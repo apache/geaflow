@@ -1,15 +1,11 @@
 # Guide
 
-[![Star](https://shields.io/github/stars/apache/geaflow?logo=startrek&label=Star&color=yellow)](https://github.com/TuGraph-family/tugraph-analytics/stargazers)
-[![Fork](https://shields.io/github/forks/apache/geaflow?logo=forgejo&label=Fork&color=orange)](https://github.com/apache/geaflow/forks)
-[![Contributor](https://shields.io/github/contributors/apache/geaflow?logo=actigraph&label=Contributor&color=abcdef)](https://github.com/apache/geaflow/contributors)
-[![Commit](https://badgen.net/github/last-commit/apache/geaflow/master?icon=git&label=Commit)](https://github.com/apache/geaflow/commits/master)
+[![Discord](https://badgen.net/badge/icon/Discord?icon=discord&label)](https://discord.gg/apKdP3DXuH)
+[![Commit](https://badgen.net/github/last-commit/tugraph-family/tugraph-analytics/master?icon=git&label=Commit)](https://github.com/TuGraph-family/tugraph-analytics/commits/master)
 [![Docker](https://shields.io/docker/pulls/tugraph/geaflow-console?logo=docker&label=Docker&color=blue)](https://hub.docker.com/r/tugraph/geaflow-console/tags)
-[![License](https://shields.io/github/license/apache/geaflow?logo=apache&label=License&color=blue)](https://www.apache.org/licenses/LICENSE-2.0.html)
-[![Release](https://shields.io/github/v/release/tugraph-family/tugraph-analytics.svg?logo=stackblitz&label=Version&color=red)](https://github.com/apache/geaflow/releases)
-[![CN](https://shields.io/badge/Docs-中文-blue?logo=readme)](https://tugraph-analytics.readthedocs.io/en/latest/docs-cn/introduction/)
-[![EN](https://shields.io/badge/Docs-English-blue?logo=readme)](https://tugraph-analytics.readthedocs.io/en/latest/docs-en/introduction/)
-[![Blog](https://badgen.net/static/Blog/github.io/orange?icon=rss)](https://tugraph-analytics.github.io/)
+[![License](https://shields.io/github/license/tugraph-family/tugraph-analytics?logo=apache&label=License&color=blue)](https://www.apache.org/licenses/LICENSE-2.0.html)
+[![Release](https://shields.io/github/v/release/tugraph-family/tugraph-analytics.svg?logo=stackblitz&label=Version&color=red)](https://github.com/TuGraph-family/tugraph-analytics/releases)
+[![Blog](https://badgen.net/static/Blog/github.io/orange?icon=rss)](https://geaflow.github.io/)
 
 > 🌐️ English | [中文](README_cn.md)
 
