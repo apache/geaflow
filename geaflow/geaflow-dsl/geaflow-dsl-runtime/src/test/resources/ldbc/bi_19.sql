@@ -1,4 +1,4 @@
-CREATE FUNCTION bi19 AS 'com.antgroup.geaflow.dsl.udf.ldbc.BICityInteractionAlgorithm';
+CREATE FUNCTION bi19 AS 'org.apache.geaflow.dsl.udf.ldbc.BICityInteractionAlgorithm';
 
 CREATE GRAPH bi (
   --static

@@ -44,11 +44,11 @@ data: {
         "org.apache.calcite.sql.SqlCreate"
         "org.apache.calcite.sql.SqlDrop"
         "org.apache.calcite.sql.SqlNumericLiteral"
-        "com.antgroup.geaflow.dsl.sqlnode.SqlTableColumn.ColumnCategory"
-        "com.antgroup.geaflow.dsl.sqlnode.SqlMatchEdge.EdgeDirection"
-        "com.antgroup.geaflow.dsl.sqlnode.*"
-        "com.antgroup.geaflow.dsl.util.GQLReturnKeyword"
-        "com.antgroup.geaflow.dsl.util.GQLEdgeConstraint"
+        "org.apache.geaflow.dsl.sqlnode.SqlTableColumn.ColumnCategory"
+        "org.apache.geaflow.dsl.sqlnode.SqlMatchEdge.EdgeDirection"
+        "org.apache.geaflow.dsl.sqlnode.*"
+        "org.apache.geaflow.dsl.util.GQLReturnKeyword"
+        "org.apache.geaflow.dsl.util.GQLEdgeConstraint"
     ]
 
     # List of new keywords. Example: "DATABASES", "TABLES". If the keyword is not a reserved

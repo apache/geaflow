@@ -23,9 +23,9 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <parent>
-        <groupId>com.antgroup.tugraph</groupId>
+        <groupId>org.apache.geaflow</groupId>
         <artifactId>geaflow-core</artifactId>
-        <version>0.6.4-SNAPSHOT</version>
+        <version>0.6.8-SNAPSHOT</version>
     </parent>
 
     <artifactId>geaflow-metaserver</artifactId>

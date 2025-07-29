@@ -23,9 +23,9 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 
     <parent>
-        <groupId>com.antgroup.tugraph</groupId>
+        <groupId>org.apache.geaflow</groupId>
         <artifactId>geaflow-parent</artifactId>
-        <version>0.6.4-SNAPSHOT</version>
+        <version>0.6.8-SNAPSHOT</version>
     </parent>
 
     <modelVersion>4.0.0</modelVersion>
@@ -435,191 +435,191 @@
 
             <!-- geaflow -->
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-rpc-proto</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-collection</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-api</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-common</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-core-common</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-model</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-operator</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-dsl-runtime</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-metrics-common</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-metrics-reporter</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-metrics-slf4j</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-metrics-influxdb</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-metrics-prometheus</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-stats-metrics</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-cluster</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-cluster-runner</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-on-ray</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-on-local</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-on-k8s</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-utils</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-runtime</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-shuffle</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-examples</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-plan</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-runtime-common</artifactId>
                 <version>${project.version}</version>
             </dependency>
 
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-pdata</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-pipeline</artifactId>
                 <version>${project.version}</version>
             </dependency>
 
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-processor</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-runtime-core</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-store-memory</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-store-rocksdb</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-store-redis</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-store-jdbc</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-store-paimon</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-dashboard</artifactId>
                 <version>${project.version}</version>
             </dependency>
 
             <!-- meta server -->
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-metaserver-common</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-metaserver-engine</artifactId>
                 <version>${project.version}</version>
             </dependency>
@@ -627,37 +627,37 @@
 
             <!-- state -->
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-memory</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-state-common</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-state-strategy</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-view-meta</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-state-api</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-state-impl</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-store-api</artifactId>
                 <version>${project.version}</version>
             </dependency>
@@ -665,57 +665,57 @@
 
             <!-- analytics -->
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-analytics-service-common</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-analytics-service-server</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-analytics-service-client</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <!-- end -->
 
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-file-common</artifactId>
                 <version>${project.version}</version>
             </dependency>
 
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-file-dfs</artifactId>
                 <version>${project.version}</version>
             </dependency>
 
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-file-oss</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-highavailability</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-service-discovery-api</artifactId>
                 <version>${project.version}</version>
             </dependency>
 
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-service-discovery-zookeeper</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-service-discovery-redis</artifactId>
                 <version>${project.version}</version>
             </dependency>
@@ -726,7 +726,7 @@
             </dependency>
 
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-infer</artifactId>
                 <version>${project.version}</version>
             </dependency>

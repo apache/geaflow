@@ -19,7 +19,7 @@
 
 set geaflow.dsl.window.size = -1;
 set geaflow.dsl.ignore.exception = true;
-create function test_edge_iterator as 'com.antgroup.geaflow.dsl.runtime.query.udf.TestEdgeIteratorUdf';
+create function test_edge_iterator as 'org.apache.geaflow.dsl.runtime.query.udf.TestEdgeIteratorUdf';
 
 
 CREATE GRAPH IF NOT EXISTS g4 (

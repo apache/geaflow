@@ -28,6 +28,6 @@ FAT_JAR=`ls $GEAFLOW_JAR_DIR | grep "^geaflow-assembly-.*[^sources].jar"`
 CLASSPATH="$GEAFLOW_JAR_DIR/$FAT_JAR"
 echo "CLASSPATH:$CLASSPATH"
 
-$JAVACMD -cp "$CLASSPATH" com.antgroup.geaflow.cluster.k8s.client.KubernetesJobSubmitter "$@"
+$JAVACMD -cp "$CLASSPATH" org.apache.geaflow.cluster.k8s.client.KubernetesJobSubmitter "$@"
 
 

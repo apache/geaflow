@@ -23,17 +23,17 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <parent>
-        <groupId>com.antgroup.tugraph</groupId>
+        <groupId>org.apache.geaflow</groupId>
         <artifactId>geaflow-console</artifactId>
-        <version>0.6.4-SNAPSHOT</version>
+        <version>0.6.8-SNAPSHOT</version>
         <relativePath>../../../pom.xml</relativePath>
     </parent>
     <artifactId>geaflow-console-common-dal</artifactId>
-    <version>0.6.4-SNAPSHOT</version>
+    <version>0.6.8-SNAPSHOT</version>
     <dependencies>
 
         <dependency>
-            <groupId>com.antgroup.tugraph</groupId>
+            <groupId>org.apache.geaflow</groupId>
             <artifactId>geaflow-console-common-util</artifactId>
         </dependency>
 
