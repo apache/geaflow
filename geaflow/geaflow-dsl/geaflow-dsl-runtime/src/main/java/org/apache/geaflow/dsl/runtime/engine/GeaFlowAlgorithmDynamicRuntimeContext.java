@@ -40,6 +40,11 @@ import org.apache.geaflow.model.graph.edge.IEdge;
 import org.apache.geaflow.model.graph.vertex.IVertex;
 import org.apache.geaflow.model.traversal.ITraversalResponse;
 import org.apache.geaflow.model.traversal.TraversalType.ResponseType;
+import org.apache.geaflow.state.iterator.IteratorWithClose;
+import org.apache.geaflow.state.pushdown.filter.EmptyFilter;
+import org.apache.geaflow.state.pushdown.filter.IFilter;
+import org.apache.geaflow.state.pushdown.filter.InEdgeFilter;
+import org.apache.geaflow.state.pushdown.filter.OutEdgeFilter;
 
 public class GeaFlowAlgorithmDynamicRuntimeContext implements AlgorithmRuntimeContext<Object, Object> {
 

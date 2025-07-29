@@ -26,6 +26,7 @@ import org.apache.geaflow.api.graph.function.aggregate.VertexCentricAggContextFu
 import org.apache.geaflow.api.graph.function.vc.VertexCentricTraversalFunction.TraversalEdgeQuery;
 import org.apache.geaflow.api.graph.function.vc.VertexCentricTraversalFunction.VertexCentricTraversalFuncContext;
 import org.apache.geaflow.common.config.Configuration;
+import org.apache.geaflow.common.exception.GeaflowRuntimeException;
 import org.apache.geaflow.common.iterator.CloseableIterator;
 import org.apache.geaflow.dsl.common.algo.AlgorithmRuntimeContext;
 import org.apache.geaflow.dsl.common.data.Row;
@@ -36,6 +37,10 @@ import org.apache.geaflow.dsl.runtime.traversal.message.ITraversalAgg;
 import org.apache.geaflow.model.graph.edge.EdgeDirection;
 import org.apache.geaflow.model.traversal.ITraversalResponse;
 import org.apache.geaflow.model.traversal.TraversalType.ResponseType;
+import org.apache.geaflow.state.pushdown.filter.EmptyFilter;
+import org.apache.geaflow.state.pushdown.filter.IFilter;
+import org.apache.geaflow.state.pushdown.filter.InEdgeFilter;
+import org.apache.geaflow.state.pushdown.filter.OutEdgeFilter;
 
 public class GeaFlowAlgorithmRuntimeContext implements AlgorithmRuntimeContext<Object, Object> {
 

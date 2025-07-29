@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 import org.apache.geaflow.api.graph.function.vc.base.VertexCentricFunction.EdgeQuery;
 import org.apache.geaflow.common.config.Configuration;
+import org.apache.geaflow.common.iterator.CloseableIterator;
 import org.apache.geaflow.common.type.primitive.IntegerType;
 import org.apache.geaflow.model.graph.edge.EdgeDirection;
 import org.apache.geaflow.model.graph.edge.IEdge;

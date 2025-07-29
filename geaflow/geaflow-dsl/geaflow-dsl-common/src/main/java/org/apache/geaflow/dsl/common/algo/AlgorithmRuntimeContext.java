@@ -26,6 +26,7 @@ import org.apache.geaflow.dsl.common.data.Row;
 import org.apache.geaflow.dsl.common.data.RowEdge;
 import org.apache.geaflow.dsl.common.types.GraphSchema;
 import org.apache.geaflow.model.graph.edge.EdgeDirection;
+import org.apache.geaflow.state.pushdown.filter.IFilter;
 
 /**
  * Interface defining methods for managing and interacting with the runtime context of a graph algorithm.
