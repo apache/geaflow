@@ -38,11 +38,14 @@ import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
 import java.nio.charset.Charset;
-import java.util.*;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -181,7 +184,7 @@ public class QueryTester implements Serializable {
         String[] paths = queryPath.split("/");
         String lastPath = paths[paths.length - 1];
         String exceptPath = dict != null ? "/expect/" + dict + "/" + lastPath.split("\\.")[0] + ".txt"
-                                              : "/expect/" + lastPath.split("\\.")[0] + ".txt";
+                                         : "/expect/" + lastPath.split("\\.")[0] + ".txt";
         String targetPath = getTargetPath(queryPath);
         String expectResult = IOUtils.resourceToString(exceptPath, Charset.defaultCharset()).trim();
         String actualResult = readFile(targetPath);
@@ -190,7 +193,7 @@ public class QueryTester implements Serializable {
 
     private void compareResult(String actualResult, String expectResult) {
         if (compareWithOrder) {
-            Assert.assertEquals(actualResult, expectResult);
+            Assert.assertEquals(expectResult, actualResult);
         } else {
             String[] actualLines = actualResult.split("\n");
             String[] expectLines = expectResult.split("\n");
@@ -206,7 +209,7 @@ public class QueryTester implements Serializable {
             String actualSort = StringUtils.join(actualLines, "\n");
             String expectSort = StringUtils.join(expectLines, "\n");
             if (!Objects.equals(actualSort, expectSort)) {
-                Assert.assertEquals(actualResult, expectResult);
+                Assert.assertEquals(expectResult, actualResult);
             }
         }
     }

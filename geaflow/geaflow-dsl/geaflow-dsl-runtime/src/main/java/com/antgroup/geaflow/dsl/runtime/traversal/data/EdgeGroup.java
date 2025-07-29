@@ -23,6 +23,7 @@ import com.antgroup.geaflow.dsl.common.data.RowEdge;
 import com.google.common.collect.AbstractIterator;
 import com.google.common.collect.FluentIterable;
 import com.google.common.collect.Iterables;
+import com.google.common.collect.Lists;
 import java.util.Iterator;
 import java.util.List;
 import java.util.function.Function;
@@ -42,6 +43,10 @@ public class EdgeGroup implements Iterable<RowEdge> {
 
     public static EdgeGroup of(Iterable<RowEdge> edges) {
         return new EdgeGroup(edges);
+    }
+
+    public static EdgeGroup of(Iterator<RowEdge> edges) {
+        return new EdgeGroup(Lists.newArrayList(edges));
     }
 
     @Override

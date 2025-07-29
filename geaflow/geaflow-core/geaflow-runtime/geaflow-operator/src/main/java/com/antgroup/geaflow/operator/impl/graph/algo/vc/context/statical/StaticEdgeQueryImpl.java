@@ -52,32 +52,19 @@ public class StaticEdgeQueryImpl<K, VV, EV> implements EdgeQuery<K, EV> {
     }
 
     @Override
-    public CloseableIterator<IEdge<K, EV>> getEdgesIterator() {
-        return graphState.staticGraph().E().query(vId).iterator();
-    }
-
-    @Override
     public List<IEdge<K, EV>> getOutEdges() {
-        return graphState.staticGraph().E().query(vId).by(OutEdgeFilter.instance()).asList();
+        return graphState.staticGraph().E().query(vId).by(OutEdgeFilter.getInstance()).asList();
     }
 
-    @Override
-    public CloseableIterator<IEdge<K, EV>> getOutEdgesIterator() {
-        return graphState.staticGraph().E().query(vId).by(OutEdgeFilter.instance()).iterator();
-    }
 
     @Override
     public List<IEdge<K, EV>> getInEdges() {
-        return graphState.staticGraph().E().query(vId).by(InEdgeFilter.instance()).asList();
+        return graphState.staticGraph().E().query(vId).by(InEdgeFilter.getInstance()).asList();
     }
 
-    @Override
-    public CloseableIterator<IEdge<K, EV>> getInEdgesIterator() {
-        return graphState.staticGraph().E().query(vId).by(InEdgeFilter.instance()).iterator();
-    }
 
     @Override
-    public List<IEdge<K, EV>> getEdges(IFilter edgeFilter) {
-        return graphState.staticGraph().E().query(vId).by(edgeFilter).asList();
+    public CloseableIterator<IEdge<K, EV>> getEdges(IFilter edgeFilter) {
+        return (CloseableIterator) graphState.staticGraph().E().query(vId).by(edgeFilter).iterator();
     }
 }

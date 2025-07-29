@@ -73,7 +73,7 @@ public class MatchVertexFunctionImpl implements MatchVertexFunction {
                 vertexTypes.stream().map(BinaryString::toString)
                     .collect(Collectors.toSet()));
         } else {
-            this.vertexFilter = EmptyFilter.of();
+            this.vertexFilter = EmptyFilter.getInstance();
         }
         for (IFilter filter : pushDownFilters) {
             this.vertexFilter = this.vertexFilter == null ? filter : this.vertexFilter.and(filter);

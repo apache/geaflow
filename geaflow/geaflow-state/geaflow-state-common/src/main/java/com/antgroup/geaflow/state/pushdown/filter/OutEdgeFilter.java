@@ -26,7 +26,7 @@ public class OutEdgeFilter<K, EV> implements IEdgeFilter<K, EV> {
 
     private static final OutEdgeFilter outEdgeFilter = new OutEdgeFilter();
 
-    public static <K, EV> OutEdgeFilter<K, EV> instance() {
+    public static <K, EV> OutEdgeFilter<K, EV> getInstance() {
         return outEdgeFilter;
     }
 

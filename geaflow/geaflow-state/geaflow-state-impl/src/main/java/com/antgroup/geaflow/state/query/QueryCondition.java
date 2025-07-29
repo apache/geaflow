@@ -34,7 +34,7 @@ public class QueryCondition<K> {
     public K queryId;
     public List<K> queryIds;
     public boolean isFullScan;
-    public IFilter[] stateFilters = new IFilter[]{EmptyFilter.of()};
+    public IFilter[] stateFilters = new IFilter[] {EmptyFilter.getInstance()};
     public IProjector projector;
     public IEdgeLimit limit;
     public EdgeAtom order;

@@ -31,7 +31,7 @@ public class VertexTsFilter<K, VV> implements IVertexFilter<K, VV> {
         this.timeRange = timeRange;
     }
 
-    public static <K, VV> VertexTsFilter<K, VV> instance(long start, long end) {
+    public static <K, VV> VertexTsFilter<K, VV> getInstance(long start, long end) {
         return new VertexTsFilter<>(TimeRange.of(start, end));
     }
 

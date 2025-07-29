@@ -76,13 +76,13 @@ public class MatchEdgeFunctionImpl implements MatchEdgeFunction {
         IFilter directionFilter;
         switch (direction) {
             case OUT:
-                directionFilter = OutEdgeFilter.instance();
+                directionFilter = OutEdgeFilter.getInstance();
                 break;
             case IN:
-                directionFilter = InEdgeFilter.instance();
+                directionFilter = InEdgeFilter.getInstance();
                 break;
             case BOTH:
-                directionFilter = EmptyFilter.of();
+                directionFilter = EmptyFilter.getInstance();
                 break;
             default:
                 throw new IllegalArgumentException("Illegal edge direction: " + direction);

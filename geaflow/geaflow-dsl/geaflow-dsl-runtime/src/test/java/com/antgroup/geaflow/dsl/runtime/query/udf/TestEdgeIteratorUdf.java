@@ -32,7 +32,10 @@ import com.antgroup.geaflow.dsl.common.types.GraphSchema;
 import com.antgroup.geaflow.dsl.common.types.StructType;
 import com.antgroup.geaflow.dsl.common.types.TableField;
 import com.antgroup.geaflow.model.graph.edge.EdgeDirection;
+import com.google.common.base.Preconditions;
+import com.google.common.collect.Lists;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -71,6 +74,24 @@ public class TestEdgeIteratorUdf implements AlgorithmUserFunction<Object, Long> 
                 count++;
             }
         }
+        List<RowEdge> bothEdge = Lists.newArrayList(context.loadStaticEdgesIterator(EdgeDirection.BOTH));
+        List<RowEdge> inEdge = Lists.newArrayList(context.loadStaticEdgesIterator(EdgeDirection.IN));
+        List<RowEdge> outEdge = Lists.newArrayList(context.loadStaticEdgesIterator(EdgeDirection.OUT));
+        Preconditions.checkState(bothEdge.size() == inEdge.size() + outEdge.size(), "Static edge not equal");
+        List<RowEdge> bothEdgeList = context.loadStaticEdges(EdgeDirection.BOTH);
+        Preconditions.checkState(bothEdgeList.size() == inEdge.size() + outEdge.size(), "Static edge not equal");
+
+        bothEdge = Lists.newArrayList(context.loadDynamicEdgesIterator(EdgeDirection.BOTH));
+        inEdge = Lists.newArrayList(context.loadDynamicEdgesIterator(EdgeDirection.IN));
+        outEdge = Lists.newArrayList(context.loadDynamicEdgesIterator(EdgeDirection.OUT));
+        Preconditions.checkState(bothEdge.size() == inEdge.size() + outEdge.size(), "Dynamic edge not equal");
+
+        bothEdge = Lists.newArrayList(context.loadEdgesIterator(EdgeDirection.BOTH));
+        inEdge = Lists.newArrayList(context.loadEdgesIterator(EdgeDirection.IN));
+        outEdge = Lists.newArrayList(context.loadEdgesIterator(EdgeDirection.OUT));
+        Preconditions.checkState(bothEdge.size() == inEdge.size() + outEdge.size(), "History edge not equal");
+
+
     }
 
     @Override

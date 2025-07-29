@@ -36,7 +36,7 @@ public class InEdgeFilter<K, EV> implements IEdgeFilter<K, EV> {
         return FilterType.IN_EDGE;
     }
 
-    public static <K, EV> InEdgeFilter<K, EV> instance() {
+    public static <K, EV> InEdgeFilter<K, EV> getInstance() {
         return inEdgeFilter;
     }
 

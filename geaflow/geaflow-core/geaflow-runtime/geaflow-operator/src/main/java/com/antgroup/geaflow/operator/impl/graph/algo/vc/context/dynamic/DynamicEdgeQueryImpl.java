@@ -58,39 +58,23 @@ public class DynamicEdgeQueryImpl<K, VV, EV> implements EdgeQuery<K, EV> {
         return edgeState.query(versionId, vId).asList();
     }
 
-    @Override
-    public CloseableIterator<IEdge<K, EV>> getEdgesIterator() {
-        DynamicEdgeState<K, VV, EV> edgeState = graphState.dynamicGraph().E();
-        return edgeState.query(versionId, vId).iterator();
-    }
 
     @Override
     public List<IEdge<K, EV>> getOutEdges() {
         DynamicEdgeState<K, VV, EV> edgeState = graphState.dynamicGraph().E();
-        return edgeState.query(versionId, vId).by(OutEdgeFilter.instance()).asList();
+        return edgeState.query(versionId, vId).by(OutEdgeFilter.getInstance()).asList();
     }
 
-    @Override
-    public CloseableIterator<IEdge<K, EV>> getOutEdgesIterator() {
-        DynamicEdgeState<K, VV, EV> edgeState = graphState.dynamicGraph().E();
-        return edgeState.query(versionId, vId).by(OutEdgeFilter.instance()).iterator();
-    }
 
     @Override
     public List<IEdge<K, EV>> getInEdges() {
         DynamicEdgeState<K, VV, EV> edgeState = graphState.dynamicGraph().E();
-        return edgeState.query(versionId, vId).by(InEdgeFilter.instance()).asList();
+        return edgeState.query(versionId, vId).by(InEdgeFilter.getInstance()).asList();
     }
 
     @Override
-    public CloseableIterator<IEdge<K, EV>> getInEdgesIterator() {
+    public CloseableIterator<IEdge<K, EV>> getEdges(IFilter edgeFilter) {
         DynamicEdgeState<K, VV, EV> edgeState = graphState.dynamicGraph().E();
-        return edgeState.query(versionId, vId).by(InEdgeFilter.instance()).iterator();
-    }
-
-    @Override
-    public List<IEdge<K, EV>> getEdges(IFilter edgeFilter) {
-        DynamicEdgeState<K, VV, EV> edgeState = graphState.dynamicGraph().E();
-        return edgeState.query(versionId, vId).by(edgeFilter).asList();
+        return edgeState.query(versionId, vId).by(edgeFilter).iterator();
     }
 }

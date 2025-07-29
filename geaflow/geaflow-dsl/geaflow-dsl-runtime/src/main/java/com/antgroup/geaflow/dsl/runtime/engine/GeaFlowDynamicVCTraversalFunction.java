@@ -113,13 +113,13 @@ public class GeaFlowDynamicVCTraversalFunction implements
                 EdgeDirection direction = ((MatchEdgeOperator) step).getFunction().getDirection();
                 switch (direction) {
                     case OUT:
-                        incrMessageEdgeFilter.add(InEdgeFilter.instance());
+                        incrMessageEdgeFilter.add(InEdgeFilter.getInstance());
                         break;
                     case IN:
-                        incrMessageEdgeFilter.add(OutEdgeFilter.instance());
+                        incrMessageEdgeFilter.add(OutEdgeFilter.getInstance());
                         break;
                     default:
-                        incrMessageEdgeFilter.add(EmptyFilter.of());
+                        incrMessageEdgeFilter.add(EmptyFilter.getInstance());
                 }
             }
 
@@ -166,7 +166,7 @@ public class GeaFlowDynamicVCTraversalFunction implements
     private void sendEvolveMessage(Object vertexId, TraversalRuntimeContext context) {
         context.setVertex(IdOnlyVertex.of(vertexId));
 
-        IFilter edgeFilter = incrMessageEdgeFilter.isEmpty() ? EmptyFilter.of() : incrMessageEdgeFilter.get(
+        IFilter edgeFilter = incrMessageEdgeFilter.isEmpty() ? EmptyFilter.getInstance() : incrMessageEdgeFilter.get(
             (int) (context.getIterationId() - 1));
         EdgeGroup rowEdges = context.loadEdges(edgeFilter);
         StepOperator<StepRecord, StepRecord> operator = commonFunction.getExecuteDagGroup()

@@ -143,7 +143,7 @@ public class GraphMemoryStoreTest {
 
         list =
             Lists.newArrayList(store.getOneDegreeGraphIterator(StatePushDown.of().withFilter(
-                GraphFilter.of(VertexMustContainFilter.instance()))));
+                GraphFilter.of(VertexMustContainFilter.getInstance()))));
         Assert.assertEquals(list.size(), 1);
 
         list =

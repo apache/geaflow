@@ -38,7 +38,7 @@ public class VertexLabelFilter<K, VV> implements IVertexFilter<K, VV> {
         this.labels = Sets.newHashSet(labels);
     }
 
-    public static <K, VV> VertexLabelFilter<K, VV> instance(String... labels) {
+    public static <K, VV> VertexLabelFilter<K, VV> getInstance(String... labels) {
         return new VertexLabelFilter<>(labels);
     }
 

@@ -193,16 +193,16 @@ public class MemoryGraphStateTest {
         Assert.assertEquals(list.size(), 6);
 
         list =
-            graphState.staticGraph().E().query().by(InEdgeFilter.instance())
+            graphState.staticGraph().E().query().by(InEdgeFilter.getInstance())
                 .limit(1L, 1L).asList();
         Assert.assertEquals(list.size(), 10);
 
-        list = graphState.staticGraph().E().query().by(InEdgeFilter.instance())
+        list = graphState.staticGraph().E().query().by(InEdgeFilter.getInstance())
             .limit(1L, 2L).asList();
         Assert.assertEquals(list.size(), 20);
 
         List<String> targetIds =
-            graphState.staticGraph().E().query().by(InEdgeFilter.instance())
+            graphState.staticGraph().E().query().by(InEdgeFilter.getInstance())
                 .select(new DstIdProjector<>()).limit(1L, 2L).asList();
 
         Assert.assertEquals(targetIds.size(), 20);

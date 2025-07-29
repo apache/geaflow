@@ -25,7 +25,7 @@ public class VertexValueDropFilter<K, VV> implements IVertexFilter<K, VV> {
 
     private static final VertexValueDropFilter filter = new VertexValueDropFilter();
 
-    public static <K, VV> VertexValueDropFilter<K, VV> instance() {
+    public static <K, VV> VertexValueDropFilter<K, VV> getInstance() {
         return filter;
     }
 

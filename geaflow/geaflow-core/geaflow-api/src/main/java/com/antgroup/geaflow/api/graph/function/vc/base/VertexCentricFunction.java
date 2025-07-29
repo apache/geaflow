@@ -95,19 +95,9 @@ public interface VertexCentricFunction<K, VV, EV, M> extends Function {
         List<IEdge<K, EV>> getEdges();
 
         /**
-         * Returns the both edges iterator.
-         */
-        CloseableIterator<IEdge<K, EV>> getEdgesIterator();
-
-        /**
          * Returns the out edges.
          */
         List<IEdge<K, EV>> getOutEdges();
-
-        /**
-         * Returns the out edges iterator.
-         */
-        CloseableIterator<IEdge<K, EV>> getOutEdgesIterator();
 
         /**
          * Returns the in edges.
@@ -115,13 +105,8 @@ public interface VertexCentricFunction<K, VV, EV, M> extends Function {
         List<IEdge<K, EV>> getInEdges();
 
         /**
-         * Returns the in edges iterator.
-         */
-        CloseableIterator<IEdge<K, EV>> getInEdgesIterator();
-
-        /**
          * Get the edges which satisfies filter condition.
          */
-        List<IEdge<K, EV>> getEdges(IFilter edgeFilter);
+        CloseableIterator<IEdge<K, EV>> getEdges(IFilter<?> edgeFilter);
     }
 }

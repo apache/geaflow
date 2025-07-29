@@ -101,7 +101,7 @@ public class StepLoopUntilOperator extends AbstractStepOperator<StepBoolFunction
             final RowVertex vertexRecord;
             if (vertexId instanceof IdOnlyVertex && !(vertexId.getId() instanceof VirtualId)) {
                 vertexRecord = context.loadVertex(vertexId.getId(),
-                    EmptyFilter.of(),
+                    EmptyFilter.getInstance(),
                     graphSchema,
                     addingVertexFieldTypes);
             } else {

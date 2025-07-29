@@ -25,7 +25,7 @@ public class EdgeValueDropFilter<K, VV> implements IEdgeFilter<K, VV> {
 
     private static final EdgeValueDropFilter filter = new EdgeValueDropFilter();
 
-    public static <K, EV> EdgeValueDropFilter<K, EV> instance() {
+    public static <K, EV> EdgeValueDropFilter<K, EV> getInstance() {
         return filter;
     }
 

@@ -26,7 +26,6 @@ import com.antgroup.geaflow.dsl.calcite.GraphRecordType;
 import com.antgroup.geaflow.dsl.common.types.GraphSchema;
 import com.antgroup.geaflow.dsl.common.types.PathType;
 import com.antgroup.geaflow.dsl.common.types.TableField;
-import com.antgroup.geaflow.dsl.common.types.VertexType;
 import com.antgroup.geaflow.dsl.common.types.VoidType;
 import com.antgroup.geaflow.dsl.planner.GQLJavaTypeFactory;
 import com.antgroup.geaflow.dsl.runtime.function.graph.MatchEdgeFunctionImpl;
@@ -66,7 +65,7 @@ public class StepPlanTest {
                     .withOutputType(VoidType.INSTANCE)
                     .withGraphSchema(createGraph())
                 .vertexMatch(new MatchVertexFunctionImpl(Sets.newHashSet(BinaryString.fromString(
-                    "person")), "a", EmptyFilter.of()))
+                    "person")), "a", EmptyFilter.getInstance()))
                     .withInputPathSchema(PathType.EMPTY)
                     .withOutputPathSchema(PathType.EMPTY)
                     .withOutputType(VoidType.INSTANCE)
@@ -77,7 +76,7 @@ public class StepPlanTest {
                     .withOutputType(VoidType.INSTANCE)
                     .withGraphSchema(createGraph())
                 .vertexMatch(new MatchVertexFunctionImpl(Sets.newHashSet(BinaryString.fromString(
-                    "person")), "b", EmptyFilter.of()))
+                    "person")), "b", EmptyFilter.getInstance()))
                     .withInputPathSchema(PathType.EMPTY)
                     .withOutputPathSchema(PathType.EMPTY)
                     .withOutputType(VoidType.INSTANCE)

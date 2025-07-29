@@ -129,9 +129,9 @@ public class RocksDBGraphStateTest {
         List<IEdge<String, String>> edgeList = graphState.staticGraph().E().query("0").asList();
         Assert.assertEquals(edgeList.size(), 390);
 
-        edgeList = graphState.staticGraph().E().query("0").by(OutEdgeFilter.instance()).asList();
+        edgeList = graphState.staticGraph().E().query("0").by(OutEdgeFilter.getInstance()).asList();
         Assert.assertEquals(edgeList.size(), 390);
-        edgeList = graphState.staticGraph().E().query("0").by(InEdgeFilter.instance()).asList();
+        edgeList = graphState.staticGraph().E().query("0").by(InEdgeFilter.getInstance()).asList();
         Assert.assertEquals(edgeList.size(), 0);
 
         graphState.manage().operate().close();
@@ -347,7 +347,7 @@ public class RocksDBGraphStateTest {
         Assert.assertEquals(num, 5000);
 
         edges = graphState.staticGraph().E().query("2")
-            .by(OutEdgeFilter.instance().and(new EdgeTsFilter(TimeRange.of(0, 1000)))).asList();
+            .by(OutEdgeFilter.getInstance().and(new EdgeTsFilter(TimeRange.of(0, 1000)))).asList();
         Assert.assertEquals(edges.size(), 1000);
 
         maxTime = edges.stream().mapToLong(e -> ((IDLabelTimeEdge) e).getTime()).max().getAsLong();
@@ -427,15 +427,15 @@ public class RocksDBGraphStateTest {
             .limit(1L, 1L).asList();
         Assert.assertEquals(list.size(), 6);
 
-        list = graphState.staticGraph().E().query().by(InEdgeFilter.instance()).limit(1L, 1L)
+        list = graphState.staticGraph().E().query().by(InEdgeFilter.getInstance()).limit(1L, 1L)
             .asList();
         Assert.assertEquals(list.size(), 10);
 
-        list = graphState.staticGraph().E().query().by(InEdgeFilter.instance()).limit(1L, 2L)
+        list = graphState.staticGraph().E().query().by(InEdgeFilter.getInstance()).limit(1L, 2L)
             .asList();
         Assert.assertEquals(list.size(), 20);
 
-        List<String> targetIds = graphState.staticGraph().E().query().by(InEdgeFilter.instance())
+        List<String> targetIds = graphState.staticGraph().E().query().by(InEdgeFilter.getInstance())
             .select(new DstIdProjector<>()).limit(1L, 2L).asList();
 
         Assert.assertEquals(targetIds.size(), 20);

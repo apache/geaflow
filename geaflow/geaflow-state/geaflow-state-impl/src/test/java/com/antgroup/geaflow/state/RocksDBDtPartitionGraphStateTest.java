@@ -135,7 +135,7 @@ public class RocksDBDtPartitionGraphStateTest {
 
         graphState.manage().operate().finish();
         List<IEdge<String, String>> edgeList1 = graphState.staticGraph().E().query("0")
-            .by(OutEdgeFilter.instance().and(EdgeTsFilter.instance(1735660800, 1735662000)))
+            .by(OutEdgeFilter.getInstance().and(EdgeTsFilter.getInstance(1735660800, 1735662000)))
             .asList();
         Assert.assertEquals(edgeList1.size(), 390);
         graphState.manage().operate().close();
@@ -146,16 +146,16 @@ public class RocksDBDtPartitionGraphStateTest {
         List<IEdge<String, String>> edgeList = graphState.staticGraph().E().query("0").asList();
         Assert.assertEquals(edgeList.size(), 750);
 
-        edgeList = graphState.staticGraph().E().query("0").by(OutEdgeFilter.instance()).asList();
+        edgeList = graphState.staticGraph().E().query("0").by(OutEdgeFilter.getInstance()).asList();
         Assert.assertEquals(edgeList.size(), 750);
-        edgeList = graphState.staticGraph().E().query("0").by(InEdgeFilter.instance()).asList();
+        edgeList = graphState.staticGraph().E().query("0").by(InEdgeFilter.getInstance()).asList();
         Assert.assertEquals(edgeList.size(), 0);
         edgeList = graphState.staticGraph().E().query()
-            .by(OutEdgeFilter.instance().and(EdgeTsFilter.instance(1735660800, 1735662000)))
+            .by(OutEdgeFilter.getInstance().and(EdgeTsFilter.getInstance(1735660800, 1735662000)))
             .asList();
         Assert.assertEquals(edgeList.size(), 780);
         edgeList = graphState.staticGraph().E().query()
-            .by(OutEdgeFilter.instance().and(EdgeTsFilter.instance(1736265600, 1736265699)))
+            .by(OutEdgeFilter.getInstance().and(EdgeTsFilter.getInstance(1736265600, 1736265699)))
             .asList();
         Assert.assertEquals(edgeList.size(), 99);
 
@@ -185,17 +185,17 @@ public class RocksDBDtPartitionGraphStateTest {
         }
 
         List<IEdge<String, String>> edges1 = graphState.staticGraph().E().query("2")
-            .by(EdgeTsFilter.instance(1735660800, 1735662800)).asList();
+            .by(EdgeTsFilter.getInstance(1735660800, 1735662800)).asList();
         List<IEdge<String, String>> edges2 = graphState.staticGraph().E().query("2")
-            .by(EdgeTsFilter.instance(1736265600, 1736365600)).asList();
+            .by(EdgeTsFilter.getInstance(1736265600, 1736365600)).asList();
         List<IEdge<String, String>> edges3 = graphState.staticGraph().E().query("2")
-            .by(EdgeTsFilter.instance(1835660800, 1835760800)).asList();
+            .by(EdgeTsFilter.getInstance(1835660800, 1835760800)).asList();
         IVertex<String, String> vertex1 = graphState.staticGraph().V().query("9999")
-            .by(VertexTsFilter.instance(1736870400, 1736970400)).get();
+            .by(VertexTsFilter.getInstance(1736870400, 1736970400)).get();
         IVertex<String, String> vertex2 = graphState.staticGraph().V().query("9999")
-            .by(VertexTsFilter.instance(1735660800, 1735760800)).get();
+            .by(VertexTsFilter.getInstance(1735660800, 1735760800)).get();
         IVertex<String, String> vertex3 = graphState.staticGraph().V().query("9999")
-            .by(VertexTsFilter.instance(1835660800, 1835760800)).get();
+            .by(VertexTsFilter.getInstance(1835660800, 1835760800)).get();
 
         Assert.assertEquals(edges1.size(), 2000);
         Assert.assertEquals(edges2.size(), 10000);
@@ -246,12 +246,12 @@ public class RocksDBDtPartitionGraphStateTest {
         graphState.manage().operate().finish();
 
         Iterator<IVertex<String, String>> it = graphState.staticGraph().V().query()
-            .by(VertexTsFilter.instance(1736870400, 1736970400)).iterator();
+            .by(VertexTsFilter.getInstance(1736870400, 1736970400)).iterator();
         List<IVertex<String, String>> vertices = Lists.newArrayList(it);
         Assert.assertEquals(vertices.size(), 100);
 
         it = graphState.staticGraph().V().query()
-            .by(VertexTsFilter.instance(1836870400, 1836970400)).iterator();
+            .by(VertexTsFilter.getInstance(1836870400, 1836970400)).iterator();
         vertices = Lists.newArrayList(it);
         Assert.assertEquals(vertices.size(), 0);
 
@@ -265,14 +265,14 @@ public class RocksDBDtPartitionGraphStateTest {
         Assert.assertEquals(Iterators.size(idIt), 150);
 
         Iterator<OneDegreeGraph<String, String, String>> it2 = graphState.staticGraph().VE().query()
-            .by(VertexTsFilter.instance(1735660800, 1736265600)
-                .and(EdgeTsFilter.instance(1735660800, 1736265600))).iterator();
+            .by(VertexTsFilter.getInstance(1735660800, 1736265600)
+                .and(EdgeTsFilter.getInstance(1735660800, 1736265600))).iterator();
         List<OneDegreeGraph> res = Lists.newArrayList(it2);
         Assert.assertEquals(res.size(), 100);
 
         it2 = graphState.staticGraph().VE().query()
-            .by(VertexTsFilter.instance(1836870400, 1836970400)
-                .and(EdgeTsFilter.instance(1836870400, 1836970400))).iterator();
+            .by(VertexTsFilter.getInstance(1836870400, 1836970400)
+                .and(EdgeTsFilter.getInstance(1836870400, 1836970400))).iterator();
         res = Lists.newArrayList(it2);
         Assert.assertEquals(res.size(), 0);
 
@@ -325,7 +325,7 @@ public class RocksDBDtPartitionGraphStateTest {
         long num = edges.stream().filter(e -> e.getDirect() == EdgeDirection.OUT).count();
         Assert.assertEquals(num, 5000);
 
-        edges = graphState.staticGraph().E().query("2").by(OutEdgeFilter.instance()
+        edges = graphState.staticGraph().E().query("2").by(OutEdgeFilter.getInstance()
             .and(new EdgeTsFilter(TimeRange.of(1735660800, 1735661800)))).asList();
         Assert.assertEquals(edges.size(), 1000);
 
@@ -340,7 +340,7 @@ public class RocksDBDtPartitionGraphStateTest {
 
         edges = graphState.staticGraph().E().query("2")
             .by(new EdgeTsFilter(TimeRange.of(1735667800, 1735670800)).and(
-                EdgeLabelFilter.instance("world"))).asList();
+                EdgeLabelFilter.getInstance("world"))).asList();
         Assert.assertEquals(edges.size(), 3000);
         long minTime = edges.stream().mapToLong(e -> ((IDLabelTimeEdge) e).getTime()).min()
             .getAsLong();
@@ -415,15 +415,15 @@ public class RocksDBDtPartitionGraphStateTest {
             .limit(1L, 1L).asList();
         Assert.assertEquals(list.size(), 6);
 
-        list = graphState.staticGraph().E().query().by(InEdgeFilter.instance()).limit(1L, 1L)
+        list = graphState.staticGraph().E().query().by(InEdgeFilter.getInstance()).limit(1L, 1L)
             .asList();
         Assert.assertEquals(list.size(), 10);
 
-        list = graphState.staticGraph().E().query().by(InEdgeFilter.instance()).limit(1L, 2L)
+        list = graphState.staticGraph().E().query().by(InEdgeFilter.getInstance()).limit(1L, 2L)
             .asList();
         Assert.assertEquals(list.size(), 20);
 
-        List<String> targetIds = graphState.staticGraph().E().query().by(InEdgeFilter.instance())
+        List<String> targetIds = graphState.staticGraph().E().query().by(InEdgeFilter.getInstance())
             .select(new DstIdProjector<>()).limit(1L, 2L).asList();
 
         Assert.assertEquals(targetIds.size(), 20);
@@ -487,10 +487,10 @@ public class RocksDBDtPartitionGraphStateTest {
         edges = graphState.staticGraph().E().asList();
         Assert.assertEquals(edges.size(), 180);
         edges = graphState.staticGraph().E().query()
-            .by(EdgeTsFilter.instance(1736265600, 1737265600)).asList();
+            .by(EdgeTsFilter.getInstance(1736265600, 1737265600)).asList();
         Assert.assertEquals(edges.size(), 80);
         edges = graphState.staticGraph().E().query()
-            .by(EdgeTsFilter.instance(1735660800, 1735661800)).asList();
+            .by(EdgeTsFilter.getInstance(1735660800, 1735661800)).asList();
         Assert.assertEquals(edges.size(), 100);
         vertices = graphState.staticGraph().V().asList();
         Assert.assertEquals(vertices.size(), 2);
@@ -502,10 +502,10 @@ public class RocksDBDtPartitionGraphStateTest {
         graphState.manage().operate().recover();
         graphState.staticGraph().V().add(new ValueTimeVertex<>("2", "world", 1737265600));
         Assert.assertEquals(graphState.staticGraph().V().query("2")
-            .by(VertexTsFilter.instance(1737265600, 1737265601)).get().getValue(), "world");
+            .by(VertexTsFilter.getInstance(1737265600, 1737265601)).get().getValue(), "world");
         graphState.manage().operate().finish();
         Assert.assertEquals(graphState.staticGraph().V().query("2")
-            .by(VertexTsFilter.instance(1737265600, 1737265601)).get().getValue(), "world");
+            .by(VertexTsFilter.getInstance(1737265600, 1737265601)).get().getValue(), "world");
 
         graphState.manage().operate().close();
         graphState.manage().operate().drop();

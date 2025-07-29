@@ -212,7 +212,7 @@ public class StaticGraphStateTest {
             .limit(1L, 1L).asList();
         Assert.assertEquals(list.size(), 6);
 
-        list = graphState.staticGraph().E().query("1", "2", "3").by(InEdgeFilter.instance())
+        list = graphState.staticGraph().E().query("1", "2", "3").by(InEdgeFilter.getInstance())
             .limit(1L, 1L).asList();
         Assert.assertEquals(list.size(), 3);
 
@@ -220,31 +220,31 @@ public class StaticGraphStateTest {
         Assert.assertEquals(list.size(), 2);
 
         list = graphState.staticGraph().E().query("11", "12", "13")
-            .by(EdgeTsFilter.instance(10, 20).or(EdgeTsFilter.instance(50, 60)).singleLimit())
+            .by(EdgeTsFilter.getInstance(10, 20).or(EdgeTsFilter.getInstance(50, 60)).singleLimit())
             .limit(2L, 1L).asList();
         Assert.assertEquals(list.size(), 18);
 
         list = graphState.staticGraph().E().query("11", "12", "13")
-            .by(EdgeTsFilter.instance(10, 20).or(EdgeTsFilter.instance(50, 60))).limit(2L, 1L)
+            .by(EdgeTsFilter.getInstance(10, 20).or(EdgeTsFilter.getInstance(50, 60))).limit(2L, 1L)
             .asList();
         Assert.assertEquals(list.size(), 9);
 
         // full limit
-        list = graphState.staticGraph().E().query().by(InEdgeFilter.instance()).limit(1L, 1L)
+        list = graphState.staticGraph().E().query().by(InEdgeFilter.getInstance()).limit(1L, 1L)
             .asList();
         Assert.assertEquals(list.size(), 100);
 
-        list = graphState.staticGraph().E().query().by(InEdgeFilter.instance()).limit(1L, 2L)
+        list = graphState.staticGraph().E().query().by(InEdgeFilter.getInstance()).limit(1L, 2L)
             .asList();
         Assert.assertEquals(list.size(), 200);
 
         list = graphState.staticGraph().E().query()
-            .by(EdgeTsFilter.instance(10, 20).or(EdgeTsFilter.instance(50, 60)).singleLimit())
+            .by(EdgeTsFilter.getInstance(10, 20).or(EdgeTsFilter.getInstance(50, 60)).singleLimit())
             .limit(2L, 1L).asList();
         Assert.assertEquals(list.size(), 540);
 
         list = graphState.staticGraph().E().query()
-            .by(EdgeTsFilter.instance(10, 20).or(EdgeTsFilter.instance(50, 60))).limit(2L, 1L)
+            .by(EdgeTsFilter.getInstance(10, 20).or(EdgeTsFilter.getInstance(50, 60))).limit(2L, 1L)
             .asList();
         Assert.assertEquals(list.size(), 270);
 
@@ -295,37 +295,37 @@ public class StaticGraphStateTest {
         graphState.manage().operate().finish();
 
         // project test
-        List<String> targetIds = graphState.staticGraph().E().query().by(InEdgeFilter.instance())
+        List<String> targetIds = graphState.staticGraph().E().query().by(InEdgeFilter.getInstance())
             .select(new DstIdProjector<>()).limit(1L, 2L).asList();
 
         Assert.assertEquals(targetIds.size(), 20);
 
         targetIds = graphState.staticGraph().E().query()
-            .by(InEdgeFilter.instance().or(OutEdgeFilter.instance()).singleLimit())
+            .by(InEdgeFilter.getInstance().or(OutEdgeFilter.getInstance()).singleLimit())
             .select(new DstIdProjector<>()).limit(1L, 2L).asList();
         Assert.assertEquals(targetIds.size(), 30);
 
         // full agg test
         Map<String, Long> res = graphState.staticGraph().E().query()
-            .by(InEdgeFilter.instance().and(new EdgeLabelFilter("teacher"))).aggregate();
+            .by(InEdgeFilter.getInstance().and(new EdgeLabelFilter("teacher"))).aggregate();
         Assert.assertEquals(res.size(), 10);
         Assert.assertTrue(res.get("2") == 1L);
 
         res = graphState.staticGraph().E().query()
-            .by(OutEdgeFilter.instance().and(new EdgeLabelFilter("student"))).aggregate();
+            .by(OutEdgeFilter.getInstance().and(new EdgeLabelFilter("student"))).aggregate();
         Assert.assertEquals(res.size(), 10);
         Assert.assertTrue(res.get("2") == 2L);
 
         // key agg test
         res = graphState.staticGraph().E().query("2", "5")
-            .by(InEdgeFilter.instance().and(new EdgeLabelFilter("teacher"))).aggregate();
+            .by(InEdgeFilter.getInstance().and(new EdgeLabelFilter("teacher"))).aggregate();
 
         Assert.assertEquals(res.size(), 2);
         Assert.assertTrue(res.get("2") == 1L);
 
         res = graphState.staticGraph().E().query("2", "5")
-            .by(InEdgeFilter.instance().and(new EdgeLabelFilter("teacher")),
-                OutEdgeFilter.instance().and(new EdgeLabelFilter("student"))).aggregate();
+            .by(InEdgeFilter.getInstance().and(new EdgeLabelFilter("teacher")),
+                OutEdgeFilter.getInstance().and(new EdgeLabelFilter("student"))).aggregate();
         Assert.assertEquals(res.size(), 2);
         Assert.assertTrue(res.get("2") == 1L);
         Assert.assertTrue(res.get("5") == 2L);

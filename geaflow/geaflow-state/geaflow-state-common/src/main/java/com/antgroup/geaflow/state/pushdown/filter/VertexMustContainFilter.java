@@ -35,7 +35,7 @@ public class VertexMustContainFilter<K, VV, EV> implements IOneDegreeGraphFilter
         return FilterType.VERTEX_MUST_CONTAIN;
     }
 
-    public static <K, VV, EV> VertexMustContainFilter<K, VV, EV> instance() {
+    public static <K, VV, EV> VertexMustContainFilter<K, VV, EV> getInstance() {
         return filter;
     }
 

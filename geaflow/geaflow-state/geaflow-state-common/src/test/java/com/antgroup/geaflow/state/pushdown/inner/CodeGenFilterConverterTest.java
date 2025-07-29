@@ -66,7 +66,7 @@ public class CodeGenFilterConverterTest {
             .or(new VertexLabelFilter(Arrays.asList("label3")));
         List<IFilter> list = new ArrayList<>();
         for (int i = 0; i < 100; i++) {
-            list.add(new AndFilter(i / 2 == 0 ? InEdgeFilter.instance() : OutEdgeFilter.instance(),
+            list.add(new AndFilter(i / 2 == 0 ? InEdgeFilter.getInstance() : OutEdgeFilter.getInstance(),
                 new EdgeLabelFilter("label" + i)).and(new EdgeTsFilter(TimeRange.of(10, 100))));
         }
         complexFilter = new OrFilter(list);
@@ -81,7 +81,7 @@ public class CodeGenFilterConverterTest {
 
         List<IGraphFilter> graphFilters = new ArrayList<>();
         for (int i = 0; i < 100; i++) {
-            graphFilters.add(new AndGraphFilter(Arrays.asList(GraphFilter.of(i / 2 == 0 ? InEdgeFilter.instance() : OutEdgeFilter.instance()),
+            graphFilters.add(new AndGraphFilter(Arrays.asList(GraphFilter.of(i / 2 == 0 ? InEdgeFilter.getInstance() : OutEdgeFilter.getInstance()),
                 GraphFilter.of(new EdgeLabelFilter("label" + i)),
                 GraphFilter.of(new EdgeTsFilter(TimeRange.of(10, 100))))));
         }

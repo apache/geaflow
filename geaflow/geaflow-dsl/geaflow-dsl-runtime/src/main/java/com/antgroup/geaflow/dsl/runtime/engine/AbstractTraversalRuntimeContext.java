@@ -195,7 +195,7 @@ public abstract class AbstractTraversalRuntimeContext implements TraversalRuntim
 
     @Override
     public EdgeGroup loadEdges(IFilter loadEdgesFilter) {
-        return EdgeGroup.of((List) edgeQuery.getEdges(loadEdgesFilter));
+        return EdgeGroup.of((CloseableIterator) edgeQuery.getEdges(loadEdgesFilter));
     }
 
     @Override

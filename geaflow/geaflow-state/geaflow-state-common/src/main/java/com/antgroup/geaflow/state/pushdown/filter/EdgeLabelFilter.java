@@ -38,7 +38,7 @@ public class EdgeLabelFilter<K, EV> implements IEdgeFilter<K, EV> {
         this.labels = Sets.newHashSet(labels);
     }
 
-    public static <K, EV> EdgeLabelFilter<K, EV> instance(String... labels) {
+    public static <K, EV> EdgeLabelFilter<K, EV> getInstance(String... labels) {
         return new EdgeLabelFilter<>(labels);
     }
 

@@ -31,7 +31,7 @@ public class EdgeTsFilter<K, EV> implements IEdgeFilter<K, EV> {
         this.timeRange = timeRange;
     }
 
-    public static <K, EV> EdgeTsFilter<K, EV> instance(long start, long end) {
+    public static <K, EV> EdgeTsFilter<K, EV> getInstance(long start, long end) {
         return new EdgeTsFilter<>(TimeRange.of(start, end));
     }
 

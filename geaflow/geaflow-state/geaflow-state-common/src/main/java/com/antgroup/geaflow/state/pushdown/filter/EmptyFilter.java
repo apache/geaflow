@@ -25,7 +25,7 @@ public class EmptyFilter implements IFilter {
 
     private static final EmptyFilter FILTER = new EmptyFilter();
 
-    public static EmptyFilter of() {
+    public static EmptyFilter getInstance() {
         return FILTER;
     }
 
