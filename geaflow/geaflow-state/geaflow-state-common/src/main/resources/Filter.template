@@ -11,7 +11,7 @@ import org.apache.geaflow.state.pushdown.filter.FilterType;
 import org.apache.geaflow.state.pushdown.filter.IFilter;
 import org.apache.geaflow.state.pushdown.filter.AndFilter;
 import org.apache.geaflow.state.pushdown.filter.OrFilter;
-import org.apache.geaflow.state.pushdown.filter.inner.GeneratedQueryFilter;
+import org.apache.geaflow.state pushdown.filter.inner.GeneratedQueryFilter;
 import java.util.List;
 import java.util.Set;
 
