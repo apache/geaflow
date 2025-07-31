@@ -5,13 +5,13 @@ import org.apache.geaflow.model.graph.edge.IEdge;
 import org.apache.geaflow.model.graph.vertex.IVertex;
 import org.apache.geaflow.model.graph.IGraphElementWithTimeField;
 import org.apache.geaflow.model.graph.IGraphElementWithLabelField;
-import org.apache.geaflow.data.state.DataType;
-import org.apache.geaflow.data.state.OneDegreeGraph;
+import org.apache.geaflow.state.data.DataType;
+import org.apache.geaflow.state.data.OneDegreeGraph;
 import org.apache.geaflow.state.pushdown.filter.FilterType;
 import org.apache.geaflow.state.pushdown.filter.IFilter;
 import org.apache.geaflow.state.pushdown.filter.AndFilter;
 import org.apache.geaflow.state.pushdown.filter.OrFilter;
-import org.apache.geaflow.state pushdown.filter.inner.GeneratedQueryFilter;
+import org.apache.geaflow.state.pushdown.filter.inner.GeneratedQueryFilter;
 import java.util.List;
 import java.util.Set;
 
