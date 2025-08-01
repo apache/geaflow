@@ -11,11 +11,11 @@
 
 <!--intro-start-->
 ## Introduction
-GeaFlow is a distributed streaming graph computing engine developed by Ant Group. It supports core capabilities such as trillion-level graph storage, hybrid graph and table processing, real-time graph computing, and interactive graph analysis. Currently, it is widely used in scenarios such as data warehouse acceleration, financial risk control, knowledge graph, and social networks etc.
+Apache GeaFlow (Incubating) is a distributed streaming graph computing engine originally initiated by Ant Group, and it has since been integrated into the Apache ecosystem. It supports core capabilities such as trillion-level graph storage, hybrid graph and table processing, real-time graph computing, and interactive graph analysis. Currently, it is widely used in scenarios such as data warehouse acceleration, financial risk control, knowledge graph, and social networks etc.
 
-For more information about GeaFlow: [GeaFlow Introduction](docs/docs-en/source/2.introduction.md)
+For more information: [GeaFlow Introduction](docs/docs-en/source/2.introduction.md)
 
-For GeaFlow design paper: [GeaFlow: A Graph Extended and Accelerated Dataflow System](https://dl.acm.org/doi/abs/10.1145/3589771)
+For design paper: [GeaFlow: A Graph Extended and Accelerated Dataflow System](https://dl.acm.org/doi/abs/10.1145/3589771)
 
 ## Features
 
