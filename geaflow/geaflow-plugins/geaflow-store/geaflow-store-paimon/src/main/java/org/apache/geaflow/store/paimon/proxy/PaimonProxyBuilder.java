@@ -20,6 +20,7 @@
 package org.apache.geaflow.store.paimon.proxy;
 
 import org.apache.geaflow.common.config.Configuration;
+import org.apache.geaflow.common.config.keys.StateConfigKeys;
 import org.apache.geaflow.state.graph.encoder.IGraphKVEncoder;
 import org.apache.geaflow.store.paimon.PaimonTableRWHandle;
 
@@ -31,7 +32,12 @@ public class PaimonProxyBuilder {
                                                                  int[] projection,
                                                                  IGraphKVEncoder<K, VV, EV> encoder) {
         // TODO: add readonly proxy.
-        return new PaimonGraphRWProxy<>(vertexRWHandle, edgeRWHandle, projection, encoder);
+        if (config.getBoolean(StateConfigKeys.STATE_WRITE_ASYNC_ENABLE)) {
+            return new AsyncPaimonGraphRWProxy<>(vertexRWHandle, edgeRWHandle, projection, encoder,
+                config);
+        } else {
+            return new PaimonGraphRWProxy<>(vertexRWHandle, edgeRWHandle, projection, encoder);
+        }
     }
 
     public static <K, VV, EV> IGraphMultiVersionedPaimonProxy<K, VV, EV> buildMultiVersioned(

@@ -25,6 +25,7 @@ import java.util.Map;
 import org.apache.commons.io.FileUtils;
 import org.apache.geaflow.common.config.Configuration;
 import org.apache.geaflow.common.config.keys.ExecutionConfigKeys;
+import org.apache.geaflow.common.config.keys.StateConfigKeys;
 import org.apache.geaflow.common.type.IType;
 import org.apache.geaflow.common.type.primitive.StringType;
 import org.apache.geaflow.common.utils.GsonUtil;
@@ -86,9 +87,9 @@ public class PaimonGraphStateTest {
         return graphState;
     }
 
-    @Test
-    public void testWriteRead() {
+    public void testWriteRead(boolean async) {
         Map<String, String> conf = new HashMap<>(config);
+        conf.put(StateConfigKeys.STATE_WRITE_ASYNC_ENABLE.getKey(), Boolean.toString(async));
         GraphState<String, String, String> graphState = getGraphState(StringType.INSTANCE,
             "write_read", conf);
 
@@ -101,8 +102,10 @@ public class PaimonGraphStateTest {
             graphState.staticGraph().E().add(new ValueEdge<>("1", id, "edge_hello"));
         }
         // read nothing since not committed
-        Assert.assertNull(graphState.staticGraph().V().query("1").get());
-        Assert.assertEquals(graphState.staticGraph().E().query("1").asList().size(), 0);
+        if (!async) {
+            Assert.assertNull(graphState.staticGraph().V().query("1").get());
+            Assert.assertEquals(graphState.staticGraph().E().query("1").asList().size(), 0);
+        }
         // commit chk = 1, now be able to read data
         graphState.manage().operate().archive();
         Assert.assertNotNull(graphState.staticGraph().V().query("1").get());
@@ -119,8 +122,10 @@ public class PaimonGraphStateTest {
         // be not able to read data with chk = 2 since not committed.
         Assert.assertNotNull(graphState.staticGraph().V().query("1").get());
         Assert.assertEquals(graphState.staticGraph().E().query("1").asList().size(), 100);
-        Assert.assertNull(graphState.staticGraph().V().query("2").get());
-        Assert.assertEquals(graphState.staticGraph().E().query("2").asList().size(), 0);
+        if (!async) {
+            Assert.assertNull(graphState.staticGraph().V().query("2").get());
+            Assert.assertEquals(graphState.staticGraph().E().query("2").asList().size(), 0);
+        }
         // commit chk = 2, now be able to read data
         graphState.manage().operate().archive();
         Assert.assertNotNull(graphState.staticGraph().V().query("1").get());
@@ -141,6 +146,12 @@ public class PaimonGraphStateTest {
 
         graphState.manage().operate().close();
         graphState.manage().operate().drop();
+    }
+
+    @Test
+    public void testBothWriteMode() {
+        testWriteRead(true);
+        testWriteRead(false);
     }
 
 }
