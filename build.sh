@@ -65,7 +65,7 @@ if [[ "$ARCH" = "x86_64" ]]; then
   fi
   GEAFLOW_IMAGE_NAME="geaflow"
   CONSOLE_IMAGE_NAME="geaflow-console"
-elif [[ "$ARCH" = "arm64" ]]; then
+elif [[ "$ARCH" = "arm64" || "$ARCH" = "aarch64" ]]; then
   if [[ "$USE_UBUNTU" = "true" ]]; then
     DOCKER_FILE="Dockerfile-arm64-ubuntu"
   else
@@ -74,7 +74,7 @@ elif [[ "$ARCH" = "arm64" ]]; then
   GEAFLOW_IMAGE_NAME="geaflow-arm"
   CONSOLE_IMAGE_NAME="geaflow-console-arm"
 else
-  echo -e "\033[31munknown arch $ARCH, only support x86_64,arm64\033[0m"
+  echo -e "\033[31munknown arch $ARCH, only support x86_64,arm64,aarch64\033[0m"
   exit 1
 fi
 
