@@ -17,9 +17,6 @@
 
 # See: https://cwiki.apache.org/confluence/display/INFRA/git+-+.asf.yaml+features
 
-publish:
-  whoami: asf-site
-
 github:
   description: "Apache GeaFlow: A Streaming Graph Computing Engine."
   homepage: https://geaflow.apache.org/
