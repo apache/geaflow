@@ -46,6 +46,7 @@
         <module>geaflow-dsl-connector-hbase</module>
         <module>geaflow-dsl-connector-pulsar</module>
         <module>geaflow-dsl-connector-random</module>
+        <module>geaflow-dsl-connector-paimon</module>
     </modules>
 
     <dependencyManagement>
