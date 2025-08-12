@@ -1,79 +1,43 @@
 # Contributing to GeaFlow
 
-Thank you for your interest in contributing to GeaFlow! We welcome all kinds of contributions and appreciate your support.
+Thank you for your interest in contributing to GeaFlow! We welcome all contributions and appreciate your support.
 
-## How to Contribute
+## Ways to Contribute
 
-### 1. Prerequisites
+There are many ways to contribute to GeaFlow, and not all of them involve writing code. All forms of participation are valuable and help grow a healthy community. Here are some examples of how you can help:
 
-Before you start, make sure you have:
-- Java 11 or above
-- Maven 3.6+
-- Git
-You may also need Docker for some modules.
+- Answering questions and helping others in our community spaces (mailing list, GitHub Discussions, etc.).
+- Reporting bugs, suggesting new features, or sharing your feedback.
+- Reviewing and testing pull requests from other contributors.
+- Translating documentation or other project materials.
+- Organizing or promoting community events.
+- Improving our project website, design, or user experience.
+- Creating tutorials, blog posts, or videos to help others learn about GeaFlow.
+- Spreading the word about GeaFlow through outreach and advocacy.
+- Any other activity that helps the project and its users!
 
-### 2. Fork the Repository
-Click the "Fork" button on the top right of the [GeaFlow GitHub page](https://github.com/apache/geaflow).
-
-### 3. Clone Your Fork
-Clone your fork to your local machine:
-```bash
-git clone https://github.com/<your-username>/geaflow.git
-cd geaflow
-```
-
-### 4. Create a Branch
-Create a new branch for your work:
-```bash
-git checkout -b my-feature-branch
-```
-
-### 5. Make Changes
-Edit the code. Please follow the coding style (see below) and add tests if needed.
-
-### 6. Run Tests
-Run all tests to make sure your changes work:
-```bash
-mvn clean install
-```
-Fix any issues before submitting your changes.
-
-### 7. Commit Changes
-Write a clear commit message:
-```bash
-git add .
-git commit -m "[Module] Brief description of your changes"
-```
-
-### 8. Push Changes
-Push your branch to your fork:
-```bash
-git push origin my-feature-branch
-```
-
-### 9. Create a Pull Request
-Go to your fork on GitHub and click "New Pull Request". Fill in a clear title and description. Link related issues if any.
-
-### 10. Review Process
-Project maintainers will review your pull request. Please respond to feedback and make changes if needed.
+If you have an idea for a contribution, please share it with the community. Every contribution is welcome!
 
 ## Code of Conduct
 
-Please follow our [Code of Conduct](../CODE_OF_CONDUCT.md) in all project interactions.
-
+Please follow our [Code of Conduct](../CODE_OF_CONDUCT.md) in all your interactions with the project.
 
 ## Coding Style
-Please follow the Java style in `tools/intellij-java-style.xml` and checkstyle rules in `tools/checkstyle.xml`. You can use IDE plugins to auto-format code.
+
+Please follow the Java style defined in `tools/intellij-java-style.xml` and the checkstyle rules in `tools/checkstyle.xml`. You can use IDE plugins to automatically format your code.
 
 ## Reporting Issues
-If you find a bug or have a feature request, please open an issue on [GitHub Issues](https://github.com/apache/geaflow/issues) with clear steps to reproduce or describe your suggestion.
+
+If you find a bug or have a feature request, please open an issue on our [GitHub Issues](https://github.com/apache/geaflow/issues). Provide clear steps to reproduce the bug or a detailed description of your suggestion.
 
 ## Documentation
-See the [docs folder](../docs) for user and developer documentation.
+
+Our user and developer documentation can be found in the [docs folder](../docs). We welcome any improvements you can make!
 
 ## Community
-- [Issue Tracker](https://github.com/apache/geaflow/issues)
-- [Mailing List](https://geaflow.apache.org/community.html)
-- [Website](https://geaflow.apache.org/)
 
-Thank you for helping improve GeaFlow!
+- **Website**: [https://geaflow.apache.org/](https://geaflow.apache.org/)
+- **Issue Tracker**: [https://github.com/apache/geaflow/issues](https://github.com/apache/geaflow/issues)
+- **Mailing List**: [dev@geaflow.apache.org](mailto:dev@geaflow.apache.org)
+
+Thank you for helping us improve GeaFlow!

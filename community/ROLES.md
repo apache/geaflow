@@ -5,20 +5,17 @@
   - [Users](#users)
   - [Contributors](#contributors)
   - [Committers](#committers)
-  - [Project Management Committee (PMC)](#project-management-committee-pmc)
 - [The Apache Way](#the-apache-way)
 
 This project follows the [Apache Software Foundation (ASF) Governance Ladder](https://theapacheway.com/ladder/). Below are the main roles, how to move between them, and their responsibilities.
 
 ## Role Overview
 
-| Role         | Level      | Key Requirements                 | Main Responsibilities             |
-| ------------ | ---------- | -------------------------------- | --------------------------------- |
-| Users        | Entry      | Use GeaFlow                      | Report issues, provide feedback   |
-| Contributors | Active     | Submit PRs/issues                | Code contributions, documentation |
-| Committers   | Trusted    | Consistent quality contributions | Review code, merge PRs, mentor    |
-| PMC Members  | Leadership | Elected by PMC                   | Project governance, releases      |
-
+| Role         | Level   | Key Requirements                 | Main Responsibilities             |
+| ------------ | ------- | -------------------------------- | --------------------------------- |
+| Users        | Entry   | Use GeaFlow                      | Report issues, provide feedback   |
+| Contributors | Active  | Submit PRs/issues                | Code contributions, documentation |
+| Committers   | Trusted | Consistent quality contributions | Review code, merge PRs, mentor    |
 
 ### Users
 **Who:** Anyone who uses GeaFlow.
@@ -49,16 +46,7 @@ This project follows the [Apache Software Foundation (ASF) Governance Ladder](ht
 - Help and mentor new contributors.
 - Follow ASF and project policies.
 
-### Project Management Committee (PMC)
-**Who:** Committers who are responsible for the overall project management. Members are elected by the current PMC.
 
-**How to become:** The PMC votes to add new members from the pool of active committers.
-
-**Responsibilities:**
-- Set project direction and policies.
-- Approve releases.
-- Ensure the project follows the Apache Way and ASF rules.
-- Handle legal, security, and community issues.
 
 ## The Apache Way
 
