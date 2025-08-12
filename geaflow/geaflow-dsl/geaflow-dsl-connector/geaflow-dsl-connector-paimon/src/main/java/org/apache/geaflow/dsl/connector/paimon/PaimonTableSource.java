@@ -70,7 +70,7 @@ public class PaimonTableSource implements TableSource {
     private String configJson;
     private Map<String, String> configs;
     private String database;
-    private String tableName;
+    private String table;
 
     private transient CatalogContext catalogContext;
     private transient Catalog catalog;
@@ -106,7 +106,7 @@ public class PaimonTableSource implements TableSource {
             }
         }
         this.database = tableConf.getString(PaimonConfigKeys.GEAFLOW_DSL_PAIMON_DATABASE_NAME);
-        this.tableName = tableConf.getString(PaimonConfigKeys.GEAFLOW_DSL_PAIMON_TABLE_NAME);
+        this.table = tableConf.getString(PaimonConfigKeys.GEAFLOW_DSL_PAIMON_TABLE_NAME);
     }
 
     @Override
@@ -132,24 +132,24 @@ public class PaimonTableSource implements TableSource {
             this.catalogContext = Objects.requireNonNull(CatalogContext.create(new Path(path)));
         }
         this.catalog = Objects.requireNonNull(CatalogFactory.createCatalog(this.catalogContext));
-        Identifier identifier = Identifier.create(database, tableName);
+        Identifier identifier = Identifier.create(database, table);
         try {
             this.readBuilder = Objects.requireNonNull(catalog.getTable(identifier).newReadBuilder());
         } catch (TableNotExistException e) {
-            throw new GeaFlowDSLException("Table: {} in db: {} not exists.", tableName, database);
+            throw new GeaFlowDSLException("Table: {} in db: {} not exists.", table, database);
         }
         this.partition2Reader = new HashMap<>();
         this.partition2InnerOffset = new HashMap<>();
         LOGGER.info("Open paimon source, tableConf: {}, tableSchema: {}, path: {}, options: "
             + "{}, configs: {}, database: {}, tableName: {}", tableConf, tableSchema, path,
-            options, configs, database, tableName);
+            options, configs, database, table);
     }
 
     @Override
     public List<Partition> listPartitions() {
         List<Split> splits = isAllWindow ? readBuilder.newScan().plan().splits() :
                              readBuilder.newStreamScan().plan().splits();
-        return splits.stream().map(split -> new PaimonPartition(database, tableName, split)).collect(Collectors.toList());
+        return splits.stream().map(split -> new PaimonPartition(database, table, split)).collect(Collectors.toList());
     }
 
     @Override
@@ -162,7 +162,7 @@ public class PaimonTableSource implements TableSource {
         throws IOException {
         PaimonPartition paimonPartition = (PaimonPartition) partition;
         assert paimonPartition.getDatabase().equals(this.database)
-            && paimonPartition.getTable().equals(this.tableName);
+            && paimonPartition.getTable().equals(this.table);
         RecordReader reader = partition2Reader.getOrDefault(partition,
             readBuilder.newRead().createReader(paimonPartition.getSplit()));
         partition2Reader.put(paimonPartition, reader);
@@ -175,23 +175,24 @@ public class PaimonTableSource implements TableSource {
             throw new GeaFlowDSLException("Paimon connector not support reset offset.");
         }
         CloseableIterator iterator = reader.toCloseableIterator();
-        if (windowInfo.getType() == WindowType.ALL_WINDOW) {
-            return FetchData.createBatchFetch(iterator, new PaimonOffset());
-        } else if (windowInfo.getType() == WindowType.SIZE_TUMBLING_WINDOW) {
-            List<Object> readContents = new ArrayList<>();
-            long i = 0;
-            for (; i < windowInfo.windowSize(); i++) {
-                if (iterator.hasNext()) {
-                    readContents.add(iterator.next());
-                } else {
-                    break;
+        switch (windowInfo.getType()) {
+            case ALL_WINDOW:
+                return FetchData.createBatchFetch(iterator, new PaimonOffset());
+            case SIZE_TUMBLING_WINDOW:
+                List<Object> readContents = new ArrayList<>();
+                long i = 0;
+                for (; i < windowInfo.windowSize(); i++) {
+                    if (iterator.hasNext()) {
+                        readContents.add(iterator.next());
+                    } else {
+                        break;
+                    }
                 }
-            }
-            long nextOffset = innerOffset.getOffset() + i;
-            boolean isFinished = !iterator.hasNext();
-            return FetchData.createStreamFetch(readContents, new PaimonOffset(nextOffset), isFinished);
-        } else {
-            throw new GeaFlowDSLException("Paimon not support window:{}", windowInfo.getType());
+                long nextOffset = innerOffset.getOffset() + i;
+                boolean isFinished = !iterator.hasNext();
+                return FetchData.createStreamFetch(readContents, new PaimonOffset(nextOffset), isFinished);
+            default:
+                throw new GeaFlowDSLException("Paimon not support window:{}", windowInfo.getType());
         }
     }
 

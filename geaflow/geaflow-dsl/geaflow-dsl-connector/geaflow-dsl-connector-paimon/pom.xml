@@ -28,7 +28,7 @@
         <version>0.6.8-SNAPSHOT</version>
     </parent>
     <artifactId>geaflow-dsl-connector-paimon</artifactId>
-    <name>Archetype - geaflow-dsl-connector-paimon</name>
+    <name>geaflow-dsl-connector-paimon</name>
 
     <dependencies>
         <dependency>
