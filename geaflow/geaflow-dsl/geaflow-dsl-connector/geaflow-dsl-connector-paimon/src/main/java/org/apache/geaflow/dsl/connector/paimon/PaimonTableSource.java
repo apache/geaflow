@@ -29,7 +29,6 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 import org.apache.commons.lang.StringUtils;
 import org.apache.geaflow.api.context.RuntimeContext;
-import org.apache.geaflow.api.window.WindowType;
 import org.apache.geaflow.common.config.Configuration;
 import org.apache.geaflow.common.config.keys.DSLConfigKeys;
 import org.apache.geaflow.common.utils.GsonUtil;
