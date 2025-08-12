@@ -37,7 +37,6 @@ public class RestJobOperatorCallback implements JobOperatorCallback {
     private static final String GEAFLOW_TOKEN_KEY = "geaflow-token";
     private static final String FINISH_JOB_PATH = "/api/tasks/%s/operations";
     private static final String FINISH_ACTION_KEY = "finish";
-    private static final String JOB_ACTION_KEY = "action";
 
     private final String callbackUrl;
     private final Map<String, String> headers;
@@ -52,16 +51,13 @@ public class RestJobOperatorCallback implements JobOperatorCallback {
 
     @Override
     public void onFinish() {
-        Map<String, String> params = new HashMap<>();
-        params.put(JOB_ACTION_KEY, FINISH_ACTION_KEY);
-        JobOperatorCallback.JobOperatorMeta jobOperatorMeta = new JobOperatorCallback.JobOperatorMeta(params);
+        JobOperatorCallback.JobOperatorMeta jobOperatorMeta = new JobOperatorCallback.JobOperatorMeta();
+        jobOperatorMeta.setSuccess(true);
+        jobOperatorMeta.setAction(FINISH_ACTION_KEY);
 
         String fullUrl = getFullUrl(jobOperatorMeta);
         if (fullUrl != null) {
-            HttpRequest request = new HttpRequest();
-            request.setSuccess(true);
-            request.setData(jobOperatorMeta);
-            HttpUtil.post(fullUrl, new Gson().toJson(request), headers);
+            HttpUtil.post(fullUrl, new Gson().toJson(jobOperatorMeta), headers);
         }
     }
 
