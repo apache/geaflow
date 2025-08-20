@@ -19,7 +19,7 @@
 
 package org.apache.geaflow.cluster.client.callback;
 
-import java.util.Map;
+import java.io.Serializable;
 
 public interface JobOperatorCallback {
 
@@ -28,20 +28,29 @@ public interface JobOperatorCallback {
      */
     void onFinish();
 
-    class JobOperatorMeta {
-        private final Map<String, String> params;
+    class JobOperatorMeta implements Serializable {
+        private boolean success;
+        private String action;
 
-        public JobOperatorMeta(Map<String, String> params) {
-            this.params = params;
+        public boolean isSuccess() {
+            return success;
         }
 
-        public Map<String, String> getParams() {
-            return params;
+        public void setSuccess(boolean success) {
+            this.success = success;
+        }
+
+        public String getAction() {
+            return action;
+        }
+
+        public void setAction(String action) {
+            this.action = action;
         }
 
         @Override
         public String toString() {
-            return "JobOperatorMeta{" + "params='" + params + '}';
+            return "JobOperatorMeta{" + "action='" + action + ", success=" + success + '}';
         }
     }
 }

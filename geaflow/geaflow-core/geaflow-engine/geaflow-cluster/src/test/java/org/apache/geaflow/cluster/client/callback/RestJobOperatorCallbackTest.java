@@ -65,16 +65,15 @@ public class RestJobOperatorCallbackTest {
         Configuration configuration = new Configuration();
         configuration.put(JOB_UNIQUE_ID, String.valueOf(0L));
         RestJobOperatorCallback callback = new RestJobOperatorCallback(configuration, baseUrl);
-        Map<String, ConnectAddress> addressList = new HashMap<>();
-        addressList.put("1", new ConnectAddress());
         callback.onFinish();
 
         // confirm that your app made the HTTP requests you were expecting.
-        RecordedRequest request1 = server.takeRequest();
-        Assert.assertEquals("/api/tasks/0/operations", request1.getPath());
-        HttpRequest result1 = new Gson()
-            .fromJson(request1.getBody().readString(StandardCharsets.UTF_8), HttpRequest.class);
-        Assert.assertTrue(result1.isSuccess());
+        RecordedRequest request = server.takeRequest();
+        Assert.assertEquals("/api/tasks/0/operations", request.getPath());
+        JobOperatorCallback.JobOperatorMeta reqBody = new Gson()
+            .fromJson(request.getBody().readString(StandardCharsets.UTF_8),  JobOperatorCallback.JobOperatorMeta.class);
+        Assert.assertTrue(reqBody.isSuccess());
+        Assert.assertEquals(reqBody.getAction(), "finish");
     }
 
 }
