@@ -20,12 +20,15 @@
 package org.apache.geaflow.dsl.connector.hive;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.stream.Collectors;
+import org.apache.geaflow.common.exception.GeaflowRuntimeException;
 import org.apache.geaflow.common.utils.ClassUtil;
 import org.apache.geaflow.dsl.common.data.Row;
 import org.apache.geaflow.dsl.common.data.impl.ObjectRow;
@@ -50,7 +53,7 @@ public class HiveReader {
     private final RecordReader<Writable, Writable> recordReader;
     private final StructType readSchema;
     private final Deserializer deserializer;
-
+    private long fetchOffset;
 
     public HiveReader(RecordReader<Writable, Writable> recordReader, StructType readSchema,
                       StorageDescriptor sd, Properties tableProps) {
@@ -59,6 +62,7 @@ public class HiveReader {
             f -> new TableField(f.getName().toLowerCase(Locale.ROOT), f.getType(), f.isNullable()))
             .collect(Collectors.toList()));
         this.deserializer = ClassUtil.newInstance(sd.getSerdeInfo().getSerializationLib());
+        this.fetchOffset = 0L;
         try {
             org.apache.hadoop.conf.Configuration conf = new org.apache.hadoop.conf.Configuration();
             SerDeUtils.initializeSerDe(deserializer, conf, tableProps, null);
@@ -69,11 +73,37 @@ public class HiveReader {
     }
 
     public FetchData<Row> read(long windowSize, String[] partitionValues) {
+        Iterator<Row> hiveIterator = new HiveIterator(recordReader, deserializer, partitionValues, readSchema);
         if (windowSize == Long.MAX_VALUE) {
-            Iterator<Row> hiveIterator = new HiveIterator(recordReader, deserializer, partitionValues, readSchema);
             return FetchData.createBatchFetch(hiveIterator, new HiveOffset(-1L));
         } else {
-            throw new GeaFlowDSLException("Cannot support stream read for hive");
+            long fetchCnt = 0L;
+            List<Row> rows = new ArrayList<>();
+            while (fetchCnt < windowSize) {
+                if (hiveIterator.hasNext()) {
+                    fetchCnt ++;
+                    rows.add(hiveIterator.next());
+                } else {
+                    break;
+                }
+            }
+            fetchOffset += fetchCnt;
+            return FetchData.createStreamFetch(rows, new HiveOffset(fetchOffset), fetchCnt < windowSize);
+        }
+    }
+
+    public void seek(long seekPos) {
+        try {
+            Writable key = recordReader.createKey();
+            Writable value = recordReader.createValue();
+            fetchOffset = seekPos;
+            while (seekPos-- > 0) {
+                if (!recordReader.next(key, value)) {
+                    throw new GeaflowRuntimeException("fetch offset is out of range: " + fetchOffset);
+                }
+            }
+        } catch (Exception e) {
+            throw new GeaflowRuntimeException(e);
         }
     }
 

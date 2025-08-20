@@ -73,6 +73,17 @@ public class FetchData<T> implements Serializable {
         return nextOffset;
     }
 
+    public void seek(long seekPos) {
+        long toSkip = seekPos;
+        while (toSkip > 0) {
+            if (!dataIterator.hasNext()) {
+                throw new RuntimeException("skip to many rows " + seekPos);
+            }
+            dataIterator.next();
+            toSkip --;
+        }
+    }
+
     /**
      * Returns true if the fetch has finished for the partition.
      */

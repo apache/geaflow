@@ -36,7 +36,9 @@ import org.apache.geaflow.dsl.common.types.TableSchema;
 import org.apache.geaflow.dsl.connector.api.FetchData;
 import org.apache.geaflow.dsl.connector.api.Partition;
 import org.apache.geaflow.dsl.connector.api.serde.TableDeserializer;
+import org.apache.geaflow.dsl.connector.api.window.AbstractFetchWindow;
 import org.apache.geaflow.dsl.connector.api.window.AllFetchWindow;
+import org.apache.geaflow.dsl.connector.api.window.SizeFetchWindow;
 import org.apache.geaflow.runtime.core.context.DefaultRuntimeContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -66,12 +68,13 @@ public class HiveTableSourceTest extends BaseHiveTest {
             new TableField("name", BinaryStringType.INSTANCE, true),
             new TableField("age", IntegerType.INSTANCE, false)
         );
-        checkReadHive(ddl, inserts, dataSchema, new StructType(),
-            "[1, jim, 20]\n"
-                + "[2, kate, 18]\n"
-                + "[3, lily, 22]\n"
-                + "[4, lucy, 25]\n"
-                + "[5, jack, 26]");
+        String expected = "[1, jim, 20]\n"
+            + "[2, kate, 18]\n"
+            + "[3, lily, 22]\n"
+            + "[4, lucy, 25]\n"
+            + "[5, jack, 26]";
+        checkReadHive(ddl, inserts, dataSchema, new StructType(), false, expected);
+        checkReadHive(ddl, inserts, dataSchema, new StructType(), true, expected);
     }
 
     @Test
@@ -87,12 +90,13 @@ public class HiveTableSourceTest extends BaseHiveTest {
             new TableField("name", BinaryStringType.INSTANCE, true),
             new TableField("age", IntegerType.INSTANCE, false)
         );
-        checkReadHive(ddl, inserts, dataSchema, new StructType(),
-            "[1, jim, 20]\n"
-                + "[2, kate, 18]\n"
-                + "[3, lily, 22]\n"
-                + "[4, lucy, 25]\n"
-                + "[5, jack, 26]");
+        String expected = "[1, jim, 20]\n"
+            + "[2, kate, 18]\n"
+            + "[3, lily, 22]\n"
+            + "[4, lucy, 25]\n"
+            + "[5, jack, 26]";
+        checkReadHive(ddl, inserts, dataSchema, new StructType(), true, expected);
+        checkReadHive(ddl, inserts, dataSchema, new StructType(), false, expected);
     }
 
     @Test
@@ -108,12 +112,13 @@ public class HiveTableSourceTest extends BaseHiveTest {
             new TableField("name", BinaryStringType.INSTANCE, true),
             new TableField("age", IntegerType.INSTANCE, false)
         );
-        checkReadHive(ddl, inserts, dataSchema, new StructType(),
-            "[1, jim, 20]\n"
-                + "[2, kate, 18]\n"
-                + "[3, lily, 22]\n"
-                + "[4, lucy, 25]\n"
-                + "[5, jack, 26]");
+        String expected = "[1, jim, 20]\n"
+            + "[2, kate, 18]\n"
+            + "[3, lily, 22]\n"
+            + "[4, lucy, 25]\n"
+            + "[5, jack, 26]";
+        checkReadHive(ddl, inserts, dataSchema, new StructType(), false, expected);
+        checkReadHive(ddl, inserts, dataSchema, new StructType(), true, expected);
     }
 
     @Test
@@ -135,12 +140,23 @@ public class HiveTableSourceTest extends BaseHiveTest {
         StructType partitionSchema = new StructType(
             new TableField("dt", BinaryStringType.INSTANCE, false)
         );
-        checkReadHive(ddl, inserts, dataSchema, partitionSchema,
+        String expected = "[1, jim, 20, 2023-04-23]\n"
+            + "[2, kate, 18, 2023-04-24]\n"
+            + "[3, lily, 22, 2023-04-24]\n"
+            + "[4, lucy, 25, 2023-04-25]\n"
+            + "[5, jack, 26, 2023-04-26]";
+        checkReadHive(ddl, inserts, dataSchema, partitionSchema, false,
             "[1, jim, 20, 2023-04-23]\n"
                 + "[2, kate, 18, 2023-04-24]\n"
                 + "[3, lily, 22, 2023-04-24]\n"
                 + "[4, lucy, 25, 2023-04-25]\n"
                 + "[5, jack, 26, 2023-04-26]");
+        checkReadHive(ddl, inserts, dataSchema, partitionSchema, true,
+                "[1, jim, 20, 2023-04-23]\n"
+                        + "[2, kate, 18, 2023-04-24]\n"
+                        + "[3, lily, 22, 2023-04-24]\n"
+                        + "[4, lucy, 25, 2023-04-25]\n"
+                        + "[5, jack, 26, 2023-04-26]");
     }
 
     @Test
@@ -163,16 +179,23 @@ public class HiveTableSourceTest extends BaseHiveTest {
             new TableField("hh", BinaryStringType.INSTANCE, false),
             new TableField("dt", BinaryStringType.INSTANCE, false)
         );
-        checkReadHive(ddl, inserts, dataSchema, partitionSchema,
+        checkReadHive(ddl, inserts, dataSchema, partitionSchema, false,
             "[1, jim, 20, 10, 2023-04-23]\n"
                 + "[2, kate, 18, 10, 2023-04-24]\n"
                 + "[3, lily, 22, 11, 2023-04-24]\n"
                 + "[4, lucy, 25, 12, 2023-04-25]\n"
                 + "[5, jack, 26, 13, 2023-04-26]");
+        checkReadHive(ddl, inserts, dataSchema, partitionSchema, true,
+                "[1, jim, 20, 10, 2023-04-23]\n"
+                        + "[2, kate, 18, 10, 2023-04-24]\n"
+                        + "[3, lily, 22, 11, 2023-04-24]\n"
+                        + "[4, lucy, 25, 12, 2023-04-25]\n"
+                        + "[5, jack, 26, 13, 2023-04-26]");
     }
 
     private void checkReadHive(String ddl, String inserts, StructType dataSchema,
                                StructType partitionSchema,
+                               boolean isStream,
                                String expectResult) throws IOException {
         executeHiveSql("Drop table if exists hive_user");
         executeHiveSql(ddl);
@@ -201,6 +224,12 @@ public class HiveTableSourceTest extends BaseHiveTest {
         List<Row> readRows = new ArrayList<>();
         for (Partition partition : partitions) {
             LOGGER.info("partition: {}", partition.getName());
+            AbstractFetchWindow window;
+            if (isStream) {
+                window = new SizeFetchWindow(1, Long.MAX_VALUE);
+            } else {
+                window = new AllFetchWindow(1);
+            }
             FetchData<Row> fetchData = hiveTableSource.fetch(partition, Optional.empty(),
                 new AllFetchWindow(1));
             Iterator<Row> rowIterator = fetchData.getDataIterator();
