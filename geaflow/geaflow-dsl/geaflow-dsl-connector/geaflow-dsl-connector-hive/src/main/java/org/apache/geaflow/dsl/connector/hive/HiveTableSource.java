@@ -213,6 +213,12 @@ public class HiveTableSource implements TableSource, EnablePartitionPushDown {
             }
             reader = new HiveReader(recordReader, dataSchema, hivePartition.getSd(), tableProps);
             partitionReaders.put(partition.getName(), reader);
+            if (startOffset.isPresent()) {
+                long seekOffset = startOffset.get().getOffset();
+                if (seekOffset > 0) {
+                    reader.seek(seekOffset);
+                }
+            }
         }
         try {
             return (FetchData<T>) reader.read(desireWindowSize, hivePartition.getPartitionValues());
