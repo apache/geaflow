@@ -29,7 +29,7 @@
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>com.antgroup.tugraph</groupId>
+    <groupId>org.apache.geaflow</groupId>
     <artifactId>geaflow-kubernetes-operator</artifactId>
     <version>0.4.0-SNAPSHOT</version>
     <packaging>pom</packaging>
@@ -114,19 +114,19 @@
             </dependency>
 
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-kubernetes-operator-bootstrap</artifactId>
                 <version>${project.version}</version>
             </dependency>
 
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-kubernetes-operator-web</artifactId>
                 <version>${project.version}</version>
             </dependency>
 
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-kubernetes-operator-core</artifactId>
                 <version>${project.version}</version>
             </dependency>
@@ -144,7 +144,7 @@
             </dependency>
 
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-on-k8s</artifactId>
                 <version>${project.version}</version>
             </dependency>

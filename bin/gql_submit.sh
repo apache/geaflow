@@ -124,6 +124,6 @@ $JAVACMD -cp "$CLASSPATH" \
   -DclusterType=LOCAL \
   -Dlog.file=${GEAFLOW_LOG_PATH} \
   -Dlog4j.configuration=${LOG4j_PROPERTIES_FILE_NAME} \
-  com.antgroup.geaflow.dsl.runtime.engine.GeaFlowGqlClient "${JOB_ARGS}" > ${GEAFLOW_LOG_PATH} 2>&1
+  org.apache.geaflow.dsl.runtime.engine.GeaFlowGqlClient "${JOB_ARGS}" > ${GEAFLOW_LOG_PATH} 2>&1
 
 echo "Finished"

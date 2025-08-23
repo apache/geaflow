@@ -17,26 +17,26 @@
  * under the License.
  */
 
-import com.antgroup.geaflow.common.config.Configuration;
-import com.antgroup.geaflow.common.type.primitive.IntegerType;
-import com.antgroup.geaflow.common.type.primitive.StringType;
-import com.antgroup.geaflow.dsl.common.data.impl.ObjectRow;
-import com.antgroup.geaflow.dsl.common.exception.GeaFlowDSLException;
-import com.antgroup.geaflow.dsl.common.types.TableField;
-import com.antgroup.geaflow.dsl.common.types.TableSchema;
-import com.antgroup.geaflow.dsl.connector.api.Partition;
-import com.antgroup.geaflow.dsl.connector.api.TableSink;
-import com.antgroup.geaflow.dsl.connector.api.TableSource;
-import com.antgroup.geaflow.dsl.connector.api.serde.impl.TextDeserializer;
-import com.antgroup.geaflow.dsl.connector.api.window.AllFetchWindow;
-import com.antgroup.geaflow.dsl.connector.socket.SocketConfigKeys;
-import com.antgroup.geaflow.dsl.connector.socket.SocketTableConnector;
-import com.antgroup.geaflow.dsl.connector.socket.SocketTableSource.SocketOffset;
-import com.antgroup.geaflow.dsl.connector.socket.SocketTableSource.SocketPartition;
-import com.antgroup.geaflow.dsl.connector.socket.server.NettyTerminalServer;
-import com.antgroup.geaflow.runtime.core.context.DefaultRuntimeContext;
 import java.util.ArrayList;
 import java.util.Optional;
+import org.apache.geaflow.common.config.Configuration;
+import org.apache.geaflow.common.type.primitive.IntegerType;
+import org.apache.geaflow.common.type.primitive.StringType;
+import org.apache.geaflow.dsl.common.data.impl.ObjectRow;
+import org.apache.geaflow.dsl.common.exception.GeaFlowDSLException;
+import org.apache.geaflow.dsl.common.types.TableField;
+import org.apache.geaflow.dsl.common.types.TableSchema;
+import org.apache.geaflow.dsl.connector.api.Partition;
+import org.apache.geaflow.dsl.connector.api.TableSink;
+import org.apache.geaflow.dsl.connector.api.TableSource;
+import org.apache.geaflow.dsl.connector.api.serde.impl.TextDeserializer;
+import org.apache.geaflow.dsl.connector.api.window.AllFetchWindow;
+import org.apache.geaflow.dsl.connector.socket.SocketConfigKeys;
+import org.apache.geaflow.dsl.connector.socket.SocketTableConnector;
+import org.apache.geaflow.dsl.connector.socket.SocketTableSource.SocketOffset;
+import org.apache.geaflow.dsl.connector.socket.SocketTableSource.SocketPartition;
+import org.apache.geaflow.dsl.connector.socket.server.NettyTerminalServer;
+import org.apache.geaflow.runtime.core.context.DefaultRuntimeContext;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 

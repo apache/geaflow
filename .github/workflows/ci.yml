@@ -36,4 +36,4 @@ jobs:
           version: "21.7"
 
       - name: Build and Test
-        run: mvn -B -e clean test -Duser.timezone=Asia/Shanghai
+        run: mvn -B -e clean test -Duser.timezone=Asia/Shanghai -Dlog4j.configuration="log4j.rootLogger=WARN, stdout"

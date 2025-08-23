@@ -24,8 +24,8 @@
 
     <parent>
         <artifactId>geaflow-dsl</artifactId>
-        <groupId>com.antgroup.tugraph</groupId>
-        <version>0.6.4-SNAPSHOT</version>
+        <groupId>org.apache.geaflow</groupId>
+        <version>0.6.8-SNAPSHOT</version>
     </parent>
 
     <modelVersion>4.0.0</modelVersion>
@@ -45,12 +45,14 @@
         <module>geaflow-dsl-connector-hudi</module>
         <module>geaflow-dsl-connector-hbase</module>
         <module>geaflow-dsl-connector-pulsar</module>
+        <module>geaflow-dsl-connector-random</module>
+        <module>geaflow-dsl-connector-paimon</module>
     </modules>
 
     <dependencyManagement>
         <dependencies>
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-dsl-connector-api</artifactId>
                 <version>${project.version}</version>
             </dependency>

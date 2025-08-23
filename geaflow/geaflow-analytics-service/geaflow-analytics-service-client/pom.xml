@@ -21,9 +21,9 @@
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <parent>
-        <groupId>com.antgroup.tugraph</groupId>
+        <groupId>org.apache.geaflow</groupId>
         <artifactId>geaflow-analytics-service</artifactId>
-        <version>0.6.4-SNAPSHOT</version>
+        <version>0.6.8-SNAPSHOT</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
@@ -32,16 +32,16 @@
     <dependencies>
 
         <dependency>
-            <groupId>com.antgroup.tugraph</groupId>
+            <groupId>org.apache.geaflow</groupId>
             <artifactId>geaflow-analytics-service-common</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.antgroup.tugraph</groupId>
+            <groupId>org.apache.geaflow</groupId>
             <artifactId>geaflow-service-discovery-api</artifactId>
         </dependency>
 
         <dependency>
-            <groupId>com.antgroup.tugraph</groupId>
+            <groupId>org.apache.geaflow</groupId>
             <artifactId>geaflow-dsl-runtime</artifactId>
             <exclusions>
                 <exclusion>
@@ -51,11 +51,11 @@
             </exclusions>
         </dependency>
         <dependency>
-            <groupId>com.antgroup.tugraph</groupId>
+            <groupId>org.apache.geaflow</groupId>
             <artifactId>geaflow-api</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.antgroup.tugraph</groupId>
+            <groupId>org.apache.geaflow</groupId>
             <artifactId>geaflow-metaserver-common</artifactId>
             <exclusions>
                 <exclusion>
@@ -65,11 +65,11 @@
             </exclusions>
         </dependency>
         <dependency>
-            <groupId>com.antgroup.tugraph</groupId>
+            <groupId>org.apache.geaflow</groupId>
             <artifactId>geaflow-rpc-proto</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.antgroup.tugraph</groupId>
+            <groupId>org.apache.geaflow</groupId>
             <artifactId>geaflow-service-discovery-redis</artifactId>
             <exclusions>
                 <exclusion>
@@ -79,7 +79,7 @@
             </exclusions>
         </dependency>
         <dependency>
-            <groupId>com.antgroup.tugraph</groupId>
+            <groupId>org.apache.geaflow</groupId>
             <artifactId>geaflow-dsl-common</artifactId>
             <version>${project.version}</version>
             <exclusions>
@@ -94,7 +94,7 @@
             </exclusions>
         </dependency>
         <dependency>
-            <groupId>com.antgroup.tugraph</groupId>
+            <groupId>org.apache.geaflow</groupId>
             <artifactId>geaflow-dsl-parser</artifactId>
             <version>${project.version}</version>
             <scope>compile</scope>

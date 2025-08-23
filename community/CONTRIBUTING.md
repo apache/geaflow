@@ -1,52 +1,43 @@
 # Contributing to GeaFlow
 
-Thank you for considering contributing to GeaFlow! We welcome contributions from the community and are grateful for your support.
+Thank you for your interest in contributing to GeaFlow! We welcome all contributions and appreciate your support.
 
-## How to Contribute
+## Ways to Contribute
 
-### 1. Fork the Repository
-Fork the repository to your own GitHub account by clicking the "Fork" button at the top right of the repository page.
+There are many ways to contribute to GeaFlow, and not all of them involve writing code. All forms of participation are valuable and help grow a healthy community. Here are some examples of how you can help:
 
-### 2. Clone the Repository
-Clone the forked repository to your local machine:
-```bash
-git clone https://github.com/TuGraph-family/tugraph-analytics.git geaflow
-cd geaflow
-```
+- Answering questions and helping others in our community spaces (mailing list, GitHub Discussions, etc.).
+- Reporting bugs, suggesting new features, or sharing your feedback.
+- Reviewing and testing pull requests from other contributors.
+- Translating documentation or other project materials.
+- Organizing or promoting community events.
+- Improving our project website, design, or user experience.
+- Creating tutorials, blog posts, or videos to help others learn about GeaFlow.
+- Spreading the word about GeaFlow through outreach and advocacy.
+- Any other activity that helps the project and its users!
 
-### 3. Create a Branch
-Create a new branch for your feature or bugfix:
-```bash
-git checkout -b my-feature-branch
-```
-
-### 4. Make Changes
-Make your changes to the codebase. Ensure your code follows the project's coding standards and includes appropriate tests.
-
-### 5. Commit Changes
-Commit your changes with a clear and concise commit message:
-```bash
-git add .
-git commit -m "Description of your changes"
-```
-
-### 6. Push Changes
-Push your changes to your forked repository:
-```bash
-git push origin my-feature-branch
-```
-
-### 7. Create a Pull Request
-Create a pull request from your forked repository to the main repository. Provide a detailed description of your changes and any relevant information.
-
-### 8. Review Process
-Your pull request will be reviewed by the project maintainers. Please be responsive to any feedback or requests for changes.
+If you have an idea for a contribution, please share it with the community. Every contribution is welcome!
 
 ## Code of Conduct
-Please adhere to our [Code of Conduct](../CODE_OF_CONDUCT.md) in all your interactions with the project.
 
-## Additional Resources
-- [Issue Tracker](https://github.com/TuGraph-family/tugraph-analytics/issues)
-- [Project Documentation](../docs)
+Please follow our [Code of Conduct](../CODE_OF_CONDUCT.md) in all your interactions with the project.
 
-Thank you for your contributions!
+## Coding Style
+
+Please follow the Java style defined in `tools/intellij-java-style.xml` and the checkstyle rules in `tools/checkstyle.xml`. You can use IDE plugins to automatically format your code.
+
+## Reporting Issues
+
+If you find a bug or have a feature request, please open an issue on our [GitHub Issues](https://github.com/apache/geaflow/issues). Provide clear steps to reproduce the bug or a detailed description of your suggestion.
+
+## Documentation
+
+Our user and developer documentation can be found in the [docs folder](../docs). We welcome any improvements you can make!
+
+## Community
+
+- **Website**: [https://geaflow.apache.org/](https://geaflow.apache.org/)
+- **Issue Tracker**: [https://github.com/apache/geaflow/issues](https://github.com/apache/geaflow/issues)
+- **Mailing List**: [dev@geaflow.apache.org](mailto:dev@geaflow.apache.org)
+
+Thank you for helping us improve GeaFlow!

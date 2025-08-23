@@ -1,4 +1,4 @@
-CREATE FUNCTION bi20 AS 'com.antgroup.geaflow.dsl.udf.ldbc.BIRecruitmentAlgorithm';
+CREATE FUNCTION bi20 AS 'org.apache.geaflow.dsl.udf.ldbc.BIRecruitmentAlgorithm';
 
 CREATE GRAPH bi (
   --static

@@ -26,7 +26,7 @@ spec:
   imagePullPolicy: IfNotPresent
   serviceAccount: geaflow
   # Reqiuired. When you submit an HLA job, you have to fill in the entryClass
-  entryClass: com.antgroup.geaflow.example.graph.statical.compute.khop.KHop
+  entryClass: org.apache.geaflow.example.graph.statical.compute.khop.KHop
 
   # Optional. Replace the udf jars to your own jars.
   udfJars:

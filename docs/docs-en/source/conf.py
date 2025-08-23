@@ -6,9 +6,10 @@
 # -- Project information -----------------------------------------------------
 
 import os, subprocess, sys, shlex
-project = 'TuGraph'
-copyright = '2023, Ant Group'
-author = 'Ant Group'
+
+project = 'GeaFlow'
+copyright = '2025, GeaFlow'
+author = 'GeaFlow'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration

@@ -23,53 +23,53 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 
     <parent>
-        <groupId>com.antgroup.tugraph</groupId>
+        <groupId>org.apache.geaflow</groupId>
         <artifactId>geaflow-runtime</artifactId>
-        <version>0.6.4-SNAPSHOT</version>
+        <version>0.6.8-SNAPSHOT</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
     <artifactId>geaflow-operator</artifactId>
     <packaging>jar</packaging>
 
-   <dependencies>
-       <dependency>
-           <groupId>commons-io</groupId>
-           <artifactId>commons-io</artifactId>
-       </dependency>
-       <dependency>
-           <groupId>org.apache.commons</groupId>
-           <artifactId>commons-lang3</artifactId>
-       </dependency>
-       <dependency>
-           <groupId>com.antgroup.tugraph</groupId>
-           <artifactId>geaflow-api</artifactId>
-       </dependency>
-       <dependency>
-           <groupId>com.antgroup.tugraph</groupId>
-           <artifactId>geaflow-common</artifactId>
-       </dependency>
-       <dependency>
-           <groupId>com.antgroup.tugraph</groupId>
-           <artifactId>geaflow-core-common</artifactId>
-       </dependency>
-       <dependency>
-           <groupId>com.antgroup.tugraph</groupId>
-           <artifactId>geaflow-state-api</artifactId>
-       </dependency>
-       <dependency>
-           <groupId>com.antgroup.tugraph</groupId>
-           <artifactId>geaflow-state-impl</artifactId>
-       </dependency>
-       <dependency>
-           <groupId>com.antgroup.tugraph</groupId>
-           <artifactId>geaflow-view-meta</artifactId>
-       </dependency>
-       <dependency>
-           <groupId>com.antgroup.tugraph</groupId>
-           <artifactId>geaflow-infer</artifactId>
-       </dependency>
-   </dependencies>
+    <dependencies>
+        <dependency>
+            <groupId>commons-io</groupId>
+            <artifactId>commons-io</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-lang3</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.geaflow</groupId>
+            <artifactId>geaflow-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.geaflow</groupId>
+            <artifactId>geaflow-common</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.geaflow</groupId>
+            <artifactId>geaflow-core-common</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.geaflow</groupId>
+            <artifactId>geaflow-state-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.geaflow</groupId>
+            <artifactId>geaflow-state-impl</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.geaflow</groupId>
+            <artifactId>geaflow-view-meta</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.geaflow</groupId>
+            <artifactId>geaflow-infer</artifactId>
+        </dependency>
+    </dependencies>
 
 
 </project>
