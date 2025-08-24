@@ -77,7 +77,7 @@ public class FetchData<T> implements Serializable {
         long toSkip = seekPos;
         while (toSkip > 0) {
             if (!dataIterator.hasNext()) {
-                throw new RuntimeException("skip to many rows " + seekPos);
+                throw new RuntimeException("seek pos:" + seekPos + " exceed the split size: " + (seekPos - toSkip));
             }
             dataIterator.next();
             toSkip --;
