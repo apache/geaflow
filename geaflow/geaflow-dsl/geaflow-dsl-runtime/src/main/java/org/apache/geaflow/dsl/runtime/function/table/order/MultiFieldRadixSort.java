@@ -19,16 +19,15 @@
 
 package org.apache.geaflow.dsl.runtime.function.table.order;
 
-import java.util.Collections;
-
-import org.apache.geaflow.common.type.IType;
-import org.apache.geaflow.dsl.common.data.Row;
-import java.util.List;
-import org.apache.geaflow.common.type.Types;
-import java.util.IntSummaryStatistics;
-import java.util.Objects;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.IntSummaryStatistics;
+import java.util.List;
+import java.util.Objects;
 import org.apache.geaflow.common.binary.BinaryString;
+import org.apache.geaflow.common.type.IType;
+import org.apache.geaflow.common.type.Types;
+import org.apache.geaflow.dsl.common.data.Row;
 
 public class MultiFieldRadixSort {
     
@@ -67,7 +66,6 @@ public class MultiFieldRadixSort {
             .filter(obj -> obj instanceof Number)  // Make sure it is a numeric type.
             .mapToInt(obj -> ((Number) obj).intValue())
             .summaryStatistics();
-        System.out.println("═══════════field.expression.evaluate(item)->number════════════");
         int max = 0, min = 0;
         if (stats.getCount() > 0) {
             max = stats.getMax();
@@ -119,7 +117,7 @@ public class MultiFieldRadixSort {
         for (int i = 0; i < n; i++) {
             values[i] = (Integer) field.expression.evaluate(data.get(i));
         }
-        System.out.println("═══════════field.expression.evaluate(item)->Integer════════════");
+        
         // Count the number of times each number appears.
         for (int i = 0; i < n; i++) {
             int digit = (values[i] + offset) / exp % 10;

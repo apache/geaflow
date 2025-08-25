@@ -19,13 +19,13 @@
 
 package org.apache.geaflow.dsl.runtime.function.table;
 
+import com.google.common.collect.Lists;
+import java.util.List;
+import java.util.PriorityQueue;
 import org.apache.geaflow.dsl.common.data.Row;
 import org.apache.geaflow.dsl.common.function.FunctionContext;
 import org.apache.geaflow.dsl.runtime.function.table.order.SortInfo;
 import org.apache.geaflow.dsl.runtime.function.table.order.TopNRowComparator;
-import com.google.common.collect.Lists;
-import java.util.List;
-import java.util.PriorityQueue;
 
 public class OrderByHeapSort implements OrderByFunction {
 

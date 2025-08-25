@@ -24,8 +24,8 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 import org.apache.geaflow.common.type.IType;
-import org.apache.geaflow.common.type.Types;
 import org.apache.geaflow.common.type.primitive.BinaryStringType;
+import org.apache.geaflow.common.type.Types;
 
 public class SortInfo implements Serializable {
 
