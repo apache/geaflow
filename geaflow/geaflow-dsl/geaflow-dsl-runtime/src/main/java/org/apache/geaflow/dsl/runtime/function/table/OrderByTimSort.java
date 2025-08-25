@@ -19,12 +19,12 @@
 
 package org.apache.geaflow.dsl.runtime.function.table;
 
+import java.util.ArrayList;
+import java.util.List;
 import org.apache.geaflow.dsl.common.data.Row;
 import org.apache.geaflow.dsl.common.function.FunctionContext;
 import org.apache.geaflow.dsl.runtime.function.table.order.SortInfo;
 import org.apache.geaflow.dsl.runtime.function.table.order.TopNRowComparator;
-import java.util.ArrayList;
-import java.util.List;
 
 public class OrderByTimSort implements OrderByFunction {
 
