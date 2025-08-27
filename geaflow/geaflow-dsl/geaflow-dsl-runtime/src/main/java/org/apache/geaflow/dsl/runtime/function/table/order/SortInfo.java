@@ -48,7 +48,8 @@ public class SortInfo implements Serializable {
                 return false;
             } else if (orderType.getTypeClass() == BinaryString.class) {
                 int precision = ((BinaryStringType) orderType).getPrecision();
-                if (precision > 11 || precision < 0) {
+                // MongoDB ObjectId: 24-character hexadecimal
+                if (precision > 24 || precision < 0) {
                     return false;  
                 }
             }
