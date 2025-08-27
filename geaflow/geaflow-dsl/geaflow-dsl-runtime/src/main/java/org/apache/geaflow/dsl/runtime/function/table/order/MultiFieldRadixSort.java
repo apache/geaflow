@@ -19,154 +19,169 @@
 
 package org.apache.geaflow.dsl.runtime.function.table.order;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.IntSummaryStatistics;
 import java.util.List;
-import java.util.Objects;
 import org.apache.geaflow.common.binary.BinaryString;
-import org.apache.geaflow.common.type.IType;
-import org.apache.geaflow.common.type.Types;
 import org.apache.geaflow.dsl.common.data.Row;
 
 public class MultiFieldRadixSort {
+
+    private static int dataSize;
+
+    private static int[] intValues, sortedIntValues, charCodes;
+
+    private static byte[] digits;
+
+    private static String[] stringValues, sortedStringValues;
+
+    private static Row[] srcData, dstData;
     
     /**
      * Multi-field radix sort.
      */
-    public static void multiFieldRadixSort(List<Row> data,
-                                    SortInfo sortInfo) {
-        if (data == null || data.size() <= 1) return;
-        
+    public static void multiFieldRadixSort(List<Row> data, SortInfo sortInfo) {
+        dataSize = data.size();
+        if (data == null || dataSize <= 1) return;
+
+        // Init arrays.
+        intValues = new int[dataSize];
+        sortedIntValues = new int[dataSize];
+        charCodes = new int[dataSize];
+        digits = new byte[dataSize];
+        stringValues = new String[dataSize];
+        sortedStringValues = new String[dataSize];
+        srcData = data.toArray(new Row[0]);
+        dstData = new Row[dataSize];
+
         // Sort by field with the lowest priority.
         List<OrderByField> fields = sortInfo.orderByFields;
 
         for (int i = fields.size() - 1; i >= 0; i--) {
             OrderByField field = fields.get(i);
-            IType<?> orderType = field.expression.getOutputType();
-            if (Types.getType(orderType.getTypeClass()) == Types.INTEGER) {
+            if (field.expression.getOutputType().getTypeClass() == Integer.class) {
                 radixSortByIntField(data, field);
-            } else if (Types.getType(orderType.getTypeClass()) == Types.BINARY_STRING) {
+            } else {
                 radixSortByStringField(data, field);
+            }
+            for (int j = 0; j < dataSize; j++) {
+                data.set(j, srcData[j]);
             }
         }
     }
-    
+
     /**
      * Radix sort by integer field.
      */
-    private static void radixSortByIntField(List<Row> data, 
-                                               OrderByField field) {
-        if (data.isEmpty()) return;
-        
+    private static void radixSortByIntField(List<Row> data, OrderByField field) {
         // Determine the number of digits.
-        IntSummaryStatistics stats = data.stream()
-            .map(item -> field.expression.evaluate(item))
-            .filter(Objects::nonNull)
-            .filter(obj -> obj instanceof Number)  // Make sure it is a numeric type.
-            .mapToInt(obj -> ((Number) obj).intValue())
-            .summaryStatistics();
-        int max = 0, min = 0;
-        if (stats.getCount() > 0) {
-            max = stats.getMax();
-            min = stats.getMin();
+        int max = Integer.MIN_VALUE;
+        int min = Integer.MAX_VALUE;
+        boolean hasNull = false;
+        
+        for (int i = 0; i < dataSize; i++) {
+            Integer value = (Integer) field.expression.evaluate(data.get(i));
+            if (value != null) {
+                intValues[i] = value;
+                max = value > max ? value : max;
+                min = value < min ? value : min;
+            } else {
+                intValues[i] = Integer.MIN_VALUE;
+                hasNull = true;
+            }
+        }
+        if (hasNull) {
+            min--;
         }
         
         // Handling negative numbers: Add the offset to all numbers to make them positive.
-        int offset = min < 0 ? -min : 0;
+        final int offset = min < 0 ? -min : 0;
         max += offset;
-        
+
+        for (int i = 0; i < dataSize; i++) {
+            if (intValues[i] == Integer.MIN_VALUE) {
+                intValues[i] = min;
+            }
+            intValues[i] += offset;
+        }
+
         // Bitwise sorting.
         for (int exp = 1; max / exp > 0; exp *= 10) {
-            countingSortByDigit(data, field, exp, offset);
+            for (int j = 0; j < dataSize; j++) {
+                digits[j] = (byte) (intValues[j] / exp % 10);
+            }
+            countingSortByDigit(field.order.value > 0);
         }
     }
-    
+
     /**
      * Radix sorting by string field.
      */
-    private static void radixSortByStringField(List<Row> data, 
-                                                  OrderByField field) {
-        if (data.isEmpty()) return;
+    private static void radixSortByStringField(List<Row> data, OrderByField field) {
+        // Precompute all strings to avoid repeated evaluation and toString.
+        int maxLength = 0;
         
-        int maxLength = data.stream()
-            .map(item -> ((BinaryString)field.expression.evaluate(item)).getLength())
-            .filter(Objects::nonNull)
-            .mapToInt(Integer::intValue)
-            .max()
-            .orElse(0);
+        for (int i = 0; i < dataSize; i++) {
+            BinaryString binaryString = (BinaryString) field.expression.evaluate(data.get(i));
+            stringValues[i] = binaryString != null ? binaryString.toString() : "";
+            maxLength = Math.max(maxLength, stringValues[i].length());
+        }
 
         // Sort from the last digit of the string.
         for (int pos = maxLength - 1; pos >= 0; pos--) {
-            countingSortByChar(data, field, pos);
+            countingSortByChar(field.order.value > 0, pos);
         }
     }
-    
+
     /**
      * Sort by the specified number of digits (integer).
      */
-    private static void countingSortByDigit(List<Row> data, 
-                                               OrderByField field,
-                                               int exp, int offset) {
-        int n = data.size();
-        List<Row> output = new ArrayList<>(Collections.nCopies(n, null));
+    private static void countingSortByDigit(boolean ascending) {
         int[] count = new int[10];
-        
-        // Pre-calculate all values to avoid repeated evaluation.
-        int[] values = new int[n];
-        for (int i = 0; i < n; i++) {
-            values[i] = (Integer) field.expression.evaluate(data.get(i));
-        }
-        
+
         // Count the number of times each number appears.
-        for (int i = 0; i < n; i++) {
-            int digit = (values[i] + offset) / exp % 10;
-            count[digit]++;
+        for (int i = 0; i < dataSize; i++) {
+            count[digits[i]]++;
         }
-        
+
         // Calculate cumulative count.
-        if (field.order.value>0){
+        if (ascending) {
             for (int i = 1; i < 10; i++) {
                 count[i] += count[i - 1];
             }
-        }else{
+        } else {
             for (int i = 8; i >= 0; i--) {
                 count[i] += count[i + 1];
             }
         }
+
         // Build the output array from back to front (to ensure stability).
-        for (int i = n - 1; i >= 0; i--) {
-            int digit = (values[i] + offset) / exp % 10;
-            output.set(count[digit] - 1, data.get(i));
-            count[digit]--;
+        for (int i = dataSize - 1; i >= 0; i--) {
+            int index = --count[digits[i]];
+            dstData[index] = srcData[i];
+            sortedIntValues[index] = intValues[i];
         }
+
+        int[] intTmp = intValues;
+        intValues = sortedIntValues;
+        sortedIntValues = intTmp;
         
-        // Copy back to the original array.
-        for (int i = 0; i < n; i++) {
-            data.set(i, output.get(i));
-        }
+        Row[] rowTmp = srcData;
+        srcData = dstData;
+        dstData = rowTmp;
     }
-    
+
     /**
      * Sort by the specified number of digits (string).
      */
-    private static void countingSortByChar(List<Row> data, 
-                                              OrderByField field,
-                                              int pos) {
-        int n = data.size();
-        List<Row> output = new ArrayList<>(Collections.nCopies(n, null));
-        
+    private static void countingSortByChar(boolean ascending, int pos) {
         // Precompute all strings and character codes to avoid repeated evaluate and toString.
-        String[] strings = new String[n];
-        int[] charCodes = new int[n];
-
         int minChar = Integer.MAX_VALUE;
         int maxChar = Integer.MIN_VALUE;
 
-        for (int i = 0; i < n; i++) {
-            strings[i] = ((BinaryString)field.expression.evaluate(data.get(i))).toString();
-            if (pos < strings[i].length()) {
-                int charCode = strings[i].codePointAt(pos);
+        for (int i = 0; i < dataSize; i++) {
+            String value = stringValues[i];
+            if (pos < value.length()) {
+                int charCode = value.codePointAt(pos);
+                charCodes[i] = charCode;
                 minChar = Math.min(minChar, charCode);
                 maxChar = Math.max(maxChar, charCode);
             }
@@ -174,29 +189,37 @@ public class MultiFieldRadixSort {
         int range = maxChar - minChar + 2;
         int[] count = new int[range];
 
-        for (int i = 0; i < n; i++) {
-            charCodes[i] = pos < strings[i].length() ? strings[i].charAt(pos) : 0;
-            charCodes[i] = charCodes[i] == 0 ? 0 : charCodes[i] - minChar + 1;
+        for (int i = 0; i < dataSize; i++) {
+            if (pos < stringValues[i].length()) {
+                charCodes[i] -= (minChar - 1);
+            } else {
+                charCodes[i] = 0; // null character
+            }
             count[charCodes[i]]++;
         }
-        
-        if (field.order.value>0){
+
+        if (ascending) {
             for (int i = 1; i < range; i++) {
                 count[i] += count[i - 1];
             }
-        }else{
-            for (int i = range-2; i >= 0; i--) {
+        } else {
+            for (int i = range - 2; i >= 0; i--) {
                 count[i] += count[i + 1];
             }
         }
-        
-        for (int i = n - 1; i >= 0; i--) {
-            output.set(count[charCodes[i]] - 1, data.get(i));
-            count[charCodes[i]]--;
+
+        for (int i = dataSize - 1; i >= 0; i--) {
+            int index = --count[charCodes[i]];
+            dstData[index] = srcData[i];
+            sortedStringValues[index] = stringValues[i];
         }
+
+        String[] stringTmp = stringValues;
+        stringValues = sortedStringValues;
+        sortedStringValues = stringTmp;
         
-        for (int i = 0; i < n; i++) {
-            data.set(i, output.get(i));
-        }
+        Row[] rowTmp = srcData;
+        srcData = dstData;
+        dstData = rowTmp;
     }
 }
