@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 ################################################################################
 # Licensed to the Apache Software Foundation (ASF) under one
 # or more contributor license agreements.  See the NOTICE file
@@ -16,44 +17,20 @@
 # specific language governing permissions and limitations
 # under the License.
 ################################################################################
-name: Java CI with Maven On JDK 8
 
-on:
-  push:
-    branches: [ "master" ]
-  pull_request:
-    branches: [ "master" ]
+set -e
+wget https://security.ubuntu.com/ubuntu/pool/main/o/openssl/libssl1.1_1.1.1-1ubuntu2.1~18.04.23_amd64.deb
+sudo dpkg -i libssl1.1_1.1.1-1ubuntu2.1~18.04.23_amd64.deb
 
-env:
-  JAVA_TOOL_OPTIONS: -Xmx3g
-
-jobs:
-  build:
-
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Print available memory
-        run: free -m
-
-      - name: Set up JDK 8
-        uses: actions/setup-java@v3
-        with:
-          java-version: '8'
-          distribution: 'temurin'
-          cache: maven
-
-      - name: Setup Protoc
-        uses: arduino/setup-protoc@v2
-        with:
-          version: "21.7"
-
-      - name: Build and Test On JDK 8
-        run: |
-          . .github/workflows/utils.sh
-          jvm_timezone=$(random_timezone)
-          echo "JVM timezone is set to $jvm_timezone"
-          
-          mvn -B -e clean test -Duser.timezone=$jvm_timezone
+function random_timezone() {
+    local rnd=$(expr $RANDOM % 25)
+    local hh=$(expr $rnd / 2)
+    local mm=$(expr $rnd % 2 \* 3)"0"
+    local sgn=$(expr $RANDOM % 2)
+    if [ $sgn -eq 0 ]
+    then
+        echo "GMT+$hh:$mm"
+    else
+        echo "GMT-$hh:$mm"
+    fi
+}
