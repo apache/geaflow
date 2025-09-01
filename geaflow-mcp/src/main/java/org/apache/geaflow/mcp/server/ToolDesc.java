@@ -25,13 +25,9 @@ package org.apache.geaflow.mcp.server;
  *
  * @author lt on 2025/9/1.
  */
-public interface GeaFlowMcpActions {
+public class ToolDesc {
 
-    String createGraph(String graphName, String ddl);
-
-    String queryGraph(String graphName, String gql);
-
-    String queryType(String graphName, String type);
-
-    void withUser(String user);
+    public static final String createGraph = "create graph with ddl";
+    public static final String insertGraph = "Insert into graph dml";
+    public static final String queryType = "query vertex or edge";
 }

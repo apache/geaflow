@@ -34,14 +34,9 @@ import java.util.Map;
 public class GeaFlowMcpServerTools {
     private static final Logger LOGGER = LoggerFactory.getLogger(GeaFlowMcpServerTools.class);
 
-    private static final String RETRY_TIMES = "analytics.retry.times";
-    private static final int DEFAULT_RETRY_TIMES = 3;
-    private static final String ERROR = "error";
     public static final String SERVER_HOST = "analytics.server.host";
     public static final String SERVER_PORT = "analytics.server.port";
     public static final String SERVER_USER = "analytics.query.user";
-    public static final String QUERY_TIMEOUT_MS = "analytics.query.timeout.ms";
-    public static final String INIT_CHANNEL_POOLS = "analytics.init.channel.pools";
     public static final String CONFIG = "analytics.client.config";
     public static final String CURRENT_VERSION = "v1.0.0";
 
@@ -118,7 +113,7 @@ public class GeaFlowMcpServerTools {
      * @param ddl Create graph ddl.
      * @return query result or error code.
      */
-    @ToolMapping(description = "create graph")
+    @ToolMapping(description = ToolDesc.createGraph)
     public String createGraph(@Param(name = McpConstants.GRAPH_NAME, description = "create graph name") String graphName,
                               @Param(name = McpConstants.DDL, description = "create graph ddl") String ddl) {
         try {
@@ -140,8 +135,8 @@ public class GeaFlowMcpServerTools {
      * @param dml Query graph dql.
      * @return query result or error code.
      */
-    @ToolMapping(description = "Insert into graph dml")
-    public String insertGraph(@Param(name = McpConstants.GRAPH_NAME, description = "query graph name") String graphName,
+    @ToolMapping(description = ToolDesc.insertGraph)
+    public String insertGraph(@Param(name = McpConstants.GRAPH_NAME, description = "graph name") String graphName,
                               @Param(name = McpConstants.DML, description = "dml insert values into graph") String dml) {
         try {
             Map<String, Object> config = YamlParser.loadConfig();
@@ -163,19 +158,20 @@ public class GeaFlowMcpServerTools {
      * @param type Query graph dql.
      * @return query result or error code.
      */
-    @ToolMapping(description = "query vertex or edge")
-    public String queryGraph(@Param(name = "Graph Name", description = "query graph name") String graphName,
-                             @Param(name = "Query Type Name", description = "query graph vertex or edge type name") String type) {
+    @ToolMapping(description = ToolDesc.queryType)
+    public String queryType(@Param(name = McpConstants.GRAPH_NAME, description = "query graph name") String graphName,
+                            @Param(name = McpConstants.TYPE, description = "query graph vertex or edge type name") String type) {
         try {
             Map<String, Object> config = YamlParser.loadConfig();
             GeaFlowMcpActions mcpActions = new GeaFlowMcpActionsLocalImpl(config);
             if (config.containsKey(SERVER_USER)) {
                 mcpActions.withUser(config.get(SERVER_USER).toString());
             }
-            return mcpActions.queryGraph(graphName, type);
+            return mcpActions.queryType(graphName, type);
         } catch (Exception e) {
             LOGGER.error(e.getMessage(), e);
             return e.getMessage();
         }
     }
+
 }

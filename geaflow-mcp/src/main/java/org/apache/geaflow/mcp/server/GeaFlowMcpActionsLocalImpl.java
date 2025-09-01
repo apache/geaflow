@@ -19,13 +19,23 @@
 
 package org.apache.geaflow.mcp.server;
 
+import org.apache.commons.io.IOUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.geaflow.cluster.local.client.LocalEnvironment;
 import org.apache.geaflow.dsl.schema.GeaFlowGraph;
 import org.apache.geaflow.env.IEnvironment;
 import org.apache.geaflow.mcp.server.util.McpLocalFileUtil;
+import org.apache.geaflow.mcp.server.util.QueryFormatUtil;
 import org.apache.geaflow.mcp.server.util.QueryLocalRunner;
 
+import java.io.File;
+import java.io.IOException;
+import java.nio.charset.Charset;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Alipay.com Inc
@@ -67,7 +77,39 @@ public class GeaFlowMcpActionsLocalImpl implements GeaFlowMcpActions {
     }
 
     @Override
-    public String queryGraph(String graphName, String type) {
+    public String queryGraph(String graphName, String dml) {
+        QueryLocalRunner compileRunner = new QueryLocalRunner();
+        String ddl = null;
+        try {
+            ddl = McpLocalFileUtil.readFile(QueryLocalRunner.DSL_STATE_REMOTE_SCHEM_PATH, graphName);
+        } catch (Throwable e) {
+            return "Cannot get graph schema for: " + graphName;
+        }
+        compileRunner.withGraphName(graphName).withGraphDefine(ddl);
+        GeaFlowGraph graph;
+        try {
+            graph = compileRunner.compileGraph();
+        } catch (Throwable e) {
+            return compileRunner.getErrorMsg();
+        }
+        if (graph == null) {
+            throw new RuntimeException("Cannot create graph: " + graphName);
+        }
+
+        QueryLocalRunner runner = new QueryLocalRunner();
+        runner.withGraphDefine(ddl);
+        String usingGraph = "USE GRAPH " + graphName + ";\n";
+        runner.withQuery(ddl + "\n" + usingGraph + dml);
+        try {
+            runner.execute();
+        } catch (Throwable e) {
+            return runner.getErrorMsg();
+        }
+        return "run query success: " + dml;
+    }
+
+    @Override
+    public String queryType(String graphName, String type) {
         QueryLocalRunner compileRunner = new QueryLocalRunner();
         String ddl = null;
         try {
@@ -90,27 +132,63 @@ public class GeaFlowMcpActionsLocalImpl implements GeaFlowMcpActions {
         runner.withGraphDefine(ddl);
         String usingGraph = "USE GRAPH " + graphName + ";\n";
         String dql = null;
+        String dirName = "query_result_" + Instant.now().toEpochMilli();
+        String resultPath = QueryLocalRunner.DSL_STATE_REMOTE_PATH + "/" + dirName;
         for (GeaFlowGraph.VertexTable vertexTable : graph.getVertexTables()) {
             if (vertexTable.getTypeName().equals(type)) {
-                dql = "Match(a:" + type + ")";
+                dql = QueryFormatUtil.makeResultTable(vertexTable, resultPath)
+                        + "\n" + QueryFormatUtil.makeEntityTableQuery(vertexTable);
             }
         }
         for (GeaFlowGraph.EdgeTable edgeTable : graph.getEdgeTables()) {
             if (edgeTable.getTypeName().equals(type)) {
-                dql = "Match()-[e:" + type + "]-()";
+                dql = QueryFormatUtil.makeResultTable(edgeTable, resultPath)
+                        + "\n" + QueryFormatUtil.makeEntityTableQuery(edgeTable);
             }
         }
         runner.withQuery(ddl + "\n" + usingGraph + dql);
+        String resultContent = "null";
         try {
             runner.execute();
+            resultContent = readFile(resultPath);
         } catch (Throwable e) {
             return runner.getErrorMsg();
         }
-        return "run query success: " + dql;
+        return resultContent;
     }
 
     @Override
     public void withUser(String user) {
         this.user = user;
+    }
+
+    private String readFile(String path) throws IOException {
+        File file = new File(path);
+        if (file.isHidden()) {
+            return "";
+        }
+        if (file.isFile()) {
+            return IOUtils.toString(new File(path).toURI(), Charset.defaultCharset()).trim();
+        }
+        File[] files = file.listFiles();
+        StringBuilder content = new StringBuilder();
+        List<String> readTextList = new ArrayList<>();
+        if (files != null) {
+            for (File subFile : files) {
+                String readText = readFile(subFile.getAbsolutePath());
+                if (StringUtils.isBlank(readText)) {
+                    continue;
+                }
+                readTextList.add(readText);
+            }
+        }
+        readTextList = readTextList.stream().sorted().collect(Collectors.toList());
+        for (String readText : readTextList) {
+            if (content.length() > 0) {
+                content.append("\n");
+            }
+            content.append(readText);
+        }
+        return content.toString().trim();
     }
 }

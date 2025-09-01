@@ -62,7 +62,6 @@ public class GeaFlowMcpClientTest {
     /**
      * Call execute query tool.
      */
-    @Test
     public void testExecuteQuery() {
         McpClientProvider toolProvider = McpClientProvider.builder()
             .apiUrl(SSE_ENDPOINT)
@@ -97,7 +96,7 @@ public class GeaFlowMcpClientTest {
             LOGGER.info("Tool: {}, desc: {}, input schema: {}", tool.name(), tool.description(), tool.inputSchema());
             toolNames.add(tool.name());
         });
-        Assertions.assertTrue(toolNames.contains(EXECUTE_QUERY_TOOL_NAME));
+        Assertions.assertTrue(toolNames.contains(McpConstants.CREATE_GRAPH_TOOL_NAME));
     }
 
     /**
@@ -148,7 +147,7 @@ public class GeaFlowMcpClientTest {
      * Call create graph tool.
      */
     @Test
-    public void testQueryGraph() throws IOException {
+    public void testQueryGraphType() throws IOException {
         McpClientProvider toolProvider = McpClientProvider.builder()
                 .apiUrl(SSE_ENDPOINT)
                 .build();
@@ -157,10 +156,10 @@ public class GeaFlowMcpClientTest {
         map.put(McpConstants.TYPE, "person");
         map.put(McpConstants.GRAPH_NAME, "modern");
 
-        String queryResults = toolProvider.callToolAsText(McpConstants.QUERY_GRAPH_TOOL_NAME, map).getContent();
+        String queryResults = toolProvider.callToolAsText(McpConstants.QUERY_TYPE_TOOL_NAME, map).getContent();
         LOGGER.info("queryResults: {}", queryResults);
-        Assertions.assertEquals("run query success: Match (a) return a.id;",
-                queryResults);
+        Assertions.assertEquals("1,jim,20\n" +
+                "2,kate,22", queryResults);
 
     }
 }

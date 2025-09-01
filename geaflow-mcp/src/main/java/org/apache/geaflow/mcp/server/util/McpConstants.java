@@ -17,4 +17,5 @@ public class McpConstants {
     public static final String CREATE_GRAPH_TOOL_NAME = "createGraph";
     public static final String INSERT_GRAPH_TOOL_NAME = "insertGraph";
     public static final String QUERY_GRAPH_TOOL_NAME = "queryGraph";
+    public static final String QUERY_TYPE_TOOL_NAME = "queryType";
 }
