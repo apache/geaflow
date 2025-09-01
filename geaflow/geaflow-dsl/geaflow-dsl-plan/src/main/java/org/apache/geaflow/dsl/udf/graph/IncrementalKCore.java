@@ -421,8 +421,3 @@ public class IncrementalKCore implements AlgorithmUserFunction<Object, Increment
         }
     }
 }
-
-import java.io.Serializable;
-import java.util.*;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
