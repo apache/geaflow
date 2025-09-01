@@ -1,0 +1,10 @@
+1	2	0.8	1000	friendship
+2	3	0.9	1001	work
+3	4	0.7	1002	family
+4	5	0.6	1003	colleague
+5	6	0.5	1004	neighbor
+6	7	0.4	1005	classmate
+7	8	0.3	1006	partner
+8	1	0.2	1007	acquaintance
+1	3	0.8	1008	friendship
+2	4	0.9	1009	work
