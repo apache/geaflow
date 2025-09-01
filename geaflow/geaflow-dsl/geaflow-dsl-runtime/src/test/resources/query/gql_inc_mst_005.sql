@@ -17,29 +17,29 @@
  * under the License.
  */
 
-CREATE TABLE v_dynamic_node (
-  name varchar,
-  id bigint
-) WITH (
-	type='file',
-	geaflow.dsl.window.size = -1,
-	geaflow.dsl.file.path = 'resource:///data/dynamic_vertex.txt'
+/*
+ * 增量最小生成树算法边删除测试
+ * 测试动态删除边的场景
+ */
+CREATE SINK inc_mst_edge_del_result WITH (
+    type='file',
+    geaflow.dsl.file.path = '/tmp/geaflow/inc_mst_edge_del_result_005.txt'
 );
 
-CREATE TABLE e_dynamic_edge (
-  srcId bigint,
-  targetId bigint,
-  weight double
-) WITH (
-	type='file',
-	geaflow.dsl.window.size = -1,
-	geaflow.dsl.file.path = 'resource:///data/dynamic_edge.txt'
-);
+USE GRAPH dynamic_graph;
 
-CREATE GRAPH dynamic_graph (
-	Vertex node using v_dynamic_node WITH ID(id),
-	Edge connects using e_dynamic_edge WITH ID(srcId, targetId)
-) WITH (
-	storeType='memory',
-	shardCount = 2
-);
+-- 初始MST计算
+INSERT INTO inc_mst_edge_del_result
+CALL IncMST(50, 0.001, 'mst_edge_del_edges') ON GRAPH dynamic_graph 
+RETURN srcId, targetId, weight;
+
+-- 删除边
+DELETE FROM dynamic_graph.e_connects WHERE srcId = 1001 AND targetId = 1002;
+
+-- 重新计算MST
+INSERT INTO inc_mst_edge_del_result
+CALL IncMST(50, 0.001, 'mst_edge_del_edges') ON GRAPH dynamic_graph 
+RETURN srcId, targetId, weight;
+
+-- 验证结果
+SELECT * FROM inc_mst_edge_del_result;

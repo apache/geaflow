@@ -17,29 +17,21 @@
  * under the License.
  */
 
-CREATE TABLE v_dynamic_node (
-  name varchar,
-  id bigint
-) WITH (
-	type='file',
-	geaflow.dsl.window.size = -1,
-	geaflow.dsl.file.path = 'resource:///data/dynamic_vertex.txt'
+/*
+ * 增量最小生成树算法自定义参数测试
+ * 测试不同参数组合的效果
+ */
+CREATE SINK inc_mst_custom_result WITH (
+    type='file',
+    geaflow.dsl.file.path = '/tmp/geaflow/inc_mst_custom_result_009.txt'
 );
 
-CREATE TABLE e_dynamic_edge (
-  srcId bigint,
-  targetId bigint,
-  weight double
-) WITH (
-	type='file',
-	geaflow.dsl.window.size = -1,
-	geaflow.dsl.file.path = 'resource:///data/dynamic_edge.txt'
-);
+USE GRAPH modern;
 
-CREATE GRAPH dynamic_graph (
-	Vertex node using v_dynamic_node WITH ID(id),
-	Edge connects using e_dynamic_edge WITH ID(srcId, targetId)
-) WITH (
-	storeType='memory',
-	shardCount = 2
-);
+-- 测试不同参数组合
+INSERT INTO inc_mst_custom_result
+CALL IncMST(20, 0.005, 'mst_custom_edges') ON GRAPH modern 
+RETURN srcId, targetId, weight;
+
+-- 验证结果
+SELECT * FROM inc_mst_custom_result;

@@ -17,28 +17,28 @@
  * under the License.
  */
 
-CREATE TABLE v_dynamic_node (
+CREATE TABLE v_medium_node (
   name varchar,
   id bigint
 ) WITH (
 	type='file',
 	geaflow.dsl.window.size = -1,
-	geaflow.dsl.file.path = 'resource:///data/dynamic_vertex.txt'
+	geaflow.dsl.file.path = 'resource:///data/medium_vertex.txt'
 );
 
-CREATE TABLE e_dynamic_edge (
+CREATE TABLE e_medium_edge (
   srcId bigint,
   targetId bigint,
   weight double
 ) WITH (
 	type='file',
 	geaflow.dsl.window.size = -1,
-	geaflow.dsl.file.path = 'resource:///data/dynamic_edge.txt'
+	geaflow.dsl.file.path = 'resource:///data/medium_edge.txt'
 );
 
-CREATE GRAPH dynamic_graph (
-	Vertex node using v_dynamic_node WITH ID(id),
-	Edge connects using e_dynamic_edge WITH ID(srcId, targetId)
+CREATE GRAPH medium_graph (
+	Vertex node using v_medium_node WITH ID(id),
+	Edge connects using e_medium_edge WITH ID(srcId, targetId)
 ) WITH (
 	storeType='memory',
 	shardCount = 2

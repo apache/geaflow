@@ -17,29 +17,19 @@
  * under the License.
  */
 
-CREATE TABLE v_dynamic_node (
-  name varchar,
-  id bigint
-) WITH (
-	type='file',
-	geaflow.dsl.window.size = -1,
-	geaflow.dsl.file.path = 'resource:///data/dynamic_vertex.txt'
+/*
+ * 增量最小生成树算法可扩展性测试
+ * 测试100K顶点图上的可扩展性
+ */
+CREATE SINK inc_mst_perf_scalability_result WITH (
+    type='file',
+    geaflow.dsl.file.path = '/tmp/geaflow/inc_mst_perf_scalability_result_007.txt'
 );
 
-CREATE TABLE e_dynamic_edge (
-  srcId bigint,
-  targetId bigint,
-  weight double
-) WITH (
-	type='file',
-	geaflow.dsl.window.size = -1,
-	geaflow.dsl.file.path = 'resource:///data/dynamic_edge.txt'
-);
+USE GRAPH scalability_graph;
+INSERT INTO inc_mst_perf_scalability_result
+CALL IncMST(500, 0.001, 'mst_perf_scalability_edges') ON GRAPH scalability_graph 
+RETURN srcId, targetId, weight;
 
-CREATE GRAPH dynamic_graph (
-	Vertex node using v_dynamic_node WITH ID(id),
-	Edge connects using e_dynamic_edge WITH ID(srcId, targetId)
-) WITH (
-	storeType='memory',
-	shardCount = 2
-);
+-- 验证结果
+SELECT * FROM inc_mst_perf_scalability_result;

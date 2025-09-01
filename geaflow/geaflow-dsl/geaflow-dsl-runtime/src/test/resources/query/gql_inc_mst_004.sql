@@ -17,29 +17,30 @@
  * under the License.
  */
 
-CREATE TABLE v_dynamic_node (
-  name varchar,
-  id bigint
-) WITH (
-	type='file',
-	geaflow.dsl.window.size = -1,
-	geaflow.dsl.file.path = 'resource:///data/dynamic_vertex.txt'
+/*
+ * 增量最小生成树算法边添加测试
+ * 测试动态添加边的场景
+ */
+CREATE SINK inc_mst_edge_add_result WITH (
+    type='file',
+    geaflow.dsl.file.path = '/tmp/geaflow/inc_mst_edge_add_result_004.txt'
 );
 
-CREATE TABLE e_dynamic_edge (
-  srcId bigint,
-  targetId bigint,
-  weight double
-) WITH (
-	type='file',
-	geaflow.dsl.window.size = -1,
-	geaflow.dsl.file.path = 'resource:///data/dynamic_edge.txt'
-);
+USE GRAPH dynamic_graph;
 
-CREATE GRAPH dynamic_graph (
-	Vertex node using v_dynamic_node WITH ID(id),
-	Edge connects using e_dynamic_edge WITH ID(srcId, targetId)
-) WITH (
-	storeType='memory',
-	shardCount = 2
-);
+-- 初始MST计算
+INSERT INTO inc_mst_edge_add_result
+CALL IncMST(50, 0.001, 'mst_edge_add_edges') ON GRAPH dynamic_graph 
+RETURN srcId, targetId, weight;
+
+-- 添加新边
+INSERT INTO dynamic_graph.e_connects VALUES (2001, 2002, 0.3);
+INSERT INTO dynamic_graph.e_connects VALUES (2002, 2003, 0.4);
+
+-- 重新计算MST
+INSERT INTO inc_mst_edge_add_result
+CALL IncMST(50, 0.001, 'mst_edge_add_edges') ON GRAPH dynamic_graph 
+RETURN srcId, targetId, weight;
+
+-- 验证结果
+SELECT * FROM inc_mst_edge_add_result;
