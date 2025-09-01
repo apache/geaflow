@@ -17,11 +17,11 @@
  * under the License.
  */
 
-package com.antgroup.geaflow.dsl.runtime.query;
+package org.apache.geaflow.dsl.runtime.query;
 
-import com.antgroup.geaflow.common.config.keys.DSLConfigKeys;
-import com.antgroup.geaflow.common.config.keys.FrameworkConfigKeys;
-import com.antgroup.geaflow.file.FileConfigKeys;
+import org.apache.geaflow.common.config.keys.DSLConfigKeys;
+import org.apache.geaflow.common.config.keys.FrameworkConfigKeys;
+import org.apache.geaflow.file.FileConfigKeys;
 import java.io.File;
 import java.io.IOException;
 import java.util.concurrent.TimeUnit;

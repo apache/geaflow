@@ -18,7 +18,7 @@
  * under the License.
  */
 
-package com.antgroup.geaflow.dsl.udf.graph.mst;
+package org.apache.geaflow.dsl.udf.graph.mst;
 
 import java.io.Serializable;
 import java.util.HashSet;
