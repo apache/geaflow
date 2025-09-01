@@ -5,7 +5,6 @@
  * regarding copyright ownership.  The ASF licenses this file
  * to you under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance
- * with the License.  You may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
  *   http://www.apache.org/licenses/LICENSE-2.0
@@ -247,13 +246,13 @@ public class MSTVertexState implements Serializable {
         if (this == obj) return true;
         if (obj == null || getClass() != obj.getClass()) return false;
         MSTVertexState that = (MSTVertexState) obj;
-        return Double.compare(that.minEdgeWeight, minEdgeWeight) == 0 &&
-                isRoot == that.isRoot &&
-                changed == that.changed &&
-                Objects.equals(vertexId, that.vertexId) &&
-                Objects.equals(parentId, that.parentId) &&
-                Objects.equals(componentId, that.componentId) &&
-                Objects.equals(mstEdges, that.mstEdges);
+        return Double.compare(that.minEdgeWeight, minEdgeWeight) == 0
+            && isRoot == that.isRoot
+            && changed == that.changed
+            && Objects.equals(vertexId, that.vertexId)
+            && Objects.equals(parentId, that.parentId)
+            && Objects.equals(componentId, that.componentId)
+            && Objects.equals(mstEdges, that.mstEdges);
     }
 
     @Override

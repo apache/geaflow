@@ -133,10 +133,10 @@ public class MSTEdge implements Serializable, Comparable<MSTEdge> {
         if (other == null || getClass() != other.getClass()) return false;
         
         // 检查正向和反向是否相等
-        boolean forwardEqual = Objects.equals(sourceId, other.sourceId) && 
-                              Objects.equals(targetId, other.targetId);
-        boolean reverseEqual = Objects.equals(sourceId, other.targetId) && 
-                              Objects.equals(targetId, other.sourceId);
+        boolean forwardEqual = Objects.equals(sourceId, other.sourceId) 
+            && Objects.equals(targetId, other.targetId);
+        boolean reverseEqual = Objects.equals(sourceId, other.targetId) 
+            && Objects.equals(targetId, other.sourceId);
         
         return (forwardEqual || reverseEqual) && Double.compare(other.weight, weight) == 0;
     }
@@ -146,9 +146,9 @@ public class MSTEdge implements Serializable, Comparable<MSTEdge> {
         if (this == obj) return true;
         if (obj == null || getClass() != obj.getClass()) return false;
         MSTEdge edge = (MSTEdge) obj;
-        return Double.compare(edge.weight, weight) == 0 &&
-               Objects.equals(sourceId, edge.sourceId) &&
-               Objects.equals(targetId, edge.targetId);
+        return Double.compare(edge.weight, weight) == 0
+            && Objects.equals(sourceId, edge.sourceId)
+            && Objects.equals(targetId, edge.targetId);
     }
 
     @Override

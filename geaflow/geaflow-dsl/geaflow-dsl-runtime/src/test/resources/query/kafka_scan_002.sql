@@ -27,7 +27,7 @@ CREATE TABLE kafka_source (
 	geaflow.dsl.kafka.topic = 'scan_002',
 	geaflow.dsl.kafka.data.operation.timeout.seconds = 5,
 	geaflow.dsl.time.window.size=10,
-	geaflow.dsl.start.time='${startTime}'
+	geaflow.dsl.start.time='${stTime}'
 );
 
 CREATE TABLE tbl_result (

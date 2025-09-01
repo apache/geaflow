@@ -265,10 +265,10 @@ public class UnionFindHelper implements Serializable {
         if (this == obj) return true;
         if (obj == null || getClass() != obj.getClass()) return false;
         UnionFindHelper that = (UnionFindHelper) obj;
-        return setCount == that.setCount &&
-               Objects.equals(parent, that.parent) &&
-               Objects.equals(rank, that.rank) &&
-               Objects.equals(size, that.size);
+        return setCount == that.setCount
+            && Objects.equals(parent, that.parent)
+            && Objects.equals(rank, that.rank)
+            && Objects.equals(size, that.size);
     }
 
     @Override

@@ -237,13 +237,13 @@ public class MSTMessage implements Serializable {
         if (this == obj) return true;
         if (obj == null || getClass() != obj.getClass()) return false;
         MSTMessage message = (MSTMessage) obj;
-        return Double.compare(message.weight, weight) == 0 &&
-               timestamp == message.timestamp &&
-               type == message.type &&
-               Objects.equals(sourceId, message.sourceId) &&
-               Objects.equals(targetId, message.targetId) &&
-               Objects.equals(componentId, message.componentId) &&
-               Objects.equals(edge, message.edge);
+        return Double.compare(message.weight, weight) == 0
+            && timestamp == message.timestamp
+            && type == message.type
+            && Objects.equals(sourceId, message.sourceId)
+            && Objects.equals(targetId, message.targetId)
+            && Objects.equals(componentId, message.componentId)
+            && Objects.equals(edge, message.edge);
     }
 
     @Override

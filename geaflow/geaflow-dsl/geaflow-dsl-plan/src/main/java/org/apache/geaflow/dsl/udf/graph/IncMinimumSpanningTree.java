@@ -76,7 +76,8 @@ public class IncMinimumSpanningTree implements AlgorithmUserFunction<Object, Obj
         
         if (parameters.length > 3) {
             throw new IllegalArgumentException(
-                "Only support up to 3 arguments: maxIterations, convergenceThreshold, keyFieldName");
+                "Only support up to 3 arguments: maxIterations, "
+                + "convergenceThreshold, keyFieldName");
         }
     }
 
@@ -251,7 +252,8 @@ public class IncMinimumSpanningTree implements AlgorithmUserFunction<Object, Obj
      */
     private boolean handleEdgeAcceptance(Object vertexId, MSTMessage message, MSTVertexState state) {
         // 创建MST边
-        MSTEdge mstEdge = new MSTEdge(vertexId, message.getSourceId(), message.getWeight());
+        MSTEdge mstEdge = new MSTEdge(vertexId, message.getSourceId(), 
+            message.getWeight());
         state.addMSTEdge(mstEdge);
         
         // 合并组件
