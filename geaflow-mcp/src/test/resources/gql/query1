@@ -1,0 +1,9 @@
+CREATE TABLE output_console(
+	res BIGINT
+) WITH (
+	type='file',
+	geaflow.dsl.file.path='/tmp/dsl/mcp/result'
+);
+
+INSERT INTO output_console
+Match (a) return a.id;

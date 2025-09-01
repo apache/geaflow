@@ -19,16 +19,15 @@
 
 package org.apache.geaflow.mcp.server.util;
 
-import static org.apache.geaflow.mcp.server.GeaFlowMcpServerTools.CONFIG;
-import static org.apache.geaflow.mcp.server.GeaFlowMcpServerTools.SERVER_HOST;
-import static org.apache.geaflow.mcp.server.GeaFlowMcpServerTools.SERVER_PORT;
-
 import com.alibaba.fastjson.JSON;
-import java.util.Map;
 import org.apache.geaflow.analytics.service.config.AnalyticsClientConfigKeys;
 import org.apache.geaflow.mcp.util.YamlParser;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+
+import java.util.Map;
+
+import static org.apache.geaflow.mcp.server.GeaFlowMcpServerTools.*;
 
 public class YamlParserTest {
 

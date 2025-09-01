@@ -19,16 +19,18 @@
 
 package org.apache.geaflow.mcp.server;
 
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
+import org.apache.commons.io.IOUtils;
+import org.apache.geaflow.mcp.server.util.McpConstants;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.noear.solon.ai.mcp.client.McpClientProvider;
 import org.noear.solon.test.SolonTest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.nio.charset.Charset;
+import java.util.*;
 
 @SolonTest(GeaFlowMcpServer.class)
 public class GeaFlowMcpClientTest {
@@ -98,4 +100,67 @@ public class GeaFlowMcpClientTest {
         Assertions.assertTrue(toolNames.contains(EXECUTE_QUERY_TOOL_NAME));
     }
 
+    /**
+     * Call create graph tool.
+     */
+    @Test
+    public void testCreateGraph() throws IOException {
+        McpClientProvider toolProvider = McpClientProvider.builder()
+                .apiUrl(SSE_ENDPOINT)
+                .build();
+
+        String gql = IOUtils.resourceToString("/gql/modern", Charset.defaultCharset()).trim();
+        Map<String, Object> map = new HashMap<>();
+        map.put(McpConstants.DDL, gql);
+        map.put(McpConstants.GRAPH_NAME, "modern");
+
+        String queryResults = toolProvider.callToolAsText(McpConstants.CREATE_GRAPH_TOOL_NAME, map).getContent();
+        LOGGER.info("queryResults: {}", queryResults);
+        Assertions.assertEquals("Create graph modern success.",
+                queryResults);
+
+    }
+
+    /**
+     * Call create graph tool.
+     */
+    @Test
+    public void testInsertGraph() throws IOException {
+        McpClientProvider toolProvider = McpClientProvider.builder()
+                .apiUrl(SSE_ENDPOINT)
+                .build();
+
+        String gql = IOUtils.resourceToString("/gql/insert1", Charset.defaultCharset()).trim();
+        Map<String, Object> map = new HashMap<>();
+        map.put(McpConstants.DML, gql);
+        map.put(McpConstants.GRAPH_NAME, "modern");
+
+        String queryResults = toolProvider.callToolAsText(McpConstants.INSERT_GRAPH_TOOL_NAME, map).getContent();
+        LOGGER.info("queryResults: {}", queryResults);
+        Assertions.assertEquals("run query success: INSERT INTO modern.person(id, name, age)\n" +
+                        "VALUES (1, 'jim', 20), (2, 'kate', 22)\n" +
+                        ";",
+                queryResults);
+
+    }
+
+    /**
+     * Call create graph tool.
+     */
+    @Test
+    public void testQueryGraph() throws IOException {
+        McpClientProvider toolProvider = McpClientProvider.builder()
+                .apiUrl(SSE_ENDPOINT)
+                .build();
+
+        Map<String, Object> map = new HashMap<>();
+        map.put(McpConstants.TYPE, "person");
+        map.put(McpConstants.GRAPH_NAME, "modern");
+
+        String queryResults = toolProvider.callToolAsText(McpConstants.QUERY_GRAPH_TOOL_NAME, map).getContent();
+        LOGGER.info("queryResults: {}", queryResults);
+        Assertions.assertEquals("run query success: Match (a) return a.id;",
+                queryResults);
+
+    }
 }

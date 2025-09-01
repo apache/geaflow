@@ -1,0 +1,3 @@
+INSERT INTO modern.person(id, name, age)
+VALUES (1, 'jim', 20), (2, 'kate', 22)
+;

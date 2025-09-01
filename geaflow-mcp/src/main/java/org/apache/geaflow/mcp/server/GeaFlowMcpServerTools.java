@@ -19,13 +19,7 @@
 
 package org.apache.geaflow.mcp.server;
 
-import com.alibaba.fastjson.JSON;
-import com.alibaba.fastjson.JSONObject;
-import java.util.Map;
-import org.apache.geaflow.analytics.service.client.AnalyticsClient;
-import org.apache.geaflow.analytics.service.client.AnalyticsClientBuilder;
-import org.apache.geaflow.analytics.service.query.QueryResults;
-import org.apache.geaflow.common.config.Configuration;
+import org.apache.geaflow.mcp.server.util.McpConstants;
 import org.apache.geaflow.mcp.util.YamlParser;
 import org.noear.solon.ai.annotation.ResourceMapping;
 import org.noear.solon.ai.annotation.ToolMapping;
@@ -33,6 +27,8 @@ import org.noear.solon.ai.mcp.server.annotation.McpServerEndpoint;
 import org.noear.solon.annotation.Param;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.Map;
 
 @McpServerEndpoint(name = "geaflow-mcp-server", sseEndpoint = "/geaflow/sse")
 public class GeaFlowMcpServerTools {
@@ -65,53 +61,121 @@ public class GeaFlowMcpServerTools {
      * @param query GQL query.
      * @return query result or error code.
      */
-    @ToolMapping(description = "execute query")
-    public String executeQuery(@Param(name = "query", description = "query") String query) {
-        AnalyticsClient analyticsClient = null;
+//    @ToolMapping(description = "execute query")
+//    public String executeQuery(@Param(name = "query", description = "query") String query) {
+//        AnalyticsClient analyticsClient = null;
+//
+//        try {
+//            Map<String, Object> config = YamlParser.loadConfig();
+//            int retryTimes = DEFAULT_RETRY_TIMES;
+//            if (config.containsKey(RETRY_TIMES)) {
+//                retryTimes = Integer.parseInt(config.get(RETRY_TIMES).toString());
+//            }
+//
+//            AnalyticsClientBuilder builder = AnalyticsClient
+//                .builder()
+//                .withHost(config.get(SERVER_HOST).toString())
+//                .withPort((Integer) config.get(SERVER_PORT))
+//                .withRetryNum(retryTimes);
+//            if (config.containsKey(CONFIG)) {
+//                Map<String, String> clientConfig = JSON.parseObject(config.get(CONFIG).toString(), Map.class);
+//                Configuration configuration = new Configuration(clientConfig);
+//                builder.withConfiguration(configuration);
+//                LOGGER.info("client config: {}", configuration);
+//            }
+//            if (config.containsKey(SERVER_USER)) {
+//                builder.withUser(config.get(SERVER_USER).toString());
+//            }
+//            if (config.containsKey(QUERY_TIMEOUT_MS)) {
+//                builder.withTimeoutMs((Integer) config.get(QUERY_TIMEOUT_MS));
+//            }
+//            if (config.containsKey(INIT_CHANNEL_POOLS)) {
+//                builder.withInitChannelPools((Boolean) config.get(INIT_CHANNEL_POOLS));
+//            }
+//            analyticsClient = builder.build();
+//
+//            QueryResults queryResults = analyticsClient.executeQuery(query);
+//            if (queryResults.getError() != null) {
+//                final JSONObject error = new JSONObject();
+//                error.put(ERROR, queryResults.getError());
+//                return error.toJSONString();
+//            }
+//            return queryResults.getFormattedData();
+//        } catch (Exception e) {
+//            LOGGER.error(e.getMessage(), e);
+//            throw new RuntimeException(e);
+//        } finally {
+//            if (analyticsClient != null) {
+//                analyticsClient.shutdown();
+//            }
+//        }
+//    }
 
+
+    /**
+     * A tool that provides graph query capabilities.
+     *
+     * @param ddl Create graph ddl.
+     * @return query result or error code.
+     */
+    @ToolMapping(description = "create graph")
+    public String createGraph(@Param(name = McpConstants.GRAPH_NAME, description = "create graph name") String graphName,
+                              @Param(name = McpConstants.DDL, description = "create graph ddl") String ddl) {
         try {
             Map<String, Object> config = YamlParser.loadConfig();
-            int retryTimes = DEFAULT_RETRY_TIMES;
-            if (config.containsKey(RETRY_TIMES)) {
-                retryTimes = Integer.parseInt(config.get(RETRY_TIMES).toString());
-            }
-
-            AnalyticsClientBuilder builder = AnalyticsClient
-                .builder()
-                .withHost(config.get(SERVER_HOST).toString())
-                .withPort((Integer) config.get(SERVER_PORT))
-                .withRetryNum(retryTimes);
-            if (config.containsKey(CONFIG)) {
-                Map<String, String> clientConfig = JSON.parseObject(config.get(CONFIG).toString(), Map.class);
-                Configuration configuration = new Configuration(clientConfig);
-                builder.withConfiguration(configuration);
-                LOGGER.info("client config: {}", configuration);
-            }
+            GeaFlowMcpActions mcpActions = new GeaFlowMcpActionsLocalImpl(config);
             if (config.containsKey(SERVER_USER)) {
-                builder.withUser(config.get(SERVER_USER).toString());
+                mcpActions.withUser(config.get(SERVER_USER).toString());
             }
-            if (config.containsKey(QUERY_TIMEOUT_MS)) {
-                builder.withTimeoutMs((Integer) config.get(QUERY_TIMEOUT_MS));
-            }
-            if (config.containsKey(INIT_CHANNEL_POOLS)) {
-                builder.withInitChannelPools((Boolean) config.get(INIT_CHANNEL_POOLS));
-            }
-            analyticsClient = builder.build();
-
-            QueryResults queryResults = analyticsClient.executeQuery(query);
-            if (queryResults.getError() != null) {
-                final JSONObject error = new JSONObject();
-                error.put(ERROR, queryResults.getError());
-                return error.toJSONString();
-            }
-            return queryResults.getFormattedData();
+            return mcpActions.createGraph(graphName, ddl);
         } catch (Exception e) {
             LOGGER.error(e.getMessage(), e);
-            throw new RuntimeException(e);
-        } finally {
-            if (analyticsClient != null) {
-                analyticsClient.shutdown();
+            return e.getMessage();
+        }
+    }
+
+    /**
+     * A tool that provides graph query capabilities.
+     *
+     * @param dml Query graph dql.
+     * @return query result or error code.
+     */
+    @ToolMapping(description = "Insert into graph dml")
+    public String insertGraph(@Param(name = McpConstants.GRAPH_NAME, description = "query graph name") String graphName,
+                              @Param(name = McpConstants.DML, description = "dml insert values into graph") String dml) {
+        try {
+            Map<String, Object> config = YamlParser.loadConfig();
+            GeaFlowMcpActions mcpActions = new GeaFlowMcpActionsLocalImpl(config);
+            if (config.containsKey(SERVER_USER)) {
+                mcpActions.withUser(config.get(SERVER_USER).toString());
             }
+            return mcpActions.queryGraph(graphName, dml);
+        } catch (Exception e) {
+            LOGGER.error(e.getMessage(), e);
+            return e.getMessage();
+        }
+    }
+
+
+    /**
+     * A tool that provides graph query capabilities.
+     *
+     * @param type Query graph dql.
+     * @return query result or error code.
+     */
+    @ToolMapping(description = "query vertex or edge")
+    public String queryGraph(@Param(name = "Graph Name", description = "query graph name") String graphName,
+                             @Param(name = "Query Type Name", description = "query graph vertex or edge type name") String type) {
+        try {
+            Map<String, Object> config = YamlParser.loadConfig();
+            GeaFlowMcpActions mcpActions = new GeaFlowMcpActionsLocalImpl(config);
+            if (config.containsKey(SERVER_USER)) {
+                mcpActions.withUser(config.get(SERVER_USER).toString());
+            }
+            return mcpActions.queryGraph(graphName, type);
+        } catch (Exception e) {
+            LOGGER.error(e.getMessage(), e);
+            return e.getMessage();
         }
     }
 }
