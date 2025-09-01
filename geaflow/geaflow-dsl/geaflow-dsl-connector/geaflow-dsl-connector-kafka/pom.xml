@@ -23,8 +23,8 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xstd">
     <parent>
         <artifactId>geaflow-dsl-connector</artifactId>
-        <groupId>com.antgroup.tugraph</groupId>
-        <version>0.6.4-SNAPSHOT</version>
+        <groupId>org.apache.geaflow</groupId>
+        <version>0.6.8-SNAPSHOT</version>
     </parent>
 
     <modelVersion>4.0.0</modelVersion>
@@ -33,12 +33,12 @@
 
     <dependencies>
         <dependency>
-            <groupId>com.antgroup.tugraph</groupId>
+            <groupId>org.apache.geaflow</groupId>
             <artifactId>geaflow-dsl-common</artifactId>
         </dependency>
 
         <dependency>
-            <groupId>com.antgroup.tugraph</groupId>
+            <groupId>org.apache.geaflow</groupId>
             <artifactId>geaflow-dsl-connector-api</artifactId>
         </dependency>
 

@@ -23,9 +23,9 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <parent>
-        <groupId>com.antgroup.tugraph</groupId>
+        <groupId>org.apache.geaflow</groupId>
         <artifactId>geaflow-parent</artifactId>
-        <version>0.6.4-SNAPSHOT</version>
+        <version>0.6.8-SNAPSHOT</version>
     </parent>
 
     <artifactId>geaflow-console</artifactId>
@@ -44,7 +44,7 @@
         <module>app/common/service/integration</module>
         <module>app/common/dal</module>
     </modules>
-    
+
     <properties>
         <java.version>8</java.version>
         <spring.version>2.7.10</spring.version>
@@ -71,7 +71,7 @@
                 <artifactId>velocity</artifactId>
                 <version>${velocity.version}</version>
             </dependency>
-            
+
             <dependency>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-starter-parent</artifactId>
@@ -166,57 +166,57 @@
             </dependency>
 
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-console-bootstrap</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-console-web</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-console-test</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-console-core-service</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-console-core-model</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-console-biz-shared</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-console-biz-service-impl</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-console-common-util</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-console-common-service-facade</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-console-common-service-integration</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-console-common-dal</artifactId>
                 <version>${project.version}</version>
             </dependency>

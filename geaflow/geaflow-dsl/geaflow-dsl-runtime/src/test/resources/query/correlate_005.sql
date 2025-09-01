@@ -17,7 +17,7 @@
  * under the License.
  */
 
-CREATE function UDTF_SPLIT as 'com.antgroup.geaflow.dsl.udf.table.udtf.Split';
+CREATE function UDTF_SPLIT as 'org.apache.geaflow.dsl.udf.table.udtf.Split';
 
 CREATE TABLE users (
 	createTime bigint,

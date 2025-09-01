@@ -22,80 +22,80 @@
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 
-  <parent>
-    <groupId>com.antgroup.tugraph</groupId>
-    <artifactId>geaflow</artifactId>
-    <version>0.6.4-SNAPSHOT</version>
-  </parent>
-  <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>org.apache.geaflow</groupId>
+        <artifactId>geaflow</artifactId>
+        <version>0.6.8-SNAPSHOT</version>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
 
-  <artifactId>geaflow-dashboard</artifactId>
-  <packaging>jar</packaging>
+    <artifactId>geaflow-dashboard</artifactId>
+    <packaging>jar</packaging>
 
-  <properties>
-    <build.node.version>v16.15.1</build.node.version>
-    <build.npm.version>8.11.0</build.npm.version>
-    <build.yarn.version>v1.22.19</build.yarn.version>
-  </properties>
+    <properties>
+        <build.node.version>v16.15.1</build.node.version>
+        <build.npm.version>8.11.0</build.npm.version>
+        <build.yarn.version>v1.22.19</build.yarn.version>
+    </properties>
 
-  <dependencies>
-    <dependency>
-      <groupId>com.antgroup.tugraph</groupId>
-      <artifactId>geaflow-cluster</artifactId>
-    </dependency>
-  </dependencies>
+    <dependencies>
+        <dependency>
+            <groupId>org.apache.geaflow</groupId>
+            <artifactId>geaflow-cluster</artifactId>
+        </dependency>
+    </dependencies>
 
-  <build>
-    <resources>
-      <resource>
-        <directory>web-dashboard/resources</directory>
-      </resource>
-    </resources>
-    <plugins>
-      <plugin>
-        <groupId>com.github.eirslett</groupId>
-        <artifactId>frontend-maven-plugin</artifactId>
-        <version>1.8.0</version>
-        <executions>
-          <execution>
-            <id>install node and yarn</id>
-            <goals>
-              <goal>install-node-and-yarn</goal>
-            </goals>
-            <phase>generate-resources</phase>
-          </execution>
-          <execution>
-            <id>yarn install</id>
-            <goals>
-              <goal>yarn</goal>
-            </goals>
-            <phase>generate-resources</phase>
-            <configuration>
-              <arguments>install</arguments>
-            </configuration>
-          </execution>
-          <execution>
-            <id>yarn run build</id>
-            <goals>
-              <goal>yarn</goal>
-            </goals>
-            <phase>generate-resources</phase>
-            <configuration>
-              <arguments>run build</arguments>
-            </configuration>
-          </execution>
-        </executions>
-        <configuration>
-          <workingDirectory>web-dashboard</workingDirectory>
-          <nodeVersion>${build.node.version}</nodeVersion>
-          <npmVersion>${build.npm.version}</npmVersion>
-          <yarnVersion>${build.yarn.version}</yarnVersion>
-          <nodeDownloadRoot>https://npmmirror.com/mirrors/node/</nodeDownloadRoot>
-          <npmDownloadRoot>https://registry.npmmirror.com/npm/-/</npmDownloadRoot>
-          <yarnDownloadRoot>https://repo.huaweicloud.com/yarn/</yarnDownloadRoot>
-          <npmRegistryURL>https://registry.npmmirror.com</npmRegistryURL>
-        </configuration>
-      </plugin>
-    </plugins>
-  </build>
+    <build>
+        <resources>
+            <resource>
+                <directory>web-dashboard/resources</directory>
+            </resource>
+        </resources>
+        <plugins>
+            <plugin>
+                <groupId>com.github.eirslett</groupId>
+                <artifactId>frontend-maven-plugin</artifactId>
+                <version>1.8.0</version>
+                <executions>
+                    <execution>
+                        <id>install node and yarn</id>
+                        <goals>
+                            <goal>install-node-and-yarn</goal>
+                        </goals>
+                        <phase>generate-resources</phase>
+                    </execution>
+                    <execution>
+                        <id>yarn install</id>
+                        <goals>
+                            <goal>yarn</goal>
+                        </goals>
+                        <phase>generate-resources</phase>
+                        <configuration>
+                            <arguments>install</arguments>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>yarn run build</id>
+                        <goals>
+                            <goal>yarn</goal>
+                        </goals>
+                        <phase>generate-resources</phase>
+                        <configuration>
+                            <arguments>run build</arguments>
+                        </configuration>
+                    </execution>
+                </executions>
+                <configuration>
+                    <workingDirectory>web-dashboard</workingDirectory>
+                    <nodeVersion>${build.node.version}</nodeVersion>
+                    <npmVersion>${build.npm.version}</npmVersion>
+                    <yarnVersion>${build.yarn.version}</yarnVersion>
+                    <nodeDownloadRoot>https://npmmirror.com/mirrors/node/</nodeDownloadRoot>
+                    <npmDownloadRoot>https://registry.npmmirror.com/npm/-/</npmDownloadRoot>
+                    <yarnDownloadRoot>https://repo.huaweicloud.com/yarn/</yarnDownloadRoot>
+                    <npmRegistryURL>https://registry.npmmirror.com</npmRegistryURL>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 </project>

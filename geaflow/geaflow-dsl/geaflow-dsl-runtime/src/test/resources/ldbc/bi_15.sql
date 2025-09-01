@@ -1,4 +1,4 @@
-CREATE FUNCTION bi15 AS 'com.antgroup.geaflow.dsl.udf.ldbc.BIConnectionPathAlgorithm';
+CREATE FUNCTION bi15 AS 'org.apache.geaflow.dsl.udf.ldbc.BIConnectionPathAlgorithm';
 
 CREATE GRAPH bi (
   --static

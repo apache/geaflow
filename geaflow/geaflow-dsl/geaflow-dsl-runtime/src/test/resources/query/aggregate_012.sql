@@ -17,8 +17,8 @@
  * under the License.
  */
 
-create function mycount as 'com.antgroup.geaflow.dsl.runtime.query.udf.MyCount';
-create function concat as 'com.antgroup.geaflow.dsl.udf.table.string.Concat';
+create function mycount as 'org.apache.geaflow.dsl.runtime.query.udf.MyCount';
+create function concat as 'org.apache.geaflow.dsl.udf.table.string.Concat';
 
 CREATE TABLE users (
 	id long,

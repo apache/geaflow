@@ -38,8 +38,8 @@
                      filePattern="${logging-path}/geaflow/common-error.log.%d{yyyy-MM-dd}"
                      append="true">
             <PatternLayout
-                pattern="%d %-5p %t %c{4} - %m%n"
-                charset="UTF-8"/>
+                    pattern="%d %-5p %t %c{4} - %m%n"
+                    charset="UTF-8"/>
             <TimeBasedTriggeringPolicy/>
             <DefaultRolloverStrategy/>
             <ThresholdFilter level="ERROR"/>
@@ -50,8 +50,8 @@
                      filePattern="${logging-path}/geaflow/app-default.log.%d{yyyy-MM-dd}"
                      append="true">
             <PatternLayout
-                pattern="%d %-5p %t %c{4}:%-4L - %m%n"
-                charset="UTF-8"/>
+                    pattern="%d %-5p %t %c{4}:%-4L - %m%n"
+                    charset="UTF-8"/>
             <TimeBasedTriggeringPolicy/>
             <DefaultRolloverStrategy/>
         </RollingFile>
@@ -60,8 +60,8 @@
                      filePattern="${logging-path}/spring/spring.log.%d{yyyy-MM-dd}"
                      append="true">
             <PatternLayout
-                pattern="%d %-5p %t %c{4}:%-4L - %m%n"
-                charset="UTF-8"/>
+                    pattern="%d %-5p %t %c{4}:%-4L - %m%n"
+                    charset="UTF-8"/>
             <TimeBasedTriggeringPolicy/>
             <DefaultRolloverStrategy/>
         </RollingFile>
@@ -81,16 +81,16 @@
             <AppenderRef ref="SPRING-APPENDER"/>
         </AsyncLogger>
 
-        <AsyncLogger name="com.antgroup.geaflow.console.web.mvc.GeaflowGlobalFilter"
+        <AsyncLogger name="org.apache.geaflow.console.web.mvc.GeaflowGlobalFilter"
                      additivity="false" level="error">
             <AppenderRef ref="ERROR-APPENDER"/>
         </AsyncLogger>
 
-        <AsyncLogger name="com.antgroup.geaflow.console" additivity="false" level="info">
+        <AsyncLogger name="org.apache.geaflow.console" additivity="false" level="info">
             <AppenderRef ref="APP-DEFAULT-APPENDER"/>
         </AsyncLogger>
 
-        <AsyncLogger name="com.antgroup.geaflow.console.common.dal.mapper" additivity="false"
+        <AsyncLogger name="org.apache.geaflow.console.common.dal.mapper" additivity="false"
                      level="info">
             <AppenderRef ref="APP-DEFAULT-APPENDER"/>
         </AsyncLogger>

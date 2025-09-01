@@ -24,44 +24,44 @@
 
     <parent>
         <artifactId>geaflow-runtime</artifactId>
-        <groupId>com.antgroup.tugraph</groupId>
-        <version>0.6.4-SNAPSHOT</version>
+        <groupId>org.apache.geaflow</groupId>
+        <version>0.6.8-SNAPSHOT</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
     <artifactId>geaflow-pdata</artifactId>
     <packaging>jar</packaging>
 
-   <dependencies>
-       <dependency>
-           <groupId>commons-io</groupId>
-           <artifactId>commons-io</artifactId>
-       </dependency>
-       <dependency>
-           <groupId>org.apache.commons</groupId>
-           <artifactId>commons-lang3</artifactId>
-       </dependency>
-       <dependency>
-           <groupId>com.antgroup.tugraph</groupId>
-           <artifactId>geaflow-api</artifactId>
-       </dependency>
-       <dependency>
-           <groupId>com.antgroup.tugraph</groupId>
-           <artifactId>geaflow-operator</artifactId>
-       </dependency>
-       <dependency>
-           <groupId>com.antgroup.tugraph</groupId>
-           <artifactId>geaflow-common</artifactId>
-       </dependency>
-       <dependency>
-           <groupId>org.yaml</groupId>
-           <artifactId>snakeyaml</artifactId>
-       </dependency>
-       <dependency>
-           <groupId>com.antgroup.tugraph</groupId>
-           <artifactId>geaflow-view-meta</artifactId>
-       </dependency>
-   </dependencies>
+    <dependencies>
+        <dependency>
+            <groupId>commons-io</groupId>
+            <artifactId>commons-io</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-lang3</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.geaflow</groupId>
+            <artifactId>geaflow-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.geaflow</groupId>
+            <artifactId>geaflow-operator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.geaflow</groupId>
+            <artifactId>geaflow-common</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.yaml</groupId>
+            <artifactId>snakeyaml</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.geaflow</groupId>
+            <artifactId>geaflow-view-meta</artifactId>
+        </dependency>
+    </dependencies>
 
 
 </project>

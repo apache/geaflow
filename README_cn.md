@@ -1,15 +1,11 @@
-# GeaFlow 文档地图
+# GeaFlow
 
-[![Star](https://shields.io/github/stars/tugraph-family/tugraph-analytics?logo=startrek&label=Star&color=yellow)](https://github.com/TuGraph-family/tugraph-analytics/stargazers)
-[![Fork](https://shields.io/github/forks/tugraph-family/tugraph-analytics?logo=forgejo&label=Fork&color=orange)](https://github.com/TuGraph-family/tugraph-analytics/forks)
-[![Contributor](https://shields.io/github/contributors/tugraph-family/tugraph-analytics?logo=actigraph&label=Contributor&color=abcdef)](https://github.com/TuGraph-family/tugraph-analytics/contributors)
+[![Discord](https://badgen.net/badge/icon/Discord?icon=discord&label)](https://discord.gg/apKdP3DXuH)
 [![Commit](https://badgen.net/github/last-commit/tugraph-family/tugraph-analytics/master?icon=git&label=Commit)](https://github.com/TuGraph-family/tugraph-analytics/commits/master)
 [![Docker](https://shields.io/docker/pulls/tugraph/geaflow-console?logo=docker&label=Docker&color=blue)](https://hub.docker.com/r/tugraph/geaflow-console/tags)
 [![License](https://shields.io/github/license/tugraph-family/tugraph-analytics?logo=apache&label=License&color=blue)](https://www.apache.org/licenses/LICENSE-2.0.html)
 [![Release](https://shields.io/github/v/release/tugraph-family/tugraph-analytics.svg?logo=stackblitz&label=Version&color=red)](https://github.com/TuGraph-family/tugraph-analytics/releases)
-[![CN](https://shields.io/badge/Docs-中文-blue?logo=readme)](https://tugraph-analytics.readthedocs.io/en/latest/docs-cn/introduction/)
-[![EN](https://shields.io/badge/Docs-English-blue?logo=readme)](https://tugraph-analytics.readthedocs.io/en/latest/docs-en/introduction/)
-[![Blog](https://badgen.net/static/Blog/github.io/orange?icon=rss)](https://tugraph-analytics.github.io/)
+[![Blog](https://badgen.net/static/Blog/github.io/orange?icon=rss)](https://geaflow.github.io/)
 
 > 🌐️ 中文 | [English](README.md)
 
@@ -92,7 +88,9 @@ GeaFlow支持增量图计算的能力，即在动态图（图是不断变化的�
 ## 联系我们
 您可以通过以下方式联系我们。
 
-![contacts](https://github.com/TuGraph-family/community/blob/master/assets/contacts-cn.png)
+| 名称                                                      | 功能     |                                               |                                                   |                                                             |
+|:--------------------------------------------------------|:-------|:----------------------------------------------|:--------------------------------------------------|:------------------------------------------------------------|
+| [dev@geaflow.apache.org](mailto:dev@geaflow.apache.org) | 开发相关讨论 | [订阅](mailto:dev-subscribe@geaflow.apache.org) | [取消订阅](mailto:dev-unsubscribe@geaflow.apache.org) | [归档](http://mail-archives.apache.org/mod_mbox/geaflow-dev/) |
 
 ## 致谢
 GeaFlow 开发过程中部分模块参考了一些业界优秀的开源项目，包括 Apache Flink、Apache Spark 以及 Apache Calcite 等, 这里表示特别的感谢。也感谢对 GeaFlow 做过贡献的个人开发者，名单如下：

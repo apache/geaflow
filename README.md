@@ -1,25 +1,21 @@
 # Guide
 
-[![Star](https://shields.io/github/stars/tugraph-family/tugraph-analytics?logo=startrek&label=Star&color=yellow)](https://github.com/TuGraph-family/tugraph-analytics/stargazers)
-[![Fork](https://shields.io/github/forks/tugraph-family/tugraph-analytics?logo=forgejo&label=Fork&color=orange)](https://github.com/TuGraph-family/tugraph-analytics/forks)
-[![Contributor](https://shields.io/github/contributors/tugraph-family/tugraph-analytics?logo=actigraph&label=Contributor&color=abcdef)](https://github.com/TuGraph-family/tugraph-analytics/contributors)
+[![Discord](https://badgen.net/badge/icon/Discord?icon=discord&label)](https://discord.gg/apKdP3DXuH)
 [![Commit](https://badgen.net/github/last-commit/tugraph-family/tugraph-analytics/master?icon=git&label=Commit)](https://github.com/TuGraph-family/tugraph-analytics/commits/master)
 [![Docker](https://shields.io/docker/pulls/tugraph/geaflow-console?logo=docker&label=Docker&color=blue)](https://hub.docker.com/r/tugraph/geaflow-console/tags)
 [![License](https://shields.io/github/license/tugraph-family/tugraph-analytics?logo=apache&label=License&color=blue)](https://www.apache.org/licenses/LICENSE-2.0.html)
 [![Release](https://shields.io/github/v/release/tugraph-family/tugraph-analytics.svg?logo=stackblitz&label=Version&color=red)](https://github.com/TuGraph-family/tugraph-analytics/releases)
-[![CN](https://shields.io/badge/Docs-中文-blue?logo=readme)](https://tugraph-analytics.readthedocs.io/en/latest/docs-cn/introduction/)
-[![EN](https://shields.io/badge/Docs-English-blue?logo=readme)](https://tugraph-analytics.readthedocs.io/en/latest/docs-en/introduction/)
-[![Blog](https://badgen.net/static/Blog/github.io/orange?icon=rss)](https://tugraph-analytics.github.io/)
+[![Blog](https://badgen.net/static/Blog/github.io/orange?icon=rss)](https://geaflow.github.io/)
 
 > 🌐️ English | [中文](README_cn.md)
 
 <!--intro-start-->
 ## Introduction
-GeaFlow is a distributed streaming graph computing engine developed by Ant Group. It supports core capabilities such as trillion-level graph storage, hybrid graph and table processing, real-time graph computing, and interactive graph analysis. Currently, it is widely used in scenarios such as data warehouse acceleration, financial risk control, knowledge graph, and social networks etc.
+Apache GeaFlow (Incubating) is a distributed streaming graph computing engine originally initiated by Ant Group, and it has since been integrated into the Apache ecosystem. It supports core capabilities such as trillion-level graph storage, hybrid graph and table processing, real-time graph computing, and interactive graph analysis. Currently, it is widely used in scenarios such as data warehouse acceleration, financial risk control, knowledge graph, and social networks etc.
 
-For more information about GeaFlow: [GeaFlow Introduction](docs/docs-en/source/2.introduction.md)
+For more information: [GeaFlow Introduction](docs/docs-en/source/2.introduction.md)
 
-For GeaFlow design paper: [GeaFlow: A Graph Extended and Accelerated Dataflow System](https://dl.acm.org/doi/abs/10.1145/3589771)
+For design paper: [GeaFlow: A Graph Extended and Accelerated Dataflow System](https://dl.acm.org/doi/abs/10.1145/3589771)
 
 ## Features
 
@@ -38,7 +34,7 @@ For GeaFlow design paper: [GeaFlow: A Graph Extended and Accelerated Dataflow Sy
 Step 1: Package the JAR and submit the Quick Start task
 
 1. Prepare Git、JDK8、Maven、Docker environment。
-2. Download Code：`git clone https://github.com/TuGraph-family/tugraph-analytics geaflow`
+2. Download Code：`git clone https://github.com/apache/geaflow.git geaflow`
 3. Build Project：`./build.sh --module=geaflow --output=package`
 4. Test Job：`./bin/gql_submit.sh --gql geaflow/geaflow-examples/gql/loop_detection_file_demo.sql`
 
@@ -87,17 +83,21 @@ Thank you very much for contributing to GeaFlow, whether bug reporting, document
 For more information: [Contribution](docs/docs-en/source/9.contribution.md).
 
 ## Contact Us
-You can contact us through the following methods:
 
-![contacts](https://github.com/TuGraph-family/community/blob/master/assets/contacts.png)
+Contact us through the following mailing list.
 
-**If you are interested in GeaFlow, please give our project a [ ⭐️ ](https://github.com/TuGraph-family/tugraph-analytics).**
+| Name                                                    | Scope                           |                                                      |                                                          |                                                                   |
+|:--------------------------------------------------------|:--------------------------------|:-----------------------------------------------------|:---------------------------------------------------------|:------------------------------------------------------------------|
+| [dev@geaflow.apache.org](mailto:dev@geaflow.apache.org) | Development-related discussions | [Subscribe](mailto:dev-subscribe@geaflow.apache.org) | [Unsubscribe](mailto:dev-unsubscribe@geaflow.apache.org) | [Archives](http://mail-archives.apache.org/mod_mbox/geaflow-dev/) |
+
+**If you are interested in GeaFlow, please give our project
+a [ ⭐️ ](https://github.com/apache/geaflow).**
 
 ## Acknowledgement
 Thanks to some outstanding open-source projects in the industry such as Apache Flink, Apache Spark, and Apache Calcite, some modules of GeaFlow were developed with their references. We would like to express our special gratitude for their contributions. Also, thanks to all the individual developers who have contributed to this repository, which are listed below.
 
-<a href="https://github.com/TuGraph-family/tugraph-analytics/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=TuGraph-family/tugraph-analytics" />
+<a href="https://github.com/apache/geaflow/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=apache/geaflow" />
 </a>
 
 Made with [contrib.rocks](https://contrib.rocks).

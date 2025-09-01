@@ -17,7 +17,7 @@
  * under the License.
  */
 
-Create Function rename_count AS 'com.antgroup.geaflow.dsl.udf.table.agg.Count';
+Create Function rename_count AS 'org.apache.geaflow.dsl.udf.table.agg.Count';
 
 CREATE TABLE users (
 	id bigint,
