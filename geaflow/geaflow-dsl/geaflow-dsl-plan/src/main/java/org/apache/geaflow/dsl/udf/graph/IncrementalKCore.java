@@ -49,7 +49,7 @@ import org.slf4j.LoggerFactory;
  * 3. Propagate recalculation requests between neighbors through message passing mechanism
  * 4. Implement intelligent pruning to avoid unnecessary recalculations
  * 
- * @author TuGraph Analytics Team
+ * @author Geaflow
  */
 @Description(name = "incremental_kcore", description = "built-in udga for Incremental K-Core")
 public class IncrementalKCore implements AlgorithmUserFunction<Object, IncrementalKCore.KCoreMessage>,
