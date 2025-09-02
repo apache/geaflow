@@ -33,7 +33,7 @@ import java.util.Objects;
  * - Create reverse edge
  * - Compare edges (by weight and endpoints)
  * 
- * @author TuGraph Analytics Team
+ * @author Geaflow Team
  */
 public class MSTEdge implements Serializable, Comparable<MSTEdge> {
     

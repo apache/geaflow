@@ -34,7 +34,7 @@ import org.testng.annotations.AfterClass;
  * IncMST算法性能测试类
  * 测试算法在大图场景下的性能表现
  * 
- * @author TuGraph Analytics Team
+ * @author Geaflow Team
  */
 public class IncMSTPerformanceTest {
 

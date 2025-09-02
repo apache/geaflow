@@ -31,7 +31,7 @@ import org.testng.annotations.Test;
  * 增量最小生成树算法测试类
  * 包含基础功能测试、增量更新测试、连通性验证等
  * 
- * @author TuGraph Analytics Team
+ * @author Geaflow Team
  */
 public class IncMSTTest {
 

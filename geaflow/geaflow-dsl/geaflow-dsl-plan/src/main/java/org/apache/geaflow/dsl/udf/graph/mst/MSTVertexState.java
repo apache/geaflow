@@ -36,7 +36,7 @@ import java.util.Set;
  * - mstEdges: MST edge set
  * - changed: Whether the state has changed
  * 
- * @author TuGraph Analytics Team
+ * @author Geaflow Team
  */
 public class MSTVertexState implements Serializable {
     

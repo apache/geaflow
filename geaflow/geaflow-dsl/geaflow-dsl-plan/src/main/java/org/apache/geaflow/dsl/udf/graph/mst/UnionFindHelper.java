@@ -35,7 +35,7 @@ import java.util.Objects;
  * - getSetCount: Get number of sets
  * - clear: Clear all sets
  * 
- * @author TuGraph Analytics Team
+ * @author Geaflow Team
  */
 public class UnionFindHelper implements Serializable {
     

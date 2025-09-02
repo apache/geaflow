@@ -33,7 +33,7 @@ import java.util.Objects;
  * - EDGE_REJECTION: Edge rejection message
  * - MST_EDGE_FOUND: MST edge discovery message
  * 
- * @author TuGraph Analytics Team
+ * @author Geaflow Team
  */
 public class MSTMessage implements Serializable {
     

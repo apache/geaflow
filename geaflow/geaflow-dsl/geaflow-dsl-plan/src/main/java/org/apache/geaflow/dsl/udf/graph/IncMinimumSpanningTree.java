@@ -40,7 +40,7 @@ import org.apache.geaflow.model.graph.edge.EdgeDirection;
 
 /**
  * Incremental Minimum Spanning Tree algorithm implementation.
- * Based on TuGraph Analytics incremental graph computing capabilities, implements MST maintenance on dynamic graphs.
+ * Based on Geaflow incremental graph computing capabilities, implements MST maintenance on dynamic graphs.
  * 
  * <p>Algorithm principle:
  * 1. Maintain current MST state
@@ -48,7 +48,7 @@ import org.apache.geaflow.model.graph.edge.EdgeDirection;
  * 3. For deleted edges: If deleted edge is MST edge, need to reconnect separated components
  * 4. Use vertex-centric message passing mechanism for distributed computing
  * 
- * @author TuGraph Analytics Team
+ * @author Geaflow Team
  */
 @Description(name = "inc_mst", description = "built-in udga for Incremental Minimum Spanning Tree")
 public class IncMinimumSpanningTree implements AlgorithmUserFunction<Object, Object>,
