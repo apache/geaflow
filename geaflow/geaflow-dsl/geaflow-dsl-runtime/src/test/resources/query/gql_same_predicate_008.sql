@@ -17,6 +17,14 @@
  * under the License.
  */
 
+-- Test Case: Same Predicate with Multiple Path Patterns
+-- Purpose: Verify Same Predicate functionality with three path patterns
+-- Query: (a:person) -> (b) | (a:person) -> (c) | (a:person) -> (d) WHERE SAME(a.age > 25)
+-- Description: This test validates that Same Predicate can handle more than two path patterns.
+-- It ensures that the shared condition is properly applied to all three path patterns
+-- and that the result set includes vertices from all three patterns.
+-- Expected: Returns person vertices with age > 25 and their connected vertices b, c, and d
+
 CREATE TABLE tbl_result (
   a_id bigint,
   a_age int,

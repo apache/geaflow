@@ -17,6 +17,14 @@
  * under the License.
  */
 
+-- Test Case: Same Predicate with Edge Conditions
+-- Purpose: Verify Same Predicate functionality with edge property conditions
+-- Query: (a:person) -[e1:knows]-> (b) | (a:person) -[e2:created]-> (c) WHERE SAME(e1.weight > 0.5)
+-- Description: This test validates that Same Predicate can handle conditions on edge properties.
+-- It ensures that edge conditions are properly shared across different path patterns
+-- and that edge properties are correctly evaluated in the shared predicate.
+-- Expected: Returns person vertices connected via knows edges with weight > 0.5 and created edges
+
 CREATE TABLE tbl_result (
   a_id bigint,
   e1_weight double,

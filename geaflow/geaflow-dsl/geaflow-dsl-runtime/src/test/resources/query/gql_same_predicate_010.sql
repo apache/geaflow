@@ -17,6 +17,14 @@
  * under the License.
  */
 
+-- Test Case: Same Predicate with Vertex Type Conditions
+-- Purpose: Verify Same Predicate functionality with different vertex types
+-- Query: (a:person) -> (b:person) | (a:person) -> (c:software) WHERE SAME(a.age > 25)
+-- Description: This test validates that Same Predicate works correctly when path patterns
+-- target different vertex types (person and software). It ensures that vertex type filtering
+-- is properly handled in conjunction with shared conditions.
+-- Expected: Returns person vertices with age > 25 connected to both person and software vertices
+
 CREATE TABLE tbl_result (
   a_id bigint,
   a_age int,

@@ -17,6 +17,14 @@
  * under the License.
  */
 
+-- Test Case: Same Predicate with Subquery Integration
+-- Purpose: Verify Same Predicate functionality with subquery conditions
+-- Query: (a:person) -> (b) | (a:person) -> (c) WHERE SAME(a.id IN (SELECT id FROM person WHERE age > 25))
+-- Description: This test validates that Same Predicate can handle subquery conditions
+-- properly. It ensures that subqueries are correctly evaluated and that the result
+-- is properly applied to both path patterns in the Same Predicate.
+-- Expected: Returns person vertices whose IDs are in the subquery result and their connected vertices
+
 CREATE TABLE tbl_result (
   a_id bigint,
   a_age int,

@@ -17,6 +17,14 @@
  * under the License.
  */
 
+-- Test Case: Same Predicate with Null Handling
+-- Purpose: Verify Same Predicate functionality with null value conditions
+-- Query: (a:person) -> (b) | (a:person) -> (c) WHERE SAME(a.age IS NOT NULL)
+-- Description: This test validates that Same Predicate can handle null value conditions
+-- properly. It ensures that IS NULL and IS NOT NULL operators work correctly
+-- in shared conditions and that null values are handled appropriately.
+-- Expected: Returns person vertices with non-null age values and their connected vertices
+
 CREATE TABLE tbl_result (
   a_id bigint,
   a_age int,

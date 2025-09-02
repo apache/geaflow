@@ -17,6 +17,14 @@
  * under the License.
  */
 
+-- Test Case: Same Predicate with Function Calls
+-- Purpose: Verify Same Predicate functionality with built-in functions
+-- Query: (a:person) -> (b) | (a:person) -> (c) WHERE SAME(LENGTH(a.name) > 4)
+-- Description: This test validates that Same Predicate can handle built-in function calls
+-- in conditions. It ensures that functions like LENGTH() are properly evaluated
+-- and that the function result is correctly applied to both path patterns.
+-- Expected: Returns person vertices with name length > 4 and their connected vertices
+
 CREATE TABLE tbl_result (
   a_id bigint,
   a_name varchar,

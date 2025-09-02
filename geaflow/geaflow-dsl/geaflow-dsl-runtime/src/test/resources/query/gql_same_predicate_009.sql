@@ -17,6 +17,14 @@
  * under the License.
  */
 
+-- Test Case: Same Predicate with Edge Direction Conditions
+-- Purpose: Verify Same Predicate functionality with different edge directions
+-- Query: (a:person) -[e1:knows]-> (b) | (a:person) <-[e2:created]- (c) WHERE SAME(e1.weight = e2.weight)
+-- Description: This test validates that Same Predicate can handle conditions comparing
+-- edge properties from different directions (outgoing and incoming edges).
+-- It ensures that edge direction is properly considered when evaluating shared conditions.
+-- Expected: Returns person vertices where knows edge weight equals created edge weight
+
 CREATE TABLE tbl_result (
   a_id bigint,
   e1_weight double,

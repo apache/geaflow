@@ -17,6 +17,14 @@
  * under the License.
  */
 
+-- Test Case: Same Predicate with Union All Semantics
+-- Purpose: Verify Same Predicate functionality with UNION ALL operator
+-- Query: (a:person) -> (b) |+| (a:person) -> (c) WHERE SAME(a.age > 25)
+-- Description: This test validates that Same Predicate works correctly with the UNION ALL
+-- operator (|+|). It ensures that duplicate results are preserved and that the shared
+-- condition is properly applied to both path patterns without deduplication.
+-- Expected: Returns all person vertices with age > 25 and their connected vertices, including duplicates
+
 CREATE TABLE tbl_result (
   a_id bigint,
   a_age int,

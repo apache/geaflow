@@ -17,6 +17,14 @@
  * under the License.
  */
 
+-- Test Case: Same Predicate with Multiple Variable Conditions
+-- Purpose: Verify complex conditions involving multiple variables in Same Predicate
+-- Query: (a:person) -> (b) | (a:person) -> (c) WHERE SAME(a.age > 25 AND b.id != c.id)
+-- Description: This test validates that Same Predicate can handle complex conditions
+-- that reference multiple variables from different path patterns. It ensures that
+-- the shared condition correctly applies to both path patterns simultaneously.
+-- Expected: Returns person vertices with age > 25 where connected vertices b and c have different IDs
+
 CREATE TABLE tbl_result (
   a_id bigint,
   a_age int,
