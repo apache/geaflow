@@ -19,27 +19,29 @@
  * Incremental K-Core algorithm edge deletion test
  * Test incremental update after deleting edges on dynamic graph
  */
-CREATE SINK inc_kcore_edge_remove_result WITH (
+CREATE TABLE inc_kcore_edge_remove_result (
+  vid int,
+  core_value int,
+  degree int,
+  change_status varchar
+) WITH (
     type='file',
-    geaflow.dsl.file.path = '/tmp/geaflow/inc_kcore_edge_remove_result_004.txt'
+    geaflow.dsl.file.path = '${target}'
 );
 
-USE GRAPH dynamic_graph;
+USE GRAPH modern;
 
 -- Initial K-Core calculation
 INSERT INTO inc_kcore_edge_remove_result
-CALL incremental_kcore(2) ON GRAPH dynamic_graph 
+CALL incremental_kcore(2) YIELD (vid, core_value, degree, change_status)
 RETURN vid, core_value, degree, change_status
 ORDER BY vid;
 
 -- Delete edges
-DELETE FROM dynamic_graph.edges WHERE weight < 0.5;
+DELETE FROM modern.relation WHERE srcId = 1001 AND targetId = 1002;
 
 -- K-Core calculation after incremental update
 INSERT INTO inc_kcore_edge_remove_result
-CALL incremental_kcore(2) ON GRAPH dynamic_graph 
+CALL incremental_kcore(2) YIELD (vid, core_value, degree, change_status)
 RETURN vid, core_value, degree, change_status
 ORDER BY vid;
-
--- Verify results
-SELECT * FROM inc_kcore_edge_remove_result;

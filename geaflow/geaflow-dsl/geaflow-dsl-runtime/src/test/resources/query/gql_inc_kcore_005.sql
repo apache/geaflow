@@ -19,28 +19,30 @@
  * Incremental K-Core algorithm different K values test
  * Test algorithm behavior under different K values
  */
-CREATE SINK inc_kcore_k_values_result WITH (
+CREATE TABLE inc_kcore_k_values_result (
+  vid int,
+  core_value int,
+  degree int,
+  change_status varchar,
+  k_value int
+) WITH (
     type='file',
-    geaflow.dsl.file.path = '/tmp/geaflow/inc_kcore_k_values_result_005.txt'
+    geaflow.dsl.file.path = '${target}'
 );
 
 USE GRAPH modern;
 
 -- Test K=1
 INSERT INTO inc_kcore_k_values_result
-CALL incremental_kcore(1) ON GRAPH modern 
+CALL incremental_kcore(1) YIELD (vid, core_value, degree, change_status)
 RETURN vid, core_value, degree, change_status, 1 as k_value;
 
 -- Test K=2
 INSERT INTO inc_kcore_k_values_result
-CALL incremental_kcore(2) ON GRAPH modern 
+CALL incremental_kcore(2) YIELD (vid, core_value, degree, change_status)
 RETURN vid, core_value, degree, change_status, 2 as k_value;
 
 -- Test K=3
 INSERT INTO inc_kcore_k_values_result
-CALL incremental_kcore(3) ON GRAPH modern 
+CALL incremental_kcore(3) YIELD (vid, core_value, degree, change_status)
 RETURN vid, core_value, degree, change_status, 3 as k_value;
-
--- Verify results, ordered by K value and vertex ID
-SELECT * FROM inc_kcore_k_values_result
-ORDER BY k_value, vid;

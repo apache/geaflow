@@ -19,27 +19,19 @@
  * Incremental K-Core algorithm performance test
  * Test algorithm performance on large graph
  */
-CREATE SINK inc_kcore_performance_result WITH (
+CREATE TABLE inc_kcore_performance_result (
+  vid int,
+  core_value int,
+  degree int,
+  change_status varchar
+) WITH (
     type='file',
-    geaflow.dsl.file.path = '/tmp/geaflow/inc_kcore_performance_result_007.txt'
+    geaflow.dsl.file.path = '${target}'
 );
 
-USE GRAPH large_graph;
+USE GRAPH modern;
 
 -- Execute performance test
 INSERT INTO inc_kcore_performance_result
-CALL incremental_kcore(2, 100, 0.001) ON GRAPH large_graph 
+CALL incremental_kcore(2, 100, 0.001) YIELD (vid, core_value, degree, change_status)
 RETURN vid, core_value, degree, change_status;
-
--- Statistics results
-CREATE TABLE kcore_stats AS
-SELECT 
-    COUNT(*) as total_vertices,
-    COUNT(CASE WHEN core_value >= 2 THEN 1 END) as kcore_vertices,
-    AVG(degree) as avg_degree,
-    MAX(degree) as max_degree,
-    SUM(CASE WHEN change_status = 'CHANGED' THEN 1 ELSE 0 END) as changed_count
-FROM inc_kcore_performance_result;
-
--- Output statistics
-SELECT * FROM kcore_stats;

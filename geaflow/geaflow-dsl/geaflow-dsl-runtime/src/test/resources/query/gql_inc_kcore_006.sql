@@ -19,24 +19,26 @@
  * Incremental K-Core algorithm convergence test
  * Test algorithm convergence under different iteration counts
  */
-CREATE SINK inc_kcore_convergence_result WITH (
+CREATE TABLE inc_kcore_convergence_result (
+  vid int,
+  core_value int,
+  degree int,
+  change_status varchar
+) WITH (
     type='file',
-    geaflow.dsl.file.path = '/tmp/geaflow/inc_kcore_convergence_result_006.txt'
+    geaflow.dsl.file.path = '${target}'
 );
 
 USE GRAPH modern;
 
 -- Test convergence under different convergence thresholds
 INSERT INTO inc_kcore_convergence_result
-CALL incremental_kcore(2, 10, 0.1) ON GRAPH modern 
+CALL incremental_kcore(2, 10, 0.1) YIELD (vid, core_value, degree, change_status)
 RETURN vid, core_value, degree, change_status
 ORDER BY vid;
 
 -- Use stricter convergence threshold
 INSERT INTO inc_kcore_convergence_result
-CALL incremental_kcore(2, 20, 0.001) ON GRAPH modern 
+CALL incremental_kcore(2, 20, 0.001) YIELD (vid, core_value, degree, change_status)
 RETURN vid, core_value, degree, change_status
 ORDER BY vid;
-
--- Verify results
-SELECT * FROM inc_kcore_convergence_result;

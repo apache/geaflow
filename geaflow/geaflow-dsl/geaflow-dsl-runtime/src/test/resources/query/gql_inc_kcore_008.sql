@@ -19,30 +19,32 @@
  * Incremental K-Core algorithm custom parameters test
  * Test the impact of different parameter combinations on algorithm results
  */
-CREATE SINK inc_kcore_custom_params_result WITH (
+CREATE TABLE inc_kcore_custom_params_result (
+  vid int,
+  core_value int,
+  degree int,
+  change_status varchar
+) WITH (
     type='file',
-    geaflow.dsl.file.path = '/tmp/geaflow/inc_kcore_custom_params_result_008.txt'
+    geaflow.dsl.file.path = '${target}'
 );
 
 USE GRAPH modern;
 
 -- Test different K values
 INSERT INTO inc_kcore_custom_params_result
-CALL incremental_kcore(1, 50, 0.001) ON GRAPH modern 
+CALL incremental_kcore(1, 50, 0.001) YIELD (vid, core_value, degree, change_status)
 RETURN vid, core_value, degree, change_status
 ORDER BY vid;
 
 -- Test different maximum iteration counts
 INSERT INTO inc_kcore_custom_params_result
-CALL incremental_kcore(2, 5, 0.001) ON GRAPH modern 
+CALL incremental_kcore(2, 5, 0.001) YIELD (vid, core_value, degree, change_status)
 RETURN vid, core_value, degree, change_status
 ORDER BY vid;
 
 -- Test different convergence thresholds
 INSERT INTO inc_kcore_custom_params_result
-CALL incremental_kcore(3, 100, 0.01) ON GRAPH modern 
+CALL incremental_kcore(3, 100, 0.01) YIELD (vid, core_value, degree, change_status)
 RETURN vid, core_value, degree, change_status
 ORDER BY vid;
-
--- Verify results
-SELECT * FROM inc_kcore_custom_params_result;

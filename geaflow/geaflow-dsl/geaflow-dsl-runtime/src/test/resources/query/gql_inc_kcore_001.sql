@@ -19,16 +19,19 @@
  * Incremental K-Core algorithm basic test
  * Execute basic incremental K-Core algorithm on modern graph
  */
-CREATE SINK inc_kcore_result WITH (
+CREATE TABLE inc_kcore_result (
+  vid int,
+  core_value int,
+  degree int,
+  change_status varchar
+) WITH (
     type='file',
-    geaflow.dsl.file.path = '/tmp/geaflow/inc_kcore_result_001.txt'
+    geaflow.dsl.file.path = '${target}'
 );
 
 USE GRAPH modern;
+
 INSERT INTO inc_kcore_result
-CALL incremental_kcore(2) ON GRAPH modern 
+CALL incremental_kcore(2) YIELD (vid, core_value, degree, change_status)
 RETURN vid, core_value, degree, change_status
 ORDER BY vid;
-
--- Verify results
-SELECT * FROM inc_kcore_result;

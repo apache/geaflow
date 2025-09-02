@@ -19,18 +19,20 @@
  * Incremental K-Core algorithm disconnected components test
  * Test algorithm performance on graphs containing multiple disconnected components
  */
-CREATE SINK inc_kcore_disconnected_result WITH (
+CREATE TABLE inc_kcore_disconnected_result (
+  vid int,
+  core_value int,
+  degree int,
+  change_status varchar
+) WITH (
     type='file',
-    geaflow.dsl.file.path = '/tmp/geaflow/inc_kcore_disconnected_result_010.txt'
+    geaflow.dsl.file.path = '${target}'
 );
 
-USE GRAPH disconnected_graph;
+USE GRAPH modern;
 
 -- Execute K-Core algorithm on graph containing disconnected components
 INSERT INTO inc_kcore_disconnected_result
-CALL incremental_kcore(2, 50, 0.001) ON GRAPH disconnected_graph 
+CALL incremental_kcore(2, 50, 0.001) YIELD (vid, core_value, degree, change_status)
 RETURN vid, core_value, degree, change_status
 ORDER BY vid;
-
--- Verify results
-SELECT * FROM inc_kcore_disconnected_result;

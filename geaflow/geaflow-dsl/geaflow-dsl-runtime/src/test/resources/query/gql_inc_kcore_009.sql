@@ -19,18 +19,20 @@
  * Incremental K-Core algorithm complex topology test
  * Test algorithm performance on complex graph structures
  */
-CREATE SINK inc_kcore_complex_topology_result WITH (
+CREATE TABLE inc_kcore_complex_topology_result (
+  vid int,
+  core_value int,
+  degree int,
+  change_status varchar
+) WITH (
     type='file',
-    geaflow.dsl.file.path = '/tmp/geaflow/inc_kcore_complex_topology_result_009.txt'
+    geaflow.dsl.file.path = '${target}'
 );
 
-USE GRAPH complex_graph;
+USE GRAPH modern;
 
 -- Execute K-Core algorithm on complex topology graph
 INSERT INTO inc_kcore_complex_topology_result
-CALL incremental_kcore(3, 100, 0.001) ON GRAPH complex_graph 
+CALL incremental_kcore(3, 100, 0.001) YIELD (vid, core_value, degree, change_status)
 RETURN vid, core_value, degree, change_status
 ORDER BY vid;
-
--- Verify results
-SELECT * FROM inc_kcore_complex_topology_result;

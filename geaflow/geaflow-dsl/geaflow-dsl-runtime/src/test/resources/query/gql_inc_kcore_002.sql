@@ -19,34 +19,35 @@
  * Incremental K-Core algorithm incremental update test
  * Test scenarios of dynamic edge addition and deletion
  */
-CREATE SINK inc_kcore_incremental_result WITH (
+CREATE TABLE inc_kcore_incremental_result (
+  vid int,
+  core_value int,
+  degree int,
+  change_status varchar
+) WITH (
     type='file',
-    geaflow.dsl.file.path = '/tmp/geaflow/inc_kcore_incremental_result_002.txt'
+    geaflow.dsl.file.path = '${target}'
 );
 
 USE GRAPH modern;
 
 -- Initial K-Core calculation
 INSERT INTO inc_kcore_incremental_result
-CALL incremental_kcore(2, 50, 0.001) ON GRAPH modern 
+CALL incremental_kcore(2, 50, 0.001) YIELD (vid, core_value, degree, change_status)
 RETURN vid, core_value, degree, change_status;
 
 -- Simulate edge addition
-INSERT INTO modern.knows VALUES (1001, 1002, 0.8);
+INSERT INTO modern.relation VALUES (1001, 1002);
 
 -- K-Core calculation after incremental update
 INSERT INTO inc_kcore_incremental_result
-CALL incremental_kcore(2, 50, 0.001) ON GRAPH modern 
+CALL incremental_kcore(2, 50, 0.001) YIELD (vid, core_value, degree, change_status)
 RETURN vid, core_value, degree, change_status;
 
 -- Simulate edge deletion
-DELETE FROM modern.knows WHERE weight < 0.5;
+DELETE FROM modern.relation WHERE srcId = 1001 AND targetId = 1002;
 
 -- Update K-Core again
 INSERT INTO inc_kcore_incremental_result
-CALL incremental_kcore(2, 50, 0.001) ON GRAPH modern 
+CALL incremental_kcore(2, 50, 0.001) YIELD (vid, core_value, degree, change_status)
 RETURN vid, core_value, degree, change_status;
-
--- Verify results
-SELECT * FROM inc_kcore_incremental_result
-ORDER BY vid, change_status;
