@@ -140,7 +140,17 @@ public class IncrementalKCore implements AlgorithmUserFunction<Object, Increment
         allEdges.addAll(staticEdges);
         allEdges.addAll(dynamicEdges);
         
-        sendMessageToNeighbors(allEdges, new KCoreMessage(vertexId, initialCore, KCoreMessage.MessageType.INIT));
+        for (RowEdge edge : allEdges) {
+            Object targetId = edge.getTargetId();
+            Object srcId = edge.getSrcId();
+            
+            if (!targetId.equals(vertexId)) {
+                context.sendMessage(targetId, new KCoreMessage(vertexId, initialCore, KCoreMessage.MessageType.INIT));
+            }
+            if (!srcId.equals(vertexId) && !srcId.equals(targetId)) {
+                context.sendMessage(srcId, new KCoreMessage(vertexId, initialCore, KCoreMessage.MessageType.INIT));
+            }
+        }
         
         LOGGER.debug("Initialized vertex {} with degree={}, core={}", vertexId, totalDegree, initialCore);
     }
@@ -248,8 +258,17 @@ public class IncrementalKCore implements AlgorithmUserFunction<Object, Increment
             allEdges.addAll(context.loadStaticEdges(EdgeDirection.BOTH));
             allEdges.addAll(context.loadDynamicEdges(EdgeDirection.BOTH));
             
-            sendMessageToNeighbors(allEdges, 
-                new KCoreMessage(vertexId, newCore, KCoreMessage.MessageType.CORE_CHANGED));
+            for (RowEdge edge : allEdges) {
+                Object targetId = edge.getTargetId();
+                Object srcId = edge.getSrcId();
+                
+                if (!targetId.equals(vertexId)) {
+                    context.sendMessage(targetId, new KCoreMessage(vertexId, newCore, KCoreMessage.MessageType.CORE_CHANGED));
+                }
+                if (!srcId.equals(vertexId) && !srcId.equals(targetId)) {
+                    context.sendMessage(srcId, new KCoreMessage(vertexId, newCore, KCoreMessage.MessageType.CORE_CHANGED));
+                }
+            }
             
             LOGGER.debug("Vertex {} core changed from {} to {}", vertexId, currentCore, newCore);
         }
@@ -280,24 +299,7 @@ public class IncrementalKCore implements AlgorithmUserFunction<Object, Increment
         return validCount;
     }
     
-    /**
-     * 向邻居发送消息.
-     * 遍历所有边，向邻居顶点发送消息.
-     */
-    private void sendMessageToNeighbors(List<RowEdge> edges, KCoreMessage message) {
-        for (RowEdge edge : edges) {
-            Object targetId = edge.getTargetId();
-            Object srcId = edge.getSrcId();
-            
-            // 发送给源顶点和目标顶点（如果不是消息发送者）
-            if (!targetId.equals(message.getSourceId())) {
-                context.sendMessage(targetId, message);
-            }
-            if (!srcId.equals(message.getSourceId()) && !srcId.equals(targetId)) {
-                context.sendMessage(srcId, message);
-            }
-        }
-    }
+
 
     @Override
     public void finish(RowVertex vertex, Optional<Row> updatedValues) {
