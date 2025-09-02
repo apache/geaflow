@@ -30,7 +30,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 
-@McpServerEndpoint(name = "geaflow-mcp-server", sseEndpoint = "/geaflow/sse")
+@McpServerEndpoint(name = "geaflow-mcp-server", channel = "sse", sseEndpoint = "/geaflow/sse")
 public class GeaFlowMcpServerTools {
     private static final Logger LOGGER = LoggerFactory.getLogger(GeaFlowMcpServerTools.class);
 

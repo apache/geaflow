@@ -27,7 +27,40 @@ package org.apache.geaflow.mcp.server;
  */
 public class ToolDesc {
 
-    public static final String createGraph = "create graph with ddl";
-    public static final String insertGraph = "Insert into graph dml";
-    public static final String queryType = "query vertex or edge";
+    public static final String createGraph = "create graph with ddl, Set the storeType to rocksdb, " +
+            "ensuring the syntax is correct and do not use any syntax not present in the examples. " +
+            "example: CREATE GRAPH modern (\n" +
+            "\tVertex person (\n" +
+            "\t  id bigint ID,\n" +
+            "\t  name varchar,\n" +
+            "\t  age int\n" +
+            "\t),\n" +
+            "\tVertex software (\n" +
+            "\t  id bigint ID,\n" +
+            "\t  name varchar,\n" +
+            "\t  lang varchar\n" +
+            "\t),\n" +
+            "\tEdge knows (\n" +
+            "\t  srcId bigint SOURCE ID,\n" +
+            "\t  targetId bigint DESTINATION ID,\n" +
+            "\t  weight double\n" +
+            "\t),\n" +
+            "\tEdge created (\n" +
+            "\t  srcId bigint SOURCE ID,\n" +
+            "  \ttargetId bigint DESTINATION ID,\n" +
+            "  \tweight double\n" +
+            "\t)\n" +
+            ") WITH (\n" +
+            "\tstoreType='rocksdb'\n" +
+            ");";
+
+    public static final String insertGraph = "Insert into graph with dml. " +
+            "A single call can only insert data into one vertex or edge type, and can only use the VALUES syntax. " +
+            "Do not use any syntax not present in the examples. " +
+            "example: INSERT INTO modern.person(id, name, age)\n" +
+            "VALUES (1, 'jim', 20), (2, 'kate', 22)\n" +
+            ";";
+
+    public static final String queryType = "query vertex or edge. " +
+            "A single call can only query data from one vertex or edge type, and only one type name needs to be provided.";
 }

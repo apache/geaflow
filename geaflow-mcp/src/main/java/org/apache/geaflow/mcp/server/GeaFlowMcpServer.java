@@ -31,6 +31,7 @@ import org.noear.solon.annotation.Controller;
 @Controller
 public class GeaFlowMcpServer {
     private static final String SERVER_NAME = "geaflow-mcp-server";
+    private static final String SSE_CHANNEL = "sse";
     private static final String SSE_ENDPOINT = "/geaflow/sse";
 
     public static void main(String[] args) {
@@ -38,6 +39,7 @@ public class GeaFlowMcpServer {
             // Manually build the mcp service endpoint.
             McpServerEndpointProvider endpointProvider = McpServerEndpointProvider.builder()
                 .name(SERVER_NAME)
+                .channel(SSE_CHANNEL)
                 .sseEndpoint(SSE_ENDPOINT)
                 .build();
             endpointProvider.addTool(new MethodToolProvider(new GeaFlowMcpServerTools()));

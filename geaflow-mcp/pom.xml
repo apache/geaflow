@@ -31,7 +31,7 @@
     <artifactId>geaflow-mcp</artifactId>
 
     <properties>
-        <solon-mcp.version>3.3.3-M1</solon-mcp.version>
+        <solon-mcp.version>3.5.1</solon-mcp.version>
         <junit.version>5.10.1</junit.version>
         <slf4j.version>1.7.15</slf4j.version>
         <log4j.version>1.2.17</log4j.version>

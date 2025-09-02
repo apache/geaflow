@@ -22,7 +22,9 @@ package org.apache.geaflow.mcp.server;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.geaflow.cluster.local.client.LocalEnvironment;
+import org.apache.geaflow.dsl.common.types.TableField;
 import org.apache.geaflow.dsl.schema.GeaFlowGraph;
+import org.apache.geaflow.dsl.schema.GeaFlowTable;
 import org.apache.geaflow.env.IEnvironment;
 import org.apache.geaflow.mcp.server.util.McpLocalFileUtil;
 import org.apache.geaflow.mcp.server.util.QueryFormatUtil;
@@ -134,16 +136,19 @@ public class GeaFlowMcpActionsLocalImpl implements GeaFlowMcpActions {
         String dql = null;
         String dirName = "query_result_" + Instant.now().toEpochMilli();
         String resultPath = QueryLocalRunner.DSL_STATE_REMOTE_PATH + "/" + dirName;
+        GeaFlowTable resultTable = null;
         for (GeaFlowGraph.VertexTable vertexTable : graph.getVertexTables()) {
             if (vertexTable.getTypeName().equals(type)) {
                 dql = QueryFormatUtil.makeResultTable(vertexTable, resultPath)
                         + "\n" + QueryFormatUtil.makeEntityTableQuery(vertexTable);
+                resultTable = vertexTable;
             }
         }
         for (GeaFlowGraph.EdgeTable edgeTable : graph.getEdgeTables()) {
             if (edgeTable.getTypeName().equals(type)) {
                 dql = QueryFormatUtil.makeResultTable(edgeTable, resultPath)
                         + "\n" + QueryFormatUtil.makeEntityTableQuery(edgeTable);
+                resultTable = edgeTable;
             }
         }
         runner.withQuery(ddl + "\n" + usingGraph + dql);
@@ -154,7 +159,9 @@ public class GeaFlowMcpActionsLocalImpl implements GeaFlowMcpActions {
         } catch (Throwable e) {
             return runner.getErrorMsg();
         }
-        return resultContent;
+        String schemaContent = "type: " + type + "\nschema: " + resultTable.getFields().stream()
+                .map(TableField::getName).collect(Collectors.joining("|"));
+        return schemaContent + "\n" + resultContent;
     }
 
     @Override

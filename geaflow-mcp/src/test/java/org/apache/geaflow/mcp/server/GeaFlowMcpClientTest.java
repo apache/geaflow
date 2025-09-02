@@ -36,6 +36,7 @@ import java.util.*;
 public class GeaFlowMcpClientTest {
     private static final Logger LOGGER = LoggerFactory.getLogger(GeaFlowMcpClientTest.class);
 
+    private static final String SSE_CHANNEL = "sse";
     private static final String SSE_ENDPOINT = "http://localhost:8088/geaflow/sse";
     private static final String QUERY = "query";
     private static final String EXECUTE_QUERY_TOOL_NAME = "executeQuery";
@@ -78,6 +79,7 @@ public class GeaFlowMcpClientTest {
     @Test
     public void testGetServerVersion() {
         McpClientProvider toolProvider = McpClientProvider.builder()
+            .channel(SSE_CHANNEL)
             .apiUrl(SSE_ENDPOINT)
             .build();
 
@@ -105,6 +107,7 @@ public class GeaFlowMcpClientTest {
     @Test
     public void testCreateGraph() throws IOException {
         McpClientProvider toolProvider = McpClientProvider.builder()
+                .channel(SSE_CHANNEL)
                 .apiUrl(SSE_ENDPOINT)
                 .build();
 
@@ -126,6 +129,7 @@ public class GeaFlowMcpClientTest {
     @Test
     public void testInsertGraph() throws IOException {
         McpClientProvider toolProvider = McpClientProvider.builder()
+                .channel(SSE_CHANNEL)
                 .apiUrl(SSE_ENDPOINT)
                 .build();
 
@@ -149,6 +153,7 @@ public class GeaFlowMcpClientTest {
     @Test
     public void testQueryGraphType() throws IOException {
         McpClientProvider toolProvider = McpClientProvider.builder()
+                .channel(SSE_CHANNEL)
                 .apiUrl(SSE_ENDPOINT)
                 .build();
 
@@ -158,7 +163,9 @@ public class GeaFlowMcpClientTest {
 
         String queryResults = toolProvider.callToolAsText(McpConstants.QUERY_TYPE_TOOL_NAME, map).getContent();
         LOGGER.info("queryResults: {}", queryResults);
-        Assertions.assertEquals("1,jim,20\n" +
+        Assertions.assertEquals("type: person\n" +
+                "schema: id|name|age\n" +
+                "1,jim,20\n" +
                 "2,kate,22", queryResults);
 
     }
