@@ -172,10 +172,10 @@ public class IncMSTPerformanceTest {
     }
 
     /**
-     * 打印性能指标
-     * @param testName 测试名称
-     * @param startTime 开始时间（纳秒）
-     * @param endTime 结束时间（纳秒）
+     * Print performance metrics
+     * @param testName Test name
+     * @param startTime Start time (nanoseconds)
+     * @param endTime End time (nanoseconds)
      */
     private void printPerformanceMetrics(String testName, long startTime, long endTime) {
         long durationNano = endTime - startTime;
@@ -189,10 +189,10 @@ public class IncMSTPerformanceTest {
     }
 
     /**
-     * 打印内存指标
-     * @param testName 测试名称
-     * @param initialMemory 初始内存使用（字节）
-     * @param finalMemory 最终内存使用（字节）
+     * Print memory metrics
+     * @param testName Test name
+     * @param initialMemory Initial memory usage (bytes)
+     * @param finalMemory Final memory usage (bytes)
      */
     private void printMemoryMetrics(String testName, long initialMemory, long finalMemory) {
         long memoryUsed = finalMemory - initialMemory;
@@ -206,8 +206,8 @@ public class IncMSTPerformanceTest {
     }
 
     /**
-     * 获取当前内存使用情况
-     * @return 内存使用量（字节）
+     * Get current memory usage
+     * @return Memory usage (bytes)
      */
     private long getCurrentMemoryUsage() {
         Runtime runtime = Runtime.getRuntime();
@@ -215,9 +215,9 @@ public class IncMSTPerformanceTest {
     }
 
     /**
-     * 格式化内存大小
-     * @param bytes 字节数
-     * @return 格式化后的字符串
+     * Format memory size
+     * @param bytes Number of bytes
+     * @return Formatted string
      */
     private String formatMemorySize(long bytes) {
         if (bytes < 1024) {
