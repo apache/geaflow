@@ -21,7 +21,6 @@ package org.apache.geaflow.mcp.server;
 
 import org.apache.commons.io.IOUtils;
 import org.apache.geaflow.mcp.server.util.McpConstants;
-import org.apache.geaflow.mcp.server.util.McpLocalFileUtil;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.noear.solon.ai.mcp.client.McpClientProvider;
