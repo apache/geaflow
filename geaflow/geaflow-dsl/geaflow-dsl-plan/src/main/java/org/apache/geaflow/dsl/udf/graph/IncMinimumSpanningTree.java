@@ -146,8 +146,8 @@ public class IncMinimumSpanningTree implements AlgorithmUserFunction<Object, Obj
     }
 
     /**
-     * 处理接收到的消息
-     * 根据消息类型执行相应的MST更新逻辑
+     * Process received messages
+     * Execute corresponding MST update logic based on message type
      */
     private void processMessages(RowVertex vertex, Iterator<Object> messages) {
         Object vertexId = vertex.getId();
@@ -162,7 +162,7 @@ public class IncMinimumSpanningTree implements AlgorithmUserFunction<Object, Obj
             }
         }
         
-        // 如果状态发生变化，更新顶点值并广播更新
+        // If state changes, update vertex value and broadcast update
         if (stateChanged) {
             context.updateVertexValue(ObjectRow.create(currentState, true));
             broadcastStateUpdate(vertexId, currentState);
@@ -170,8 +170,8 @@ public class IncMinimumSpanningTree implements AlgorithmUserFunction<Object, Obj
     }
 
     /**
-     * 处理单个消息
-     * 根据消息类型执行相应的处理逻辑
+     * Process single message
+     * Execute corresponding processing logic based on message type
      */
     private boolean processMessage(Object vertexId, MSTMessage message, MSTVertexState state) {
         switch (message.getType()) {
@@ -191,8 +191,8 @@ public class IncMinimumSpanningTree implements AlgorithmUserFunction<Object, Obj
     }
 
     /**
-     * 处理组件更新消息
-     * 更新顶点的组件标识符
+     * Handle component update message
+     * Update vertex component identifier
      */
     private boolean handleComponentUpdate(Object vertexId, MSTMessage message, MSTVertexState state) {
         Object newComponentId = message.getComponentId();
@@ -204,20 +204,20 @@ public class IncMinimumSpanningTree implements AlgorithmUserFunction<Object, Obj
     }
 
     /**
-     * 处理边提议消息
-     * 检查是否接受新的MST边
+     * Handle edge proposal message
+     * Check whether to accept new MST edge
      */
     private boolean handleEdgeProposal(Object vertexId, MSTMessage message, MSTVertexState state) {
         Object sourceComponentId = message.getComponentId();
         Object targetComponentId = state.getComponentId();
         
-        // 检查是否连接不同组件
+        // Check if connecting different components
         if (!sourceComponentId.equals(targetComponentId)) {
             double edgeWeight = message.getWeight();
             
-            // 检查是否是更好的边
+            // Check if it's a better edge
             if (edgeWeight < state.getMinEdgeWeight()) {
-                // 接受边提议
+                // Accept edge proposal
                 MSTMessage acceptance = new MSTMessage(
                     MSTMessage.MessageType.EDGE_ACCEPTANCE,
                     vertexId,
@@ -227,13 +227,13 @@ public class IncMinimumSpanningTree implements AlgorithmUserFunction<Object, Obj
                 acceptance.setComponentId(targetComponentId);
                 context.sendMessage(message.getSourceId(), acceptance);
                 
-                // 更新本地状态
+                // Update local state
                 state.setParentId(message.getSourceId());
                 state.setMinEdgeWeight(edgeWeight);
                 state.setRoot(false);
                 return true;
             } else {
-                // 拒绝边提议
+                // Reject edge proposal
                 MSTMessage rejection = new MSTMessage(
                     MSTMessage.MessageType.EDGE_REJECTION,
                     vertexId,
@@ -247,20 +247,20 @@ public class IncMinimumSpanningTree implements AlgorithmUserFunction<Object, Obj
     }
 
     /**
-     * 处理边接受消息
-     * 添加MST边并合并组件
+     * Handle edge acceptance message
+     * Add MST edge and merge components
      */
     private boolean handleEdgeAcceptance(Object vertexId, MSTMessage message, MSTVertexState state) {
-        // 创建MST边
+        // Create MST edge
         MSTEdge mstEdge = new MSTEdge(vertexId, message.getSourceId(), 
             message.getWeight());
         state.addMSTEdge(mstEdge);
         
-        // 合并组件
+        // Merge components
         Object newComponentId = findMinComponentId(state.getComponentId(), message.getComponentId());
         state.setComponentId(newComponentId);
         
-        // 广播MST边发现消息
+        // Broadcast MST edge discovery message
         MSTMessage mstEdgeMsg = new MSTMessage(
             MSTMessage.MessageType.MST_EDGE_FOUND,
             vertexId,
@@ -274,17 +274,17 @@ public class IncMinimumSpanningTree implements AlgorithmUserFunction<Object, Obj
     }
 
     /**
-     * 处理边拒绝消息
-     * 记录被拒绝的边
+     * Handle edge rejection message
+     * Record rejected edges
      */
     private boolean handleEdgeRejection(Object vertexId, MSTMessage message, MSTVertexState state) {
-        // 可以在这里记录被拒绝的边，用于调试或统计
+        // Can record rejected edges here for debugging or statistics
         return false;
     }
 
     /**
-     * 处理MST边发现消息
-     * 记录发现的MST边
+     * Handle MST edge discovery message
+     * Record discovered MST edges
      */
     private boolean handleMSTEdgeFound(Object vertexId, MSTMessage message, MSTVertexState state) {
         MSTEdge foundEdge = message.getEdge();
@@ -296,8 +296,8 @@ public class IncMinimumSpanningTree implements AlgorithmUserFunction<Object, Obj
     }
 
     /**
-     * 广播状态更新消息
-     * 向邻居发送组件更新信息
+     * Broadcast state update message
+     * Send component update information to neighbors
      */
     private void broadcastStateUpdate(Object vertexId, MSTVertexState state) {
         MSTMessage updateMsg = new MSTMessage(
@@ -312,8 +312,8 @@ public class IncMinimumSpanningTree implements AlgorithmUserFunction<Object, Obj
     }
 
     /**
-     * 获取当前顶点状态
-     * 如果不存在则创建新的状态
+     * Get current vertex state
+     * Create new state if it doesn't exist
      */
     private MSTVertexState getCurrentVertexState(RowVertex vertex) {
         Optional<Row> currentValues = context.getVertexValue(vertex.getId());
@@ -328,8 +328,8 @@ public class IncMinimumSpanningTree implements AlgorithmUserFunction<Object, Obj
     }
 
     /**
-     * 选择较小的组件ID作为新的组件ID
-     * 用于组件合并时的ID选择策略
+     * Select smaller component ID as new component ID
+     * ID selection strategy for component merging
      */
     private Object findMinComponentId(Object id1, Object id2) {
         if (id1.toString().compareTo(id2.toString()) < 0) {
