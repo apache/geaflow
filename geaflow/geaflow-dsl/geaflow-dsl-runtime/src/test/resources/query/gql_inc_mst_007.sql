@@ -18,18 +18,18 @@
  */
 
 /*
- * 增量最小生成树算法性能测试
- * 测试算法在性能图上的表现
+ * Incremental Minimum Spanning Tree algorithm性能Test
+ * Test算法在性能图上的表现
  */
-CREATE SINK inc_mst_perf_result WITH (
+CREATE TABLE inc_mst_perf_result WITH (
     type='file',
     geaflow.dsl.file.path = '/tmp/geaflow/inc_mst_perf_result_007.txt'
 );
 
 USE GRAPH performance_graph;
 INSERT INTO inc_mst_perf_result
-CALL IncMST(200, 0.001, 'mst_perf_edges') ON GRAPH performance_graph 
+CALL IncMST(200, 0.001, 'mst_perf_edges') YIELD (srcId, targetId, weight) 
 RETURN srcId, targetId, weight;
 
--- 验证结果
+-- Verify results
 SELECT * FROM inc_mst_perf_result;

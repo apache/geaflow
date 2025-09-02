@@ -18,18 +18,18 @@
  */
 
 /*
- * 增量最小生成树算法内存效率测试
- * 测试算法内存使用效率
+ * Incremental Minimum Spanning Tree algorithm内存效率Test
+ * Test算法内存使用效率
  */
-CREATE SINK inc_mst_perf_memory_result WITH (
+CREATE TABLE inc_mst_perf_memory_result WITH (
     type='file',
     geaflow.dsl.file.path = '/tmp/geaflow/inc_mst_perf_memory_result_006.txt'
 );
 
 USE GRAPH large_graph;
 INSERT INTO inc_mst_perf_memory_result
-CALL IncMST(300, 0.001, 'mst_perf_memory_edges') ON GRAPH large_graph 
+CALL IncMST(300, 0.001, 'mst_perf_memory_edges') YIELD (srcId, targetId, weight) 
 RETURN srcId, targetId, weight;
 
--- 验证结果
+-- Verify results
 SELECT * FROM inc_mst_perf_memory_result;

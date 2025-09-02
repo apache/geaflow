@@ -18,29 +18,30 @@
  */
 
 /*
- * 增量最小生成树算法增量更新测试
- * 测试边动态添加和删除的场景
+ * Incremental Minimum Spanning Tree algorithm incremental update test
+ * Test dynamic edge addition and deletion scenarios
  */
-CREATE SINK inc_mst_incremental_result WITH (
+CREATE TABLE inc_mst_incremental_result (
+  srcId int,
+  targetId int,
+  weight double
+) WITH (
     type='file',
-    geaflow.dsl.file.path = '/tmp/geaflow/inc_mst_incremental_result_002.txt'
+    geaflow.dsl.file.path = '${target}'
 );
 
 USE GRAPH modern;
 
--- 初始MST计算
+-- Initial MST calculation
 INSERT INTO inc_mst_incremental_result
-CALL IncMST(50, 0.001, 'mst_incremental_edges') ON GRAPH modern 
+CALL IncMST(50, 0.001, 'mst_incremental_edges') YIELD (srcId, targetId, weight)
 RETURN srcId, targetId, weight;
 
--- 模拟边更新
-INSERT INTO modern.e_knows VALUES (1001, 1002, 0.5);
-INSERT INTO modern.e_knows VALUES (1002, 1003, 0.8);
+-- Simulate edge updates
+INSERT INTO modern.relation VALUES (1001, 1002);
+INSERT INTO modern.relation VALUES (1002, 1003);
 
--- 增量更新后的MST计算
+-- MST calculation after incremental update
 INSERT INTO inc_mst_incremental_result
-CALL IncMST(50, 0.001, 'mst_incremental_edges') ON GRAPH modern 
+CALL IncMST(50, 0.001, 'mst_incremental_edges') YIELD (srcId, targetId, weight)
 RETURN srcId, targetId, weight;
-
--- 验证结果
-SELECT * FROM inc_mst_incremental_result;

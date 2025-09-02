@@ -18,28 +18,29 @@
  */
 
 /*
- * 增量最小生成树算法边删除测试
- * 测试动态删除边的场景
+ * Incremental Minimum Spanning Tree algorithm edge deletion test
+ * Test dynamic edge deletion scenarios
  */
-CREATE SINK inc_mst_edge_del_result WITH (
+CREATE TABLE inc_mst_edge_del_result (
+  srcId int,
+  targetId int,
+  weight double
+) WITH (
     type='file',
-    geaflow.dsl.file.path = '/tmp/geaflow/inc_mst_edge_del_result_005.txt'
+    geaflow.dsl.file.path = '${target}'
 );
 
-USE GRAPH dynamic_graph;
+USE GRAPH modern;
 
--- 初始MST计算
+-- Initial MST calculation
 INSERT INTO inc_mst_edge_del_result
-CALL IncMST(50, 0.001, 'mst_edge_del_edges') ON GRAPH dynamic_graph 
+CALL IncMST(50, 0.001, 'mst_edge_del_edges') YIELD (srcId, targetId, weight)
 RETURN srcId, targetId, weight;
 
--- 删除边
-DELETE FROM dynamic_graph.e_connects WHERE srcId = 1001 AND targetId = 1002;
+-- Delete edges
+DELETE FROM modern.relation WHERE srcId = 1001 AND targetId = 1002;
 
--- 重新计算MST
+-- Recalculate MST
 INSERT INTO inc_mst_edge_del_result
-CALL IncMST(50, 0.001, 'mst_edge_del_edges') ON GRAPH dynamic_graph 
+CALL IncMST(50, 0.001, 'mst_edge_del_edges') YIELD (srcId, targetId, weight)
 RETURN srcId, targetId, weight;
-
--- 验证结果
-SELECT * FROM inc_mst_edge_del_result;

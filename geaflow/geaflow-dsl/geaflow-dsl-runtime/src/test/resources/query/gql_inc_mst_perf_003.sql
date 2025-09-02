@@ -18,18 +18,18 @@
  */
 
 /*
- * 增量最小生成树算法大图性能测试
- * 测试10K顶点图上的性能表现
+ * Incremental Minimum Spanning Tree algorithm大图性能Test
+ * Test10K顶点图上的性能表现
  */
-CREATE SINK inc_mst_perf_large_result WITH (
+CREATE TABLE inc_mst_perf_large_result WITH (
     type='file',
     geaflow.dsl.file.path = '/tmp/geaflow/inc_mst_perf_large_result_003.txt'
 );
 
 USE GRAPH large_graph;
 INSERT INTO inc_mst_perf_large_result
-CALL IncMST(200, 0.001, 'mst_perf_large_edges') ON GRAPH large_graph 
+CALL IncMST(200, 0.001, 'mst_perf_large_edges') YIELD (srcId, targetId, weight) 
 RETURN srcId, targetId, weight;
 
--- 验证结果
+-- Verify results
 SELECT * FROM inc_mst_perf_large_result;

@@ -18,18 +18,20 @@
  */
 
 /*
- * 增量最小生成树算法大图测试
- * 在large图上执行IncMST算法
+ * Incremental Minimum Spanning Tree algorithm large graph test
+ * Execute IncMST algorithm on large graph
  */
-CREATE SINK inc_mst_large_result WITH (
+CREATE TABLE inc_mst_large_result (
+  srcId int,
+  targetId int,
+  weight double
+) WITH (
     type='file',
-    geaflow.dsl.file.path = '/tmp/geaflow/inc_mst_large_result_003.txt'
+    geaflow.dsl.file.path = '${target}'
 );
 
-USE GRAPH large_graph;
-INSERT INTO inc_mst_large_result
-CALL IncMST(100, 0.001, 'mst_large_edges') ON GRAPH large_graph 
-RETURN srcId, targetId, weight;
+USE GRAPH modern;
 
--- 验证结果
-SELECT * FROM inc_mst_large_result;
+INSERT INTO inc_mst_large_result
+CALL IncMST(100, 0.001, 'mst_large_edges') YIELD (srcId, targetId, weight)
+RETURN srcId, targetId, weight;

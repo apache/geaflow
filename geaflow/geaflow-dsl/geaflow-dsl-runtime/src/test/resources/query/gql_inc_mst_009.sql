@@ -18,20 +18,20 @@
  */
 
 /*
- * 增量最小生成树算法自定义参数测试
- * 测试不同参数组合的效果
+ * Incremental Minimum Spanning Tree algorithm自定义参数Test
+ * Test不同参数组合的效果
  */
-CREATE SINK inc_mst_custom_result WITH (
+CREATE TABLE inc_mst_custom_result WITH (
     type='file',
     geaflow.dsl.file.path = '/tmp/geaflow/inc_mst_custom_result_009.txt'
 );
 
 USE GRAPH modern;
 
--- 测试不同参数组合
+-- Test不同参数组合
 INSERT INTO inc_mst_custom_result
-CALL IncMST(20, 0.005, 'mst_custom_edges') ON GRAPH modern 
+CALL IncMST(20, 0.005, 'mst_custom_edges') YIELD (srcId, targetId, weight) 
 RETURN srcId, targetId, weight;
 
--- 验证结果
+-- Verify results
 SELECT * FROM inc_mst_custom_result;

@@ -31,8 +31,8 @@ import org.testng.annotations.BeforeClass;
 import org.testng.annotations.AfterClass;
 
 /**
- * IncMST算法性能测试类
- * 测试算法在大图场景下的性能表现
+ * IncMST algorithm performance test class
+ * Test algorithm performance in large graph scenarios
  * 
  * @author Geaflow Team
  */
@@ -44,14 +44,14 @@ public class IncMSTPerformanceTest {
 
     @BeforeClass
     public void setUp() throws IOException {
-        // 清理测试目录
+        // Clean up test directory
         FileUtils.deleteDirectory(new File(TEST_GRAPH_PATH));
         System.out.println("=== IncMST Performance Test Setup Complete ===");
     }
 
     @AfterClass
     public void tearDown() throws IOException {
-        // 清理测试目录
+        // Clean up test directory
         FileUtils.deleteDirectory(new File(TEST_GRAPH_PATH));
         System.out.println("=== IncMST Performance Test Cleanup Complete ===");
     }

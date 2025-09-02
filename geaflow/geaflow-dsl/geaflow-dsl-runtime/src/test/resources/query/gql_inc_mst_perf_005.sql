@@ -18,20 +18,20 @@
  */
 
 /*
- * 增量最小生成树算法收敛性性能测试
- * 测试算法收敛性能
+ * Incremental Minimum Spanning Tree algorithm收敛性性能Test
+ * Test算法收敛性能
  */
-CREATE SINK inc_mst_perf_convergence_result WITH (
+CREATE TABLE inc_mst_perf_convergence_result WITH (
     type='file',
     geaflow.dsl.file.path = '/tmp/geaflow/inc_mst_perf_convergence_result_005.txt'
 );
 
 USE GRAPH modern;
 
--- 测试收敛性
+-- Test收敛性
 INSERT INTO inc_mst_perf_convergence_result
-CALL IncMST(5, 0.01, 'mst_perf_convergence_edges') ON GRAPH modern 
+CALL IncMST(5, 0.01, 'mst_perf_convergence_edges') YIELD (srcId, targetId, weight) 
 RETURN srcId, targetId, weight;
 
--- 验证结果
+-- Verify results
 SELECT * FROM inc_mst_perf_convergence_result;

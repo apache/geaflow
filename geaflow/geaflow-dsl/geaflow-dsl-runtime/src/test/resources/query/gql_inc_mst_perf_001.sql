@@ -18,18 +18,20 @@
  */
 
 /*
- * 增量最小生成树算法小图性能测试
- * 测试modern图上的性能表现
+ * Incremental Minimum Spanning Tree algorithm small graph performance test
+ * Test performance on modern graph
  */
-CREATE SINK inc_mst_perf_small_result WITH (
+CREATE TABLE inc_mst_perf_small_result (
+  srcId int,
+  targetId int,
+  weight double
+) WITH (
     type='file',
-    geaflow.dsl.file.path = '/tmp/geaflow/inc_mst_perf_small_result_001.txt'
+    geaflow.dsl.file.path = '${target}'
 );
 
 USE GRAPH modern;
-INSERT INTO inc_mst_perf_small_result
-CALL IncMST(30, 0.001, 'mst_perf_small_edges') ON GRAPH modern 
-RETURN srcId, targetId, weight;
 
--- 验证结果
-SELECT * FROM inc_mst_perf_small_result;
+INSERT INTO inc_mst_perf_small_result
+CALL IncMST(30, 0.001, 'mst_perf_small_edges') YIELD (srcId, targetId, weight)
+RETURN srcId, targetId, weight;

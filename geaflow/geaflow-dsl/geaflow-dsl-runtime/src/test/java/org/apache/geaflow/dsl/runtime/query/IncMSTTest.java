@@ -28,8 +28,8 @@ import org.apache.commons.io.FileUtils;
 import org.testng.annotations.Test;
 
 /**
- * 增量最小生成树算法测试类
- * 包含基础功能测试、增量更新测试、连通性验证等
+ * Incremental Minimum Spanning Tree algorithm test class
+ * Includes basic functionality tests, incremental update tests, connectivity validation, etc.
  * 
  * @author Geaflow Team
  */

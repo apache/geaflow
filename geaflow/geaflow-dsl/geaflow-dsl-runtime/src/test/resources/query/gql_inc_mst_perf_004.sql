@@ -18,29 +18,30 @@
  */
 
 /*
- * 增量最小生成树算法增量更新性能测试
- * 测试动态图更新场景的性能表现
+ * Incremental Minimum Spanning Tree algorithm incremental update performance test
+ * Test performance in dynamic graph update scenarios
  */
-CREATE SINK inc_mst_perf_incremental_result WITH (
+CREATE TABLE inc_mst_perf_incremental_result (
+  srcId int,
+  targetId int,
+  weight double
+) WITH (
     type='file',
-    geaflow.dsl.file.path = '/tmp/geaflow/inc_mst_perf_incremental_result_004.txt'
+    geaflow.dsl.file.path = '${target}'
 );
 
-USE GRAPH dynamic_graph;
+USE GRAPH modern;
 
--- 初始MST计算
+-- Initial MST calculation
 INSERT INTO inc_mst_perf_incremental_result
-CALL IncMST(50, 0.001, 'mst_perf_incremental_edges') ON GRAPH dynamic_graph 
+CALL IncMST(50, 0.001, 'mst_perf_incremental_edges') YIELD (srcId, targetId, weight) 
 RETURN srcId, targetId, weight;
 
--- 模拟边更新
-INSERT INTO dynamic_graph.e_connects VALUES (3001, 3002, 0.2);
-INSERT INTO dynamic_graph.e_connects VALUES (3002, 3003, 0.3);
+-- Simulate edge updates
+INSERT INTO modern.relation VALUES (3001, 3002);
+INSERT INTO modern.relation VALUES (3002, 3003);
 
--- 增量更新后的MST计算
+-- MST calculation after incremental update
 INSERT INTO inc_mst_perf_incremental_result
-CALL IncMST(50, 0.001, 'mst_perf_incremental_edges') ON GRAPH dynamic_graph 
+CALL IncMST(50, 0.001, 'mst_perf_incremental_edges') YIELD (srcId, targetId, weight) 
 RETURN srcId, targetId, weight;
-
--- 验证结果
-SELECT * FROM inc_mst_perf_incremental_result;

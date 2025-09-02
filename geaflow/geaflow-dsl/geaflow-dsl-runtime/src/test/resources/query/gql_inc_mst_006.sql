@@ -18,18 +18,20 @@
  */
 
 /*
- * 增量最小生成树算法连通分量测试
- * 测试不连通图的MST计算
+ * Incremental Minimum Spanning Tree algorithm connected components test
+ * Test MST calculation on disconnected graphs
  */
-CREATE SINK inc_mst_connected_result WITH (
+CREATE TABLE inc_mst_connected_result (
+  srcId int,
+  targetId int,
+  weight double
+) WITH (
     type='file',
-    geaflow.dsl.file.path = '/tmp/geaflow/inc_mst_connected_result_006.txt'
+    geaflow.dsl.file.path = '${target}'
 );
 
-USE GRAPH disconnected_graph;
-INSERT INTO inc_mst_connected_result
-CALL IncMST(100, 0.001, 'mst_connected_edges') ON GRAPH disconnected_graph 
-RETURN srcId, targetId, weight;
+USE GRAPH modern;
 
--- 验证结果
-SELECT * FROM inc_mst_connected_result;
+INSERT INTO inc_mst_connected_result
+CALL IncMST(100, 0.001, 'mst_connected_edges') YIELD (srcId, targetId, weight)
+RETURN srcId, targetId, weight;

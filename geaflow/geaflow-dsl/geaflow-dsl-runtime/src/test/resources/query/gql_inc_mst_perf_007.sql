@@ -18,18 +18,18 @@
  */
 
 /*
- * 增量最小生成树算法可扩展性测试
- * 测试100K顶点图上的可扩展性
+ * Incremental Minimum Spanning Tree algorithm可扩展性Test
+ * Test100K顶点图上的可扩展性
  */
-CREATE SINK inc_mst_perf_scalability_result WITH (
+CREATE TABLE inc_mst_perf_scalability_result WITH (
     type='file',
     geaflow.dsl.file.path = '/tmp/geaflow/inc_mst_perf_scalability_result_007.txt'
 );
 
 USE GRAPH scalability_graph;
 INSERT INTO inc_mst_perf_scalability_result
-CALL IncMST(500, 0.001, 'mst_perf_scalability_edges') ON GRAPH scalability_graph 
+CALL IncMST(500, 0.001, 'mst_perf_scalability_edges') YIELD (srcId, targetId, weight) 
 RETURN srcId, targetId, weight;
 
--- 验证结果
+-- Verify results
 SELECT * FROM inc_mst_perf_scalability_result;

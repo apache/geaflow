@@ -18,29 +18,30 @@
  */
 
 /*
- * 增量最小生成树算法边添加测试
- * 测试动态添加边的场景
+ * Incremental Minimum Spanning Tree algorithm edge addition test
+ * Test dynamic edge addition scenarios
  */
-CREATE SINK inc_mst_edge_add_result WITH (
+CREATE TABLE inc_mst_edge_add_result (
+  srcId int,
+  targetId int,
+  weight double
+) WITH (
     type='file',
-    geaflow.dsl.file.path = '/tmp/geaflow/inc_mst_edge_add_result_004.txt'
+    geaflow.dsl.file.path = '${target}'
 );
 
-USE GRAPH dynamic_graph;
+USE GRAPH modern;
 
--- 初始MST计算
+-- Initial MST calculation
 INSERT INTO inc_mst_edge_add_result
-CALL IncMST(50, 0.001, 'mst_edge_add_edges') ON GRAPH dynamic_graph 
+CALL IncMST(50, 0.001, 'mst_edge_add_edges') YIELD (srcId, targetId, weight)
 RETURN srcId, targetId, weight;
 
--- 添加新边
-INSERT INTO dynamic_graph.e_connects VALUES (2001, 2002, 0.3);
-INSERT INTO dynamic_graph.e_connects VALUES (2002, 2003, 0.4);
+-- Add new edges
+INSERT INTO modern.relation VALUES (2001, 2002);
+INSERT INTO modern.relation VALUES (2002, 2003);
 
--- 重新计算MST
+-- Recalculate MST
 INSERT INTO inc_mst_edge_add_result
-CALL IncMST(50, 0.001, 'mst_edge_add_edges') ON GRAPH dynamic_graph 
+CALL IncMST(50, 0.001, 'mst_edge_add_edges') YIELD (srcId, targetId, weight)
 RETURN srcId, targetId, weight;
-
--- 验证结果
-SELECT * FROM inc_mst_edge_add_result;

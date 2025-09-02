@@ -18,18 +18,20 @@
  */
 
 /*
- * 增量最小生成树算法基础测试
- * 在modern图上执行基础的IncMST算法
+ * Incremental Minimum Spanning Tree algorithm basic test
+ * Execute basic IncMST algorithm on modern graph
  */
-CREATE SINK inc_mst_result WITH (
+CREATE TABLE inc_mst_result (
+  srcId int,
+  targetId int,
+  weight double
+) WITH (
     type='file',
-    geaflow.dsl.file.path = '/tmp/geaflow/inc_mst_result_001.txt'
+    geaflow.dsl.file.path = '${target}'
 );
 
 USE GRAPH modern;
-INSERT INTO inc_mst_result
-CALL IncMST() ON GRAPH modern 
-RETURN srcId, targetId, weight;
 
--- 验证结果
-SELECT * FROM inc_mst_result;
+INSERT INTO inc_mst_result
+CALL IncMST() YIELD (srcId, targetId, weight)
+RETURN srcId, targetId, weight;
