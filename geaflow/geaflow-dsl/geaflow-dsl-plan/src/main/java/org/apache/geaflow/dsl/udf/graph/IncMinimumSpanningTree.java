@@ -27,22 +27,22 @@ import org.apache.geaflow.dsl.common.data.RowEdge;
 import org.apache.geaflow.dsl.common.data.RowVertex;
 import org.apache.geaflow.dsl.common.data.impl.ObjectRow;
 import org.apache.geaflow.dsl.common.function.Description;
-import org.apache.geaflow.dsl.common.types.GraphSchema;
-import org.apache.geaflow.dsl.common.types.StructType;
-import org.apache.geaflow.dsl.common.types.TableField;
-import org.apache.geaflow.dsl.common.types.ObjectType;
-import org.apache.geaflow.model.graph.edge.EdgeDirection;
-import org.apache.geaflow.dsl.udf.graph.mst.MSTVertexState;
-import org.apache.geaflow.dsl.udf.graph.mst.MSTMessage;
-import org.apache.geaflow.dsl.udf.graph.mst.MSTEdge;
-
 import java.util.*;
 
+import org.apache.geaflow.dsl.common.types.GraphSchema;
+import org.apache.geaflow.dsl.common.types.ObjectType;
+import org.apache.geaflow.dsl.common.types.StructType;
+import org.apache.geaflow.dsl.common.types.TableField;
+import org.apache.geaflow.dsl.udf.graph.mst.MSTEdge;
+import org.apache.geaflow.dsl.udf.graph.mst.MSTMessage;
+import org.apache.geaflow.dsl.udf.graph.mst.MSTVertexState;
+import org.apache.geaflow.model.graph.edge.EdgeDirection;
+
 /**
- * 增量最小生成树算法实现
- * 基于TuGraph Analytics的增量图计算能力，实现动态图上的MST维护
+ * 增量最小生成树算法实现.
+ * 基于TuGraph Analytics的增量图计算能力，实现动态图上的MST维护.
  * 
- * 算法原理：
+ * <p>算法原理：
  * 1. 维护当前MST状态
  * 2. 对于新增边：使用Union-Find检测是否形成环，若不形成环且权重更小则加入MST
  * 3. 对于删除边：若删除的是MST边，需要重新连接分离的组件

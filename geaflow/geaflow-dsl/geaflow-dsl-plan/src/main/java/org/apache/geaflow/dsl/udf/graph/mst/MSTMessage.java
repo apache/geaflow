@@ -23,10 +23,10 @@ import java.io.Serializable;
 import java.util.Objects;
 
 /**
- * MST消息类
- * 用于顶点间的消息传递，支持不同类型的MST操作
+ * MST消息类.
+ * 用于顶点间的消息传递，支持不同类型的MST操作.
  * 
- * 消息类型：
+ * <p>消息类型：
  * - COMPONENT_UPDATE: 组件更新消息
  * - EDGE_PROPOSAL: 边提议消息
  * - EDGE_ACCEPTANCE: 边接受消息
@@ -39,43 +39,43 @@ public class MSTMessage implements Serializable {
     
     private static final long serialVersionUID = 1L;
     
-    /** 消息类型枚举 */
+    /** 消息类型枚举. */
     public enum MessageType {
-        /** 组件更新消息 */
+        /** 组件更新消息. */
         COMPONENT_UPDATE,
-        /** 边提议消息 */
+        /** 边提议消息. */
         EDGE_PROPOSAL,
-        /** 边接受消息 */
+        /** 边接受消息. */
         EDGE_ACCEPTANCE,
-        /** 边拒绝消息 */
+        /** 边拒绝消息. */
         EDGE_REJECTION,
-        /** MST边发现消息 */
+        /** MST边发现消息. */
         MST_EDGE_FOUND
     }
 
-    /** 消息类型 */
+    /** 消息类型. */
     private MessageType type;
     
-    /** 源顶点ID */
+    /** 源顶点ID. */
     private Object sourceId;
     
-    /** 目标顶点ID */
+    /** 目标顶点ID. */
     private Object targetId;
     
-    /** 边权重 */
+    /** 边权重. */
     private double weight;
     
-    /** 组件ID */
+    /** 组件ID. */
     private Object componentId;
     
-    /** MST边 */
+    /** MST边. */
     private MSTEdge edge;
     
-    /** 消息时间戳 */
+    /** 消息时间戳. */
     private long timestamp;
 
     /**
-     * 构造函数
+     * 构造函数.
      * @param type 消息类型
      * @param sourceId 源顶点ID
      * @param targetId 目标顶点ID
@@ -90,7 +90,7 @@ public class MSTMessage implements Serializable {
     }
 
     /**
-     * 构造函数（带组件ID）
+     * 构造函数（带组件ID）.
      * @param type 消息类型
      * @param sourceId 源顶点ID
      * @param targetId 目标顶点ID
@@ -161,7 +161,7 @@ public class MSTMessage implements Serializable {
     }
 
     /**
-     * 检查是否为组件更新消息
+     * 检查是否为组件更新消息.
      * @return 是否为组件更新消息
      */
     public boolean isComponentUpdate() {
@@ -169,7 +169,7 @@ public class MSTMessage implements Serializable {
     }
 
     /**
-     * 检查是否为边提议消息
+     * 检查是否为边提议消息.
      * @return 是否为边提议消息
      */
     public boolean isEdgeProposal() {
@@ -177,7 +177,7 @@ public class MSTMessage implements Serializable {
     }
 
     /**
-     * 检查是否为边接受消息
+     * 检查是否为边接受消息.
      * @return 是否为边接受消息
      */
     public boolean isEdgeAcceptance() {
@@ -185,7 +185,7 @@ public class MSTMessage implements Serializable {
     }
 
     /**
-     * 检查是否为边拒绝消息
+     * 检查是否为边拒绝消息.
      * @return 是否为边拒绝消息
      */
     public boolean isEdgeRejection() {
@@ -193,7 +193,7 @@ public class MSTMessage implements Serializable {
     }
 
     /**
-     * 检查是否为MST边发现消息
+     * 检查是否为MST边发现消息.
      * @return 是否为MST边发现消息
      */
     public boolean isMSTEdgeFound() {
@@ -201,7 +201,7 @@ public class MSTMessage implements Serializable {
     }
 
     /**
-     * 检查消息是否过期
+     * 检查消息是否过期.
      * @param currentTime 当前时间
      * @param timeout 超时时间（毫秒）
      * @return 是否过期
@@ -211,7 +211,7 @@ public class MSTMessage implements Serializable {
     }
 
     /**
-     * 创建消息的副本
+     * 创建消息的副本.
      * @return 消息副本
      */
     public MSTMessage copy() {
@@ -222,7 +222,7 @@ public class MSTMessage implements Serializable {
     }
 
     /**
-     * 创建反向消息
+     * 创建反向消息.
      * @return 反向消息
      */
     public MSTMessage reverse() {
@@ -234,8 +234,12 @@ public class MSTMessage implements Serializable {
 
     @Override
     public boolean equals(Object obj) {
-        if (this == obj) return true;
-        if (obj == null || getClass() != obj.getClass()) return false;
+        if (this == obj) {
+            return true;
+        }
+        if (obj == null || getClass() != obj.getClass()) {
+            return false;
+        }
         MSTMessage message = (MSTMessage) obj;
         return Double.compare(message.weight, weight) == 0
             && timestamp == message.timestamp
@@ -253,14 +257,14 @@ public class MSTMessage implements Serializable {
 
     @Override
     public String toString() {
-        return "MSTMessage{" +
-                "type=" + type +
-                ", sourceId=" + sourceId +
-                ", targetId=" + targetId +
-                ", weight=" + weight +
-                ", componentId=" + componentId +
-                ", edge=" + edge +
-                ", timestamp=" + timestamp +
-                '}';
+        return "MSTMessage{"
+                + "type=" + type
+                + ", sourceId=" + sourceId
+                + ", targetId=" + targetId
+                + ", weight=" + weight
+                + ", componentId=" + componentId
+                + ", edge=" + edge
+                + ", timestamp=" + timestamp
+                + '}';
     }
 } 

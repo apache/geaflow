@@ -25,14 +25,15 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * Union-Find辅助类
- * 用于维护图的连通性检测，支持路径压缩和按秩合并优化
+ * Union-Find数据结构辅助类.
+ * 用于管理不相交集合的合并和查找操作.
  * 
- * 功能：
- * - 创建集合
- * - 查找元素所属集合
- * - 合并两个集合
- * - 检测两个元素是否连通
+ * <p>支持的操作：
+ * - makeSet: 创建新集合
+ * - find: 查找元素所属集合
+ * - union: 合并两个集合
+ * - getSetCount: 获取集合数量
+ * - clear: 清空所有集合
  * 
  * @author TuGraph Analytics Team
  */
@@ -40,20 +41,20 @@ public class UnionFindHelper implements Serializable {
     
     private static final long serialVersionUID = 1L;
     
-    /** 父节点映射 */
+    /** 父节点映射. */
     private Map<Object, Object> parent;
     
-    /** 秩映射（用于按秩合并优化） */
+    /** 秩映射（用于路径压缩优化）. */
     private Map<Object, Integer> rank;
     
-    /** 集合大小映射 */
+    /** 集合大小映射. */
     private Map<Object, Integer> size;
     
-    /** 集合数量 */
+    /** 集合数量. */
     private int setCount;
 
     /**
-     * 构造函数
+     * 构造函数.
      */
     public UnionFindHelper() {
         this.parent = new HashMap<>();
@@ -63,30 +64,28 @@ public class UnionFindHelper implements Serializable {
     }
 
     /**
-     * 创建新的集合
+     * 创建新集合.
      * @param x 元素
      */
     public void makeSet(Object x) {
         if (!parent.containsKey(x)) {
-            parent.put(x, x); // 自己为父节点
-            rank.put(x, 0);   // 初始秩为0
-            size.put(x, 1);   // 初始大小为1
-            setCount++;       // 集合数量加1
+            parent.put(x, x);
+            rank.put(x, 0);
+            size.put(x, 1);
+            setCount++;
         }
     }
 
     /**
-     * 查找元素所属集合的根节点
-     * 使用路径压缩优化
+     * 查找元素所属集合的根节点.
      * @param x 元素
      * @return 根节点
      */
     public Object find(Object x) {
         if (!parent.containsKey(x)) {
-            makeSet(x);
+            return null;
         }
         
-        // 路径压缩：将查找路径上的所有节点直接连接到根节点
         if (!parent.get(x).equals(x)) {
             parent.put(x, find(parent.get(x)));
         }
@@ -94,55 +93,43 @@ public class UnionFindHelper implements Serializable {
     }
 
     /**
-     * 合并两个集合
-     * 使用按秩合并优化
-     * @param x 元素1
-     * @param y 元素2
-     * @return 是否成功合并（如果已经在同一个集合中返回false）
+     * 合并两个集合.
+     * @param x 第一个元素
+     * @param y 第二个元素
+     * @return 是否成功合并
      */
     public boolean union(Object x, Object y) {
         Object rootX = find(x);
         Object rootY = find(y);
-
+        
+        if (rootX == null || rootY == null) {
+            return false;
+        }
+        
         if (rootX.equals(rootY)) {
             return false; // 已经在同一个集合中
         }
-
-        // 按秩合并：将秩较小的树连接到秩较大的树
-        int rankX = rank.get(rootX);
-        int rankY = rank.get(rootY);
-
-        if (rankX < rankY) {
-            // 将rootX连接到rootY
-            parent.put(rootX, rootY);
-            size.put(rootY, size.get(rootY) + size.get(rootX));
-        } else if (rankX > rankY) {
-            // 将rootY连接到rootX
-            parent.put(rootY, rootX);
-            size.put(rootX, size.get(rootX) + size.get(rootY));
-        } else {
-            // 秩相等时，将rootY连接到rootX，并增加rootX的秩
-            parent.put(rootY, rootX);
-            rank.put(rootX, rankX + 1);
-            size.put(rootX, size.get(rootX) + size.get(rootY));
+        
+        // 按秩合并
+        if (rank.get(rootX) < rank.get(rootY)) {
+            Object temp = rootX;
+            rootX = rootY;
+            rootY = temp;
         }
-
-        setCount--; // 集合数量减1
+        
+        parent.put(rootY, rootX);
+        size.put(rootX, size.get(rootX) + size.get(rootY));
+        
+        if (rank.get(rootX).equals(rank.get(rootY))) {
+            rank.put(rootX, rank.get(rootX) + 1);
+        }
+        
+        setCount--;
         return true;
     }
 
     /**
-     * 检测两个元素是否连通
-     * @param x 元素1
-     * @param y 元素2
-     * @return 是否连通
-     */
-    public boolean connected(Object x, Object y) {
-        return find(x).equals(find(y));
-    }
-
-    /**
-     * 获取集合的数量
+     * 获取集合数量.
      * @return 集合数量
      */
     public int getSetCount() {
@@ -150,31 +137,34 @@ public class UnionFindHelper implements Serializable {
     }
 
     /**
-     * 获取指定元素所在集合的大小
-     * @param x 元素
+     * 获取指定集合的大小.
+     * @param x 集合中的任意元素
      * @return 集合大小
      */
     public int getSetSize(Object x) {
         Object root = find(x);
+        if (root == null) {
+            return 0;
+        }
         return size.get(root);
     }
 
     /**
-     * 获取所有集合的根节点
-     * @return 根节点集合
+     * 检查两个元素是否在同一集合中.
+     * @param x 第一个元素
+     * @param y 第二个元素
+     * @return 是否在同一集合中
      */
-    public java.util.Set<Object> getRoots() {
-        java.util.Set<Object> roots = new java.util.HashSet<>();
-        for (Object x : parent.keySet()) {
-            roots.add(find(x));
-        }
-        return roots;
+    public boolean isConnected(Object x, Object y) {
+        Object rootX = find(x);
+        Object rootY = find(y);
+        return rootX != null && rootX.equals(rootY);
     }
 
     /**
-     * 重置Union-Find结构
+     * 清空所有集合.
      */
-    public void reset() {
+    public void clear() {
         parent.clear();
         rank.clear();
         size.clear();
@@ -182,7 +172,7 @@ public class UnionFindHelper implements Serializable {
     }
 
     /**
-     * 检查Union-Find结构是否为空
+     * 检查Union-Find结构是否为空.
      * @return 是否为空
      */
     public boolean isEmpty() {
@@ -190,7 +180,7 @@ public class UnionFindHelper implements Serializable {
     }
 
     /**
-     * 获取Union-Find结构中的元素数量
+     * 获取Union-Find结构中的元素数量.
      * @return 元素数量
      */
     public int size() {
@@ -198,7 +188,7 @@ public class UnionFindHelper implements Serializable {
     }
 
     /**
-     * 检查元素是否存在
+     * 检查元素是否存在.
      * @param x 元素
      * @return 是否存在
      */
@@ -207,7 +197,7 @@ public class UnionFindHelper implements Serializable {
     }
 
     /**
-     * 移除元素（及其所在集合）
+     * 移除元素（及其所在集合）.
      * @param x 元素
      * @return 是否成功移除
      */
@@ -236,7 +226,7 @@ public class UnionFindHelper implements Serializable {
     }
 
     /**
-     * 获取指定集合的所有元素
+     * 获取指定集合的所有元素.
      * @param root 集合根节点
      * @return 集合中的所有元素
      */
@@ -252,18 +242,22 @@ public class UnionFindHelper implements Serializable {
 
     @Override
     public String toString() {
-        return "UnionFindHelper{" +
-                "parent=" + parent +
-                ", rank=" + rank +
-                ", size=" + size +
-                ", setCount=" + setCount +
-                '}';
+        return "UnionFindHelper{"
+                + "parent=" + parent
+                + ", rank=" + rank
+                + ", size=" + size
+                + ", setCount=" + setCount
+                + '}';
     }
 
     @Override
     public boolean equals(Object obj) {
-        if (this == obj) return true;
-        if (obj == null || getClass() != obj.getClass()) return false;
+        if (this == obj) {
+            return true;
+        }
+        if (obj == null || getClass() != obj.getClass()) {
+            return false;
+        }
         UnionFindHelper that = (UnionFindHelper) obj;
         return setCount == that.setCount
             && Objects.equals(parent, that.parent)

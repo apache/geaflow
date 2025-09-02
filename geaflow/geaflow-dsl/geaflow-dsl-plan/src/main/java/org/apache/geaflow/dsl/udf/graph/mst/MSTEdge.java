@@ -23,13 +23,15 @@ import java.io.Serializable;
 import java.util.Objects;
 
 /**
- * MST边类
- * 表示最小生成树中的边
+ * MST边类.
+ * 表示最小生成树中的一条边，包含源顶点、目标顶点和权重信息.
  * 
- * 包含信息：
- * - sourceId: 源顶点ID
- * - targetId: 目标顶点ID
- * - weight: 边权重
+ * <p>支持的操作：
+ * - 创建边
+ * - 获取边的端点
+ * - 检查是否为自环
+ * - 创建反向边
+ * - 比较边（按权重和端点）
  * 
  * @author TuGraph Analytics Team
  */
@@ -37,17 +39,17 @@ public class MSTEdge implements Serializable, Comparable<MSTEdge> {
     
     private static final long serialVersionUID = 1L;
     
-    /** 源顶点ID */
+    /** 源顶点ID. */
     private Object sourceId;
     
-    /** 目标顶点ID */
+    /** 目标顶点ID. */
     private Object targetId;
     
-    /** 边权重 */
+    /** 边权重. */
     private double weight;
 
     /**
-     * 构造函数
+     * 构造函数.
      * @param sourceId 源顶点ID
      * @param targetId 目标顶点ID
      * @param weight 边权重
@@ -85,7 +87,7 @@ public class MSTEdge implements Serializable, Comparable<MSTEdge> {
     }
 
     /**
-     * 获取边的另一个端点
+     * 获取边的另一个端点.
      * @param vertexId 已知的顶点ID
      * @return 另一个端点ID，如果vertexId不是边的端点则返回null
      */
@@ -99,7 +101,7 @@ public class MSTEdge implements Serializable, Comparable<MSTEdge> {
     }
 
     /**
-     * 检查指定顶点是否为边的端点
+     * 检查指定顶点是否为边的端点.
      * @param vertexId 顶点ID
      * @return 是否为端点
      */
@@ -108,7 +110,7 @@ public class MSTEdge implements Serializable, Comparable<MSTEdge> {
     }
 
     /**
-     * 检查是否为自环边
+     * 检查是否为自环边.
      * @return 是否为自环
      */
     public boolean isSelfLoop() {
@@ -116,7 +118,7 @@ public class MSTEdge implements Serializable, Comparable<MSTEdge> {
     }
 
     /**
-     * 创建边的反向边
+     * 创建边的反向边.
      * @return 反向边
      */
     public MSTEdge reverse() {
@@ -124,13 +126,17 @@ public class MSTEdge implements Serializable, Comparable<MSTEdge> {
     }
 
     /**
-     * 检查两条边是否相等（忽略方向）
+     * 检查两条边是否相等（忽略方向）.
      * @param other 另一条边
      * @return 是否相等
      */
     public boolean equalsIgnoreDirection(MSTEdge other) {
-        if (this == other) return true;
-        if (other == null || getClass() != other.getClass()) return false;
+        if (this == other) {
+            return true;
+        }
+        if (other == null || getClass() != other.getClass()) {
+            return false;
+        }
         
         // 检查正向和反向是否相等
         boolean forwardEqual = Objects.equals(sourceId, other.sourceId) 
@@ -143,8 +149,12 @@ public class MSTEdge implements Serializable, Comparable<MSTEdge> {
 
     @Override
     public boolean equals(Object obj) {
-        if (this == obj) return true;
-        if (obj == null || getClass() != obj.getClass()) return false;
+        if (this == obj) {
+            return true;
+        }
+        if (obj == null || getClass() != obj.getClass()) {
+            return false;
+        }
         MSTEdge edge = (MSTEdge) obj;
         return Double.compare(edge.weight, weight) == 0
             && Objects.equals(sourceId, edge.sourceId)
@@ -176,10 +186,10 @@ public class MSTEdge implements Serializable, Comparable<MSTEdge> {
 
     @Override
     public String toString() {
-        return "MSTEdge{" +
-                "sourceId=" + sourceId +
-                ", targetId=" + targetId +
-                ", weight=" + weight +
-                '}';
+        return "MSTEdge{"
+                + "sourceId=" + sourceId
+                + ", targetId=" + targetId
+                + ", weight=" + weight
+                + '}';
     }
 } 

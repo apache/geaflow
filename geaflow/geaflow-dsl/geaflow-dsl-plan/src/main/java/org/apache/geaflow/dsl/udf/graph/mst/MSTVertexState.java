@@ -21,14 +21,14 @@ package org.apache.geaflow.dsl.udf.graph.mst;
 
 import java.io.Serializable;
 import java.util.HashSet;
-import java.util.Set;
 import java.util.Objects;
+import java.util.Set;
 
 /**
- * MST顶点状态类
- * 维护每个顶点在最小生成树中的状态信息
+ * MST顶点状态类.
+ * 维护每个顶点在最小生成树中的状态信息.
  * 
- * 包含信息：
+ * <p>包含信息：
  * - parentId: MST中的父节点ID
  * - componentId: 所属组件ID
  * - minEdgeWeight: 到父节点的边权重
@@ -42,29 +42,29 @@ public class MSTVertexState implements Serializable {
     
     private static final long serialVersionUID = 1L;
     
-    /** MST中的父节点ID */
+    /** MST中的父节点ID. */
     private Object parentId;
     
-    /** 所属组件ID */
+    /** 所属组件ID. */
     private Object componentId;
     
-    /** 到父节点的边权重 */
+    /** 到父节点的边权重. */
     private double minEdgeWeight;
     
-    /** 是否为根节点 */
+    /** 是否为根节点. */
     private boolean isRoot;
     
-    /** MST边集合 */
+    /** MST边集合. */
     private Set<MSTEdge> mstEdges;
     
-    /** 状态是否发生变化 */
+    /** 状态是否发生变化. */
     private boolean changed;
     
-    /** 顶点ID */
+    /** 顶点ID. */
     private Object vertexId;
 
     /**
-     * 构造函数
+     * 构造函数.
      * @param vertexId 顶点ID
      */
     public MSTVertexState(Object vertexId) {
@@ -141,19 +141,22 @@ public class MSTVertexState implements Serializable {
     }
 
     /**
-     * 添加MST边
+     * 添加MST边.
      * @param edge MST边
+     * @return 是否添加成功
      */
-    public void addMSTEdge(MSTEdge edge) {
-        if (this.mstEdges.add(edge)) {
+    public boolean addMSTEdge(MSTEdge edge) {
+        boolean added = this.mstEdges.add(edge);
+        if (added) {
             this.changed = true;
         }
+        return added;
     }
 
     /**
-     * 移除MST边
+     * 移除MST边.
      * @param edge MST边
-     * @return 是否成功移除
+     * @return 是否移除成功
      */
     public boolean removeMSTEdge(MSTEdge edge) {
         boolean removed = this.mstEdges.remove(edge);
@@ -164,7 +167,7 @@ public class MSTVertexState implements Serializable {
     }
 
     /**
-     * 检查是否包含指定的MST边
+     * 检查是否包含指定的MST边.
      * @param edge MST边
      * @return 是否包含
      */
@@ -173,7 +176,7 @@ public class MSTVertexState implements Serializable {
     }
 
     /**
-     * 获取MST边的数量
+     * 获取MST边的数量.
      * @return 边数量
      */
     public int getMSTEdgeCount() {
@@ -181,7 +184,7 @@ public class MSTVertexState implements Serializable {
     }
 
     /**
-     * 清空MST边集合
+     * 清空MST边集合.
      */
     public void clearMSTEdges() {
         if (!this.mstEdges.isEmpty()) {
@@ -191,14 +194,14 @@ public class MSTVertexState implements Serializable {
     }
 
     /**
-     * 重置状态变化标志
+     * 重置状态变化标志.
      */
     public void resetChanged() {
         this.changed = false;
     }
 
     /**
-     * 检查是否为叶子节点（没有子节点）
+     * 检查是否为叶子节点（没有子节点）.
      * @return 是否为叶子节点
      */
     public boolean isLeaf() {
@@ -206,7 +209,7 @@ public class MSTVertexState implements Serializable {
     }
 
     /**
-     * 获取到指定顶点的边权重
+     * 获取到指定顶点的边权重.
      * @param targetId 目标顶点ID
      * @return 边权重，如果不存在则返回Double.MAX_VALUE
      */
@@ -220,7 +223,7 @@ public class MSTVertexState implements Serializable {
     }
 
     /**
-     * 检查是否与指定顶点相连
+     * 检查是否与指定顶点相连.
      * @param targetId 目标顶点ID
      * @return 是否相连
      */
@@ -230,21 +233,25 @@ public class MSTVertexState implements Serializable {
 
     @Override
     public String toString() {
-        return "MSTVertexState{" +
-                "vertexId=" + vertexId +
-                ", parentId=" + parentId +
-                ", componentId=" + componentId +
-                ", minEdgeWeight=" + minEdgeWeight +
-                ", isRoot=" + isRoot +
-                ", mstEdges=" + mstEdges +
-                ", changed=" + changed +
-                '}';
+        return "MSTVertexState{"
+                + "vertexId=" + vertexId
+                + ", parentId=" + parentId
+                + ", componentId=" + componentId
+                + ", minEdgeWeight=" + minEdgeWeight
+                + ", isRoot=" + isRoot
+                + ", mstEdges=" + mstEdges
+                + ", changed=" + changed
+                + '}';
     }
 
     @Override
     public boolean equals(Object obj) {
-        if (this == obj) return true;
-        if (obj == null || getClass() != obj.getClass()) return false;
+        if (this == obj) {
+            return true;
+        }
+        if (obj == null || getClass() != obj.getClass()) {
+            return false;
+        }
         MSTVertexState that = (MSTVertexState) obj;
         return Double.compare(that.minEdgeWeight, minEdgeWeight) == 0
             && isRoot == that.isRoot
