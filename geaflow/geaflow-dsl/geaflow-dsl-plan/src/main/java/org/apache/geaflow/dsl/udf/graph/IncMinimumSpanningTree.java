@@ -270,7 +270,7 @@ public class IncMinimumSpanningTree implements AlgorithmUserFunction<Object, Obj
             message.getWeight()
         );
         mstEdgeMsg.setEdge(mstEdge);
-        context.sendMessageToNeighbors(mstEdgeMsg);
+        sendMessageToNeighbors(mstEdgeMsg);
         
         return true;
     }
@@ -310,7 +310,7 @@ public class IncMinimumSpanningTree implements AlgorithmUserFunction<Object, Obj
         );
         updateMsg.setComponentId(state.getComponentId());
         
-        context.sendMessageToNeighbors(updateMsg);
+        sendMessageToNeighbors(updateMsg);
     }
 
     /**
@@ -318,10 +318,9 @@ public class IncMinimumSpanningTree implements AlgorithmUserFunction<Object, Obj
      * Create new state if it doesn't exist.
      */
     private MSTVertexState getCurrentVertexState(RowVertex vertex) {
-        Optional<Row> currentValues = context.getVertexValue(vertex.getId());
-        if (currentValues.isPresent()) {
-            Row values = currentValues.get();
-            Object stateObj = values.getField(0, ObjectType.INSTANCE);
+        Row vertexValue = vertex.getValue();
+        if (vertexValue != null) {
+            Object stateObj = vertexValue.getField(0, ObjectType.INSTANCE);
             if (stateObj instanceof MSTVertexState) {
                 return (MSTVertexState) stateObj;
             }
@@ -338,5 +337,31 @@ public class IncMinimumSpanningTree implements AlgorithmUserFunction<Object, Obj
             return id1;
         }
         return id2;
+    }
+    
+    /**
+     * Send message to all neighbors.
+     * Traverse all edges and send messages to neighbor vertices.
+     * 
+     * @param message Message to send to neighbors
+     */
+    private void sendMessageToNeighbors(MSTMessage message) {
+        List<RowEdge> edges = context.loadEdges(EdgeDirection.BOTH);
+        Object sourceId = message.getSourceId();
+        
+        for (RowEdge edge : edges) {
+            Object targetId = edge.getTargetId();
+            Object srcId = edge.getSrcId();
+            
+            // Send to target vertex if it's not the source
+            if (!targetId.equals(sourceId)) {
+                context.sendMessage(targetId, message);
+            }
+            
+            // Send to source vertex if it's not the source and different from target
+            if (!srcId.equals(sourceId) && !srcId.equals(targetId)) {
+                context.sendMessage(srcId, message);
+            }
+        }
     }
 } 
