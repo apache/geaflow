@@ -7,7 +7,7 @@ on:
     branches: [ "master" ]
 
 env:
-  JAVA_TOOL_OPTIONS: -Xmx3g
+  JAVA_TOOL_OPTIONS: -Xmx6g
 
 jobs:
   build:

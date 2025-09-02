@@ -130,9 +130,18 @@
                         <goals>
                             <goal>prepare-agent</goal>
                         </goals>
-                        <configuration>
+                        <configuration>  
                             <propertyName>coverageAgent</propertyName>
                             <destFile>${jacoco.path}</destFile>
+                            <!-- 每个测试进程分配400MB，保留系统开销 -->  
+                            <argLine>${coverageAgent} -Xmx400m -XX:MaxMetaspaceSize=128m -XX:+UseG1GC</argLine>  
+      
+                            <!-- 最多2个并行进程 -->  
+                            <forkCount>2</forkCount>  
+                            <reuseForks>false</reuseForks>  
+                            <parallel>classes</parallel>  
+                            <threadCount>2</threadCount>  
+                            <perCoreThreadCount>false</perCoreThreadCount>  
                         </configuration>
                     </execution>
                     <execution>
