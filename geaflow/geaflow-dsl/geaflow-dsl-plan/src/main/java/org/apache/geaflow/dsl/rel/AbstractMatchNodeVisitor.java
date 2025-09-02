@@ -21,6 +21,7 @@ package org.apache.geaflow.dsl.rel;
 
 import org.apache.calcite.rel.RelNode;
 import org.apache.geaflow.dsl.rel.match.IMatchNode;
+import org.apache.geaflow.dsl.rel.match.MatchSamePredicate;
 
 public abstract class AbstractMatchNodeVisitor<T> implements MatchNodeVisitor<T> {
 
@@ -30,5 +31,10 @@ public abstract class AbstractMatchNodeVisitor<T> implements MatchNodeVisitor<T>
             return ((IMatchNode) node).accept(this);
         }
         throw new IllegalArgumentException("node is not a IMatchNode");
+    }
+
+    @Override
+    public T visitSamePredicate(MatchSamePredicate samePredicate) {
+        return visit(samePredicate);
     }
 }

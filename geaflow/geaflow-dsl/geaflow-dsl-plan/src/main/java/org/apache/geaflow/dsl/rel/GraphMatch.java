@@ -45,6 +45,7 @@ import org.apache.geaflow.dsl.rel.match.MatchFilter;
 import org.apache.geaflow.dsl.rel.match.MatchJoin;
 import org.apache.geaflow.dsl.rel.match.MatchPathModify;
 import org.apache.geaflow.dsl.rel.match.MatchPathSort;
+import org.apache.geaflow.dsl.rel.match.MatchSamePredicate;
 import org.apache.geaflow.dsl.rel.match.MatchUnion;
 import org.apache.geaflow.dsl.rel.match.SingleMatchNode;
 import org.apache.geaflow.dsl.rel.match.SubQueryStart;
@@ -175,6 +176,14 @@ public abstract class GraphMatch extends SingleRel {
                 .map(this::visit)
                 .map(explain -> "{" + explain + "}")
                 .collect(Collectors.joining(" Union "));
+        }
+
+        @Override
+        public String visitSamePredicate(MatchSamePredicate samePredicate) {
+            String leftString = visit(samePredicate.getLeft());
+            String rightString = visit(samePredicate.getRight());
+            String operator = samePredicate.isDistinct() ? " | " : " |+| ";
+            return "{" + leftString + "}" + operator + "{" + rightString + "} WHERE SAME(" + samePredicate.getCondition() + ")";
         }
 
         @Override
