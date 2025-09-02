@@ -16,8 +16,8 @@
  */
 
 /*
- * 增量K-Core算法收敛性测试
- * 测试算法在不同迭代次数下的收敛情况
+ * Incremental K-Core algorithm convergence test
+ * Test algorithm convergence under different iteration counts
  */
 CREATE SINK inc_kcore_convergence_result WITH (
     type='file',
@@ -26,17 +26,17 @@ CREATE SINK inc_kcore_convergence_result WITH (
 
 USE GRAPH modern;
 
--- 测试不同收敛阈值的收敛情况
+-- Test convergence under different convergence thresholds
 INSERT INTO inc_kcore_convergence_result
 CALL incremental_kcore(2, 10, 0.1) ON GRAPH modern 
 RETURN vid, core_value, degree, change_status
 ORDER BY vid;
 
--- 使用更严格的收敛阈值
+-- Use stricter convergence threshold
 INSERT INTO inc_kcore_convergence_result
 CALL incremental_kcore(2, 20, 0.001) ON GRAPH modern 
 RETURN vid, core_value, degree, change_status
 ORDER BY vid;
 
--- 验证结果
+-- Verify results
 SELECT * FROM inc_kcore_convergence_result;

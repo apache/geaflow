@@ -16,8 +16,8 @@
  */
 
 /*
- * 增量K-Core算法边添加测试
- * 测试在动态图上添加边后的增量更新
+ * Incremental K-Core algorithm edge addition test
+ * Test incremental update after adding edges on dynamic graph
  */
 CREATE SINK inc_kcore_edge_add_result WITH (
     type='file',
@@ -26,20 +26,20 @@ CREATE SINK inc_kcore_edge_add_result WITH (
 
 USE GRAPH dynamic_graph;
 
--- 初始K-Core计算
+-- Initial K-Core calculation
 INSERT INTO inc_kcore_edge_add_result
 CALL incremental_kcore(2) ON GRAPH dynamic_graph 
 RETURN vid, core_value, degree, change_status
 ORDER BY vid;
 
--- 添加新边
+-- Add new edge
 INSERT INTO dynamic_graph.edges VALUES (1001, 1002, 0.8, 1000);
 
--- 增量更新后的K-Core计算
+-- K-Core calculation after incremental update
 INSERT INTO inc_kcore_edge_add_result
 CALL incremental_kcore(2) ON GRAPH dynamic_graph 
 RETURN vid, core_value, degree, change_status
 ORDER BY vid;
 
--- 验证结果
+-- Verify results
 SELECT * FROM inc_kcore_edge_add_result;

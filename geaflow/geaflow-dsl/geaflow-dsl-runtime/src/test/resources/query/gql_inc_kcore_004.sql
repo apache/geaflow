@@ -16,8 +16,8 @@
  */
 
 /*
- * 增量K-Core算法边删除测试
- * 测试在动态图上删除边后的增量更新
+ * Incremental K-Core algorithm edge deletion test
+ * Test incremental update after deleting edges on dynamic graph
  */
 CREATE SINK inc_kcore_edge_remove_result WITH (
     type='file',
@@ -26,20 +26,20 @@ CREATE SINK inc_kcore_edge_remove_result WITH (
 
 USE GRAPH dynamic_graph;
 
--- 初始K-Core计算
+-- Initial K-Core calculation
 INSERT INTO inc_kcore_edge_remove_result
 CALL incremental_kcore(2) ON GRAPH dynamic_graph 
 RETURN vid, core_value, degree, change_status
 ORDER BY vid;
 
--- 删除边
+-- Delete edges
 DELETE FROM dynamic_graph.edges WHERE weight < 0.5;
 
--- 增量更新后的K-Core计算
+-- K-Core calculation after incremental update
 INSERT INTO inc_kcore_edge_remove_result
 CALL incremental_kcore(2) ON GRAPH dynamic_graph 
 RETURN vid, core_value, degree, change_status
 ORDER BY vid;
 
--- 验证结果
+-- Verify results
 SELECT * FROM inc_kcore_edge_remove_result;

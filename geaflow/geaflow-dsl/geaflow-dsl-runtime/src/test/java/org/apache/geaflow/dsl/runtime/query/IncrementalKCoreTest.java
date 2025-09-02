@@ -26,8 +26,8 @@ import org.apache.commons.io.FileUtils;
 import org.testng.annotations.Test;
 
 /**
- * 增量K-Core算法测试类
- * 包含基础功能测试、增量更新测试、动态图测试等
+ * Incremental K-Core algorithm test class
+ * Includes basic functionality tests, incremental update tests, dynamic graph tests, etc.
  * 
  * @author TuGraph Analytics Team
  */

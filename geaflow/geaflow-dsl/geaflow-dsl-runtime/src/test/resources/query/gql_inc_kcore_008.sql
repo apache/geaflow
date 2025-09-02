@@ -16,8 +16,8 @@
  */
 
 /*
- * 增量K-Core算法自定义参数测试
- * 测试不同参数组合对算法结果的影响
+ * Incremental K-Core algorithm custom parameters test
+ * Test the impact of different parameter combinations on algorithm results
  */
 CREATE SINK inc_kcore_custom_params_result WITH (
     type='file',
@@ -26,23 +26,23 @@ CREATE SINK inc_kcore_custom_params_result WITH (
 
 USE GRAPH modern;
 
--- 测试不同的K值
+-- Test different K values
 INSERT INTO inc_kcore_custom_params_result
 CALL incremental_kcore(1, 50, 0.001) ON GRAPH modern 
 RETURN vid, core_value, degree, change_status
 ORDER BY vid;
 
--- 测试不同的最大迭代次数
+-- Test different maximum iteration counts
 INSERT INTO inc_kcore_custom_params_result
 CALL incremental_kcore(2, 5, 0.001) ON GRAPH modern 
 RETURN vid, core_value, degree, change_status
 ORDER BY vid;
 
--- 测试不同的收敛阈值
+-- Test different convergence thresholds
 INSERT INTO inc_kcore_custom_params_result
 CALL incremental_kcore(3, 100, 0.01) ON GRAPH modern 
 RETURN vid, core_value, degree, change_status
 ORDER BY vid;
 
--- 验证结果
+-- Verify results
 SELECT * FROM inc_kcore_custom_params_result;

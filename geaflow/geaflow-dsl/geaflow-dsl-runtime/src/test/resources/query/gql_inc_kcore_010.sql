@@ -16,8 +16,8 @@
  */
 
 /*
- * 增量K-Core算法不连通组件测试
- * 测试在包含多个不连通组件的图上的算法表现
+ * Incremental K-Core algorithm disconnected components test
+ * Test algorithm performance on graphs containing multiple disconnected components
  */
 CREATE SINK inc_kcore_disconnected_result WITH (
     type='file',
@@ -26,11 +26,11 @@ CREATE SINK inc_kcore_disconnected_result WITH (
 
 USE GRAPH disconnected_graph;
 
--- 在包含不连通组件的图上执行K-Core算法
+-- Execute K-Core algorithm on graph containing disconnected components
 INSERT INTO inc_kcore_disconnected_result
 CALL incremental_kcore(2, 50, 0.001) ON GRAPH disconnected_graph 
 RETURN vid, core_value, degree, change_status
 ORDER BY vid;
 
--- 验证结果
+-- Verify results
 SELECT * FROM inc_kcore_disconnected_result;

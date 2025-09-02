@@ -40,14 +40,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * 增量K-Core算法实现.
- * 支持动态图的增量更新，处理边添加和删除的场景.
+ * Incremental K-Core algorithm implementation.
+ * Supports incremental updates for dynamic graphs, handling edge addition and deletion scenarios.
  * 
- * <p>算法原理：
- * 1. 维护顶点的K-Core值缓存和度数信息
- * 2. 当图发生变化时，只重新计算受影响的顶点
- * 3. 通过消息传递机制在邻居间传播重计算请求
- * 4. 实现智能剪枝，避免不必要的重计算
+ * <p>Algorithm principle:
+ * 1. Maintain vertex K-Core value cache and degree information
+ * 2. When graph changes, only recalculate affected vertices
+ * 3. Propagate recalculation requests between neighbors through message passing mechanism
+ * 4. Implement intelligent pruning to avoid unnecessary recalculations
  * 
  * @author TuGraph Analytics Team
  */
@@ -58,11 +58,11 @@ public class IncrementalKCore implements AlgorithmUserFunction<Object, Increment
     private static final Logger LOGGER = LoggerFactory.getLogger(IncrementalKCore.class);
     
     private AlgorithmRuntimeContext<Object, KCoreMessage> context;
-    private int k = 3; // 默认K值
-    private int maxIterations = 100; // 最大迭代次数
-    private double convergenceThreshold = 0.001; // 收敛阈值
+    private int k = 3; // Default K value
+    private int maxIterations = 100; // Maximum number of iterations
+    private double convergenceThreshold = 0.001; // Convergence threshold
     
-    // 顶点状态缓存
+    // Vertex state cache
     private Map<Object, Integer> vertexCoreValues = new HashMap<>();
     private Map<Object, Integer> vertexDegrees = new HashMap<>();
     private Set<Object> affectedVertices = new HashSet<>();
@@ -72,7 +72,7 @@ public class IncrementalKCore implements AlgorithmUserFunction<Object, Increment
     public void init(AlgorithmRuntimeContext<Object, KCoreMessage> context, Object[] parameters) {
         this.context = context;
         
-        // 解析参数：k, maxIterations, convergenceThreshold
+        // Parse parameters: k, maxIterations, convergenceThreshold
         if (parameters.length > 0) {
             this.k = Integer.parseInt(String.valueOf(parameters[0]));
         }
@@ -99,43 +99,43 @@ public class IncrementalKCore implements AlgorithmUserFunction<Object, Increment
         Object vertexId = vertex.getId();
         long currentIteration = context.getCurrentIterationId();
         
-        // 第一次迭代：初始化
+        // First iteration: initialization
         if (currentIteration == 1L) {
             initializeVertex(vertex);
             return;
         }
         
-        // 检查是否已收敛或达到最大迭代次数
+        // Check if converged or reached maximum iterations
         if (hasConverged || currentIteration > maxIterations) {
             return;
         }
         
-        // 处理增量更新
+        // Process incremental updates
         processIncrementalUpdate(vertex, messages);
     }
     
     /**
-     * 初始化顶点状态.
-     * 计算初始度数和K-Core值.
+     * Initialize vertex state.
+     * Calculate initial degree and K-Core value.
      */
     private void initializeVertex(RowVertex vertex) {
         Object vertexId = vertex.getId();
         
-        // 计算初始度数（包括静态边和动态边）
+        // Calculate initial degree (including static and dynamic edges)
         List<RowEdge> staticEdges = context.loadStaticEdges(EdgeDirection.BOTH);
         List<RowEdge> dynamicEdges = context.loadDynamicEdges(EdgeDirection.BOTH);
         
         int totalDegree = staticEdges.size() + dynamicEdges.size();
         vertexDegrees.put(vertexId, totalDegree);
         
-        // 初始K-Core值设为度数
+        // Initial K-Core value set to degree
         int initialCore = totalDegree;
         vertexCoreValues.put(vertexId, initialCore);
         
-        // 更新顶点值：core_value, degree, change_status
+        // Update vertex value: core_value, degree, change_status
         context.updateVertexValue(ObjectRow.create(initialCore, totalDegree, "INIT"));
         
-        // 向邻居发送初始化消息
+        // Send initialization messages to neighbors
         List<RowEdge> allEdges = new ArrayList<>();
         allEdges.addAll(staticEdges);
         allEdges.addAll(dynamicEdges);
@@ -146,8 +146,8 @@ public class IncrementalKCore implements AlgorithmUserFunction<Object, Increment
     }
     
     /**
-     * 处理增量更新消息.
-     * 根据接收到的消息类型进行相应的处理.
+     * Process incremental update messages.
+     * Handle different message types accordingly.
      */
     private void processIncrementalUpdate(RowVertex vertex, Iterator<KCoreMessage> messages) {
         Object vertexId = vertex.getId();
@@ -155,7 +155,7 @@ public class IncrementalKCore implements AlgorithmUserFunction<Object, Increment
         Set<Object> changedNeighbors = new HashSet<>();
         Map<Object, Integer> neighborCores = new HashMap<>();
         
-        // 处理接收到的消息
+        // Process received messages
         while (messages.hasNext()) {
             KCoreMessage message = messages.next();
             
@@ -189,11 +189,11 @@ public class IncrementalKCore implements AlgorithmUserFunction<Object, Increment
     }
     
     /**
-     * 处理边添加事件.
-     * 增加顶点的度数并标记为受影响顶点.
+     * Handle edge addition event.
+     * Increase vertex degree and mark as affected vertex.
      */
     private void handleEdgeAdded(Object vertexId, KCoreMessage message) {
-        // 增加度数
+        // Increase degree
         int currentDegree = vertexDegrees.getOrDefault(vertexId, 0);
         vertexDegrees.put(vertexId, currentDegree + 1);
         affectedVertices.add(vertexId);
@@ -332,18 +332,18 @@ public class IncrementalKCore implements AlgorithmUserFunction<Object, Increment
         
         private static final long serialVersionUID = 1L;
         
-        /** 消息类型枚举. */
+        /** Message type enumeration. */
         public enum MessageType {
-            INIT,           // 初始化消息
-            EDGE_ADDED,     // 边添加消息
-            EDGE_REMOVED,   // 边删除消息
-            CORE_CHANGED    // Core值变化消息
+            INIT,           // Initialization message
+            EDGE_ADDED,     // Edge addition message
+            EDGE_REMOVED,   // Edge removal message
+            CORE_CHANGED    // Core value change message
         }
         
         private Object sourceId;
         private int coreValue;
         private MessageType type;
-        private Object edgeInfo; // 可选的边信息
+        private Object edgeInfo; // Optional edge information
         private long timestamp;
         
         public KCoreMessage(Object sourceId, int coreValue, MessageType type) {

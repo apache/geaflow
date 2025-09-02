@@ -16,8 +16,8 @@
  */
 
 /*
- * 增量K-Core算法性能测试
- * 在大图上测试算法性能
+ * Incremental K-Core algorithm performance test
+ * Test algorithm performance on large graph
  */
 CREATE SINK inc_kcore_performance_result WITH (
     type='file',
@@ -26,12 +26,12 @@ CREATE SINK inc_kcore_performance_result WITH (
 
 USE GRAPH large_graph;
 
--- 执行性能测试
+-- Execute performance test
 INSERT INTO inc_kcore_performance_result
 CALL incremental_kcore(2, 100, 0.001) ON GRAPH large_graph 
 RETURN vid, core_value, degree, change_status;
 
--- 统计结果
+-- Statistics results
 CREATE TABLE kcore_stats AS
 SELECT 
     COUNT(*) as total_vertices,
@@ -41,5 +41,5 @@ SELECT
     SUM(CASE WHEN change_status = 'CHANGED' THEN 1 ELSE 0 END) as changed_count
 FROM inc_kcore_performance_result;
 
--- 输出统计信息
+-- Output statistics
 SELECT * FROM kcore_stats;

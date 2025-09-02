@@ -16,8 +16,8 @@
  */
 
 /*
- * 增量K-Core算法不同K值测试
- * 测试不同K值下的算法行为
+ * Incremental K-Core algorithm different K values test
+ * Test algorithm behavior under different K values
  */
 CREATE SINK inc_kcore_k_values_result WITH (
     type='file',
@@ -26,21 +26,21 @@ CREATE SINK inc_kcore_k_values_result WITH (
 
 USE GRAPH modern;
 
--- 测试K=1
+-- Test K=1
 INSERT INTO inc_kcore_k_values_result
 CALL incremental_kcore(1) ON GRAPH modern 
 RETURN vid, core_value, degree, change_status, 1 as k_value;
 
--- 测试K=2
+-- Test K=2
 INSERT INTO inc_kcore_k_values_result
 CALL incremental_kcore(2) ON GRAPH modern 
 RETURN vid, core_value, degree, change_status, 2 as k_value;
 
--- 测试K=3
+-- Test K=3
 INSERT INTO inc_kcore_k_values_result
 CALL incremental_kcore(3) ON GRAPH modern 
 RETURN vid, core_value, degree, change_status, 3 as k_value;
 
--- 验证结果，按K值和顶点ID排序
+-- Verify results, ordered by K value and vertex ID
 SELECT * FROM inc_kcore_k_values_result
 ORDER BY k_value, vid;

@@ -16,8 +16,8 @@
  */
 
 /*
- * 增量K-Core算法复杂拓扑测试
- * 测试在复杂图结构上的算法表现
+ * Incremental K-Core algorithm complex topology test
+ * Test algorithm performance on complex graph structures
  */
 CREATE SINK inc_kcore_complex_topology_result WITH (
     type='file',
@@ -26,11 +26,11 @@ CREATE SINK inc_kcore_complex_topology_result WITH (
 
 USE GRAPH complex_graph;
 
--- 在复杂拓扑图上执行K-Core算法
+-- Execute K-Core algorithm on complex topology graph
 INSERT INTO inc_kcore_complex_topology_result
 CALL incremental_kcore(3, 100, 0.001) ON GRAPH complex_graph 
 RETURN vid, core_value, degree, change_status
 ORDER BY vid;
 
--- 验证结果
+-- Verify results
 SELECT * FROM inc_kcore_complex_topology_result;

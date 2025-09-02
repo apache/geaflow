@@ -16,8 +16,8 @@
  */
 
 /*
- * 增量K-Core算法基础测试
- * 在modern图上执行基础的增量K-Core算法
+ * Incremental K-Core algorithm basic test
+ * Execute basic incremental K-Core algorithm on modern graph
  */
 CREATE SINK inc_kcore_result WITH (
     type='file',
@@ -30,5 +30,5 @@ CALL incremental_kcore(2) ON GRAPH modern
 RETURN vid, core_value, degree, change_status
 ORDER BY vid;
 
--- 验证结果
+-- Verify results
 SELECT * FROM inc_kcore_result;

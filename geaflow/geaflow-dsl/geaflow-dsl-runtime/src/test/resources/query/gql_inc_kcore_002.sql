@@ -16,8 +16,8 @@
  */
 
 /*
- * 增量K-Core算法增量更新测试
- * 测试边动态添加和删除的场景
+ * Incremental K-Core algorithm incremental update test
+ * Test scenarios of dynamic edge addition and deletion
  */
 CREATE SINK inc_kcore_incremental_result WITH (
     type='file',
@@ -26,27 +26,27 @@ CREATE SINK inc_kcore_incremental_result WITH (
 
 USE GRAPH modern;
 
--- 初始K-Core计算
+-- Initial K-Core calculation
 INSERT INTO inc_kcore_incremental_result
 CALL incremental_kcore(2, 50, 0.001) ON GRAPH modern 
 RETURN vid, core_value, degree, change_status;
 
--- 模拟边添加
+-- Simulate edge addition
 INSERT INTO modern.knows VALUES (1001, 1002, 0.8);
 
--- 增量更新后的K-Core计算
+-- K-Core calculation after incremental update
 INSERT INTO inc_kcore_incremental_result
 CALL incremental_kcore(2, 50, 0.001) ON GRAPH modern 
 RETURN vid, core_value, degree, change_status;
 
--- 模拟边删除
+-- Simulate edge deletion
 DELETE FROM modern.knows WHERE weight < 0.5;
 
--- 再次更新K-Core
+-- Update K-Core again
 INSERT INTO inc_kcore_incremental_result
 CALL incremental_kcore(2, 50, 0.001) ON GRAPH modern 
 RETURN vid, core_value, degree, change_status;
 
--- 验证结果
+-- Verify results
 SELECT * FROM inc_kcore_incremental_result
 ORDER BY vid, change_status;
