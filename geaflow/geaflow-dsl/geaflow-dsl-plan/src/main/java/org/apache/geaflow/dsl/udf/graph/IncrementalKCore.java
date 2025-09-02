@@ -19,6 +19,9 @@
 
 package org.apache.geaflow.dsl.udf.graph;
 
+import java.io.Serializable;
+import java.util.*;
+
 import org.apache.geaflow.common.type.primitive.IntegerType;
 import org.apache.geaflow.common.type.primitive.StringType;
 import org.apache.geaflow.dsl.common.algo.AlgorithmRuntimeContext;
@@ -33,17 +36,14 @@ import org.apache.geaflow.dsl.common.types.GraphSchema;
 import org.apache.geaflow.dsl.common.types.StructType;
 import org.apache.geaflow.dsl.common.types.TableField;
 import org.apache.geaflow.model.graph.edge.EdgeDirection;
-
-import java.io.Serializable;
-import java.util.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * 增量K-Core算法实现
- * 支持动态图的增量更新，处理边添加和删除的场景
+ * 增量K-Core算法实现.
+ * 支持动态图的增量更新，处理边添加和删除的场景.
  * 
- * 算法原理：
+ * <p>算法原理：
  * 1. 维护顶点的K-Core值缓存和度数信息
  * 2. 当图发生变化时，只重新计算受影响的顶点
  * 3. 通过消息传递机制在邻居间传播重计算请求
@@ -115,8 +115,8 @@ public class IncrementalKCore implements AlgorithmUserFunction<Object, Increment
     }
     
     /**
-     * 初始化顶点状态
-     * 计算初始度数和K-Core值
+     * 初始化顶点状态.
+     * 计算初始度数和K-Core值.
      */
     private void initializeVertex(RowVertex vertex) {
         Object vertexId = vertex.getId();
@@ -146,8 +146,8 @@ public class IncrementalKCore implements AlgorithmUserFunction<Object, Increment
     }
     
     /**
-     * 处理增量更新消息
-     * 根据接收到的消息类型进行相应的处理
+     * 处理增量更新消息.
+     * 根据接收到的消息类型进行相应的处理.
      */
     private void processIncrementalUpdate(RowVertex vertex, Iterator<KCoreMessage> messages) {
         Object vertexId = vertex.getId();
@@ -177,6 +177,9 @@ public class IncrementalKCore implements AlgorithmUserFunction<Object, Increment
                     neighborCores.put(message.getSourceId(), message.getCoreValue());
                     needsRecomputation = true;
                     break;
+                default:
+                    LOGGER.warn("Unknown message type: {}", message.getType());
+                    break;
             }
         }
         
@@ -186,8 +189,8 @@ public class IncrementalKCore implements AlgorithmUserFunction<Object, Increment
     }
     
     /**
-     * 处理边添加事件
-     * 增加顶点的度数并标记为受影响顶点
+     * 处理边添加事件.
+     * 增加顶点的度数并标记为受影响顶点.
      */
     private void handleEdgeAdded(Object vertexId, KCoreMessage message) {
         // 增加度数
@@ -199,8 +202,8 @@ public class IncrementalKCore implements AlgorithmUserFunction<Object, Increment
     }
     
     /**
-     * 处理边删除事件
-     * 减少顶点的度数并标记为受影响顶点
+     * 处理边删除事件.
+     * 减少顶点的度数并标记为受影响顶点.
      */
     private void handleEdgeRemoved(Object vertexId, KCoreMessage message) {
         // 减少度数
@@ -212,8 +215,8 @@ public class IncrementalKCore implements AlgorithmUserFunction<Object, Increment
     }
     
     /**
-     * 重新计算K-Core值
-     * 基于当前邻居的Core值和度数重新计算
+     * 重新计算K-Core值.
+     * 基于当前邻居的Core值和度数重新计算.
      */
     private void recomputeKCore(RowVertex vertex, Map<Object, Integer> neighborCores) {
         Object vertexId = vertex.getId();
@@ -253,8 +256,8 @@ public class IncrementalKCore implements AlgorithmUserFunction<Object, Increment
     }
     
     /**
-     * 计算有效邻居数
-     * 统计K-Core值 >= k的邻居数量
+     * 计算有效邻居数.
+     * 统计K-Core值 >= k的邻居数量.
      */
     private int countValidNeighbors(RowVertex vertex, Map<Object, Integer> neighborCores) {
         List<RowEdge> allEdges = new ArrayList<>();
@@ -263,8 +266,8 @@ public class IncrementalKCore implements AlgorithmUserFunction<Object, Increment
         
         int validCount = 0;
         for (RowEdge edge : allEdges) {
-            Object neighborId = edge.getTargetId().equals(vertex.getId()) ? 
-                edge.getSrcId() : edge.getTargetId();
+            Object neighborId = edge.getTargetId().equals(vertex.getId()) 
+                ? edge.getSrcId() : edge.getTargetId();
             
             int neighborCore = neighborCores.getOrDefault(neighborId, 
                 vertexCoreValues.getOrDefault(neighborId, 0));
@@ -278,8 +281,8 @@ public class IncrementalKCore implements AlgorithmUserFunction<Object, Increment
     }
     
     /**
-     * 向邻居发送消息
-     * 遍历所有边，向邻居顶点发送消息
+     * 向邻居发送消息.
+     * 遍历所有边，向邻居顶点发送消息.
      */
     private void sendMessageToNeighbors(List<RowEdge> edges, KCoreMessage message) {
         for (RowEdge edge : edges) {
@@ -322,14 +325,14 @@ public class IncrementalKCore implements AlgorithmUserFunction<Object, Increment
     }
     
     /**
-     * K-Core消息类
-     * 用于顶点间通信的消息类型
+     * K-Core消息类.
+     * 用于顶点间通信的消息类型.
      */
     public static class KCoreMessage implements Serializable {
         
         private static final long serialVersionUID = 1L;
         
-        /** 消息类型枚举 */
+        /** 消息类型枚举. */
         public enum MessageType {
             INIT,           // 初始化消息
             EDGE_ADDED,     // 边添加消息
@@ -394,25 +397,29 @@ public class IncrementalKCore implements AlgorithmUserFunction<Object, Increment
         
         @Override
         public String toString() {
-            return "KCoreMessage{" +
-                "sourceId=" + sourceId +
-                ", coreValue=" + coreValue +
-                ", type=" + type +
-                ", edgeInfo=" + edgeInfo +
-                ", timestamp=" + timestamp +
-                '}';
+            return "KCoreMessage{"
+                + "sourceId=" + sourceId
+                + ", coreValue=" + coreValue
+                + ", type=" + type
+                + ", edgeInfo=" + edgeInfo
+                + ", timestamp=" + timestamp
+                + '}';
         }
 
         @Override
         public boolean equals(Object obj) {
-            if (this == obj) return true;
-            if (obj == null || getClass() != obj.getClass()) return false;
+            if (this == obj) {
+                return true;
+            }
+            if (obj == null || getClass() != obj.getClass()) {
+                return false;
+            }
             KCoreMessage that = (KCoreMessage) obj;
-            return coreValue == that.coreValue &&
-                   timestamp == that.timestamp &&
-                   Objects.equals(sourceId, that.sourceId) &&
-                   type == that.type &&
-                   Objects.equals(edgeInfo, that.edgeInfo);
+            return coreValue == that.coreValue
+                   && timestamp == that.timestamp
+                   && Objects.equals(sourceId, that.sourceId)
+                   && type == that.type
+                   && Objects.equals(edgeInfo, that.edgeInfo);
         }
 
         @Override
