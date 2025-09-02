@@ -39,14 +39,14 @@ import org.apache.geaflow.dsl.udf.graph.mst.MSTVertexState;
 import org.apache.geaflow.model.graph.edge.EdgeDirection;
 
 /**
- * 增量最小生成树算法实现.
- * 基于TuGraph Analytics的增量图计算能力，实现动态图上的MST维护.
+ * Incremental Minimum Spanning Tree algorithm implementation.
+ * Based on TuGraph Analytics incremental graph computing capabilities, implements MST maintenance on dynamic graphs.
  * 
- * <p>算法原理：
- * 1. 维护当前MST状态
- * 2. 对于新增边：使用Union-Find检测是否形成环，若不形成环且权重更小则加入MST
- * 3. 对于删除边：若删除的是MST边，需要重新连接分离的组件
- * 4. 采用顶点中心的消息传递机制实现分布式计算
+ * <p>Algorithm principle:
+ * 1. Maintain current MST state
+ * 2. For new edges: Use Union-Find to detect if cycles are formed, if no cycle and weight is smaller then add to MST
+ * 3. For deleted edges: If deleted edge is MST edge, need to reconnect separated components
+ * 4. Use vertex-centric message passing mechanism for distributed computing
  * 
  * @author TuGraph Analytics Team
  */
@@ -56,14 +56,14 @@ public class IncMinimumSpanningTree implements AlgorithmUserFunction<Object, Obj
 
     private AlgorithmRuntimeContext<Object, Object> context;
     private String keyFieldName = "mst_edges";
-    private int maxIterations = 50; // 最大迭代次数
-    private double convergenceThreshold = 0.001; // 收敛阈值
+    private int maxIterations = 50; // Maximum number of iterations
+    private double convergenceThreshold = 0.001; // Convergence threshold
 
     @Override
     public void init(AlgorithmRuntimeContext<Object, Object> context, Object[] parameters) {
         this.context = context;
         
-        // 解析参数：maxIterations, convergenceThreshold, keyFieldName
+        // Parse parameters: maxIterations, convergenceThreshold, keyFieldName
         if (parameters.length > 0) {
             this.maxIterations = Integer.parseInt(String.valueOf(parameters[0]));
         }
@@ -86,24 +86,24 @@ public class IncMinimumSpanningTree implements AlgorithmUserFunction<Object, Obj
         long currentIterationId = context.getCurrentIterationId();
         
         if (currentIterationId == 1L) {
-            // 初始化阶段：每个顶点初始化为独立组件
+            // Initialization phase: each vertex initialized as independent component
             initializeVertex(vertex);
         } else if (currentIterationId <= maxIterations) {
-            // 计算阶段：处理消息并更新MST
+            // Computation phase: process messages and update MST
             processMessages(vertex, messages);
         }
     }
 
     @Override
     public void finish(RowVertex graphVertex, Optional<Row> updatedValues) {
-        // 完成阶段：输出MST结果
+        // Completion phase: output MST results
         if (updatedValues.isPresent()) {
             Row values = updatedValues.get();
             Object mstEdges = values.getField(0, ObjectType.INSTANCE);
             boolean hasChanged = (boolean) values.getField(1, ObjectType.INSTANCE);
             
             if (hasChanged && mstEdges != null) {
-                // 输出MST边信息
+                // Output MST edge information
                 context.take(ObjectRow.create(graphVertex.getId(), mstEdges));
             }
         }
@@ -111,7 +111,7 @@ public class IncMinimumSpanningTree implements AlgorithmUserFunction<Object, Obj
 
     @Override
     public StructType getOutputType(GraphSchema graphSchema) {
-        // 返回结果类型：顶点ID和MST边集合
+        // Return result type: vertex ID and MST edge set
         return new StructType(
             new TableField("vertex_id", graphSchema.getIdType(), false),
             new TableField(keyFieldName, ObjectType.INSTANCE, false)
@@ -119,19 +119,19 @@ public class IncMinimumSpanningTree implements AlgorithmUserFunction<Object, Obj
     }
 
     /**
-     * 初始化顶点状态
-     * 每个顶点初始化为独立组件，自己为根节点
+     * Initialize vertex state
+     * Each vertex initialized as independent component, self as root node
      */
     private void initializeVertex(RowVertex vertex) {
         Object vertexId = vertex.getId();
         
-        // 创建初始MST状态
+        // Create initial MST state
         MSTVertexState initialState = new MSTVertexState(vertexId);
         
-        // 更新顶点值
+        // Update vertex value
         context.updateVertexValue(ObjectRow.create(initialState, true));
         
-        // 向邻居发送初始化消息
+        // Send initialization messages to neighbors
         List<RowEdge> edges = context.loadEdges(EdgeDirection.BOTH);
         for (RowEdge edge : edges) {
             MSTMessage initMessage = new MSTMessage(

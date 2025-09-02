@@ -25,15 +25,15 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * Union-Find数据结构辅助类.
- * 用于管理不相交集合的合并和查找操作.
+ * Union-Find data structure helper class.
+ * Used for managing union and find operations on disjoint sets.
  * 
- * <p>支持的操作：
- * - makeSet: 创建新集合
- * - find: 查找元素所属集合
- * - union: 合并两个集合
- * - getSetCount: 获取集合数量
- * - clear: 清空所有集合
+ * <p>Supported operations:
+ * - makeSet: Create new set
+ * - find: Find the set an element belongs to
+ * - union: Merge two sets
+ * - getSetCount: Get number of sets
+ * - clear: Clear all sets
  * 
  * @author TuGraph Analytics Team
  */
@@ -41,20 +41,20 @@ public class UnionFindHelper implements Serializable {
     
     private static final long serialVersionUID = 1L;
     
-    /** 父节点映射. */
+    /** Parent node mapping. */
     private Map<Object, Object> parent;
     
-    /** 秩映射（用于路径压缩优化）. */
+    /** Rank mapping (for path compression optimization). */
     private Map<Object, Integer> rank;
     
-    /** 集合大小映射. */
+    /** Set size mapping. */
     private Map<Object, Integer> size;
     
-    /** 集合数量. */
+    /** Number of sets. */
     private int setCount;
 
     /**
-     * 构造函数.
+     * Constructor.
      */
     public UnionFindHelper() {
         this.parent = new HashMap<>();
@@ -64,8 +64,8 @@ public class UnionFindHelper implements Serializable {
     }
 
     /**
-     * 创建新集合.
-     * @param x 元素
+     * Create new set.
+     * @param x Element
      */
     public void makeSet(Object x) {
         if (!parent.containsKey(x)) {
@@ -77,9 +77,9 @@ public class UnionFindHelper implements Serializable {
     }
 
     /**
-     * 查找元素所属集合的根节点.
-     * @param x 元素
-     * @return 根节点
+     * Find the root node of the set an element belongs to.
+     * @param x Element
+     * @return Root node
      */
     public Object find(Object x) {
         if (!parent.containsKey(x)) {
@@ -93,10 +93,10 @@ public class UnionFindHelper implements Serializable {
     }
 
     /**
-     * 合并两个集合.
-     * @param x 第一个元素
-     * @param y 第二个元素
-     * @return 是否成功合并
+     * Merge two sets.
+     * @param x First element
+     * @param y Second element
+     * @return Whether merge was successful
      */
     public boolean union(Object x, Object y) {
         Object rootX = find(x);
@@ -107,10 +107,10 @@ public class UnionFindHelper implements Serializable {
         }
         
         if (rootX.equals(rootY)) {
-            return false; // 已经在同一个集合中
+            return false; // Already in the same set
         }
         
-        // 按秩合并
+        // Union by rank
         if (rank.get(rootX) < rank.get(rootY)) {
             Object temp = rootX;
             rootX = rootY;
@@ -129,17 +129,17 @@ public class UnionFindHelper implements Serializable {
     }
 
     /**
-     * 获取集合数量.
-     * @return 集合数量
+     * Get number of sets.
+     * @return Number of sets
      */
     public int getSetCount() {
         return setCount;
     }
 
     /**
-     * 获取指定集合的大小.
-     * @param x 集合中的任意元素
-     * @return 集合大小
+     * Get size of specified set.
+     * @param x Any element in the set
+     * @return Set size
      */
     public int getSetSize(Object x) {
         Object root = find(x);
@@ -150,10 +150,10 @@ public class UnionFindHelper implements Serializable {
     }
 
     /**
-     * 检查两个元素是否在同一集合中.
-     * @param x 第一个元素
-     * @param y 第二个元素
-     * @return 是否在同一集合中
+     * Check if two elements are in the same set.
+     * @param x First element
+     * @param y Second element
+     * @return Whether they are in the same set
      */
     public boolean isConnected(Object x, Object y) {
         Object rootX = find(x);
@@ -162,7 +162,7 @@ public class UnionFindHelper implements Serializable {
     }
 
     /**
-     * 清空所有集合.
+     * Clear all sets.
      */
     public void clear() {
         parent.clear();
@@ -172,34 +172,34 @@ public class UnionFindHelper implements Serializable {
     }
 
     /**
-     * 检查Union-Find结构是否为空.
-     * @return 是否为空
+     * Check if Union-Find structure is empty.
+     * @return Whether it is empty
      */
     public boolean isEmpty() {
         return parent.isEmpty();
     }
 
     /**
-     * 获取Union-Find结构中的元素数量.
-     * @return 元素数量
+     * Get number of elements in Union-Find structure.
+     * @return Number of elements
      */
     public int size() {
         return parent.size();
     }
 
     /**
-     * 检查元素是否存在.
-     * @param x 元素
-     * @return 是否存在
+     * Check if element exists.
+     * @param x Element
+     * @return Whether it exists
      */
     public boolean contains(Object x) {
         return parent.containsKey(x);
     }
 
     /**
-     * 移除元素（及其所在集合）.
-     * @param x 元素
-     * @return 是否成功移除
+     * Remove element (and its set).
+     * @param x Element
+     * @return Whether removal was successful
      */
     public boolean remove(Object x) {
         if (!parent.containsKey(x)) {
@@ -210,14 +210,14 @@ public class UnionFindHelper implements Serializable {
         int rootSize = size.get(root);
         
         if (rootSize == 1) {
-            // 如果集合只有一个元素，直接移除
+            // If set has only one element, remove directly
             parent.remove(x);
             rank.remove(x);
             size.remove(x);
             setCount--;
         } else {
-            // 如果集合有多个元素，需要重新组织
-            // 这里简化处理，实际应用中可能需要更复杂的逻辑
+            // If set has multiple elements, need to reorganize
+            // Simplified handling here, actual applications may need more complex logic
             parent.remove(x);
             size.put(root, rootSize - 1);
         }
@@ -226,9 +226,9 @@ public class UnionFindHelper implements Serializable {
     }
 
     /**
-     * 获取指定集合的所有元素.
-     * @param root 集合根节点
-     * @return 集合中的所有元素
+     * Get all elements in specified set.
+     * @param root Set root node
+     * @return All elements in the set
      */
     public java.util.Set<Object> getSetElements(Object root) {
         java.util.Set<Object> elements = new java.util.HashSet<>();

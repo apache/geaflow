@@ -25,16 +25,16 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
- * MST顶点状态类.
- * 维护每个顶点在最小生成树中的状态信息.
+ * MST vertex state class.
+ * Maintains state information for each vertex in the minimum spanning tree.
  * 
- * <p>包含信息：
- * - parentId: MST中的父节点ID
- * - componentId: 所属组件ID
- * - minEdgeWeight: 到父节点的边权重
- * - isRoot: 是否为根节点
- * - mstEdges: MST边集合
- * - changed: 状态是否发生变化
+ * <p>Contains information:
+ * - parentId: Parent node ID in MST
+ * - componentId: Component ID it belongs to
+ * - minEdgeWeight: Edge weight to parent node
+ * - isRoot: Whether it is a root node
+ * - mstEdges: MST edge set
+ * - changed: Whether the state has changed
  * 
  * @author TuGraph Analytics Team
  */
@@ -42,39 +42,39 @@ public class MSTVertexState implements Serializable {
     
     private static final long serialVersionUID = 1L;
     
-    /** MST中的父节点ID. */
+    /** Parent node ID in MST. */
     private Object parentId;
     
-    /** 所属组件ID. */
+    /** Component ID it belongs to. */
     private Object componentId;
     
-    /** 到父节点的边权重. */
+    /** Edge weight to parent node. */
     private double minEdgeWeight;
     
-    /** 是否为根节点. */
+    /** Whether it is a root node. */
     private boolean isRoot;
     
-    /** MST边集合. */
+    /** MST edge set. */
     private Set<MSTEdge> mstEdges;
     
-    /** 状态是否发生变化. */
+    /** Whether the state has changed. */
     private boolean changed;
     
-    /** 顶点ID. */
+    /** Vertex ID. */
     private Object vertexId;
 
     /**
-     * 构造函数.
-     * @param vertexId 顶点ID
+     * Constructor.
+     * @param vertexId Vertex ID
      */
     public MSTVertexState(Object vertexId) {
         this.vertexId = vertexId;
-        this.parentId = vertexId; // 初始时自己为父节点
-        this.componentId = vertexId; // 初始时自己为独立组件
-        this.minEdgeWeight = Double.MAX_VALUE; // 初始权重为无穷大
-        this.isRoot = true; // 初始时为根节点
-        this.mstEdges = new HashSet<>(); // 初始MST边集为空
-        this.changed = false; // 初始状态未变化
+        this.parentId = vertexId; // Initially self as parent node
+        this.componentId = vertexId; // Initially self as independent component
+        this.minEdgeWeight = Double.MAX_VALUE; // Initial weight as infinity
+        this.isRoot = true; // Initially as root node
+        this.mstEdges = new HashSet<>(); // Initial MST edge set is empty
+        this.changed = false; // Initial state unchanged
     }
 
     // Getters and Setters
@@ -141,9 +141,9 @@ public class MSTVertexState implements Serializable {
     }
 
     /**
-     * 添加MST边.
-     * @param edge MST边
-     * @return 是否添加成功
+     * Add MST edge.
+     * @param edge MST edge
+     * @return Whether addition was successful
      */
     public boolean addMSTEdge(MSTEdge edge) {
         boolean added = this.mstEdges.add(edge);
@@ -154,9 +154,9 @@ public class MSTVertexState implements Serializable {
     }
 
     /**
-     * 移除MST边.
-     * @param edge MST边
-     * @return 是否移除成功
+     * Remove MST edge.
+     * @param edge MST edge
+     * @return Whether removal was successful
      */
     public boolean removeMSTEdge(MSTEdge edge) {
         boolean removed = this.mstEdges.remove(edge);
@@ -167,24 +167,24 @@ public class MSTVertexState implements Serializable {
     }
 
     /**
-     * 检查是否包含指定的MST边.
-     * @param edge MST边
-     * @return 是否包含
+     * Check if contains the specified MST edge.
+     * @param edge MST edge
+     * @return Whether it contains the edge
      */
     public boolean containsMSTEdge(MSTEdge edge) {
         return this.mstEdges.contains(edge);
     }
 
     /**
-     * 获取MST边的数量.
-     * @return 边数量
+     * Get the number of MST edges.
+     * @return Number of edges
      */
     public int getMSTEdgeCount() {
         return this.mstEdges.size();
     }
 
     /**
-     * 清空MST边集合.
+     * Clear MST edge set.
      */
     public void clearMSTEdges() {
         if (!this.mstEdges.isEmpty()) {
@@ -194,24 +194,24 @@ public class MSTVertexState implements Serializable {
     }
 
     /**
-     * 重置状态变化标志.
+     * Reset state change flag.
      */
     public void resetChanged() {
         this.changed = false;
     }
 
     /**
-     * 检查是否为叶子节点（没有子节点）.
-     * @return 是否为叶子节点
+     * Check if it is a leaf node (no child nodes).
+     * @return Whether it is a leaf node
      */
     public boolean isLeaf() {
         return this.mstEdges.isEmpty();
     }
 
     /**
-     * 获取到指定顶点的边权重.
-     * @param targetId 目标顶点ID
-     * @return 边权重，如果不存在则返回Double.MAX_VALUE
+     * Get edge weight to specified vertex.
+     * @param targetId Target vertex ID
+     * @return Edge weight, returns Double.MAX_VALUE if not exists
      */
     public double getEdgeWeightTo(Object targetId) {
         for (MSTEdge edge : mstEdges) {
@@ -223,9 +223,9 @@ public class MSTVertexState implements Serializable {
     }
 
     /**
-     * 检查是否与指定顶点相连.
-     * @param targetId 目标顶点ID
-     * @return 是否相连
+     * Check if connected to specified vertex.
+     * @param targetId Target vertex ID
+     * @return Whether connected
      */
     public boolean isConnectedTo(Object targetId) {
         return getEdgeWeightTo(targetId) < Double.MAX_VALUE;

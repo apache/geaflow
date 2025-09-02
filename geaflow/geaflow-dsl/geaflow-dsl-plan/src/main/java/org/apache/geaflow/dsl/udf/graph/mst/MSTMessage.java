@@ -23,15 +23,15 @@ import java.io.Serializable;
 import java.util.Objects;
 
 /**
- * MST消息类.
- * 用于顶点间的消息传递，支持不同类型的MST操作.
+ * MST message class.
+ * Used for message passing between vertices, supporting different types of MST operations.
  * 
- * <p>消息类型：
- * - COMPONENT_UPDATE: 组件更新消息
- * - EDGE_PROPOSAL: 边提议消息
- * - EDGE_ACCEPTANCE: 边接受消息
- * - EDGE_REJECTION: 边拒绝消息
- * - MST_EDGE_FOUND: MST边发现消息
+ * <p>Message types:
+ * - COMPONENT_UPDATE: Component update message
+ * - EDGE_PROPOSAL: Edge proposal message
+ * - EDGE_ACCEPTANCE: Edge acceptance message
+ * - EDGE_REJECTION: Edge rejection message
+ * - MST_EDGE_FOUND: MST edge discovery message
  * 
  * @author TuGraph Analytics Team
  */
@@ -39,47 +39,47 @@ public class MSTMessage implements Serializable {
     
     private static final long serialVersionUID = 1L;
     
-    /** 消息类型枚举. */
+    /** Message type enumeration. */
     public enum MessageType {
-        /** 组件更新消息. */
+        /** Component update message. */
         COMPONENT_UPDATE,
-        /** 边提议消息. */
+        /** Edge proposal message. */
         EDGE_PROPOSAL,
-        /** 边接受消息. */
+        /** Edge acceptance message. */
         EDGE_ACCEPTANCE,
-        /** 边拒绝消息. */
+        /** Edge rejection message. */
         EDGE_REJECTION,
-        /** MST边发现消息. */
+        /** MST edge discovery message. */
         MST_EDGE_FOUND
     }
 
-    /** 消息类型. */
+    /** Message type. */
     private MessageType type;
     
-    /** 源顶点ID. */
+    /** Source vertex ID. */
     private Object sourceId;
     
-    /** 目标顶点ID. */
+    /** Target vertex ID. */
     private Object targetId;
     
-    /** 边权重. */
+    /** Edge weight. */
     private double weight;
     
-    /** 组件ID. */
+    /** Component ID. */
     private Object componentId;
     
-    /** MST边. */
+    /** MST edge. */
     private MSTEdge edge;
     
-    /** 消息时间戳. */
+    /** Message timestamp. */
     private long timestamp;
 
     /**
-     * 构造函数.
-     * @param type 消息类型
-     * @param sourceId 源顶点ID
-     * @param targetId 目标顶点ID
-     * @param weight 边权重
+     * Constructor.
+     * @param type Message type
+     * @param sourceId Source vertex ID
+     * @param targetId Target vertex ID
+     * @param weight Edge weight
      */
     public MSTMessage(MessageType type, Object sourceId, Object targetId, double weight) {
         this.type = type;
@@ -90,12 +90,12 @@ public class MSTMessage implements Serializable {
     }
 
     /**
-     * 构造函数（带组件ID）.
-     * @param type 消息类型
-     * @param sourceId 源顶点ID
-     * @param targetId 目标顶点ID
-     * @param weight 边权重
-     * @param componentId 组件ID
+     * Constructor with component ID.
+     * @param type Message type
+     * @param sourceId Source vertex ID
+     * @param targetId Target vertex ID
+     * @param weight Edge weight
+     * @param componentId Component ID
      */
     public MSTMessage(MessageType type, Object sourceId, Object targetId, double weight, Object componentId) {
         this(type, sourceId, targetId, weight);
@@ -161,58 +161,58 @@ public class MSTMessage implements Serializable {
     }
 
     /**
-     * 检查是否为组件更新消息.
-     * @return 是否为组件更新消息
+     * Check if this is a component update message.
+     * @return Whether this is a component update message
      */
     public boolean isComponentUpdate() {
         return type == MessageType.COMPONENT_UPDATE;
     }
 
     /**
-     * 检查是否为边提议消息.
-     * @return 是否为边提议消息
+     * Check if this is an edge proposal message.
+     * @return Whether this is an edge proposal message
      */
     public boolean isEdgeProposal() {
         return type == MessageType.EDGE_PROPOSAL;
     }
 
     /**
-     * 检查是否为边接受消息.
-     * @return 是否为边接受消息
+     * Check if this is an edge acceptance message.
+     * @return Whether this is an edge acceptance message
      */
     public boolean isEdgeAcceptance() {
         return type == MessageType.EDGE_ACCEPTANCE;
     }
 
     /**
-     * 检查是否为边拒绝消息.
-     * @return 是否为边拒绝消息
+     * Check if this is an edge rejection message.
+     * @return Whether this is an edge rejection message
      */
     public boolean isEdgeRejection() {
         return type == MessageType.EDGE_REJECTION;
     }
 
     /**
-     * 检查是否为MST边发现消息.
-     * @return 是否为MST边发现消息
+     * Check if this is an MST edge discovery message.
+     * @return Whether this is an MST edge discovery message
      */
     public boolean isMSTEdgeFound() {
         return type == MessageType.MST_EDGE_FOUND;
     }
 
     /**
-     * 检查消息是否过期.
-     * @param currentTime 当前时间
-     * @param timeout 超时时间（毫秒）
-     * @return 是否过期
+     * Check if the message is expired.
+     * @param currentTime Current time
+     * @param timeout Timeout duration (milliseconds)
+     * @return Whether the message is expired
      */
     public boolean isExpired(long currentTime, long timeout) {
         return (currentTime - timestamp) > timeout;
     }
 
     /**
-     * 创建消息的副本.
-     * @return 消息副本
+     * Create a copy of the message.
+     * @return Message copy
      */
     public MSTMessage copy() {
         MSTMessage copy = new MSTMessage(type, sourceId, targetId, weight, componentId);
@@ -222,8 +222,8 @@ public class MSTMessage implements Serializable {
     }
 
     /**
-     * 创建反向消息.
-     * @return 反向消息
+     * Create a reverse message.
+     * @return Reverse message
      */
     public MSTMessage reverse() {
         MSTMessage reverse = new MSTMessage(type, targetId, sourceId, weight, componentId);

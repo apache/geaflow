@@ -23,15 +23,15 @@ import java.io.Serializable;
 import java.util.Objects;
 
 /**
- * MST边类.
- * 表示最小生成树中的一条边，包含源顶点、目标顶点和权重信息.
+ * MST edge class.
+ * Represents an edge in the minimum spanning tree, containing source vertex, target vertex and weight information.
  * 
- * <p>支持的操作：
- * - 创建边
- * - 获取边的端点
- * - 检查是否为自环
- * - 创建反向边
- * - 比较边（按权重和端点）
+ * <p>Supported operations:
+ * - Create edge
+ * - Get edge endpoints
+ * - Check if it is a self-loop
+ * - Create reverse edge
+ * - Compare edges (by weight and endpoints)
  * 
  * @author TuGraph Analytics Team
  */
@@ -39,20 +39,20 @@ public class MSTEdge implements Serializable, Comparable<MSTEdge> {
     
     private static final long serialVersionUID = 1L;
     
-    /** 源顶点ID. */
+    /** Source vertex ID. */
     private Object sourceId;
     
-    /** 目标顶点ID. */
+    /** Target vertex ID. */
     private Object targetId;
     
-    /** 边权重. */
+    /** Edge weight. */
     private double weight;
 
     /**
-     * 构造函数.
-     * @param sourceId 源顶点ID
-     * @param targetId 目标顶点ID
-     * @param weight 边权重
+     * Constructor.
+     * @param sourceId Source vertex ID
+     * @param targetId Target vertex ID
+     * @param weight Edge weight
      */
     public MSTEdge(Object sourceId, Object targetId, double weight) {
         this.sourceId = sourceId;
@@ -87,9 +87,9 @@ public class MSTEdge implements Serializable, Comparable<MSTEdge> {
     }
 
     /**
-     * 获取边的另一个端点.
-     * @param vertexId 已知的顶点ID
-     * @return 另一个端点ID，如果vertexId不是边的端点则返回null
+     * Get the other endpoint of the edge.
+     * @param vertexId Known vertex ID
+     * @return Other endpoint ID, returns null if vertexId is not an endpoint of the edge
      */
     public Object getOtherEndpoint(Object vertexId) {
         if (sourceId.equals(vertexId)) {
@@ -101,34 +101,34 @@ public class MSTEdge implements Serializable, Comparable<MSTEdge> {
     }
 
     /**
-     * 检查指定顶点是否为边的端点.
-     * @param vertexId 顶点ID
-     * @return 是否为端点
+     * Check if specified vertex is an endpoint of the edge.
+     * @param vertexId Vertex ID
+     * @return Whether it is an endpoint
      */
     public boolean isEndpoint(Object vertexId) {
         return sourceId.equals(vertexId) || targetId.equals(vertexId);
     }
 
     /**
-     * 检查是否为自环边.
-     * @return 是否为自环
+     * Check if it is a self-loop edge.
+     * @return Whether it is a self-loop
      */
     public boolean isSelfLoop() {
         return sourceId.equals(targetId);
     }
 
     /**
-     * 创建边的反向边.
-     * @return 反向边
+     * Create reverse edge.
+     * @return Reverse edge
      */
     public MSTEdge reverse() {
         return new MSTEdge(targetId, sourceId, weight);
     }
 
     /**
-     * 检查两条边是否相等（忽略方向）.
-     * @param other 另一条边
-     * @return 是否相等
+     * Check if two edges are equal (ignoring direction).
+     * @param other Another edge
+     * @return Whether they are equal
      */
     public boolean equalsIgnoreDirection(MSTEdge other) {
         if (this == other) {
@@ -138,7 +138,7 @@ public class MSTEdge implements Serializable, Comparable<MSTEdge> {
             return false;
         }
         
-        // 检查正向和反向是否相等
+        // Check if forward and reverse are equal
         boolean forwardEqual = Objects.equals(sourceId, other.sourceId) 
             && Objects.equals(targetId, other.targetId);
         boolean reverseEqual = Objects.equals(sourceId, other.targetId) 
@@ -168,19 +168,19 @@ public class MSTEdge implements Serializable, Comparable<MSTEdge> {
 
     @Override
     public int compareTo(MSTEdge other) {
-        // 首先按权重比较
+        // First compare by weight
         int weightCompare = Double.compare(this.weight, other.weight);
         if (weightCompare != 0) {
             return weightCompare;
         }
         
-        // 权重相同时，按源顶点ID比较
+        // If weights are equal, compare by source vertex ID
         int sourceCompare = sourceId.toString().compareTo(other.sourceId.toString());
         if (sourceCompare != 0) {
             return sourceCompare;
         }
         
-        // 源顶点ID相同时，按目标顶点ID比较
+        // If source vertex IDs are equal, compare by target vertex ID
         return targetId.toString().compareTo(other.targetId.toString());
     }
 
