@@ -33,5 +33,7 @@ public interface GeaFlowMcpActions {
 
     String queryType(String graphName, String type);
 
+    String getGraphSchema(String graphName);
+
     void withUser(String user);
 }

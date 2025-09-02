@@ -165,6 +165,18 @@ public class GeaFlowMcpActionsLocalImpl implements GeaFlowMcpActions {
     }
 
     @Override
+    public String getGraphSchema(String graphName) {
+        QueryLocalRunner compileRunner = new QueryLocalRunner();
+        String ddl = null;
+        try {
+            ddl = McpLocalFileUtil.readFile(QueryLocalRunner.DSL_STATE_REMOTE_SCHEM_PATH, graphName);
+        } catch (Throwable e) {
+            return "Cannot get graph schema for: " + graphName;
+        }
+        return ddl;
+    }
+
+    @Override
     public void withUser(String user) {
         this.user = user;
     }

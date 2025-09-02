@@ -27,12 +27,12 @@ package org.apache.geaflow.mcp.server.util;
  */
 public class McpConstants {
 
-    public static final String CREATE_GRAPH = "create graph";
-    public static final String GRAPH_NAME = "Graph Name";
-    public static final String DDL = "Create Graph DDL";
-    public static final String DQL = "Query Graph DQL";
-    public static final String DML = "Insert into graph dml";
-    public static final String TYPE = "Query Type Name";
+    public static final String CREATE_GRAPH = "create_graph";
+    public static final String GRAPH_NAME = "graph_name";
+    public static final String DDL = "create_graph_ddl";
+    public static final String DQL = "query_graph_dql";
+    public static final String DML = "insert_graph_dml";
+    public static final String TYPE = "query_type_name";
     public static final String CREATE_GRAPH_TOOL_NAME = "createGraph";
     public static final String INSERT_GRAPH_TOOL_NAME = "insertGraph";
     public static final String QUERY_GRAPH_TOOL_NAME = "queryGraph";

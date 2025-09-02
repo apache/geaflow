@@ -63,4 +63,6 @@ public class ToolDesc {
 
     public static final String queryType = "query vertex or edge. " +
             "A single call can only query data from one vertex or edge type, and only one type name needs to be provided.";
+
+    public static final String getGraphSchema = "query graph schema.";
 }

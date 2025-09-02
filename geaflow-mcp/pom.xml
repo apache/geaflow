@@ -143,7 +143,7 @@
         </dependency>
         <dependency>
             <groupId>org.apache.geaflow</groupId>
-            <artifactId>geaflow-deploy</artifactId>
+            <artifactId>geaflow-assembly</artifactId>
             <version>${project.version}</version>
         </dependency>
 

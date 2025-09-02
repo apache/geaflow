@@ -130,6 +130,28 @@ public class GeaFlowMcpServerTools {
     }
 
     /**
+     * A tool that get graph schema.
+     *
+     * @param graphName Create graph ddl.
+     * @return query result or error code.
+     */
+    @ToolMapping(description = ToolDesc.getGraphSchema)
+    public String getGraphSchema(@Param(name = McpConstants.GRAPH_NAME, description = "get graph schema name") String graphName) {
+        try {
+            Map<String, Object> config = YamlParser.loadConfig();
+            GeaFlowMcpActions mcpActions = new GeaFlowMcpActionsLocalImpl(config);
+            if (config.containsKey(SERVER_USER)) {
+                mcpActions.withUser(config.get(SERVER_USER).toString());
+            }
+            return mcpActions.getGraphSchema(graphName);
+        } catch (Exception e) {
+            LOGGER.error(e.getMessage(), e);
+            return e.getMessage();
+        }
+    }
+
+
+    /**
      * A tool that provides graph query capabilities.
      *
      * @param dml Query graph dql.

@@ -21,6 +21,7 @@ package org.apache.geaflow.mcp.server;
 
 import org.apache.commons.io.IOUtils;
 import org.apache.geaflow.mcp.server.util.McpConstants;
+import org.apache.geaflow.mcp.server.util.McpLocalFileUtil;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.noear.solon.ai.mcp.client.McpClientProvider;
@@ -90,6 +91,7 @@ public class GeaFlowMcpClientTest {
     @Test
     public void testListTools() {
         McpClientProvider toolProvider = McpClientProvider.builder()
+            .channel(SSE_CHANNEL)
             .apiUrl(SSE_ENDPOINT)
             .build();
 
@@ -140,7 +142,8 @@ public class GeaFlowMcpClientTest {
 
         String queryResults = toolProvider.callToolAsText(McpConstants.INSERT_GRAPH_TOOL_NAME, map).getContent();
         LOGGER.info("queryResults: {}", queryResults);
-        Assertions.assertEquals("run query success: INSERT INTO modern.person(id, name, age)\n" +
+        String licenseHead = IOUtils.resourceToString("/gql/licenseHead", Charset.defaultCharset());
+        Assertions.assertEquals("run query success: " + licenseHead + "INSERT INTO modern.person(id, name, age)\n" +
                         "VALUES (1, 'jim', 20), (2, 'kate', 22)\n" +
                         ";",
                 queryResults);
