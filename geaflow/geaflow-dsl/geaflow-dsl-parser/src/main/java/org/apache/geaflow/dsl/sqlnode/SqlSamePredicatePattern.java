@@ -31,54 +31,53 @@ import org.apache.calcite.sql.parser.SqlParserPos;
 import org.apache.calcite.sql.validate.SqlValidator;
 import org.apache.calcite.sql.validate.SqlValidatorScope;
 import org.apache.calcite.util.ImmutableNullableList;
-import org.apache.geaflow.dsl.common.exception.GeaFlowDSLException;
-import org.apache.geaflow.dsl.operator.SqlPathPatternOperator;
+
 
 /**
  * SQL node representing a same predicate pattern in GQL.
  * This node represents a pattern where two path patterns share a common predicate condition.
- * 
+ * <p>
  * Example: MATCH (a:person) -> (b) | (a:person) -> (c) WHERE SAME(a.age > 25)
- * 
+ * <p>
  * The left and right path patterns must satisfy the same predicate condition.
  */
 public class SqlSamePredicatePattern extends SqlCall {
 
     /**
-     * Operator for same predicate pattern
+     * Operator for same predicate pattern.
      */
     public static final SqlOperator OPERATOR = new SqlSpecialOperator("SAME_PREDICATE", SqlKind.OTHER);
 
     /**
-     * Left path pattern
+     * Left path pattern.
      */
     private final SqlNode left;
 
     /**
-     * Right path pattern
+     * Right path pattern.
      */
     private final SqlNode right;
 
     /**
-     * Shared predicate condition that must be satisfied by both path patterns
+     * Shared predicate condition that must be satisfied by both path patterns.
      */
     private final SqlNode predicate;
 
     /**
-     * Whether to use distinct semantics (true) or union all (false)
+     * Whether to use distinct semantics (true) or union all (false).
      */
     private final boolean isDistinct;
 
     /**
-     * Constructor for SqlSamePredicatePattern
-     * 
+     * Constructor for SqlSamePredicatePattern.
+     *
      * @param pos parser position
      * @param left left path pattern
      * @param right right path pattern
      * @param predicate shared predicate condition
      * @param isDistinct whether to use distinct semantics
      */
-    public SqlSamePredicatePattern(SqlParserPos pos, SqlNode left, SqlNode right, 
+    public SqlSamePredicatePattern(SqlParserPos pos, SqlNode left, SqlNode right,
                                    SqlNode predicate, boolean isDistinct) {
         super(pos);
         this.left = Objects.requireNonNull(left, "left path pattern cannot be null");
@@ -115,8 +114,8 @@ public class SqlSamePredicatePattern extends SqlCall {
     }
 
     /**
-     * Get the left path pattern
-     * 
+     * Get the left path pattern.
+     *
      * @return left path pattern
      */
     public SqlNode getLeft() {
@@ -124,8 +123,8 @@ public class SqlSamePredicatePattern extends SqlCall {
     }
 
     /**
-     * Get the right path pattern
-     * 
+     * Get the right path pattern.
+     *
      * @return right path pattern
      */
     public SqlNode getRight() {
@@ -133,8 +132,8 @@ public class SqlSamePredicatePattern extends SqlCall {
     }
 
     /**
-     * Get the shared predicate condition
-     * 
+     * Get the shared predicate condition.
+     *
      * @return predicate condition
      */
     public SqlNode getPredicate() {
@@ -142,8 +141,8 @@ public class SqlSamePredicatePattern extends SqlCall {
     }
 
     /**
-     * Check if this pattern uses distinct semantics
-     * 
+     * Check if this pattern uses distinct semantics.
+     *
      * @return true if distinct, false if union all
      */
     public boolean isDistinct() {
@@ -152,7 +151,7 @@ public class SqlSamePredicatePattern extends SqlCall {
 
     /**
      * Check if this pattern uses union all semantics
-     * 
+     *
      * @return true if union all, false if distinct
      */
     public boolean isUnionAll() {
@@ -163,17 +162,17 @@ public class SqlSamePredicatePattern extends SqlCall {
     public void unparse(SqlWriter writer, int leftPrec, int rightPrec) {
         // Unparse left path pattern
         left.unparse(writer, leftPrec, rightPrec);
-        
+
         // Unparse union operator
         if (isDistinct) {
             writer.print(" | ");
         } else {
             writer.print(" |+| ");
         }
-        
+
         // Unparse right path pattern
         right.unparse(writer, leftPrec, rightPrec);
-        
+
         // Unparse WHERE SAME clause
         writer.keyword("WHERE");
         writer.keyword("SAME");
@@ -186,10 +185,10 @@ public class SqlSamePredicatePattern extends SqlCall {
     public void validate(SqlValidator validator, SqlValidatorScope scope) {
         // Validate left path pattern
         validator.validateQuery(left, scope, validator.getUnknownType());
-        
+
         // Validate right path pattern
         validator.validateQuery(right, scope, validator.getUnknownType());
-        
+
         // Validate predicate expression by calling validate on the predicate itself
         predicate.validate(validator, scope);
     }
@@ -220,10 +219,10 @@ public class SqlSamePredicatePattern extends SqlCall {
             return false;
         }
         SqlSamePredicatePattern that = (SqlSamePredicatePattern) obj;
-        return isDistinct == that.isDistinct &&
-               Objects.equals(left, that.left) &&
-               Objects.equals(right, that.right) &&
-               Objects.equals(predicate, that.predicate);
+        return isDistinct == that.isDistinct
+               && Objects.equals(left, that.left)
+               && Objects.equals(right, that.right)
+               && Objects.equals(predicate, that.predicate);
     }
 
     @Override

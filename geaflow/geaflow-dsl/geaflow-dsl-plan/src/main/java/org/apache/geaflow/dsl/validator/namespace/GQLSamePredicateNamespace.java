@@ -57,7 +57,7 @@ public class GQLSamePredicateNamespace extends GQLBaseNamespace {
 
     /**
      * Constructor for GQLSamePredicateNamespace
-     * 
+     *
      * @param validator the validator instance
      * @param samePredicatePattern the same predicate pattern to validate
      */
@@ -68,7 +68,7 @@ public class GQLSamePredicateNamespace extends GQLBaseNamespace {
 
     /**
      * Set the match node context for validation
-     * 
+     *
      * @param matchNodeContext the match node context
      */
     public void setMatchNodeContext(MatchNodeContext matchNodeContext) {
@@ -79,16 +79,16 @@ public class GQLSamePredicateNamespace extends GQLBaseNamespace {
     protected RelDataType validateImpl(RelDataType targetRowType) {
         SqlValidatorScope scope = getValidator().getScopes(samePredicatePattern);
         List<PathRecordType> pathRecordTypes = new ArrayList<>();
-        
+
         // Validate left path pattern
         validatePathPattern(samePredicatePattern.getLeft(), matchNodeContext, scope, pathRecordTypes);
-        
+
         // Validate right path pattern
         validatePathPattern(samePredicatePattern.getRight(), matchNodeContext, scope, pathRecordTypes);
-        
+
         // Validate same predicate condition
         validateSamePredicate(samePredicatePattern.getPredicate(), scope, pathRecordTypes);
-        
+
         // Create union path record type from all path patterns
         PathRecordType patternType = new UnionPathRecordType(pathRecordTypes,
             this.getValidator().getTypeFactory());
@@ -97,16 +97,16 @@ public class GQLSamePredicateNamespace extends GQLBaseNamespace {
 
     /**
      * Validate a path pattern and add its type to the list
-     * 
+     *
      * @param pathPatternNode the path pattern node to validate
      * @param matchNodeContext the match node context
      * @param scope the validator scope
      * @param pathPatternTypes list to collect path pattern types
      */
     private void validatePathPattern(SqlNode pathPatternNode,
-                                   MatchNodeContext matchNodeContext,
-                                   SqlValidatorScope scope,
-                                   List<PathRecordType> pathPatternTypes) {
+                                     MatchNodeContext matchNodeContext,
+                                     SqlValidatorScope scope,
+                                     List<PathRecordType> pathPatternTypes) {
         if (pathPatternNode instanceof SqlPathPattern) {
             SqlPathPattern pathPattern = (SqlPathPattern) pathPatternNode;
             GQLPathPatternNamespace pathPatternNs =
@@ -116,11 +116,11 @@ public class GQLSamePredicateNamespace extends GQLBaseNamespace {
             // Validate the path pattern
             pathPattern.validate(validator, scope);
             RelDataType pathType = validator.getValidatedNodeType(pathPattern);
-            
+
             if (!(pathType instanceof PathRecordType)) {
                 throw new IllegalStateException("PathPattern should return PathRecordType, but got: " + pathType.getClass());
             }
-            
+
             // Add resolved path pattern type to context
             matchNodeContext.addResolvedPathPatternType((PathRecordType) pathType);
             pathPatternTypes.add((PathRecordType) pathType);
@@ -128,7 +128,7 @@ public class GQLSamePredicateNamespace extends GQLBaseNamespace {
             // Handle other types of path pattern nodes
             pathPatternNode.validate(validator, scope);
             RelDataType pathType = validator.getValidatedNodeType(pathPatternNode);
-            
+
             if (pathType instanceof PathRecordType) {
                 pathPatternTypes.add((PathRecordType) pathType);
             } else {
@@ -140,16 +140,16 @@ public class GQLSamePredicateNamespace extends GQLBaseNamespace {
 
     /**
      * Validate the same predicate condition
-     * 
+     *
      * @param predicate the predicate to validate
      * @param scope the validator scope
      * @param pathPatternTypes list of path pattern types
      */
-    private void validateSamePredicate(SqlNode predicate, SqlValidatorScope scope, 
-                                     List<PathRecordType> pathPatternTypes) {
+    private void validateSamePredicate(SqlNode predicate, SqlValidatorScope scope,
+                                       List<PathRecordType> pathPatternTypes) {
         // Validate the predicate expression
         predicate.validate(validator, scope);
-        
+
         // Check that predicate variables exist in all path patterns
         validatePredicateVariableScope(predicate, pathPatternTypes);
     }
@@ -157,35 +157,35 @@ public class GQLSamePredicateNamespace extends GQLBaseNamespace {
     /**
      * Validate that variables referenced in the predicate exist in all path patterns
      * and have compatible types
-     * 
+     *
      * @param predicate the predicate to validate
      * @param pathPatternTypes list of path pattern types
      */
     private void validatePredicateVariableScope(SqlNode predicate, List<PathRecordType> pathPatternTypes) {
         // Collect variables referenced in the predicate
         Set<String> predicateVariables = collectVariableReferences(predicate);
-        
+
         // Check each variable in all path patterns
         for (String variable : predicateVariables) {
             RelDataType firstType = null;
             boolean foundInAllPatterns = true;
-            
+
             for (PathRecordType pathType : pathPatternTypes) {
                 RelDataTypeField field = pathType.getField(variable, isCaseSensitive(), false);
                 if (field == null) {
                     foundInAllPatterns = false;
                     break;
                 }
-                
+
                 if (firstType == null) {
                     firstType = field.getType();
                 } else if (!SqlTypeUtil.isComparable(firstType, field.getType())) {
                     throw new GeaFlowDSLException(predicate.getParserPosition(),
-                        "Variable '{}' has incompatible types across path patterns: {} vs {}", 
+                        "Variable '{}' has incompatible types across path patterns: {} vs {}",
                         variable, firstType, field.getType());
                 }
             }
-            
+
             if (!foundInAllPatterns) {
                 throw new GeaFlowDSLException(predicate.getParserPosition(),
                     "Variable '{}' is not available in all path patterns", variable);
@@ -195,7 +195,7 @@ public class GQLSamePredicateNamespace extends GQLBaseNamespace {
 
     /**
      * Collect all variable references from a SQL node
-     * 
+     *
      * @param node the SQL node to analyze
      * @return set of variable names
      */
@@ -207,7 +207,7 @@ public class GQLSamePredicateNamespace extends GQLBaseNamespace {
 
     /**
      * Recursively collect variable references from a SQL node
-     * 
+     *
      * @param node the SQL node to analyze
      * @param variables set to collect variable names
      */

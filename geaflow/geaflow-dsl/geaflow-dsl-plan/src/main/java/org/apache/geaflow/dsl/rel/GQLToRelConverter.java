@@ -89,6 +89,7 @@ import org.apache.geaflow.dsl.rel.match.MatchFilter;
 import org.apache.geaflow.dsl.rel.match.MatchJoin;
 import org.apache.geaflow.dsl.rel.match.MatchPathModify;
 import org.apache.geaflow.dsl.rel.match.MatchPathSort;
+import org.apache.geaflow.dsl.rel.match.MatchSamePredicate;
 import org.apache.geaflow.dsl.rel.match.MatchUnion;
 import org.apache.geaflow.dsl.rel.match.SingleMatchNode;
 import org.apache.geaflow.dsl.rel.match.SubQueryStart;
@@ -111,6 +112,7 @@ import org.apache.geaflow.dsl.sqlnode.SqlMatchPattern;
 import org.apache.geaflow.dsl.sqlnode.SqlPathPattern;
 import org.apache.geaflow.dsl.sqlnode.SqlPathPatternSubQuery;
 import org.apache.geaflow.dsl.sqlnode.SqlReturnStatement;
+import org.apache.geaflow.dsl.sqlnode.SqlSamePredicatePattern;
 import org.apache.geaflow.dsl.sqlnode.SqlUnionPathPattern;
 import org.apache.geaflow.dsl.util.GQLNodeUtil;
 import org.apache.geaflow.dsl.util.GQLRelUtil;
@@ -501,6 +503,9 @@ public class GQLToRelConverter extends SqlToRelConverter {
     }
 
     private IMatchNode convertPathPattern(SqlNode sqlNode, Blackboard withBb) {
+        if (sqlNode instanceof SqlSamePredicatePattern) {
+            return convertSamePredicatePattern((SqlSamePredicatePattern) sqlNode, withBb);
+        }
         if (sqlNode instanceof SqlUnionPathPattern) {
             SqlUnionPathPattern unionPathPattern = (SqlUnionPathPattern) sqlNode;
             IMatchNode left = convertPathPattern(unionPathPattern.getLeft(), withBb);
@@ -558,6 +563,33 @@ public class GQLToRelConverter extends SqlToRelConverter {
             preMatchNode = (SqlMatchNode) pathNode;
         }
         return relPathPattern;
+    }
+
+    private IMatchNode convertSamePredicatePattern(SqlSamePredicatePattern samePredicatePattern, Blackboard withBb) {
+        // Convert left path pattern
+        IMatchNode leftPattern = convertPathPattern(samePredicatePattern.getLeft(), withBb);
+        
+        // Convert right path pattern
+        IMatchNode rightPattern = convertPathPattern(samePredicatePattern.getRight(), withBb);
+        
+        // Get path pattern schema
+        PathRecordType pathSchema = (PathRecordType) getValidator().getValidatedNodeType(samePredicatePattern);
+        
+        // Convert same predicate condition
+        SqlValidatorScope scope = getValidator().getScopes(samePredicatePattern);
+        Blackboard bb = createBlackboard(scope, null, false).setWithBb(withBb);
+        
+        // Create temporary union for condition conversion
+        List<RelNode> inputs = Arrays.asList(leftPattern, rightPattern);
+        IMatchNode tempUnion = MatchUnion.create(leftPattern.getCluster(), leftPattern.getTraitSet(),
+            inputs, !samePredicatePattern.isDistinct());
+        bb.setRoot(tempUnion, true);
+        
+        RexNode condition = bb.convertExpression(samePredicatePattern.getPredicate());
+        
+        // Create MatchSamePredicate node
+        return MatchSamePredicate.create(leftPattern, rightPattern, condition, 
+            samePredicatePattern.isDistinct(), pathSchema);
     }
 
     private SingleMatchNode translateCycleMatchNode(SingleMatchNode relPathPattern, SqlNode pathNode) {

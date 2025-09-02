@@ -19,20 +19,24 @@
 
 package org.apache.geaflow.dsl.optimize.rule;
 
+import java.util.Arrays;
+import java.util.List;
 import org.apache.calcite.plan.RelOptRule;
 import org.apache.calcite.plan.RelOptRuleCall;
+import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rex.RexNode;
 import org.apache.geaflow.dsl.rel.match.MatchFilter;
 import org.apache.geaflow.dsl.rel.match.MatchSamePredicate;
 import org.apache.geaflow.dsl.rel.match.MatchUnion;
+import org.apache.geaflow.dsl.util.GQLRexUtil;
 
 /**
  * Optimization rule for same predicate patterns.
  * This rule converts MatchSamePredicate to a more efficient MatchUnion + MatchFilter combination.
- * 
+ *
  * The transformation is:
- * MatchSamePredicate(left, right, condition, distinct) 
- * -> MatchFilter(MatchUnion(left, right, distinct), condition)
+ * MatchSamePredicate(left, right, condition, distinct) ->
+ * MatchFilter(MatchUnion(left, right, distinct), condition)
  */
 public class SamePredicateOptimizationRule extends RelOptRule {
 
@@ -42,7 +46,7 @@ public class SamePredicateOptimizationRule extends RelOptRule {
     public static final SamePredicateOptimizationRule INSTANCE = new SamePredicateOptimizationRule();
 
     /**
-     * Private constructor for singleton pattern
+     * Constructor for SamePredicateOptimizationRule
      */
     private SamePredicateOptimizationRule() {
         super(operand(MatchSamePredicate.class, any()));
@@ -52,12 +56,13 @@ public class SamePredicateOptimizationRule extends RelOptRule {
     public void onMatch(RelOptRuleCall call) {
         MatchSamePredicate samePredicate = call.rel(0);
         
-        // Create union operation from left and right path patterns
+        // Create union of left and right path patterns
+        List<RelNode> inputs = Arrays.asList(samePredicate.getLeft(), samePredicate.getRight());
         MatchUnion union = MatchUnion.create(
             samePredicate.getCluster(),
             samePredicate.getTraitSet(),
-            samePredicate.getInputs(),
-            samePredicate.isDistinct()
+            inputs,
+            !samePredicate.isDistinct() // MatchUnion uses 'all' parameter (true for union all, false for distinct)
         );
         
         // Apply the shared predicate condition as a filter
@@ -69,10 +74,5 @@ public class SamePredicateOptimizationRule extends RelOptRule {
         
         // Transform the original same predicate to the optimized union + filter
         call.transformTo(filter);
-    }
-
-    // Rule name for debugging and logging
-    public String getRuleName() {
-        return "SamePredicateOptimizationRule";
     }
 }

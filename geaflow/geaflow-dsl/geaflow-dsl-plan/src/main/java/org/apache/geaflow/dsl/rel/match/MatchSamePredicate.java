@@ -34,10 +34,10 @@ import org.apache.geaflow.dsl.rel.MatchNodeVisitor;
 /**
  * Relational operator for same predicate pattern matching.
  * This operator represents a pattern where two path patterns share a common predicate condition.
- * 
+ *
  * The same predicate pattern is typically converted to a union + filter operation during optimization.
  */
-public class MatchSamePredicate extends AbstractRelNode implements IMatchNode {
+public class MatchSamePredicate extends AbstractMatchNode {
 
     /**
      * Left path pattern
@@ -50,18 +50,18 @@ public class MatchSamePredicate extends AbstractRelNode implements IMatchNode {
     private final IMatchNode right;
 
     /**
-     * Shared predicate condition
+     * Shared predicate condition that must be satisfied by both path patterns
      */
     private final RexNode condition;
 
     /**
-     * Whether to use distinct semantics
+     * Whether to use distinct semantics (true) or union all (false)
      */
     private final boolean isDistinct;
 
     /**
      * Constructor for MatchSamePredicate
-     * 
+     *
      * @param cluster the cluster
      * @param traits the trait set
      * @param left left path pattern
@@ -71,15 +71,14 @@ public class MatchSamePredicate extends AbstractRelNode implements IMatchNode {
      * @param pathSchema the path schema
      */
     protected MatchSamePredicate(RelOptCluster cluster, RelTraitSet traits,
-                                IMatchNode left, IMatchNode right, 
-                                RexNode condition, boolean isDistinct,
-                                PathRecordType pathSchema) {
-        super(cluster, traits);
+                                  IMatchNode left, IMatchNode right,
+                                  RexNode condition, boolean isDistinct,
+                                  PathRecordType pathSchema) {
+        super(cluster, traits, pathSchema);
         this.left = left;
         this.right = right;
         this.condition = condition;
         this.isDistinct = isDistinct;
-        this.rowType = pathSchema;
     }
 
     @Override
@@ -113,8 +112,7 @@ public class MatchSamePredicate extends AbstractRelNode implements IMatchNode {
 
     @Override
     public <T> T accept(MatchNodeVisitor<T> visitor) {
-        // TODO: Add visitSamePredicate method to MatchNodeVisitor interface
-        throw new UnsupportedOperationException("visitSamePredicate not yet implemented in MatchNodeVisitor");
+        return visitor.visitSamePredicate(this);
     }
 
     @Override
@@ -128,7 +126,7 @@ public class MatchSamePredicate extends AbstractRelNode implements IMatchNode {
 
     /**
      * Get the left path pattern
-     * 
+     *
      * @return left path pattern
      */
     public IMatchNode getLeft() {
@@ -137,7 +135,7 @@ public class MatchSamePredicate extends AbstractRelNode implements IMatchNode {
 
     /**
      * Get the right path pattern
-     * 
+     *
      * @return right path pattern
      */
     public IMatchNode getRight() {
@@ -146,7 +144,7 @@ public class MatchSamePredicate extends AbstractRelNode implements IMatchNode {
 
     /**
      * Get the shared predicate condition
-     * 
+     *
      * @return predicate condition
      */
     public RexNode getCondition() {
@@ -155,7 +153,7 @@ public class MatchSamePredicate extends AbstractRelNode implements IMatchNode {
 
     /**
      * Check if this pattern uses distinct semantics
-     * 
+     *
      * @return true if distinct, false if union all
      */
     public boolean isDistinct() {
@@ -164,7 +162,7 @@ public class MatchSamePredicate extends AbstractRelNode implements IMatchNode {
 
     /**
      * Check if this pattern uses union all semantics
-     * 
+     *
      * @return true if union all, false if distinct
      */
     public boolean isUnionAll() {
@@ -172,8 +170,8 @@ public class MatchSamePredicate extends AbstractRelNode implements IMatchNode {
     }
 
     /**
-     * Create a new MatchSamePredicate instance
-     * 
+     * Create a new MatchSamePredicate
+     *
      * @param left left path pattern
      * @param right right path pattern
      * @param condition shared predicate condition
@@ -182,21 +180,9 @@ public class MatchSamePredicate extends AbstractRelNode implements IMatchNode {
      * @return new MatchSamePredicate instance
      */
     public static MatchSamePredicate create(IMatchNode left, IMatchNode right,
-                                          RexNode condition, boolean isDistinct,
-                                          PathRecordType pathSchema) {
+                                            RexNode condition, boolean isDistinct,
+                                            PathRecordType pathSchema) {
         return new MatchSamePredicate(left.getCluster(), left.getTraitSet(),
             left, right, condition, isDistinct, pathSchema);
-    }
-
-    @Override
-    public String toString() {
-        StringBuilder sb = new StringBuilder();
-        sb.append("MatchSamePredicate(");
-        sb.append("left=").append(left);
-        sb.append(", right=").append(right);
-        sb.append(", condition=").append(condition);
-        sb.append(", distinct=").append(isDistinct);
-        sb.append(")");
-        return sb.toString();
     }
 }
