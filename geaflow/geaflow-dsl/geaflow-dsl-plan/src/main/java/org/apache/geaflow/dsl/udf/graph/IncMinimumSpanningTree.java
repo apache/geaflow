@@ -19,6 +19,8 @@
 
 package org.apache.geaflow.dsl.udf.graph;
 
+import java.util.*;
+
 import org.apache.geaflow.dsl.common.algo.AlgorithmRuntimeContext;
 import org.apache.geaflow.dsl.common.algo.AlgorithmUserFunction;
 import org.apache.geaflow.dsl.common.algo.IncrementalAlgorithmUserFunction;
@@ -27,8 +29,6 @@ import org.apache.geaflow.dsl.common.data.RowEdge;
 import org.apache.geaflow.dsl.common.data.RowVertex;
 import org.apache.geaflow.dsl.common.data.impl.ObjectRow;
 import org.apache.geaflow.dsl.common.function.Description;
-import java.util.*;
-
 import org.apache.geaflow.dsl.common.types.GraphSchema;
 import org.apache.geaflow.dsl.common.types.ObjectType;
 import org.apache.geaflow.dsl.common.types.StructType;
@@ -119,8 +119,8 @@ public class IncMinimumSpanningTree implements AlgorithmUserFunction<Object, Obj
     }
 
     /**
-     * Initialize vertex state
-     * Each vertex initialized as independent component, self as root node
+     * Initialize vertex state.
+     * Each vertex is initialized as an independent component with itself as the root node.
      */
     private void initializeVertex(RowVertex vertex) {
         Object vertexId = vertex.getId();
@@ -146,8 +146,8 @@ public class IncMinimumSpanningTree implements AlgorithmUserFunction<Object, Obj
     }
 
     /**
-     * Process received messages
-     * Execute corresponding MST update logic based on message type
+     * Process received messages.
+     * Execute corresponding MST update logic based on message type.
      */
     private void processMessages(RowVertex vertex, Iterator<Object> messages) {
         Object vertexId = vertex.getId();
@@ -170,8 +170,8 @@ public class IncMinimumSpanningTree implements AlgorithmUserFunction<Object, Obj
     }
 
     /**
-     * Process single message
-     * Execute corresponding processing logic based on message type
+     * Process single message.
+     * Execute corresponding processing logic based on message type.
      */
     private boolean processMessage(Object vertexId, MSTMessage message, MSTVertexState state) {
         switch (message.getType()) {
@@ -191,8 +191,8 @@ public class IncMinimumSpanningTree implements AlgorithmUserFunction<Object, Obj
     }
 
     /**
-     * Handle component update message
-     * Update vertex component identifier
+     * Handle component update message.
+     * Update vertex component identifier.
      */
     private boolean handleComponentUpdate(Object vertexId, MSTMessage message, MSTVertexState state) {
         Object newComponentId = message.getComponentId();
@@ -204,8 +204,8 @@ public class IncMinimumSpanningTree implements AlgorithmUserFunction<Object, Obj
     }
 
     /**
-     * Handle edge proposal message
-     * Check whether to accept new MST edge
+     * Handle edge proposal message.
+     * Check whether to accept new MST edge.
      */
     private boolean handleEdgeProposal(Object vertexId, MSTMessage message, MSTVertexState state) {
         Object sourceComponentId = message.getComponentId();
@@ -247,8 +247,8 @@ public class IncMinimumSpanningTree implements AlgorithmUserFunction<Object, Obj
     }
 
     /**
-     * Handle edge acceptance message
-     * Add MST edge and merge components
+     * Handle edge acceptance message.
+     * Add MST edge and merge components.
      */
     private boolean handleEdgeAcceptance(Object vertexId, MSTMessage message, MSTVertexState state) {
         // Create MST edge
@@ -274,8 +274,8 @@ public class IncMinimumSpanningTree implements AlgorithmUserFunction<Object, Obj
     }
 
     /**
-     * Handle edge rejection message
-     * Record rejected edges
+     * Handle edge rejection message.
+     * Record rejected edges.
      */
     private boolean handleEdgeRejection(Object vertexId, MSTMessage message, MSTVertexState state) {
         // Can record rejected edges here for debugging or statistics
@@ -283,8 +283,8 @@ public class IncMinimumSpanningTree implements AlgorithmUserFunction<Object, Obj
     }
 
     /**
-     * Handle MST edge discovery message
-     * Record discovered MST edges
+     * Handle MST edge discovery message.
+     * Record discovered MST edges.
      */
     private boolean handleMSTEdgeFound(Object vertexId, MSTMessage message, MSTVertexState state) {
         MSTEdge foundEdge = message.getEdge();
@@ -296,8 +296,8 @@ public class IncMinimumSpanningTree implements AlgorithmUserFunction<Object, Obj
     }
 
     /**
-     * Broadcast state update message
-     * Send component update information to neighbors
+     * Broadcast state update message.
+     * Send component update information to neighbors.
      */
     private void broadcastStateUpdate(Object vertexId, MSTVertexState state) {
         MSTMessage updateMsg = new MSTMessage(
@@ -312,8 +312,8 @@ public class IncMinimumSpanningTree implements AlgorithmUserFunction<Object, Obj
     }
 
     /**
-     * Get current vertex state
-     * Create new state if it doesn't exist
+     * Get current vertex state.
+     * Create new state if it doesn't exist.
      */
     private MSTVertexState getCurrentVertexState(RowVertex vertex) {
         Optional<Row> currentValues = context.getVertexValue(vertex.getId());
@@ -328,8 +328,8 @@ public class IncMinimumSpanningTree implements AlgorithmUserFunction<Object, Obj
     }
 
     /**
-     * Select smaller component ID as new component ID
-     * ID selection strategy for component merging
+     * Select smaller component ID as new component ID.
+     * ID selection strategy for component merging.
      */
     private Object findMinComponentId(Object id1, Object id2) {
         if (id1.toString().compareTo(id2.toString()) < 0) {
