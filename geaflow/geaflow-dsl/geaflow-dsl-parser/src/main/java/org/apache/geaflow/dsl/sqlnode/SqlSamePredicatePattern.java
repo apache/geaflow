@@ -51,22 +51,22 @@ public class SqlSamePredicatePattern extends SqlCall {
     /**
      * Left path pattern.
      */
-    private final SqlNode left;
+    private SqlNode left;
 
     /**
      * Right path pattern.
      */
-    private final SqlNode right;
+    private SqlNode right;
 
     /**
      * Shared predicate condition that must be satisfied by both path patterns.
      */
-    private final SqlNode predicate;
+    private SqlNode predicate;
 
     /**
      * Whether to use distinct semantics (true) or union all (false).
      */
-    private final boolean isDistinct;
+    private boolean isDistinct;
 
     /**
      * Constructor for SqlSamePredicatePattern.
@@ -100,14 +100,14 @@ public class SqlSamePredicatePattern extends SqlCall {
     public void setOperand(int i, SqlNode operand) {
         switch (i) {
             case 0:
-                // left path pattern
-                throw new UnsupportedOperationException("Cannot modify left path pattern after creation");
+                this.left = Objects.requireNonNull(operand, "left path pattern cannot be null");
+                break;
             case 1:
-                // right path pattern
-                throw new UnsupportedOperationException("Cannot modify right path pattern after creation");
+                this.right = Objects.requireNonNull(operand, "right path pattern cannot be null");
+                break;
             case 2:
-                // predicate
-                throw new UnsupportedOperationException("Cannot modify predicate after creation");
+                this.predicate = Objects.requireNonNull(operand, "predicate cannot be null");
+                break;
             default:
                 throw new IllegalArgumentException("Illegal index: " + i);
         }
@@ -156,6 +156,42 @@ public class SqlSamePredicatePattern extends SqlCall {
      */
     public boolean isUnionAll() {
         return !isDistinct;
+    }
+
+    /**
+     * Set the left path pattern.
+     *
+     * @param left left path pattern
+     */
+    public void setLeft(SqlNode left) {
+        this.left = Objects.requireNonNull(left, "left path pattern cannot be null");
+    }
+
+    /**
+     * Set the right path pattern.
+     *
+     * @param right right path pattern
+     */
+    public void setRight(SqlNode right) {
+        this.right = Objects.requireNonNull(right, "right path pattern cannot be null");
+    }
+
+    /**
+     * Set the shared predicate condition.
+     *
+     * @param predicate predicate condition
+     */
+    public void setPredicate(SqlNode predicate) {
+        this.predicate = Objects.requireNonNull(predicate, "predicate cannot be null");
+    }
+
+    /**
+     * Set whether to use distinct semantics.
+     *
+     * @param isDistinct true if distinct, false if union all
+     */
+    public void setDistinct(boolean isDistinct) {
+        this.isDistinct = isDistinct;
     }
 
     @Override
