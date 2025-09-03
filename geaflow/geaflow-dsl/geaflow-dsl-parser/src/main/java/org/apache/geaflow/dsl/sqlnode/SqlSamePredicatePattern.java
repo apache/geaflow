@@ -36,10 +36,10 @@ import org.apache.calcite.util.ImmutableNullableList;
 /**
  * SQL node representing a same predicate pattern in GQL.
  * This node represents a pattern where two path patterns share a common predicate condition.
- * <p>
- * Example: MATCH (a:person) -> (b) | (a:person) -> (c) WHERE SAME(a.age > 25)
- * <p>
- * The left and right path patterns must satisfy the same predicate condition.
+ *
+ * <p>Example: MATCH (a:person) -> (b) | (a:person) -> (c) WHERE SAME(a.age > 25)
+ *
+ * <p>The left and right path patterns must satisfy the same predicate condition.
  */
 public class SqlSamePredicatePattern extends SqlCall {
 
@@ -150,7 +150,7 @@ public class SqlSamePredicatePattern extends SqlCall {
     }
 
     /**
-     * Check if this pattern uses union all semantics
+     * Check if this pattern uses union all semantics.
      *
      * @return true if union all, false if distinct
      */
