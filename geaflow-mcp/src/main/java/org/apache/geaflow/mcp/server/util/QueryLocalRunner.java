@@ -41,8 +41,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
-import static org.apache.geaflow.common.config.keys.DSLConfigKeys.GEAFLOW_DSL_COMPILE_PHYSICAL_PLAN_ENABLE;
-
 public class QueryLocalRunner {
 
 
@@ -102,7 +100,7 @@ public class QueryLocalRunner {
         environment.getEnvironmentContext().withConfig(config);
         // Compile graph name
         CompileContext compileContext = new CompileContext();
-        config.put(GEAFLOW_DSL_COMPILE_PHYSICAL_PLAN_ENABLE.getKey(), "false");
+        config.put(DSLConfigKeys.GEAFLOW_DSL_COMPILE_PHYSICAL_PLAN_ENABLE.getKey(), "false");
         compileContext.setConfig(config);
         PipelineContext pipelineContext = new PipelineContext(PipelineTaskType.CompileTask.name(),
                 new Configuration(compileContext.getConfig()));

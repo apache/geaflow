@@ -19,12 +19,6 @@
 
 package org.apache.geaflow.mcp.server.util;
 
-/**
- * Alipay.com Inc
- * Copyright (c) 2004-2025 All Rights Reserved.
- *
- * @author lt on 2025/9/1.
- */
 public class McpConstants {
 
     public static final String CREATE_GRAPH = "create_graph";
