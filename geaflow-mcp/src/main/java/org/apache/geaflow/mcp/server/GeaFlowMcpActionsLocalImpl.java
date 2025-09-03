@@ -39,12 +39,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-/**
- * Alipay.com Inc
- * Copyright (c) 2004-2025 All Rights Reserved.
- *
- * @author lt on 2025/9/1.
- */
 public class GeaFlowMcpActionsLocalImpl implements GeaFlowMcpActions {
 
     private Map<String, Object> configs;

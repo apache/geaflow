@@ -19,6 +19,12 @@
 
 package org.apache.geaflow.mcp.server;
 
+import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONObject;
+import org.apache.geaflow.analytics.service.client.AnalyticsClient;
+import org.apache.geaflow.analytics.service.client.AnalyticsClientBuilder;
+import org.apache.geaflow.analytics.service.query.QueryResults;
+import org.apache.geaflow.common.config.Configuration;
 import org.apache.geaflow.mcp.server.util.McpConstants;
 import org.apache.geaflow.mcp.util.YamlParser;
 import org.noear.solon.ai.annotation.ResourceMapping;
@@ -34,9 +40,14 @@ import java.util.Map;
 public class GeaFlowMcpServerTools {
     private static final Logger LOGGER = LoggerFactory.getLogger(GeaFlowMcpServerTools.class);
 
+    private static final String RETRY_TIMES = "analytics.retry.times";
+    private static final int DEFAULT_RETRY_TIMES = 3;
+    private static final String ERROR = "error";
     public static final String SERVER_HOST = "analytics.server.host";
     public static final String SERVER_PORT = "analytics.server.port";
     public static final String SERVER_USER = "analytics.query.user";
+    public static final String QUERY_TIMEOUT_MS = "analytics.query.timeout.ms";
+    public static final String INIT_CHANNEL_POOLS = "analytics.init.channel.pools";
     public static final String CONFIG = "analytics.client.config";
     public static final String CURRENT_VERSION = "v1.0.0";
 
@@ -56,55 +67,55 @@ public class GeaFlowMcpServerTools {
      * @param query GQL query.
      * @return query result or error code.
      */
-//    @ToolMapping(description = "execute query")
-//    public String executeQuery(@Param(name = "query", description = "query") String query) {
-//        AnalyticsClient analyticsClient = null;
-//
-//        try {
-//            Map<String, Object> config = YamlParser.loadConfig();
-//            int retryTimes = DEFAULT_RETRY_TIMES;
-//            if (config.containsKey(RETRY_TIMES)) {
-//                retryTimes = Integer.parseInt(config.get(RETRY_TIMES).toString());
-//            }
-//
-//            AnalyticsClientBuilder builder = AnalyticsClient
-//                .builder()
-//                .withHost(config.get(SERVER_HOST).toString())
-//                .withPort((Integer) config.get(SERVER_PORT))
-//                .withRetryNum(retryTimes);
-//            if (config.containsKey(CONFIG)) {
-//                Map<String, String> clientConfig = JSON.parseObject(config.get(CONFIG).toString(), Map.class);
-//                Configuration configuration = new Configuration(clientConfig);
-//                builder.withConfiguration(configuration);
-//                LOGGER.info("client config: {}", configuration);
-//            }
-//            if (config.containsKey(SERVER_USER)) {
-//                builder.withUser(config.get(SERVER_USER).toString());
-//            }
-//            if (config.containsKey(QUERY_TIMEOUT_MS)) {
-//                builder.withTimeoutMs((Integer) config.get(QUERY_TIMEOUT_MS));
-//            }
-//            if (config.containsKey(INIT_CHANNEL_POOLS)) {
-//                builder.withInitChannelPools((Boolean) config.get(INIT_CHANNEL_POOLS));
-//            }
-//            analyticsClient = builder.build();
-//
-//            QueryResults queryResults = analyticsClient.executeQuery(query);
-//            if (queryResults.getError() != null) {
-//                final JSONObject error = new JSONObject();
-//                error.put(ERROR, queryResults.getError());
-//                return error.toJSONString();
-//            }
-//            return queryResults.getFormattedData();
-//        } catch (Exception e) {
-//            LOGGER.error(e.getMessage(), e);
-//            throw new RuntimeException(e);
-//        } finally {
-//            if (analyticsClient != null) {
-//                analyticsClient.shutdown();
-//            }
-//        }
-//    }
+    @ToolMapping(description = "execute query")
+    public String executeQuery(@Param(name = "query", description = "query") String query) {
+        AnalyticsClient analyticsClient = null;
+
+        try {
+            Map<String, Object> config = YamlParser.loadConfig();
+            int retryTimes = DEFAULT_RETRY_TIMES;
+            if (config.containsKey(RETRY_TIMES)) {
+                retryTimes = Integer.parseInt(config.get(RETRY_TIMES).toString());
+            }
+
+            AnalyticsClientBuilder builder = AnalyticsClient
+                .builder()
+                .withHost(config.get(SERVER_HOST).toString())
+                .withPort((Integer) config.get(SERVER_PORT))
+                .withRetryNum(retryTimes);
+            if (config.containsKey(CONFIG)) {
+                Map<String, String> clientConfig = JSON.parseObject(config.get(CONFIG).toString(), Map.class);
+                Configuration configuration = new Configuration(clientConfig);
+                builder.withConfiguration(configuration);
+                LOGGER.info("client config: {}", configuration);
+            }
+            if (config.containsKey(SERVER_USER)) {
+                builder.withUser(config.get(SERVER_USER).toString());
+            }
+            if (config.containsKey(QUERY_TIMEOUT_MS)) {
+                builder.withTimeoutMs((Integer) config.get(QUERY_TIMEOUT_MS));
+            }
+            if (config.containsKey(INIT_CHANNEL_POOLS)) {
+                builder.withInitChannelPools((Boolean) config.get(INIT_CHANNEL_POOLS));
+            }
+            analyticsClient = builder.build();
+
+            QueryResults queryResults = analyticsClient.executeQuery(query);
+            if (queryResults.getError() != null) {
+                final JSONObject error = new JSONObject();
+                error.put(ERROR, queryResults.getError());
+                return error.toJSONString();
+            }
+            return queryResults.getFormattedData();
+        } catch (Exception e) {
+            LOGGER.error(e.getMessage(), e);
+            throw new RuntimeException(e);
+        } finally {
+            if (analyticsClient != null) {
+                analyticsClient.shutdown();
+            }
+        }
+    }
 
 
     /**

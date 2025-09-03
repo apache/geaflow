@@ -19,33 +19,27 @@
 
 package org.apache.geaflow.mcp.server;
 
-/**
- * Alipay.com Inc
- * Copyright (c) 2004-2025 All Rights Reserved.
- *
- * @author lt on 2025/9/1.
- */
 public class ToolDesc {
 
     public static final String createGraph = "create graph with ddl, Set the storeType to rocksdb, " +
             "ensuring the syntax is correct and do not use any syntax not present in the examples. " +
             "example: CREATE GRAPH modern (\n" +
-            "\tVertex person (\n" +
+            "\tVertex `person` (\n" +
             "\t  id bigint ID,\n" +
             "\t  name varchar,\n" +
             "\t  age int\n" +
             "\t),\n" +
-            "\tVertex software (\n" +
+            "\tVertex `software` (\n" +
             "\t  id bigint ID,\n" +
             "\t  name varchar,\n" +
             "\t  lang varchar\n" +
             "\t),\n" +
-            "\tEdge knows (\n" +
+            "\tEdge `knows` (\n" +
             "\t  srcId bigint SOURCE ID,\n" +
             "\t  targetId bigint DESTINATION ID,\n" +
             "\t  weight double\n" +
             "\t),\n" +
-            "\tEdge created (\n" +
+            "\tEdge `created` (\n" +
             "\t  srcId bigint SOURCE ID,\n" +
             "  \ttargetId bigint DESTINATION ID,\n" +
             "  \tweight double\n" +
