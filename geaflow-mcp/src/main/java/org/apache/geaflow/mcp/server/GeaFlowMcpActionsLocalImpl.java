@@ -144,7 +144,7 @@ public class GeaFlowMcpActionsLocalImpl implements GeaFlowMcpActions {
             }
         }
         if (resultTable == null) {
-            throw new RuntimeException("Cannot fine type: " + type + " in graph: " + graphName);
+            throw new RuntimeException("Cannot find type: " + type + " in graph: " + graphName);
         }
         String usingGraph = "USE GRAPH " + graphName + ";\n";
         runner.withQuery(ddl + "\n" + usingGraph + dql);
