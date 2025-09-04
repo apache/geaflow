@@ -19,7 +19,6 @@
 
 package org.apache.geaflow.state.strategy;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 import org.apache.geaflow.state.partition.IPartitionManager;

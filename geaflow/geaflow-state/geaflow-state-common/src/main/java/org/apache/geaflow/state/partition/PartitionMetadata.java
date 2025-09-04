@@ -63,15 +63,19 @@ public class PartitionMetadata implements Serializable {
     }
 
     @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        PartitionMetadata that = (PartitionMetadata) o;
-        return recordCount == that.recordCount &&
-               lastModified == that.lastModified &&
-               isActive == that.isActive &&
-               Objects.equals(partitionName, that.partitionName) &&
-               Objects.equals(labelName, that.labelName);
+    public boolean equals(Object obj) {
+        if (this == obj) {
+            return true;
+        }
+        if (obj == null || getClass() != obj.getClass()) {
+            return false;
+        }
+        PartitionMetadata that = (PartitionMetadata) obj;
+        return recordCount == that.recordCount
+            && lastModified == that.lastModified
+            && isActive == that.isActive
+            && Objects.equals(partitionName, that.partitionName)
+            && Objects.equals(labelName, that.labelName);
     }
 
     @Override
@@ -81,12 +85,12 @@ public class PartitionMetadata implements Serializable {
 
     @Override
     public String toString() {
-        return "PartitionMetadata{" +
-               "partitionName='" + partitionName + '\'' +
-               ", labelName='" + labelName + '\'' +
-               ", recordCount=" + recordCount +
-               ", lastModified=" + lastModified +
-               ", isActive=" + isActive +
-               '}';
+        return "PartitionMetadata{"
+            + "partitionName='" + partitionName + '\''
+            + ", labelName='" + labelName + '\''
+            + ", recordCount=" + recordCount
+            + ", lastModified=" + lastModified
+            + ", isActive=" + isActive
+            + '}';
     }
 }
