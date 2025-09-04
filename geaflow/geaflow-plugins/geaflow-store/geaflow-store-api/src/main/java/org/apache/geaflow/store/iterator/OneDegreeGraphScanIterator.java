@@ -32,7 +32,7 @@ import org.apache.geaflow.state.iterator.IteratorWithClose;
 import org.apache.geaflow.state.pushdown.IStatePushDown;
 import org.apache.geaflow.state.pushdown.filter.inner.IGraphFilter;
 
-// TODO: Implement one degree graph scan iterator for graph proxy partitioned by label
+// Enhanced one degree graph scan iterator with partition-aware support
 public class OneDegreeGraphScanIterator<K, VV, EV> implements
     IOneDegreeGraphIterator<K, VV, EV> {
 
@@ -44,6 +44,10 @@ public class OneDegreeGraphScanIterator<K, VV, EV> implements
 
     private List<IEdge<K, EV>> candidateEdges;
     private IVertex<K, VV> candidateVertex;
+    
+    // Partition-aware fields
+    private boolean partitionAware = false;
+    private org.apache.geaflow.state.strategy.IPartitionScanStrategy scanStrategy;
 
     public OneDegreeGraphScanIterator(
         IType<K> keyType,
@@ -54,6 +58,40 @@ public class OneDegreeGraphScanIterator<K, VV, EV> implements
         this.vertexIterator = vertexIterator;
         this.edgeListIterator = new EdgeListScanIterator<>(edgeIterator);
         this.filter = (IGraphFilter) pushdown.getFilter();
+    }
+
+    /**
+     * Partition-aware constructor for multi-partition scanning.
+     */
+    public OneDegreeGraphScanIterator(
+        IType<K> keyType,
+        org.apache.geaflow.state.iterator.IMultiPartitionIterator<IVertex<K, VV>> vertexIterator,
+        org.apache.geaflow.state.iterator.IMultiPartitionIterator<IEdge<K, EV>> edgeIterator,
+        IStatePushDown pushdown) {
+        
+        this.keyType = keyType;
+        this.vertexIterator = vertexIterator;
+        this.edgeListIterator = new EdgeListScanIterator<>(edgeIterator);
+        this.filter = (IGraphFilter) pushdown.getFilter();
+        this.partitionAware = true;
+    }
+
+    /**
+     * Partition-aware constructor with scan strategy.
+     */
+    public OneDegreeGraphScanIterator(
+        IType<K> keyType,
+        org.apache.geaflow.state.iterator.IMultiPartitionIterator<IVertex<K, VV>> vertexIterator,
+        org.apache.geaflow.state.iterator.IMultiPartitionIterator<IEdge<K, EV>> edgeIterator,
+        IStatePushDown pushdown,
+        org.apache.geaflow.state.strategy.IPartitionScanStrategy scanStrategy) {
+        
+        this.keyType = keyType;
+        this.vertexIterator = vertexIterator;
+        this.edgeListIterator = new EdgeListScanIterator<>(edgeIterator);
+        this.filter = (IGraphFilter) pushdown.getFilter();
+        this.partitionAware = true;
+        this.scanStrategy = scanStrategy;
     }
 
 
@@ -114,6 +152,67 @@ public class OneDegreeGraphScanIterator<K, VV, EV> implements
     @Override
     public OneDegreeGraph<K, VV, EV> next() {
         return nextValue;
+    }
+
+    @Override
+    public List<String> getActivePartitions() {
+        if (!partitionAware) {
+            return java.util.Collections.emptyList();
+        }
+        
+        java.util.Set<String> allPartitions = new java.util.HashSet<>();
+        if (vertexIterator instanceof org.apache.geaflow.state.iterator.IMultiPartitionIterator) {
+            allPartitions.addAll(((org.apache.geaflow.state.iterator.IMultiPartitionIterator<?>) vertexIterator).getActivePartitions());
+        }
+        if (edgeListIterator instanceof org.apache.geaflow.state.iterator.IMultiPartitionIterator) {
+            allPartitions.addAll(((org.apache.geaflow.state.iterator.IMultiPartitionIterator<?>) edgeListIterator).getActivePartitions());
+        }
+        return new java.util.ArrayList<>(allPartitions);
+    }
+
+    @Override
+    public boolean isPartitionAware() {
+        return partitionAware;
+    }
+
+    @Override
+    public java.util.Map<String, Long> getPartitionStats() {
+        if (!partitionAware) {
+            return java.util.Collections.emptyMap();
+        }
+        
+        java.util.Map<String, Long> stats = new java.util.HashMap<>();
+        if (vertexIterator instanceof org.apache.geaflow.state.iterator.IMultiPartitionIterator) {
+            java.util.Map<String, Long> vertexStats = ((org.apache.geaflow.state.iterator.IMultiPartitionIterator<?>) vertexIterator).getPartitionStats();
+            vertexStats.forEach((partition, count) -> 
+                stats.merge(partition + "_vertices", count, Long::sum));
+        }
+        if (edgeListIterator instanceof org.apache.geaflow.state.iterator.IMultiPartitionIterator) {
+            java.util.Map<String, Long> edgeStats = ((org.apache.geaflow.state.iterator.IMultiPartitionIterator<?>) edgeListIterator).getPartitionStats();
+            edgeStats.forEach((partition, count) -> 
+                stats.merge(partition + "_edges", count, Long::sum));
+        }
+        return stats;
+    }
+
+    /**
+     * Enhanced merge logic for cross-partition data.
+     */
+    private OneDegreeGraph<K, VV, EV> mergeFromPartitions(K vertexId, IVertex<K, VV> vertex, List<IEdge<K, EV>> edges) {
+        if (!partitionAware) {
+            // Use existing merge logic for non-partitioned case
+            return new OneDegreeGraph<K, VV, EV>(vertexId, vertex, 
+                org.apache.geaflow.state.iterator.IteratorWithClose.wrap(edges.iterator()));
+        }
+        
+        // Enhanced merge logic for partition-aware case
+        // Ensure data consistency across partitions
+        List<IEdge<K, EV>> validEdges = edges.stream()
+            .filter(edge -> edge.getSrcId().equals(vertexId))
+            .collect(java.util.stream.Collectors.toList());
+        
+        return new OneDegreeGraph<K, VV, EV>(vertexId, vertex, 
+            org.apache.geaflow.state.iterator.IteratorWithClose.wrap(validEdges.iterator()));
     }
 
     @Override

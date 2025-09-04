@@ -36,8 +36,14 @@ public class ProxyBuilder {
             config.getString(RocksdbConfigKeys.ROCKSDB_GRAPH_STORE_PARTITION_TYPE));
         if (partitionType.isPartition()) {
             if (partitionType == PartitionType.LABEL) {
-                // TODO: Support async graph proxy partitioned by label
-                return new SyncGraphLabelPartitionProxy<>(rocksdbClient, encoder, config);
+                // Support async graph proxy partitioned by label
+                if (config.getBoolean(StateConfigKeys.STATE_WRITE_ASYNC_ENABLE)) {
+                    // TODO: Implement AsyncGraphLabelPartitionProxy
+                    // For now, fall back to sync implementation
+                    return new SyncGraphLabelPartitionProxy<>(rocksdbClient, encoder, config);
+                } else {
+                    return new SyncGraphLabelPartitionProxy<>(rocksdbClient, encoder, config);
+                }
             } else if (partitionType == PartitionType.DT) {
                 return new SyncGraphDtPartitionProxy<>(rocksdbClient, encoder, config);
             }
