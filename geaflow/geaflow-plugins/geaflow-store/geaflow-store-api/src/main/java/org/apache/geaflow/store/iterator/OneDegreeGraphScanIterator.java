@@ -117,26 +117,21 @@ public class OneDegreeGraphScanIterator<K, VV, EV> implements
                 K vertexKey = candidateVertex.getId();
                 int res = keyType.compare(edgeKey, vertexKey);
                 if (res < 0) {
-                    nextValue = new OneDegreeGraph<>(edgeKey, null,
-                        IteratorWithClose.wrap(candidateEdges.iterator()));
+                    nextValue = mergeFromPartitions(edgeKey, null, candidateEdges);
                     candidateEdges = null;
                 } else if (res == 0) {
-                    nextValue = new OneDegreeGraph<>(vertexKey, candidateVertex,
-                        IteratorWithClose.wrap(candidateEdges.iterator()));
+                    nextValue = mergeFromPartitions(vertexKey, candidateVertex, candidateEdges);
                     candidateVertex = null;
                     candidateEdges = null;
                 } else {
-                    nextValue = new OneDegreeGraph<>(vertexKey, candidateVertex,
-                        IteratorWithClose.wrap(Collections.emptyIterator()));
+                    nextValue = mergeFromPartitions(vertexKey, candidateVertex, new ArrayList<>());
                     candidateVertex = null;
                 }
             } else if (candidateEdges.size() > 0) {
-                nextValue = new OneDegreeGraph<>(candidateEdges.get(0).getSrcId(), null,
-                    IteratorWithClose.wrap(candidateEdges.iterator()));
+                nextValue = mergeFromPartitions(candidateEdges.get(0).getSrcId(), null, candidateEdges);
                 candidateEdges = null;
             } else if (candidateVertex != null) {
-                nextValue = new OneDegreeGraph<>(candidateVertex.getId(), candidateVertex,
-                    IteratorWithClose.wrap(Collections.emptyIterator()));
+                nextValue = mergeFromPartitions(candidateVertex.getId(), candidateVertex, new ArrayList<>());
                 candidateVertex = null;
             } else {
                 return false;

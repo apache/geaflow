@@ -38,9 +38,7 @@ public class ProxyBuilder {
             if (partitionType == PartitionType.LABEL) {
                 // Support async graph proxy partitioned by label
                 if (config.getBoolean(StateConfigKeys.STATE_WRITE_ASYNC_ENABLE)) {
-                    // TODO: Implement AsyncGraphLabelPartitionProxy
-                    // For now, fall back to sync implementation
-                    return new SyncGraphLabelPartitionProxy<>(rocksdbClient, encoder, config);
+                    return new AsyncGraphLabelPartitionProxy<>(rocksdbClient, encoder, config);
                 } else {
                     return new SyncGraphLabelPartitionProxy<>(rocksdbClient, encoder, config);
                 }

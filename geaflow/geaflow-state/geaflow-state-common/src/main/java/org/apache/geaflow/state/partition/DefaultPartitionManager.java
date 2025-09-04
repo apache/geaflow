@@ -26,6 +26,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import org.apache.geaflow.state.pushdown.filter.IFilter;
+import org.apache.geaflow.state.pushdown.filter.inner.FilterHelper;
 import org.apache.geaflow.state.pushdown.filter.inner.IGraphFilter;
 
 /**
@@ -99,16 +100,20 @@ public class DefaultPartitionManager implements IPartitionManager {
     }
 
     /**
-     * Extract labels from graph filter conditions.
+     * Extract labels from graph filter conditions using FilterHelper.
+     * This method combines both vertex and edge labels from the filter.
      */
     private Set<String> extractLabelsFromGraphFilter(IGraphFilter graphFilter) {
         Set<String> labels = new HashSet<>();
         
-        // This is a simplified implementation
-        // In practice, you would need to traverse the filter tree
-        // and extract label conditions based on the specific filter implementation
+        // Extract vertex labels
+        List<String> vertexLabels = FilterHelper.parseLabel(graphFilter, true);
+        labels.addAll(vertexLabels);
         
-        // For now, return empty set to indicate all partitions should be scanned
+        // Extract edge labels
+        List<String> edgeLabels = FilterHelper.parseLabel(graphFilter, false);
+        labels.addAll(edgeLabels);
+        
         return labels;
     }
 
