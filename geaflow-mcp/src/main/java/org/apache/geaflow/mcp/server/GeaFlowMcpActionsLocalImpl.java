@@ -56,7 +56,7 @@ public class GeaFlowMcpActionsLocalImpl implements GeaFlowMcpActions {
         try {
             graph = runner.compileGraph();
         } catch (Throwable e) {
-            throw new RuntimeException("Compile error: " + runner.getErrorMsg());
+            throw new RuntimeException("Compile error: " + e.getCause().getMessage());
         }
         if (graph == null) {
             throw new RuntimeException("Cannot create graph: " + graphName);
@@ -78,7 +78,7 @@ public class GeaFlowMcpActionsLocalImpl implements GeaFlowMcpActions {
         try {
             ddl = McpLocalFileUtil.readFile(QueryLocalRunner.DSL_STATE_REMOTE_SCHEM_PATH, graphName);
         } catch (Throwable e) {
-            return "Cannot get graph schema for: " + graphName;
+            throw new RuntimeException("Cannot get graph schema for: " + graphName);
         }
         compileRunner.withGraphName(graphName).withGraphDefine(ddl);
         GeaFlowGraph graph;
@@ -98,7 +98,7 @@ public class GeaFlowMcpActionsLocalImpl implements GeaFlowMcpActions {
         try {
             runner.execute();
         } catch (Throwable e) {
-            return runner.getErrorMsg();
+            throw new RuntimeException("Run query error: " + e.getCause().getMessage());
         }
         return "run query success: " + dml;
     }
@@ -125,7 +125,6 @@ public class GeaFlowMcpActionsLocalImpl implements GeaFlowMcpActions {
 
         QueryLocalRunner runner = new QueryLocalRunner();
         runner.withGraphDefine(ddl);
-        String usingGraph = "USE GRAPH " + graphName + ";\n";
         String dql = null;
         String dirName = "query_result_" + Instant.now().toEpochMilli();
         String resultPath = QueryLocalRunner.DSL_STATE_REMOTE_PATH + "/" + dirName;
@@ -147,6 +146,7 @@ public class GeaFlowMcpActionsLocalImpl implements GeaFlowMcpActions {
         if (resultTable == null) {
             throw new RuntimeException("Cannot fine type: " + type + " in graph: " + graphName);
         }
+        String usingGraph = "USE GRAPH " + graphName + ";\n";
         runner.withQuery(ddl + "\n" + usingGraph + dql);
         String resultContent = "null";
         try {

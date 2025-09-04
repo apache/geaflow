@@ -66,7 +66,6 @@ public class GeaFlowMcpServerTools {
      * @param query GQL query.
      * @return query result or error code.
      */
-    @ToolMapping(description = "execute query")
     public String executeQuery(@Param(name = "query", description = "query") String query) {
         AnalyticsClient analyticsClient = null;
 

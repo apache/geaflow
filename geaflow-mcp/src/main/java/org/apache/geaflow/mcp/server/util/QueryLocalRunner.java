@@ -91,10 +91,7 @@ public class QueryLocalRunner {
         String fileName = McpLocalFileUtil.createAndWriteFile(DSL_STATE_REMOTE_PATH, this.graphDefine);
         config.put(DSLConfigKeys.GEAFLOW_DSL_QUERY_PATH.getKey(), DSL_STATE_REMOTE_PATH + "/" + fileName);
         config.put(DSLConfigKeys.GEAFLOW_DSL_QUERY_PATH_TYPE.getKey(), "file");
-        //config.put(ExecutionConfigKeys.CONTAINER_WORKER_NUM.getKey(), String.valueOf(workerNum));
         config.putAll(this.config);
-        //initResultDirectory();
-
         Environment environment = EnvironmentFactory.onLocalEnvironment();
         environment.getEnvironmentContext().withConfig(config);
         // Compile graph name
@@ -127,9 +124,7 @@ public class QueryLocalRunner {
         config.put(DSLConfigKeys.GEAFLOW_DSL_QUERY_PATH.getKey(), DSL_STATE_REMOTE_PATH + "/" + fileName);
         config.put(DSLConfigKeys.GEAFLOW_DSL_QUERY_PATH_TYPE.getKey(), "file");
         config.put(FrameworkConfigKeys.BATCH_NUMBER_PER_CHECKPOINT.getKey(), "1");
-        //        config.put(ExecutionConfigKeys.CONTAINER_WORKER_NUM.getKey(), String.valueOf(workerNum));
         config.putAll(this.config);
-        //initResultDirectory();
 
         Environment environment = EnvironmentFactory.onLocalEnvironment();
         environment.getEnvironmentContext().withConfig(config);
