@@ -119,7 +119,7 @@
                     </execution>
                 </executions>
             </plugin>
-            <!--增加jacoco 配置 -->
+            <!-- Add jacoco configuration -->
             <plugin>
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>
@@ -133,10 +133,10 @@
                         <configuration>  
                             <propertyName>coverageAgent</propertyName>
                             <destFile>${jacoco.path}</destFile>
-                            <!-- 每个测试进程分配400MB，保留系统开销 -->  
+                            <!-- Allocate 400MB for each test process, reserve system overhead -->  
                             <argLine>${coverageAgent} -Xmx400m -XX:MaxMetaspaceSize=128m -XX:+UseG1GC</argLine>  
       
-                            <!-- 最多2个并行进程 -->  
+                            <!-- Maximum 2 parallel processes -->  
                             <forkCount>2</forkCount>  
                             <reuseForks>false</reuseForks>  
                             <parallel>classes</parallel>  
