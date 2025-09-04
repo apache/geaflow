@@ -19,6 +19,9 @@
 
 package org.apache.geaflow.mcp.server.util;
 
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Objects;
 import org.apache.geaflow.cluster.system.ClusterMetaStore;
 import org.apache.geaflow.common.config.Configuration;
 import org.apache.geaflow.common.config.keys.DSLConfigKeys;
@@ -36,10 +39,6 @@ import org.apache.geaflow.file.FileConfigKeys;
 import org.apache.geaflow.runtime.pipeline.PipelineContext;
 import org.apache.geaflow.runtime.pipeline.PipelineTaskType;
 import org.apache.geaflow.runtime.pipeline.task.PipelineTaskContext;
-
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Objects;
 
 public class QueryLocalRunner {
 

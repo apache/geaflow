@@ -19,6 +19,14 @@
 
 package org.apache.geaflow.mcp.server;
 
+import java.io.File;
+import java.io.IOException;
+import java.nio.charset.Charset;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.geaflow.cluster.local.client.LocalEnvironment;
@@ -29,15 +37,6 @@ import org.apache.geaflow.env.IEnvironment;
 import org.apache.geaflow.mcp.server.util.McpLocalFileUtil;
 import org.apache.geaflow.mcp.server.util.QueryFormatUtil;
 import org.apache.geaflow.mcp.server.util.QueryLocalRunner;
-
-import java.io.File;
-import java.io.IOException;
-import java.nio.charset.Charset;
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
 
 public class GeaFlowMcpActionsLocalImpl implements GeaFlowMcpActions {
 
@@ -57,7 +56,7 @@ public class GeaFlowMcpActionsLocalImpl implements GeaFlowMcpActions {
         try {
             graph = runner.compileGraph();
         } catch (Throwable e) {
-            return runner.getErrorMsg();
+            throw new RuntimeException("Compile error: " + runner.getErrorMsg());
         }
         if (graph == null) {
             throw new RuntimeException("Cannot create graph: " + graphName);
@@ -86,7 +85,7 @@ public class GeaFlowMcpActionsLocalImpl implements GeaFlowMcpActions {
         try {
             graph = compileRunner.compileGraph();
         } catch (Throwable e) {
-            return compileRunner.getErrorMsg();
+            throw new RuntimeException("Compile error: " + compileRunner.getErrorMsg());
         }
         if (graph == null) {
             throw new RuntimeException("Cannot create graph: " + graphName);
@@ -145,6 +144,9 @@ public class GeaFlowMcpActionsLocalImpl implements GeaFlowMcpActions {
                 resultTable = edgeTable;
             }
         }
+        if (resultTable == null) {
+            throw new RuntimeException("Cannot fine type: " + type + " in graph: " + graphName);
+        }
         runner.withQuery(ddl + "\n" + usingGraph + dql);
         String resultContent = "null";
         try {
@@ -160,7 +162,6 @@ public class GeaFlowMcpActionsLocalImpl implements GeaFlowMcpActions {
 
     @Override
     public String getGraphSchema(String graphName) {
-        QueryLocalRunner compileRunner = new QueryLocalRunner();
         String ddl = null;
         try {
             ddl = McpLocalFileUtil.readFile(QueryLocalRunner.DSL_STATE_REMOTE_SCHEM_PATH, graphName);

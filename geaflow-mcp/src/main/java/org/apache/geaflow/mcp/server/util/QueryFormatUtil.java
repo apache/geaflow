@@ -19,11 +19,10 @@
 
 package org.apache.geaflow.mcp.server.util;
 
+import java.util.Locale;
 import org.apache.geaflow.dsl.common.types.TableField;
 import org.apache.geaflow.dsl.schema.GeaFlowGraph;
 import org.apache.geaflow.dsl.schema.GeaFlowTable;
-
-import java.util.Locale;
 
 public class QueryFormatUtil {
 

@@ -21,6 +21,7 @@ package org.apache.geaflow.mcp.server;
 
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
+import java.util.Map;
 import org.apache.geaflow.analytics.service.client.AnalyticsClient;
 import org.apache.geaflow.analytics.service.client.AnalyticsClientBuilder;
 import org.apache.geaflow.analytics.service.query.QueryResults;
@@ -33,8 +34,6 @@ import org.noear.solon.ai.mcp.server.annotation.McpServerEndpoint;
 import org.noear.solon.annotation.Param;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.util.Map;
 
 @McpServerEndpoint(name = "geaflow-mcp-server", channel = "sse", sseEndpoint = "/geaflow/sse")
 public class GeaFlowMcpServerTools {
