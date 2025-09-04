@@ -49,13 +49,13 @@ public class QueryFormatUtil {
         StringBuilder builder = new StringBuilder();
         builder.append("INSERT INTO output_table\n");
         if (table instanceof GeaFlowGraph.VertexTable) {
-            builder.append("Match(a:")
+            builder.append("Match(a:`")
                     .append(((GeaFlowGraph.VertexTable)table).getTypeName())
-                    .append(")\n");
+                    .append("`)\n");
         } else {
-            builder.append("Match()-[a:")
+            builder.append("Match()-[a:`")
                     .append(((GeaFlowGraph.EdgeTable)table).getTypeName())
-                    .append("]-()\n");
+                    .append("`]-()\n");
         }
         builder.append("Return ");
         int index = 0;
