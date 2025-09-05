@@ -117,10 +117,11 @@ public class GeaFlowMcpServerTools {
 
 
     /**
-     * A tool that provides graph query capabilities.
+     * A tool that provides create graph capabilities.
      *
+     * @param graphName graph name to create.
      * @param ddl Create graph ddl.
-     * @return query result or error code.
+     * @return execute result or error message.
      */
     @ToolMapping(description = ToolDesc.createGraph)
     public String createGraph(@Param(name = McpConstants.GRAPH_NAME, description = "create graph name") String graphName,
@@ -141,8 +142,8 @@ public class GeaFlowMcpServerTools {
     /**
      * A tool that get graph schema.
      *
-     * @param graphName Create graph ddl.
-     * @return query result or error code.
+     * @param graphName graphName to get.
+     * @return execute result or error message.
      */
     @ToolMapping(description = ToolDesc.getGraphSchema)
     public String getGraphSchema(@Param(name = McpConstants.GRAPH_NAME, description = "get graph schema name") String graphName) {
@@ -161,10 +162,11 @@ public class GeaFlowMcpServerTools {
 
 
     /**
-     * A tool that provides graph query capabilities.
+     * A tool that provides insert data into graph capabilities.
      *
-     * @param dml Query graph dql.
-     * @return query result or error code.
+     * @param graphName graph name to operate.
+     * @param dml dml to run with graph.
+     * @return execute result or error message.
      */
     @ToolMapping(description = ToolDesc.insertGraph)
     public String insertGraph(@Param(name = McpConstants.GRAPH_NAME, description = "graph name") String graphName,
@@ -186,8 +188,9 @@ public class GeaFlowMcpServerTools {
     /**
      * A tool that provides graph query capabilities.
      *
-     * @param type Query graph dql.
-     * @return query result or error code.
+     * @param graphName graph name to query.
+     * @param type query graph entity type.
+     * @return execute result or error message.
      */
     @ToolMapping(description = ToolDesc.queryType)
     public String queryType(@Param(name = McpConstants.GRAPH_NAME, description = "query graph name") String graphName,

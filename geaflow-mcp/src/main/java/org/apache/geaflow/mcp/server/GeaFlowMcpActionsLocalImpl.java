@@ -93,8 +93,7 @@ public class GeaFlowMcpActionsLocalImpl implements GeaFlowMcpActions {
 
         QueryLocalRunner runner = new QueryLocalRunner();
         runner.withGraphDefine(ddl);
-        String usingGraph = "USE GRAPH " + graphName + ";\n";
-        runner.withQuery(ddl + "\n" + usingGraph + dml);
+        runner.withQuery(ddl + "\n" + QueryFormatUtil.makeUseGraph(graphName) + dml);
         try {
             runner.execute();
         } catch (Throwable e) {
@@ -146,8 +145,7 @@ public class GeaFlowMcpActionsLocalImpl implements GeaFlowMcpActions {
         if (resultTable == null) {
             throw new RuntimeException("Cannot find type: " + type + " in graph: " + graphName);
         }
-        String usingGraph = "USE GRAPH " + graphName + ";\n";
-        runner.withQuery(ddl + "\n" + usingGraph + dql);
+        runner.withQuery(ddl + "\n" + QueryFormatUtil.makeUseGraph(graphName) + dql);
         String resultContent = "null";
         try {
             runner.execute();

@@ -23,6 +23,7 @@ public class ToolDesc {
 
     public static final String createGraph = "create graph with ddl, Set the storeType to rocksdb, "
             + "ensuring the syntax is correct and do not use any syntax not present in the examples. "
+            + "DDL statements must end with a semicolon. "
             + "example: CREATE GRAPH `modern` (\n"
             + "\tVertex `person` (\n"
             + "\t  `id` bigint ID,\n"

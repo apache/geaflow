@@ -54,11 +54,11 @@ public class McpLocalFileUtil {
         Path filePath = Paths.get(root, fileName);
 
         if (!Files.exists(filePath)) {
-            throw new IOException("文件不存在: " + filePath);
+            throw new IOException("File not exist: " + filePath);
         }
 
         if (!Files.isRegularFile(filePath)) {
-            throw new IOException("路径不是文件: " + filePath);
+            throw new IOException("Path is not file: " + filePath);
         }
 
         return new String(Files.readAllBytes(filePath), StandardCharsets.UTF_8);

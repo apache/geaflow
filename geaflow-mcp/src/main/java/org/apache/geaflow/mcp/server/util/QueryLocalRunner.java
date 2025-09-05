@@ -139,35 +139,4 @@ public class QueryLocalRunner {
         }
         return this;
     }
-
-
-
-    private static class AddDDLPipelineHook implements GQLPipeLine.GQLPipelineHook {
-
-        private final String graphDefine;
-
-
-        public AddDDLPipelineHook(String graphDefine) {
-            this.graphDefine = graphDefine;
-        }
-
-        @Override
-        public String rewriteScript(String script, Configuration configuration) {
-            return script;
-        }
-
-        @Override
-        public void beforeExecute(QueryClient queryClient, QueryContext queryContext) {
-            if (graphDefine != null) {
-                queryClient.executeQuery(graphDefine, queryContext);
-            }
-        }
-
-        @Override
-        public void afterExecute(QueryClient queryClient, QueryContext queryContext) {
-
-        }
-    }
-
-
 }

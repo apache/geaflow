@@ -70,6 +70,10 @@ public class QueryFormatUtil {
         return builder.toString();
     }
 
+    public static String makeUseGraph(String graphName) {
+        return "USE GRAPH " + graphName + ";\n";
+    }
+
     private static String tableTypeMapper(String iType) {
         String upper = iType.toUpperCase(Locale.ROOT);
         switch (upper) {
