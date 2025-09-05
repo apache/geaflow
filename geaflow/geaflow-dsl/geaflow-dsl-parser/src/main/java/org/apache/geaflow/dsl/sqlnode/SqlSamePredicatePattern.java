@@ -34,17 +34,20 @@ import org.apache.calcite.util.ImmutableNullableList;
 
 
 /**
- * SQL node representing a same predicate pattern in GQL.
- * This node represents a pattern where two path patterns share a common predicate condition.
+ * SQL node representing a shared predicate pattern in GQL.
+ * This node represents a pattern where multiple path patterns share a common predicate condition.
+ * The SAME keyword ensures that all path patterns in the union must satisfy the same condition.
  *
  * <p>Example: MATCH (a:person) -> (b) | (a:person) -> (c) WHERE SAME(a.age > 25)
+ * This means both path patterns (a->b) and (a->c) must satisfy the condition a.age > 25.
  *
- * <p>The left and right path patterns must satisfy the same predicate condition.
+ * <p>Note: This is different from EXISTS syntax which checks path existence.
+ * SAME predicate is used for condition sharing across multiple paths, not entity comparison.
  */
 public class SqlSamePredicatePattern extends SqlCall {
 
     /**
-     * Operator for same predicate pattern.
+     * Operator for shared predicate pattern across multiple paths.
      */
     public static final SqlOperator OPERATOR = new SqlSpecialOperator("SAME_PREDICATE", SqlKind.OTHER);
 
@@ -209,7 +212,7 @@ public class SqlSamePredicatePattern extends SqlCall {
         // Unparse right path pattern
         right.unparse(writer, leftPrec, rightPrec);
 
-        // Unparse WHERE SAME clause
+        // Unparse WHERE SAME clause - shared condition for all paths
         writer.keyword("WHERE");
         writer.keyword("SAME");
         writer.keyword("(");
