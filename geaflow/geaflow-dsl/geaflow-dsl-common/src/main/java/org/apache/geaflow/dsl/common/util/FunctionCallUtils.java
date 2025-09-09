@@ -63,7 +63,7 @@ public class FunctionCallUtils {
     }
 
     /**
-     * Validates that type degree mappings are consistent
+     * Validates that type degree mappings are consistent.
      */
     private static void validateTypeDegreeMappings() {
         for (TypeDegreeMapping mapping : TYPE_DEGREE_MAPPINGS) {
@@ -77,8 +77,8 @@ public class FunctionCallUtils {
                 for (int j = i + 1; j < mapping.targetTypes.length; j++) {
                     if (mapping.targetTypes[i].equals(mapping.targetTypes[j])) {
                         throw new IllegalStateException(
-                            "Duplicate target type " + mapping.targetTypes[i] +
-                            " in mapping for source type: " + mapping.sourceType);
+                            "Duplicate target type " + mapping.targetTypes[i]
+                            + " in mapping for source type: " + mapping.sourceType);
                     }
                 }
             }
@@ -86,7 +86,7 @@ public class FunctionCallUtils {
     }
 
     /**
-     * Internal class to define type degree mapping for implicit conversion
+     * Internal class to define type degree mapping for implicit conversion.
      */
     private static class TypeDegreeMapping {
         final Class<?> sourceType;
@@ -98,7 +98,7 @@ public class FunctionCallUtils {
         }
     }
 
-    // Type mapping definitions to reduce duplication
+    // Type mapping definitions to reduce duplication.
     private static final TypeMapping[] PRIMITIVE_TYPE_MAPPINGS = {
         new TypeMapping(int.class, Integer.class),
         new TypeMapping(long.class, Long.class),
@@ -123,7 +123,7 @@ public class FunctionCallUtils {
     }
 
     /**
-     * Validates that all type mappings are consistent and bidirectional
+     * Validates that all type mappings are consistent and bidirectional.
      */
     private static void validateTypeMappings() {
         // Ensure all boxed types have corresponding unboxed types
@@ -150,7 +150,7 @@ public class FunctionCallUtils {
     }
 
     /**
-     * Internal class to define primitive type to wrapper type mapping
+     * Internal class to define primitive type to wrapper type mapping.
      */
     private static class TypeMapping {
         final Class<?> primitiveType;
