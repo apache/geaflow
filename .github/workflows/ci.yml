@@ -25,7 +25,7 @@ on:
     branches: [ "master" ]
 
 env:
-  JAVA_TOOL_OPTIONS: -Xmx3g
+  JAVA_TOOL_OPTIONS: -Xmx4g
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.number || github.run_id }}
