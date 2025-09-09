@@ -17,10 +17,10 @@
  * under the License.
  */
 
--- Test Case: Same Predicate with Edge Conditions
--- Purpose: Verify Same Predicate functionality with edge property conditions
+-- Test Case: shared with Edge Conditions
+-- Purpose: Verify shared functionality with edge property conditions
 -- Query: (a:person) -[e1:knows]-> (b) | (a:person) -[e2:created]-> (c) WHERE SHARED(e1.weight > 0.5)
--- Description: This test validates that Same Predicate can handle conditions on edge properties.
+-- Description: This test validates that shared can handle conditions on edge properties.
 -- It ensures that edge conditions are properly shared across different path patterns
 -- and that edge properties are correctly evaluated in the shared predicate.
 -- Expected: Returns person vertices connected via knows edges with weight > 0.5 and created edges

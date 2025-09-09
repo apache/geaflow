@@ -17,10 +17,10 @@
  * under the License.
  */
 
--- Test Case: Same Predicate with String Conditions
--- Purpose: Verify Same Predicate functionality with string comparison
+-- Test Case: shared with String Conditions
+-- Purpose: Verify shared functionality with string comparison
 -- Query: (a:person) -> (b) | (a:person) -> (c) WHERE SHARED(a.name = 'marko')
--- Description: This test validates that Same Predicate can handle string comparison
+-- Description: This test validates that shared can handle string comparison
 -- conditions. It ensures that string literals and string properties are properly
 -- compared and that the condition is correctly applied to both path patterns.
 -- Expected: Returns person vertices with name 'marko' and their connected vertices

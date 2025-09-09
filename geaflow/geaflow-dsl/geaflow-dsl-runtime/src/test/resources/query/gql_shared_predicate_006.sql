@@ -17,10 +17,10 @@
  * under the License.
  */
 
--- Test Case: Same Predicate with Union All Semantics
--- Purpose: Verify Same Predicate functionality with UNION ALL operator
+-- Test Case: shared with Union All Semantics
+-- Purpose: Verify shared functionality with UNION ALL operator
 -- Query: (a:person) -> (b) |+| (a:person) -> (c) WHERE SHARED(a.age > 25)
--- Description: This test validates that Same Predicate works correctly with the UNION ALL
+-- Description: This test validates that shared works correctly with the UNION ALL
 -- operator (|+|). It ensures that duplicate results are preserved and that the shared
 -- condition is properly applied to both path patterns without deduplication.
 -- Expected: Returns all person vertices with age > 25 and their connected vertices, including duplicates

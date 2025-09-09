@@ -17,11 +17,11 @@
  * under the License.
  */
 
--- Test Case: Same Predicate with Distinct Semantics
--- Purpose: Verify the correct behavior of Same Predicate with DISTINCT keyword
+-- Test Case: shared with Distinct Semantics
+-- Purpose: Verify the correct behavior of shared with DISTINCT keyword
 -- Query: (a:person) -> (b) | (a:person) -> (c) WHERE SHARED(a.age > 25) DISTINCT
 -- Description: This test validates that the DISTINCT keyword properly removes duplicate
--- results when using Same Predicate pattern. It ensures that identical result rows
+-- results when using shared pattern. It ensures that identical result rows
 -- are eliminated from the output.
 -- Expected: Returns unique person vertices with age > 25 and their distinct connected vertices
 

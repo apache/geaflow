@@ -17,10 +17,10 @@
  * under the License.
  */
 
--- Test Case: Same Predicate with Vertex Type Conditions
--- Purpose: Verify Same Predicate functionality with different vertex types
+-- Test Case: shared with Vertex Type Conditions
+-- Purpose: Verify shared functionality with different vertex types
 -- Query: (a:person) -> (b:person) | (a:person) -> (c:software) WHERE SHARED(a.age > 25)
--- Description: This test validates that Same Predicate works correctly when path patterns
+-- Description: This test validates that shared works correctly when path patterns
 -- target different vertex types (person and software). It ensures that vertex type filtering
 -- is properly handled in conjunction with shared conditions.
 -- Expected: Returns person vertices with age > 25 connected to both person and software vertices

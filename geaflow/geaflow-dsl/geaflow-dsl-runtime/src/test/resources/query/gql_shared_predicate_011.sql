@@ -17,10 +17,10 @@
  * under the License.
  */
 
--- Test Case: Same Predicate with Complex Arithmetic Expressions
--- Purpose: Verify Same Predicate functionality with arithmetic operations
+-- Test Case: shared with Complex Arithmetic Expressions
+-- Purpose: Verify shared functionality with arithmetic operations
 -- Query: (a:person) -> (b) | (a:person) -> (c) WHERE SHARED(a.age * 2 > 50)
--- Description: This test validates that Same Predicate can handle complex arithmetic
+-- Description: This test validates that shared can handle complex arithmetic
 -- expressions in conditions. It ensures that mathematical operations are properly
 -- evaluated and that the result is correctly applied to both path patterns.
 -- Expected: Returns person vertices where age * 2 > 50 (i.e., age > 25)

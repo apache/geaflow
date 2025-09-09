@@ -17,10 +17,10 @@
  * under the License.
  */
 
--- Test Case: Same Predicate with Edge Direction Conditions
--- Purpose: Verify Same Predicate functionality with different edge directions
+-- Test Case: shared with Edge Direction Conditions
+-- Purpose: Verify shared functionality with different edge directions
 -- Query: (a:person) -[e1:knows]-> (b) | (a:person) <-[e2:created]- (c) WHERE SHARED(e1.weight = e2.weight)
--- Description: This test validates that Same Predicate can handle conditions comparing
+-- Description: This test validates that shared can handle conditions comparing
 -- edge properties from different directions (outgoing and incoming edges).
 -- It ensures that edge direction is properly considered when evaluating shared conditions.
 -- Expected: Returns person vertices where knows edge weight equals created edge weight

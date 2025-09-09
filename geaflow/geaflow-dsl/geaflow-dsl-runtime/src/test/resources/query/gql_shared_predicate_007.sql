@@ -17,10 +17,10 @@
  * under the License.
  */
 
--- Test Case: Same Predicate with Complex Nested Conditions
--- Purpose: Verify Same Predicate functionality with complex logical expressions
+-- Test Case: shared with Complex Nested Conditions
+-- Purpose: Verify shared functionality with complex logical expressions
 -- Query: (a:person) -> (b) | (a:person) -> (c) WHERE SHARED(a.age > 25 OR (b.id = 1 AND c.id = 2))
--- Description: This test validates that Same Predicate can handle complex nested logical
+-- Description: This test validates that shared can handle complex nested logical
 -- conditions with OR and AND operators. It ensures that compound conditions are properly
 -- evaluated across different path patterns and that logical precedence is maintained.
 -- Expected: Returns person vertices that either have age > 25 or where b.id=1 and c.id=2

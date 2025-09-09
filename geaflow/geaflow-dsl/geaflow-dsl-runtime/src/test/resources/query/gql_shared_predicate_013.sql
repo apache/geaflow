@@ -17,10 +17,10 @@
  * under the License.
  */
 
--- Test Case: Same Predicate with Null Handling
--- Purpose: Verify Same Predicate functionality with null value conditions
+-- Test Case: shared with Null Handling
+-- Purpose: Verify shared functionality with null value conditions
 -- Query: (a:person) -> (b) | (a:person) -> (c) WHERE SHARED(a.age IS NOT NULL)
--- Description: This test validates that Same Predicate can handle null value conditions
+-- Description: This test validates that shared can handle null value conditions
 -- properly. It ensures that IS NULL and IS NOT NULL operators work correctly
 -- in shared conditions and that null values are handled appropriately.
 -- Expected: Returns person vertices with non-null age values and their connected vertices

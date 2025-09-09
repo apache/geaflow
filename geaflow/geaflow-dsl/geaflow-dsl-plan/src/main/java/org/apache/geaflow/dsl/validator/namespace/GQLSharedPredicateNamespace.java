@@ -86,7 +86,7 @@ public class GQLSharedPredicateNamespace extends GQLBaseNamespace {
         // Validate right path pattern
         validatePathPattern(sharedPredicatePattern.getRight(), matchNodeContext, scope, pathRecordTypes);
 
-        // Validate same predicate condition
+        // Validate shared condition
         validateSharedPredicate(sharedPredicatePattern.getPredicate(), scope, pathRecordTypes);
 
         // Create union path record type from all path patterns
@@ -139,7 +139,7 @@ public class GQLSharedPredicateNamespace extends GQLBaseNamespace {
     }
 
     /**
-     * Validate the same predicate condition
+     * Validate the shared condition
      *
      * @param predicate the predicate to validate
      * @param scope the validator scope

@@ -17,10 +17,10 @@
  * under the License.
  */
 
--- Test Case: Same Predicate with Function Calls
--- Purpose: Verify Same Predicate functionality with built-in functions
+-- Test Case: shared with Function Calls
+-- Purpose: Verify shared functionality with built-in functions
 -- Query: (a:person) -> (b) | (a:person) -> (c) WHERE SHARED(LENGTH(a.name) > 4)
--- Description: This test validates that Same Predicate can handle built-in function calls
+-- Description: This test validates that shared can handle built-in function calls
 -- in conditions. It ensures that functions like LENGTH() are properly evaluated
 -- and that the function result is correctly applied to both path patterns.
 -- Expected: Returns person vertices with name length > 4 and their connected vertices

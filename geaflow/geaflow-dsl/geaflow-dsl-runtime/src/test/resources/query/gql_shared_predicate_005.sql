@@ -17,10 +17,10 @@
  * under the License.
  */
 
--- Test Case: Same Predicate with Nested Path Patterns
--- Purpose: Verify Same Predicate functionality with multi-hop path patterns
+-- Test Case: shared with Nested Path Patterns
+-- Purpose: Verify shared functionality with multi-hop path patterns
 -- Query: (a:person) -> (b) -> (c) | (a:person) -> (d) WHERE SHARED(a.age > 25 AND b.id != d.id)
--- Description: This test validates that Same Predicate works correctly with nested path patterns
+-- Description: This test validates that shared works correctly with nested path patterns
 -- of different lengths. It ensures that conditions can be shared across path patterns
 -- with different hop counts and that intermediate vertices are properly handled.
 -- Expected: Returns person vertices with age > 25 where b and d vertices have different IDs
