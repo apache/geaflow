@@ -41,36 +41,125 @@ public class FunctionCallUtils {
 
     public static String UDF_EVAL_METHOD_NAME = "eval";
 
+    // Type degree mappings for implicit type conversion hierarchy
+    private static final TypeDegreeMapping[] TYPE_DEGREE_MAPPINGS = {
+        new TypeDegreeMapping(Integer.class, new Class<?>[]{Long.class, Double.class, BigDecimal.class}),
+        new TypeDegreeMapping(Long.class, new Class<?>[]{Double.class, BigDecimal.class}),
+        new TypeDegreeMapping(Byte.class, new Class<?>[]{Integer.class, Long.class, Double.class, BigDecimal.class}),
+        new TypeDegreeMapping(Short.class, new Class<?>[]{Integer.class, Long.class, Double.class, BigDecimal.class}),
+        new TypeDegreeMapping(BigDecimal.class, new Class<?>[]{Double.class})
+    };
+
     private static final Map<Class<?>, Class<?>[]> TYPE_DEGREE_MAP = new HashMap<>();
 
     static {
-        TYPE_DEGREE_MAP
-            .put(Integer.class, new Class<?>[]{Long.class, Double.class, BigDecimal.class});
-        TYPE_DEGREE_MAP.put(Long.class, new Class<?>[]{Double.class, BigDecimal.class});
-        TYPE_DEGREE_MAP.put(Byte.class,
-            new Class<?>[]{Integer.class, Long.class, Double.class, BigDecimal.class});
-        TYPE_DEGREE_MAP.put(Short.class,
-            new Class<?>[]{Integer.class, Long.class, Double.class, BigDecimal.class});
-        TYPE_DEGREE_MAP.put(BigDecimal.class, new Class<?>[]{Double.class});
+        // Initialize type degree mappings from the definitions
+        for (TypeDegreeMapping mapping : TYPE_DEGREE_MAPPINGS) {
+            TYPE_DEGREE_MAP.put(mapping.sourceType, mapping.targetTypes);
+        }
+
+        // Validate type degree mappings
+        validateTypeDegreeMappings();
     }
+
+    /**
+     * Validates that type degree mappings are consistent
+     */
+    private static void validateTypeDegreeMappings() {
+        for (TypeDegreeMapping mapping : TYPE_DEGREE_MAPPINGS) {
+            if (mapping.targetTypes == null || mapping.targetTypes.length == 0) {
+                throw new IllegalStateException(
+                    "Empty target types for source type: " + mapping.sourceType);
+            }
+
+            // Check for duplicate target types
+            for (int i = 0; i < mapping.targetTypes.length; i++) {
+                for (int j = i + 1; j < mapping.targetTypes.length; j++) {
+                    if (mapping.targetTypes[i].equals(mapping.targetTypes[j])) {
+                        throw new IllegalStateException(
+                            "Duplicate target type " + mapping.targetTypes[i] +
+                            " in mapping for source type: " + mapping.sourceType);
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Internal class to define type degree mapping for implicit conversion
+     */
+    private static class TypeDegreeMapping {
+        final Class<?> sourceType;
+        final Class<?>[] targetTypes;
+
+        TypeDegreeMapping(Class<?> sourceType, Class<?>[] targetTypes) {
+            this.sourceType = sourceType;
+            this.targetTypes = targetTypes;
+        }
+    }
+
+    // Type mapping definitions to reduce duplication
+    private static final TypeMapping[] PRIMITIVE_TYPE_MAPPINGS = {
+        new TypeMapping(int.class, Integer.class),
+        new TypeMapping(long.class, Long.class),
+        new TypeMapping(short.class, Short.class),
+        new TypeMapping(byte.class, Byte.class),
+        new TypeMapping(boolean.class, Boolean.class),
+        new TypeMapping(double.class, Double.class)
+    };
 
     private static final Map<Class<?>, Class<?>> BOX_TYPE_MAPS = new HashMap<>();
     private static final Map<Class<?>, Class<?>> UNBOX_TYPE_MAPS = new HashMap<>();
 
     static {
-        BOX_TYPE_MAPS.put(int.class, Integer.class);
-        BOX_TYPE_MAPS.put(long.class, Long.class);
-        BOX_TYPE_MAPS.put(short.class, Short.class);
-        BOX_TYPE_MAPS.put(byte.class, Byte.class);
-        BOX_TYPE_MAPS.put(boolean.class, Boolean.class);
-        BOX_TYPE_MAPS.put(double.class, Double.class);
+        // Initialize type mappings from the definitions
+        for (TypeMapping mapping : PRIMITIVE_TYPE_MAPPINGS) {
+            BOX_TYPE_MAPS.put(mapping.primitiveType, mapping.wrapperType);
+            UNBOX_TYPE_MAPS.put(mapping.wrapperType, mapping.primitiveType);
+        }
 
-        UNBOX_TYPE_MAPS.put(Integer.class, int.class);
-        UNBOX_TYPE_MAPS.put(Long.class, long.class);
-        UNBOX_TYPE_MAPS.put(Short.class, short.class);
-        UNBOX_TYPE_MAPS.put(Byte.class, byte.class);
-        UNBOX_TYPE_MAPS.put(Boolean.class, boolean.class);
-        UNBOX_TYPE_MAPS.put(Double.class, double.class);
+        // Validate that all mappings are bidirectional
+        validateTypeMappings();
+    }
+
+    /**
+     * Validates that all type mappings are consistent and bidirectional
+     */
+    private static void validateTypeMappings() {
+        // Ensure all boxed types have corresponding unboxed types
+        for (Class<?> primitiveType : BOX_TYPE_MAPS.keySet()) {
+            Class<?> wrapperType = BOX_TYPE_MAPS.get(primitiveType);
+            if (!UNBOX_TYPE_MAPS.containsKey(wrapperType)) {
+                throw new IllegalStateException(
+                    "Missing unboxed type mapping for wrapper type: " + wrapperType);
+            }
+            if (UNBOX_TYPE_MAPS.get(wrapperType) != primitiveType) {
+                throw new IllegalStateException(
+                    "Inconsistent type mapping between " + primitiveType + " and " + wrapperType);
+            }
+        }
+
+        // Ensure all unboxed types have corresponding boxed types
+        for (Class<?> wrapperType : UNBOX_TYPE_MAPS.keySet()) {
+            Class<?> primitiveType = UNBOX_TYPE_MAPS.get(wrapperType);
+            if (!BOX_TYPE_MAPS.containsKey(primitiveType)) {
+                throw new IllegalStateException(
+                    "Missing boxed type mapping for primitive type: " + primitiveType);
+            }
+        }
+    }
+
+    /**
+     * Internal class to define primitive type to wrapper type mapping
+     */
+    private static class TypeMapping {
+        final Class<?> primitiveType;
+        final Class<?> wrapperType;
+
+        TypeMapping(Class<?> primitiveType, Class<?> wrapperType) {
+            this.primitiveType = primitiveType;
+            this.wrapperType = wrapperType;
+        }
     }
 
     public static Method findMatchMethod(Class<?> udfClass, List<Class<?>> paramTypes) {
@@ -198,9 +287,9 @@ public class FunctionCallUtils {
         return -1;
     }
 
-    public static List<Class[]> getAllEvalParamTypes(Class<?> udfClass) {
+    public static List<Class<?>[]> getAllEvalParamTypes(Class<?> udfClass) {
         List<Method> evalMethods = getAllEvalMethods(udfClass);
-        List<Class[]> types = new ArrayList<>();
+        List<Class<?>[]> types = new ArrayList<>();
         for (Method evalMethod : evalMethods) {
             types.add(evalMethod.getParameterTypes());
         }
@@ -209,7 +298,7 @@ public class FunctionCallUtils {
 
     public static List<Method> getAllEvalMethods(Class<?> udfClass) {
         List<Method> evalMethods = new ArrayList<>();
-        Class clazz = udfClass;
+        Class<?> clazz = udfClass;
         while (clazz != Object.class) {
             Method[] methods = clazz.getDeclaredMethods();
             for (Method method : methods) {
@@ -224,7 +313,7 @@ public class FunctionCallUtils {
 
     private static List<Method> getAllMethod(Class<?> udfClass) {
         List<Method> evalMethods = new ArrayList<>();
-        Class clazz = udfClass;
+        Class<?> clazz = udfClass;
         while (clazz != Object.class) {
             Method[] methods = clazz.getDeclaredMethods();
             for (Method method : methods) {
@@ -235,12 +324,44 @@ public class FunctionCallUtils {
         return evalMethods;
     }
 
+    /**
+     * Gets the boxed (wrapper) type for a primitive type, or returns the type as-is if it's not primitive.
+     *
+     * @param type the input type
+     * @return the boxed type if primitive, otherwise the original type
+     */
     public static Class<?> getBoxType(Class<?> type) {
         return BOX_TYPE_MAPS.getOrDefault(type, type);
     }
 
+    /**
+     * Gets the unboxed (primitive) type for a wrapper type, or returns the type as-is if it's not a wrapper.
+     *
+     * @param type the input type
+     * @return the unboxed type if wrapper, otherwise the original type
+     */
     public static Class<?> getUnboxType(Class<?> type) {
         return UNBOX_TYPE_MAPS.getOrDefault(type, type);
+    }
+
+    /**
+     * Checks if a type is a primitive wrapper type.
+     *
+     * @param type the type to check
+     * @return true if the type is a wrapper type, false otherwise
+     */
+    public static boolean isWrapperType(Class<?> type) {
+        return UNBOX_TYPE_MAPS.containsKey(type);
+    }
+
+    /**
+     * Checks if a type is a primitive type.
+     *
+     * @param type the type to check
+     * @return true if the type is primitive, false otherwise
+     */
+    public static boolean isPrimitiveType(Class<?> type) {
+        return BOX_TYPE_MAPS.containsKey(type);
     }
 
 
