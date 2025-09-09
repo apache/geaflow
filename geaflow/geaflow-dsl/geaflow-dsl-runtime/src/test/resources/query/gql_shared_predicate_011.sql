@@ -17,13 +17,13 @@
  * under the License.
  */
 
--- Test Case: Basic Same Predicate Functionality
--- Purpose: Verify the fundamental Same Predicate syntax and functionality
--- Query: (a:person) -> (b) | (a:person) -> (c) WHERE SAME(a.age > 25)
--- Description: This test validates that the basic Same Predicate pattern works correctly
--- by finding person vertices that have age greater than 25 and connecting them to
--- two different target vertices through separate path patterns.
--- Expected: Returns person vertices with age > 25 and their connected vertices b and c
+-- Test Case: Same Predicate with Complex Arithmetic Expressions
+-- Purpose: Verify Same Predicate functionality with arithmetic operations
+-- Query: (a:person) -> (b) | (a:person) -> (c) WHERE SHARED(a.age * 2 > 50)
+-- Description: This test validates that Same Predicate can handle complex arithmetic
+-- expressions in conditions. It ensures that mathematical operations are properly
+-- evaluated and that the result is correctly applied to both path patterns.
+-- Expected: Returns person vertices where age * 2 > 50 (i.e., age > 25)
 
 CREATE TABLE tbl_result (
   a_id bigint,
@@ -44,6 +44,6 @@ SELECT
   b_id,
   c_id
 FROM (
-  MATCH (a:person) -> (b) | (a:person) -> (c) WHERE SAME(a.age > 25)
+  MATCH (a:person) -> (b) | (a:person) -> (c) WHERE SHARED(a.age * 2 > 50)
   RETURN a.id as a_id, a.age as a_age, b.id as b_id, c.id as c_id
 )

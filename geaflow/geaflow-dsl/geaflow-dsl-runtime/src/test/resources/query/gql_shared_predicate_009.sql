@@ -17,18 +17,19 @@
  * under the License.
  */
 
--- Test Case: Same Predicate with Complex Nested Conditions
--- Purpose: Verify Same Predicate functionality with complex logical expressions
--- Query: (a:person) -> (b) | (a:person) -> (c) WHERE SAME(a.age > 25 OR (b.id = 1 AND c.id = 2))
--- Description: This test validates that Same Predicate can handle complex nested logical
--- conditions with OR and AND operators. It ensures that compound conditions are properly
--- evaluated across different path patterns and that logical precedence is maintained.
--- Expected: Returns person vertices that either have age > 25 or where b.id=1 and c.id=2
+-- Test Case: Same Predicate with Edge Direction Conditions
+-- Purpose: Verify Same Predicate functionality with different edge directions
+-- Query: (a:person) -[e1:knows]-> (b) | (a:person) <-[e2:created]- (c) WHERE SHARED(e1.weight = e2.weight)
+-- Description: This test validates that Same Predicate can handle conditions comparing
+-- edge properties from different directions (outgoing and incoming edges).
+-- It ensures that edge direction is properly considered when evaluating shared conditions.
+-- Expected: Returns person vertices where knows edge weight equals created edge weight
 
 CREATE TABLE tbl_result (
   a_id bigint,
-  a_age int,
+  e1_weight double,
   b_id bigint,
+  e2_weight double,
   c_id bigint
 ) WITH (
 	type='file',
@@ -40,10 +41,11 @@ USE GRAPH modern;
 INSERT INTO tbl_result
 SELECT
 	a_id,
-  a_age,
+  e1_weight,
   b_id,
+  e2_weight,
   c_id
 FROM (
-  MATCH (a:person) -> (b) | (a:person) -> (c) WHERE SAME(a.age > 25 OR (b.id = 1 AND c.id = 2))
-  RETURN a.id as a_id, a.age as a_age, b.id as b_id, c.id as c_id
+  MATCH (a:person) -[e1:knows]-> (b) | (a:person) <-[e2:created]- (c) WHERE SHARED(e1.weight = e2.weight)
+  RETURN a.id as a_id, e1.weight as e1_weight, b.id as b_id, e2.weight as e2_weight, c.id as c_id
 )

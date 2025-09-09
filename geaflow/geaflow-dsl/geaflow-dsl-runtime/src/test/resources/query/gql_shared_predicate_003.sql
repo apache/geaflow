@@ -17,13 +17,13 @@
  * under the License.
  */
 
--- Test Case: Same Predicate with Null Handling
--- Purpose: Verify Same Predicate functionality with null value conditions
--- Query: (a:person) -> (b) | (a:person) -> (c) WHERE SAME(a.age IS NOT NULL)
--- Description: This test validates that Same Predicate can handle null value conditions
--- properly. It ensures that IS NULL and IS NOT NULL operators work correctly
--- in shared conditions and that null values are handled appropriately.
--- Expected: Returns person vertices with non-null age values and their connected vertices
+-- Test Case: Same Predicate with Multiple Variable Conditions
+-- Purpose: Verify complex conditions involving multiple variables in Same Predicate
+-- Query: (a:person) -> (b) | (a:person) -> (c) WHERE SHARED(a.age > 25 AND b.id != c.id)
+-- Description: This test validates that Same Predicate can handle complex conditions
+-- that reference multiple variables from different path patterns. It ensures that
+-- the shared condition correctly applies to both path patterns simultaneously.
+-- Expected: Returns person vertices with age > 25 where connected vertices b and c have different IDs
 
 CREATE TABLE tbl_result (
   a_id bigint,
@@ -44,6 +44,6 @@ SELECT
   b_id,
   c_id
 FROM (
-  MATCH (a:person) -> (b) | (a:person) -> (c) WHERE SAME(a.age IS NOT NULL)
+  MATCH (a:person) -> (b) | (a:person) -> (c) WHERE SHARED(a.age > 25 AND b.id != c.id)
   RETURN a.id as a_id, a.age as a_age, b.id as b_id, c.id as c_id
 )

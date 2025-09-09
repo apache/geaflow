@@ -17,17 +17,18 @@
  * under the License.
  */
 
--- Test Case: Same Predicate with Complex Arithmetic Expressions
--- Purpose: Verify Same Predicate functionality with arithmetic operations
--- Query: (a:person) -> (b) | (a:person) -> (c) WHERE SAME(a.age * 2 > 50)
--- Description: This test validates that Same Predicate can handle complex arithmetic
--- expressions in conditions. It ensures that mathematical operations are properly
--- evaluated and that the result is correctly applied to both path patterns.
--- Expected: Returns person vertices where age * 2 > 50 (i.e., age > 25)
+-- Test Case: Same Predicate with Function Calls
+-- Purpose: Verify Same Predicate functionality with built-in functions
+-- Query: (a:person) -> (b) | (a:person) -> (c) WHERE SHARED(LENGTH(a.name) > 4)
+-- Description: This test validates that Same Predicate can handle built-in function calls
+-- in conditions. It ensures that functions like LENGTH() are properly evaluated
+-- and that the function result is correctly applied to both path patterns.
+-- Expected: Returns person vertices with name length > 4 and their connected vertices
 
 CREATE TABLE tbl_result (
   a_id bigint,
-  a_age int,
+  a_name varchar,
+  name_length int,
   b_id bigint,
   c_id bigint
 ) WITH (
@@ -40,10 +41,11 @@ USE GRAPH modern;
 INSERT INTO tbl_result
 SELECT
 	a_id,
-  a_age,
+  a_name,
+  name_length,
   b_id,
   c_id
 FROM (
-  MATCH (a:person) -> (b) | (a:person) -> (c) WHERE SAME(a.age * 2 > 50)
-  RETURN a.id as a_id, a.age as a_age, b.id as b_id, c.id as c_id
+  MATCH (a:person) -> (b) | (a:person) -> (c) WHERE SHARED(LENGTH(a.name) > 4)
+  RETURN a.id as a_id, a.name as a_name, LENGTH(a.name) as name_length, b.id as b_id, c.id as c_id
 )

@@ -17,18 +17,17 @@
  * under the License.
  */
 
--- Test Case: Same Predicate with Function Calls
--- Purpose: Verify Same Predicate functionality with built-in functions
--- Query: (a:person) -> (b) | (a:person) -> (c) WHERE SAME(LENGTH(a.name) > 4)
--- Description: This test validates that Same Predicate can handle built-in function calls
--- in conditions. It ensures that functions like LENGTH() are properly evaluated
--- and that the function result is correctly applied to both path patterns.
--- Expected: Returns person vertices with name length > 4 and their connected vertices
+-- Test Case: Same Predicate with Distinct Semantics
+-- Purpose: Verify the correct behavior of Same Predicate with DISTINCT keyword
+-- Query: (a:person) -> (b) | (a:person) -> (c) WHERE SHARED(a.age > 25) DISTINCT
+-- Description: This test validates that the DISTINCT keyword properly removes duplicate
+-- results when using Same Predicate pattern. It ensures that identical result rows
+-- are eliminated from the output.
+-- Expected: Returns unique person vertices with age > 25 and their distinct connected vertices
 
 CREATE TABLE tbl_result (
   a_id bigint,
-  a_name varchar,
-  name_length int,
+  a_age int,
   b_id bigint,
   c_id bigint
 ) WITH (
@@ -41,11 +40,10 @@ USE GRAPH modern;
 INSERT INTO tbl_result
 SELECT
 	a_id,
-  a_name,
-  name_length,
+  a_age,
   b_id,
   c_id
 FROM (
-  MATCH (a:person) -> (b) | (a:person) -> (c) WHERE SAME(LENGTH(a.name) > 4)
-  RETURN a.id as a_id, a.name as a_name, LENGTH(a.name) as name_length, b.id as b_id, c.id as c_id
+  MATCH (a:person) -> (b) | (a:person) -> (c) WHERE SHARED(a.age > 25) DISTINCT
+  RETURN a.id as a_id, a.age as a_age, b.id as b_id, c.id as c_id
 )

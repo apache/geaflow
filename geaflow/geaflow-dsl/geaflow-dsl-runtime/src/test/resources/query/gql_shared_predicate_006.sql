@@ -17,13 +17,13 @@
  * under the License.
  */
 
--- Test Case: Same Predicate with Multiple Variable Conditions
--- Purpose: Verify complex conditions involving multiple variables in Same Predicate
--- Query: (a:person) -> (b) | (a:person) -> (c) WHERE SAME(a.age > 25 AND b.id != c.id)
--- Description: This test validates that Same Predicate can handle complex conditions
--- that reference multiple variables from different path patterns. It ensures that
--- the shared condition correctly applies to both path patterns simultaneously.
--- Expected: Returns person vertices with age > 25 where connected vertices b and c have different IDs
+-- Test Case: Same Predicate with Union All Semantics
+-- Purpose: Verify Same Predicate functionality with UNION ALL operator
+-- Query: (a:person) -> (b) |+| (a:person) -> (c) WHERE SHARED(a.age > 25)
+-- Description: This test validates that Same Predicate works correctly with the UNION ALL
+-- operator (|+|). It ensures that duplicate results are preserved and that the shared
+-- condition is properly applied to both path patterns without deduplication.
+-- Expected: Returns all person vertices with age > 25 and their connected vertices, including duplicates
 
 CREATE TABLE tbl_result (
   a_id bigint,
@@ -44,6 +44,6 @@ SELECT
   b_id,
   c_id
 FROM (
-  MATCH (a:person) -> (b) | (a:person) -> (c) WHERE SAME(a.age > 25 AND b.id != c.id)
+  MATCH (a:person) -> (b) |+| (a:person) -> (c) WHERE SHARED(a.age > 25)
   RETURN a.id as a_id, a.age as a_age, b.id as b_id, c.id as c_id
 )

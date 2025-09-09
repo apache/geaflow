@@ -17,20 +17,20 @@
  * under the License.
  */
 
--- Test Case: Same Predicate with Edge Direction Conditions
--- Purpose: Verify Same Predicate functionality with different edge directions
--- Query: (a:person) -[e1:knows]-> (b) | (a:person) <-[e2:created]- (c) WHERE SAME(e1.weight = e2.weight)
--- Description: This test validates that Same Predicate can handle conditions comparing
--- edge properties from different directions (outgoing and incoming edges).
--- It ensures that edge direction is properly considered when evaluating shared conditions.
--- Expected: Returns person vertices where knows edge weight equals created edge weight
+-- Test Case: Same Predicate with Multiple Path Patterns
+-- Purpose: Verify Same Predicate functionality with three path patterns
+-- Query: (a:person) -> (b) | (a:person) -> (c) | (a:person) -> (d) WHERE SHARED(a.age > 25)
+-- Description: This test validates that Same Predicate can handle more than two path patterns.
+-- It ensures that the shared condition is properly applied to all three path patterns
+-- and that the result set includes vertices from all three patterns.
+-- Expected: Returns person vertices with age > 25 and their connected vertices b, c, and d
 
 CREATE TABLE tbl_result (
   a_id bigint,
-  e1_weight double,
+  a_age int,
   b_id bigint,
-  e2_weight double,
-  c_id bigint
+  c_id bigint,
+  d_id bigint
 ) WITH (
 	type='file',
 	geaflow.dsl.file.path='${target}'
@@ -41,11 +41,11 @@ USE GRAPH modern;
 INSERT INTO tbl_result
 SELECT
 	a_id,
-  e1_weight,
+  a_age,
   b_id,
-  e2_weight,
-  c_id
+  c_id,
+  d_id
 FROM (
-  MATCH (a:person) -[e1:knows]-> (b) | (a:person) <-[e2:created]- (c) WHERE SAME(e1.weight = e2.weight)
-  RETURN a.id as a_id, e1.weight as e1_weight, b.id as b_id, e2.weight as e2_weight, c.id as c_id
+  MATCH (a:person) -> (b) | (a:person) -> (c) | (a:person) -> (d) WHERE SHARED(a.age > 25)
+  RETURN a.id as a_id, a.age as a_age, b.id as b_id, c.id as c_id, d.id as d_id
 )

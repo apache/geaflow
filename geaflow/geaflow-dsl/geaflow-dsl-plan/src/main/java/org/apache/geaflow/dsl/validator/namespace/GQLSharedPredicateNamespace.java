@@ -35,20 +35,20 @@ import org.apache.geaflow.dsl.calcite.PathRecordType;
 import org.apache.geaflow.dsl.calcite.UnionPathRecordType;
 import org.apache.geaflow.dsl.common.exception.GeaFlowDSLException;
 import org.apache.geaflow.dsl.sqlnode.SqlPathPattern;
-import org.apache.geaflow.dsl.sqlnode.SqlSamePredicatePattern;
+import org.apache.geaflow.dsl.sqlnode.SqlSharedPredicatePattern;
 import org.apache.geaflow.dsl.validator.namespace.GQLMatchNodeNamespace.MatchNodeContext;
 
 /**
- * Namespace for validating same predicate patterns in GQL.
- * This namespace handles the validation of same predicate patterns where
+ * Namespace for validating shared predicate patterns in GQL.
+ * This namespace handles the validation of shared predicate patterns where
  * two path patterns share a common predicate condition.
  */
-public class GQLSamePredicateNamespace extends GQLBaseNamespace {
+public class GQLSharedPredicateNamespace extends GQLBaseNamespace {
 
     /**
-     * The same predicate pattern being validated
+     * The shared predicate pattern being validated
      */
-    private final SqlSamePredicatePattern samePredicatePattern;
+    private final SqlSharedPredicatePattern sharedPredicatePattern;
 
     /**
      * Context for match node validation
@@ -56,14 +56,14 @@ public class GQLSamePredicateNamespace extends GQLBaseNamespace {
     private MatchNodeContext matchNodeContext;
 
     /**
-     * Constructor for GQLSamePredicateNamespace
+     * Constructor for GQLSharedPredicateNamespace
      *
      * @param validator the validator instance
-     * @param samePredicatePattern the same predicate pattern to validate
+     * @param sharedPredicatePattern the shared predicate pattern to validate
      */
-    public GQLSamePredicateNamespace(SqlValidatorImpl validator, SqlSamePredicatePattern samePredicatePattern) {
-        super(validator, samePredicatePattern);
-        this.samePredicatePattern = samePredicatePattern;
+    public GQLSharedPredicateNamespace(SqlValidatorImpl validator, SqlSharedPredicatePattern sharedPredicatePattern) {
+        super(validator, sharedPredicatePattern);
+        this.sharedPredicatePattern = sharedPredicatePattern;
     }
 
     /**
@@ -77,17 +77,17 @@ public class GQLSamePredicateNamespace extends GQLBaseNamespace {
 
     @Override
     protected RelDataType validateImpl(RelDataType targetRowType) {
-        SqlValidatorScope scope = getValidator().getScopes(samePredicatePattern);
+        SqlValidatorScope scope = getValidator().getScopes(sharedPredicatePattern);
         List<PathRecordType> pathRecordTypes = new ArrayList<>();
 
         // Validate left path pattern
-        validatePathPattern(samePredicatePattern.getLeft(), matchNodeContext, scope, pathRecordTypes);
+        validatePathPattern(sharedPredicatePattern.getLeft(), matchNodeContext, scope, pathRecordTypes);
 
         // Validate right path pattern
-        validatePathPattern(samePredicatePattern.getRight(), matchNodeContext, scope, pathRecordTypes);
+        validatePathPattern(sharedPredicatePattern.getRight(), matchNodeContext, scope, pathRecordTypes);
 
         // Validate same predicate condition
-        validateSamePredicate(samePredicatePattern.getPredicate(), scope, pathRecordTypes);
+        validateSharedPredicate(sharedPredicatePattern.getPredicate(), scope, pathRecordTypes);
 
         // Create union path record type from all path patterns
         PathRecordType patternType = new UnionPathRecordType(pathRecordTypes,
@@ -145,7 +145,7 @@ public class GQLSamePredicateNamespace extends GQLBaseNamespace {
      * @param scope the validator scope
      * @param pathPatternTypes list of path pattern types
      */
-    private void validateSamePredicate(SqlNode predicate, SqlValidatorScope scope,
+    private void validateSharedPredicate(SqlNode predicate, SqlValidatorScope scope,
                                        List<PathRecordType> pathPatternTypes) {
         // Validate the predicate expression
         predicate.validate(validator, scope);
@@ -230,6 +230,6 @@ public class GQLSamePredicateNamespace extends GQLBaseNamespace {
 
     @Override
     public SqlNode getNode() {
-        return samePredicatePattern;
+        return sharedPredicatePattern;
     }
 }

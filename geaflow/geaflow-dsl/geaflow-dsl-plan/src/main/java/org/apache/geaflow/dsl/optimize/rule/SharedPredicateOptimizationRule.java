@@ -26,53 +26,53 @@ import org.apache.calcite.plan.RelOptRuleCall;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rex.RexNode;
 import org.apache.geaflow.dsl.rel.match.MatchFilter;
-import org.apache.geaflow.dsl.rel.match.MatchSamePredicate;
+import org.apache.geaflow.dsl.rel.match.MatchSharedPredicate;
 import org.apache.geaflow.dsl.rel.match.MatchUnion;
 import org.apache.geaflow.dsl.util.GQLRexUtil;
 
 /**
- * Optimization rule for same predicate patterns.
- * This rule converts MatchSamePredicate to a more efficient MatchUnion + MatchFilter combination.
+ * Optimization rule for shared predicate patterns.
+ * This rule converts MatchSharedPredicate to a more efficient MatchUnion + MatchFilter combination.
  *
  * The transformation is:
- * MatchSamePredicate(left, right, condition, distinct) ->
+ * MatchSharedPredicate(left, right, condition, distinct) ->
  * MatchFilter(MatchUnion(left, right, distinct), condition)
  */
-public class SamePredicateOptimizationRule extends RelOptRule {
+public class SharedPredicateOptimizationRule extends RelOptRule {
 
     /**
      * Singleton instance of the rule
      */
-    public static final SamePredicateOptimizationRule INSTANCE = new SamePredicateOptimizationRule();
+    public static final SharedPredicateOptimizationRule INSTANCE = new SharedPredicateOptimizationRule();
 
     /**
-     * Constructor for SamePredicateOptimizationRule
+     * Constructor for SharedPredicateOptimizationRule
      */
-    private SamePredicateOptimizationRule() {
-        super(operand(MatchSamePredicate.class, any()));
+    private SharedPredicateOptimizationRule() {
+        super(operand(MatchSharedPredicate.class, any()));
     }
 
     @Override
     public void onMatch(RelOptRuleCall call) {
-        MatchSamePredicate samePredicate = call.rel(0);
+        MatchSharedPredicate sharedPredicate = call.rel(0);
         
         // Create union of left and right path patterns
-        List<RelNode> inputs = Arrays.asList(samePredicate.getLeft(), samePredicate.getRight());
+        List<RelNode> inputs = Arrays.asList(sharedPredicate.getLeft(), sharedPredicate.getRight());
         MatchUnion union = MatchUnion.create(
-            samePredicate.getCluster(),
-            samePredicate.getTraitSet(),
+            sharedPredicate.getCluster(),
+            sharedPredicate.getTraitSet(),
             inputs,
-            !samePredicate.isDistinct() // MatchUnion uses 'all' parameter (true for union all, false for distinct)
+            !sharedPredicate.isDistinct() // MatchUnion uses 'all' parameter (true for union all, false for distinct)
         );
-        
+
         // Apply the shared predicate condition as a filter
         MatchFilter filter = MatchFilter.create(
             union,
-            samePredicate.getCondition(),
-            samePredicate.getPathSchema()
+            sharedPredicate.getCondition(),
+            sharedPredicate.getPathSchema()
         );
-        
-        // Transform the original same predicate to the optimized union + filter
+
+        // Transform the original shared predicate to the optimized union + filter
         call.transformTo(filter);
     }
 }

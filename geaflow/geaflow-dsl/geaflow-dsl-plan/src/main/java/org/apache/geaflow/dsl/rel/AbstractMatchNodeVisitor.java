@@ -21,7 +21,7 @@ package org.apache.geaflow.dsl.rel;
 
 import org.apache.calcite.rel.RelNode;
 import org.apache.geaflow.dsl.rel.match.IMatchNode;
-import org.apache.geaflow.dsl.rel.match.MatchSamePredicate;
+import org.apache.geaflow.dsl.rel.match.MatchSharedPredicate;
 
 public abstract class AbstractMatchNodeVisitor<T> implements MatchNodeVisitor<T> {
 
@@ -34,7 +34,7 @@ public abstract class AbstractMatchNodeVisitor<T> implements MatchNodeVisitor<T>
     }
 
     @Override
-    public T visitSamePredicate(MatchSamePredicate samePredicate) {
-        return visit(samePredicate);
+    public T visitSharedPredicate(MatchSharedPredicate sharedPredicate) {
+        return visit(sharedPredicate);
     }
 }

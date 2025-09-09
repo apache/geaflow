@@ -17,17 +17,17 @@
  * under the License.
  */
 
--- Test Case: Same Predicate with Vertex Type Conditions
--- Purpose: Verify Same Predicate functionality with different vertex types
--- Query: (a:person) -> (b:person) | (a:person) -> (c:software) WHERE SAME(a.age > 25)
--- Description: This test validates that Same Predicate works correctly when path patterns
--- target different vertex types (person and software). It ensures that vertex type filtering
--- is properly handled in conjunction with shared conditions.
--- Expected: Returns person vertices with age > 25 connected to both person and software vertices
+-- Test Case: Same Predicate with String Conditions
+-- Purpose: Verify Same Predicate functionality with string comparison
+-- Query: (a:person) -> (b) | (a:person) -> (c) WHERE SHARED(a.name = 'marko')
+-- Description: This test validates that Same Predicate can handle string comparison
+-- conditions. It ensures that string literals and string properties are properly
+-- compared and that the condition is correctly applied to both path patterns.
+-- Expected: Returns person vertices with name 'marko' and their connected vertices
 
 CREATE TABLE tbl_result (
   a_id bigint,
-  a_age int,
+  a_name varchar,
   b_id bigint,
   c_id bigint
 ) WITH (
@@ -40,10 +40,10 @@ USE GRAPH modern;
 INSERT INTO tbl_result
 SELECT
 	a_id,
-  a_age,
+  a_name,
   b_id,
   c_id
 FROM (
-  MATCH (a:person) -> (b:person) | (a:person) -> (c:software) WHERE SAME(a.age > 25)
-  RETURN a.id as a_id, a.age as a_age, b.id as b_id, c.id as c_id
+  MATCH (a:person) -> (b) | (a:person) -> (c) WHERE SHARED(a.name = 'marko')
+  RETURN a.id as a_id, a.name as a_name, b.id as b_id, c.id as c_id
 )

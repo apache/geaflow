@@ -32,12 +32,12 @@ import org.apache.geaflow.dsl.calcite.PathRecordType;
 import org.apache.geaflow.dsl.rel.MatchNodeVisitor;
 
 /**
- * Relational operator for same predicate pattern matching.
+ * Relational operator for shared predicate pattern matching.
  * This operator represents a pattern where two path patterns share a common predicate condition.
  *
- * The same predicate pattern is typically converted to a union + filter operation during optimization.
+ * The shared predicate pattern is typically converted to a union + filter operation during optimization.
  */
-public class MatchSamePredicate extends AbstractMatchNode {
+public class MatchSharedPredicate extends AbstractMatchNode {
 
     /**
      * Left path pattern
@@ -60,7 +60,7 @@ public class MatchSamePredicate extends AbstractMatchNode {
     private final boolean isDistinct;
 
     /**
-     * Constructor for MatchSamePredicate
+     * Constructor for MatchSharedPredicate
      *
      * @param cluster the cluster
      * @param traits the trait set
@@ -70,8 +70,8 @@ public class MatchSamePredicate extends AbstractMatchNode {
      * @param isDistinct whether to use distinct semantics
      * @param pathSchema the path schema
      */
-    protected MatchSamePredicate(RelOptCluster cluster, RelTraitSet traits,
-                                  IMatchNode left, IMatchNode right,
+    protected MatchSharedPredicate(RelOptCluster cluster, RelTraitSet traits,
+                                   IMatchNode left, IMatchNode right,
                                   RexNode condition, boolean isDistinct,
                                   PathRecordType pathSchema) {
         super(cluster, traits, pathSchema);
@@ -98,21 +98,21 @@ public class MatchSamePredicate extends AbstractMatchNode {
 
     @Override
     public IMatchNode copy(List<RelNode> inputs, PathRecordType pathType) {
-        return new MatchSamePredicate(getCluster(), getTraitSet(),
+        return new MatchSharedPredicate(getCluster(), getTraitSet(),
             (IMatchNode) inputs.get(0), (IMatchNode) inputs.get(1),
             condition, isDistinct, pathType);
     }
 
     @Override
     public RelNode copy(RelTraitSet traitSet, List<RelNode> inputs) {
-        return new MatchSamePredicate(getCluster(), traitSet,
+        return new MatchSharedPredicate(getCluster(), traitSet,
             (IMatchNode) inputs.get(0), (IMatchNode) inputs.get(1),
             condition, isDistinct, getPathSchema());
     }
 
     @Override
     public <T> T accept(MatchNodeVisitor<T> visitor) {
-        return visitor.visitSamePredicate(this);
+        return visitor.visitSharedPredicate(this);
     }
 
     @Override
@@ -170,19 +170,19 @@ public class MatchSamePredicate extends AbstractMatchNode {
     }
 
     /**
-     * Create a new MatchSamePredicate
+     * Create a new MatchSharedPredicate
      *
      * @param left left path pattern
      * @param right right path pattern
      * @param condition shared predicate condition
      * @param isDistinct whether to use distinct semantics
      * @param pathSchema the path schema
-     * @return new MatchSamePredicate instance
+     * @return new MatchSharedPredicate instance
      */
-    public static MatchSamePredicate create(IMatchNode left, IMatchNode right,
-                                            RexNode condition, boolean isDistinct,
-                                            PathRecordType pathSchema) {
-        return new MatchSamePredicate(left.getCluster(), left.getTraitSet(),
-            left, right, condition, isDistinct, pathSchema);
+    public static MatchSharedPredicate create(IMatchNode left, IMatchNode right,
+                                             RexNode condition, boolean isDistinct,
+                                             PathRecordType pathSchema) {
+        return new MatchSharedPredicate(left.getCluster(), left.getTraitSet(),
+                                       left, right, condition, isDistinct, pathSchema);
     }
 }

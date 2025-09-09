@@ -36,20 +36,20 @@ import org.apache.calcite.util.ImmutableNullableList;
 /**
  * SQL node representing a shared predicate pattern in GQL.
  * This node represents a pattern where multiple path patterns share a common predicate condition.
- * The SAME keyword ensures that all path patterns in the union must satisfy the same condition.
+ * The SHARED keyword ensures that all path patterns in the union must satisfy the same condition.
  *
- * <p>Example: MATCH (a:person) -> (b) | (a:person) -> (c) WHERE SAME(a.age > 25)
+ * <p>Example: MATCH (a:person) -> (b) | (a:person) -> (c) WHERE SHARED(a.age > 25)
  * This means both path patterns (a->b) and (a->c) must satisfy the condition a.age > 25.
  *
  * <p>Note: This is different from EXISTS syntax which checks path existence.
- * SAME predicate is used for condition sharing across multiple paths, not entity comparison.
+ * SHARED predicate is used for condition sharing across multiple paths, not entity comparison.
  */
-public class SqlSamePredicatePattern extends SqlCall {
+public class SqlSharedPredicatePattern extends SqlCall {
 
     /**
      * Operator for shared predicate pattern across multiple paths.
      */
-    public static final SqlOperator OPERATOR = new SqlSpecialOperator("SAME_PREDICATE", SqlKind.OTHER);
+    public static final SqlOperator OPERATOR = new SqlSpecialOperator("SHARED_PREDICATE", SqlKind.OTHER);
 
     /**
      * Left path pattern.
@@ -80,8 +80,8 @@ public class SqlSamePredicatePattern extends SqlCall {
      * @param predicate shared predicate condition
      * @param isDistinct whether to use distinct semantics
      */
-    public SqlSamePredicatePattern(SqlParserPos pos, SqlNode left, SqlNode right,
-                                   SqlNode predicate, boolean isDistinct) {
+    public SqlSharedPredicatePattern(SqlParserPos pos, SqlNode left, SqlNode right,
+                                     SqlNode predicate, boolean isDistinct) {
         super(pos);
         this.left = Objects.requireNonNull(left, "left path pattern cannot be null");
         this.right = Objects.requireNonNull(right, "right path pattern cannot be null");
@@ -212,9 +212,9 @@ public class SqlSamePredicatePattern extends SqlCall {
         // Unparse right path pattern
         right.unparse(writer, leftPrec, rightPrec);
 
-        // Unparse WHERE SAME clause - shared condition for all paths
+        // Unparse WHERE SHARED clause - shared condition for all paths
         writer.keyword("WHERE");
-        writer.keyword("SAME");
+        writer.keyword("SHARED");
         writer.keyword("(");
         predicate.unparse(writer, leftPrec, rightPrec);
         writer.keyword(")");
@@ -240,7 +240,7 @@ public class SqlSamePredicatePattern extends SqlCall {
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();
-        sb.append("SqlSamePredicatePattern(");
+        sb.append("SqlSharedPredicatePattern(");
         sb.append("left=").append(left);
         sb.append(", right=").append(right);
         sb.append(", predicate=").append(predicate);
@@ -257,7 +257,7 @@ public class SqlSamePredicatePattern extends SqlCall {
         if (obj == null || getClass() != obj.getClass()) {
             return false;
         }
-        SqlSamePredicatePattern that = (SqlSamePredicatePattern) obj;
+        SqlSharedPredicatePattern that = (SqlSharedPredicatePattern) obj;
         return isDistinct == that.isDistinct
                && Objects.equals(left, that.left)
                && Objects.equals(right, that.right)

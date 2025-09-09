@@ -17,20 +17,19 @@
  * under the License.
  */
 
--- Test Case: Same Predicate with Multiple Path Patterns
--- Purpose: Verify Same Predicate functionality with three path patterns
--- Query: (a:person) -> (b) | (a:person) -> (c) | (a:person) -> (d) WHERE SAME(a.age > 25)
--- Description: This test validates that Same Predicate can handle more than two path patterns.
--- It ensures that the shared condition is properly applied to all three path patterns
--- and that the result set includes vertices from all three patterns.
--- Expected: Returns person vertices with age > 25 and their connected vertices b, c, and d
+-- Test Case: Same Predicate with Subquery Integration
+-- Purpose: Verify Same Predicate functionality with subquery conditions
+-- Query: (a:person) -> (b) | (a:person) -> (c) WHERE SHARED(a.id IN (SELECT id FROM person WHERE age > 25))
+-- Description: This test validates that Same Predicate can handle subquery conditions
+-- properly. It ensures that subqueries are correctly evaluated and that the result
+-- is properly applied to both path patterns in the Same Predicate.
+-- Expected: Returns person vertices whose IDs are in the subquery result and their connected vertices
 
 CREATE TABLE tbl_result (
   a_id bigint,
   a_age int,
   b_id bigint,
-  c_id bigint,
-  d_id bigint
+  c_id bigint
 ) WITH (
 	type='file',
 	geaflow.dsl.file.path='${target}'
@@ -43,9 +42,8 @@ SELECT
 	a_id,
   a_age,
   b_id,
-  c_id,
-  d_id
+  c_id
 FROM (
-  MATCH (a:person) -> (b) | (a:person) -> (c) | (a:person) -> (d) WHERE SAME(a.age > 25)
-  RETURN a.id as a_id, a.age as a_age, b.id as b_id, c.id as c_id, d.id as d_id
+  MATCH (a:person) -> (b) | (a:person) -> (c) WHERE SHARED(a.id IN (SELECT id FROM person WHERE age > 25))
+  RETURN a.id as a_id, a.age as a_age, b.id as b_id, c.id as c_id
 )

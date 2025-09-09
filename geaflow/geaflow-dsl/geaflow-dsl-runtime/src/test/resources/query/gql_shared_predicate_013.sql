@@ -17,19 +17,18 @@
  * under the License.
  */
 
--- Test Case: Same Predicate with Edge Conditions
--- Purpose: Verify Same Predicate functionality with edge property conditions
--- Query: (a:person) -[e1:knows]-> (b) | (a:person) -[e2:created]-> (c) WHERE SAME(e1.weight > 0.5)
--- Description: This test validates that Same Predicate can handle conditions on edge properties.
--- It ensures that edge conditions are properly shared across different path patterns
--- and that edge properties are correctly evaluated in the shared predicate.
--- Expected: Returns person vertices connected via knows edges with weight > 0.5 and created edges
+-- Test Case: Same Predicate with Null Handling
+-- Purpose: Verify Same Predicate functionality with null value conditions
+-- Query: (a:person) -> (b) | (a:person) -> (c) WHERE SHARED(a.age IS NOT NULL)
+-- Description: This test validates that Same Predicate can handle null value conditions
+-- properly. It ensures that IS NULL and IS NOT NULL operators work correctly
+-- in shared conditions and that null values are handled appropriately.
+-- Expected: Returns person vertices with non-null age values and their connected vertices
 
 CREATE TABLE tbl_result (
   a_id bigint,
-  e1_weight double,
+  a_age int,
   b_id bigint,
-  e2_weight double,
   c_id bigint
 ) WITH (
 	type='file',
@@ -41,11 +40,10 @@ USE GRAPH modern;
 INSERT INTO tbl_result
 SELECT
 	a_id,
-  e1_weight,
+  a_age,
   b_id,
-  e2_weight,
   c_id
 FROM (
-  MATCH (a:person) -[e1:knows]-> (b) | (a:person) -[e2:created]-> (c) WHERE SAME(e1.weight > 0.5)
-  RETURN a.id as a_id, e1.weight as e1_weight, b.id as b_id, e2.weight as e2_weight, c.id as c_id
+  MATCH (a:person) -> (b) | (a:person) -> (c) WHERE SHARED(a.age IS NOT NULL)
+  RETURN a.id as a_id, a.age as a_age, b.id as b_id, c.id as c_id
 )

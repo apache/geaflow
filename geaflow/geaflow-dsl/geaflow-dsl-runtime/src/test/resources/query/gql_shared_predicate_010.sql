@@ -17,13 +17,13 @@
  * under the License.
  */
 
--- Test Case: Same Predicate with Subquery Integration
--- Purpose: Verify Same Predicate functionality with subquery conditions
--- Query: (a:person) -> (b) | (a:person) -> (c) WHERE SAME(a.id IN (SELECT id FROM person WHERE age > 25))
--- Description: This test validates that Same Predicate can handle subquery conditions
--- properly. It ensures that subqueries are correctly evaluated and that the result
--- is properly applied to both path patterns in the Same Predicate.
--- Expected: Returns person vertices whose IDs are in the subquery result and their connected vertices
+-- Test Case: Same Predicate with Vertex Type Conditions
+-- Purpose: Verify Same Predicate functionality with different vertex types
+-- Query: (a:person) -> (b:person) | (a:person) -> (c:software) WHERE SHARED(a.age > 25)
+-- Description: This test validates that Same Predicate works correctly when path patterns
+-- target different vertex types (person and software). It ensures that vertex type filtering
+-- is properly handled in conjunction with shared conditions.
+-- Expected: Returns person vertices with age > 25 connected to both person and software vertices
 
 CREATE TABLE tbl_result (
   a_id bigint,
@@ -44,6 +44,6 @@ SELECT
   b_id,
   c_id
 FROM (
-  MATCH (a:person) -> (b) | (a:person) -> (c) WHERE SAME(a.id IN (SELECT id FROM person WHERE age > 25))
+  MATCH (a:person) -> (b:person) | (a:person) -> (c:software) WHERE SHARED(a.age > 25)
   RETURN a.id as a_id, a.age as a_age, b.id as b_id, c.id as c_id
 )

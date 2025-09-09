@@ -52,7 +52,7 @@ import org.apache.geaflow.dsl.sqlnode.SqlMatchPattern;
 import org.apache.geaflow.dsl.sqlnode.SqlPathPattern;
 import org.apache.geaflow.dsl.sqlnode.SqlPathPatternSubQuery;
 import org.apache.geaflow.dsl.sqlnode.SqlReturnStatement;
-import org.apache.geaflow.dsl.sqlnode.SqlSamePredicatePattern;
+import org.apache.geaflow.dsl.sqlnode.SqlSharedPredicatePattern;
 import org.apache.geaflow.dsl.sqlnode.SqlUnionPathPattern;
 import org.apache.geaflow.dsl.util.GQLNodeUtil;
 import org.apache.geaflow.dsl.validator.namespace.GQLAlgorithmNamespace;
@@ -65,7 +65,7 @@ import org.apache.geaflow.dsl.validator.namespace.GQLMatchPatternNamespace;
 import org.apache.geaflow.dsl.validator.namespace.GQLPathPatternNamespace;
 import org.apache.geaflow.dsl.validator.namespace.GQLReturnNamespace;
 import org.apache.geaflow.dsl.validator.namespace.GQLSubQueryNamespace;
-import org.apache.geaflow.dsl.validator.namespace.GQLSamePredicateNamespace;
+import org.apache.geaflow.dsl.validator.namespace.GQLSharedPredicateNamespace;
 import org.apache.geaflow.dsl.validator.namespace.GQLUnionPathPatternNamespace;
 import org.apache.geaflow.dsl.validator.namespace.IdentifierCompleteNamespace;
 import org.apache.geaflow.dsl.validator.scope.GQLPathPatternScope;
@@ -263,19 +263,19 @@ public class GQLValidatorImpl extends SqlValidatorImpl {
                 scopes.put(algorithmCall, algorithmScope);
                 break;
             case OTHER:
-                // Handle same predicate pattern
-                if (node instanceof SqlSamePredicatePattern) {
-                    SqlSamePredicatePattern samePredicatePattern = (SqlSamePredicatePattern) node;
-                    GQLScope samePredicateScope = new GQLScope(parentScope, samePredicatePattern);
-                    GQLSamePredicateNamespace samePredicateNamespace = new GQLSamePredicateNamespace(this, samePredicatePattern);
-                    registerNamespace(usingScope, alias, samePredicateNamespace, forceNullable);
-                    
+                // Handle shared predicate pattern
+                if (node instanceof SqlSharedPredicatePattern) {
+                    SqlSharedPredicatePattern sharedPredicatePattern = (SqlSharedPredicatePattern) node;
+                    GQLScope sharedPredicateScope = new GQLScope(parentScope, sharedPredicatePattern);
+                    GQLSharedPredicateNamespace sharedPredicateNamespace = new GQLSharedPredicateNamespace(this, sharedPredicatePattern);
+                    registerNamespace(usingScope, alias, sharedPredicateNamespace, forceNullable);
+
                     // Register left and right path patterns
-                    SqlValidatorNamespace samePredicateFromNs = namespaces.get(enclosingNode);
-                    registerPathPattern(samePredicatePattern.getLeft(), parentScope, samePredicateFromNs, alias, forceNullable);
-                    registerPathPattern(samePredicatePattern.getRight(), parentScope, samePredicateFromNs, alias, forceNullable);
-                    
-                    scopes.put(samePredicatePattern, samePredicateScope);
+                    SqlValidatorNamespace sharedPredicateFromNs = namespaces.get(enclosingNode);
+                    registerPathPattern(sharedPredicatePattern.getLeft(), parentScope, sharedPredicateFromNs, alias, forceNullable);
+                    registerPathPattern(sharedPredicatePattern.getRight(), parentScope, sharedPredicateFromNs, alias, forceNullable);
+
+                    scopes.put(sharedPredicatePattern, sharedPredicateScope);
                     break;
                 }
             default:
@@ -290,16 +290,16 @@ public class GQLValidatorImpl extends SqlValidatorImpl {
                                                       boolean forceNullable) {
         GQLPathPatternScope pathPatternScope = new GQLPathPatternScope(parentScope, (SqlCall) sqlNode);
 
-        if (sqlNode instanceof SqlSamePredicatePattern) {
-            SqlSamePredicatePattern samePredicatePattern = (SqlSamePredicatePattern) sqlNode;
-            GQLSamePredicateNamespace pathNs = new GQLSamePredicateNamespace(this, samePredicatePattern);
+        if (sqlNode instanceof SqlSharedPredicatePattern) {
+            SqlSharedPredicatePattern sharedPredicatePattern = (SqlSharedPredicatePattern) sqlNode;
+            GQLSharedPredicateNamespace pathNs = new GQLSharedPredicateNamespace(this, sharedPredicatePattern);
             registerNamespace(null, alias, pathNs, forceNullable);
-            
+
             // Register left and right path patterns
-            registerPathPattern(samePredicatePattern.getLeft(), parentScope, fromNs, alias, forceNullable);
-            registerPathPattern(samePredicatePattern.getRight(), parentScope, fromNs, alias, forceNullable);
-            
-            scopes.put(samePredicatePattern, pathPatternScope);
+            registerPathPattern(sharedPredicatePattern.getLeft(), parentScope, fromNs, alias, forceNullable);
+            registerPathPattern(sharedPredicatePattern.getRight(), parentScope, fromNs, alias, forceNullable);
+
+            scopes.put(sharedPredicatePattern, pathPatternScope);
             return pathNs;
         }
         
