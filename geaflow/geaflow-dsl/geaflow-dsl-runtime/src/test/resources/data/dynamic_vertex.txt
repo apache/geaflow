@@ -1,0 +1,5 @@
+1001	person	0.8
+1002	person	0.9
+1003	person	0.7
+1004	person	0.6
+1005	person	0.5

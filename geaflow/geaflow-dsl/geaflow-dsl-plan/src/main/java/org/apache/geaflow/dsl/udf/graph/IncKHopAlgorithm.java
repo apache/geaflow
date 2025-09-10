@@ -154,12 +154,12 @@ public class IncKHopAlgorithm implements AlgorithmUserFunction<Object, IntTreePa
                 if (sendInPathMessage != null) {
                     sendMessage(staticInEdges, sendInPathMessage);
                     sendMessage(dynamicInEdges, sendInPathMessage);
-                    //合并消息树开启时，只在无消息发出时，保存当前路径
+                    //When merge message tree is enabled, only save current path when no message is sent
                     if (staticInEdges.isEmpty() && dynamicInEdges.isEmpty()) {
                         stashInPathMessages.add(sendInPathMessage);
                     }
                 }
-                // 激活自己
+                // Activate self
                 sendMessage(vertex.getId());
             } else if (currentIterationId == maxIterNum - 1) {
                 // tree path is reversed.
