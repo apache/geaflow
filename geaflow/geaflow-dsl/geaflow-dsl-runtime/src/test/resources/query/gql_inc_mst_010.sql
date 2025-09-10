@@ -17,31 +17,19 @@
  * under the License.
  */
 
-CREATE TABLE kafka_source (
-	id bigint,
-	name varchar,
-	age long
-) WITH (
-	type='kafka',
-	geaflow.dsl.kafka.servers = 'localhost:9092',
-	geaflow.dsl.kafka.topic = 'scan_002',
-	geaflow.dsl.kafka.data.operation.timeout.seconds = 5,
-	geaflow.dsl.time.window.size=10,
-	geaflow.dsl.start.time='${stTime}'
+/*
+ * Incremental Minimum Spanning Tree algorithm复杂拓扑Test
+ * Test复杂图结构的MST计算
+ */
+CREATE TABLE inc_mst_complex_result WITH (
+    type='file',
+    geaflow.dsl.file.path = '/tmp/geaflow/inc_mst_complex_result_010.txt'
 );
 
-CREATE TABLE tbl_result (
-	id bigint,
-	name varchar,
-	age long
-) WITH (
-	type='file',
-	geaflow.dsl.file.path='${target}'
-);
+USE GRAPH complex_graph;
+INSERT INTO inc_mst_complex_result
+CALL IncMST(150, 0.001, 'mst_complex_edges') YIELD (srcId, targetId, weight) 
+RETURN srcId, targetId, weight;
 
-INSERT INTO tbl_result
-SELECT DISTINCT id, name, age
-FROM kafka_source
-ORDER BY id
-LIMIT 5
-;
+-- Verify results
+SELECT * FROM inc_mst_complex_result;

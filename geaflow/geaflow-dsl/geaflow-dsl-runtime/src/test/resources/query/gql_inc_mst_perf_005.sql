@@ -17,31 +17,21 @@
  * under the License.
  */
 
-CREATE TABLE kafka_source (
-	id bigint,
-	name varchar,
-	age long
-) WITH (
-	type='kafka',
-	geaflow.dsl.kafka.servers = 'localhost:9092',
-	geaflow.dsl.kafka.topic = 'scan_002',
-	geaflow.dsl.kafka.data.operation.timeout.seconds = 5,
-	geaflow.dsl.time.window.size=10,
-	geaflow.dsl.start.time='${stTime}'
+/*
+ * Incremental Minimum Spanning Tree algorithm收敛性性能Test
+ * Test算法收敛性能
+ */
+CREATE TABLE inc_mst_perf_convergence_result WITH (
+    type='file',
+    geaflow.dsl.file.path = '/tmp/geaflow/inc_mst_perf_convergence_result_005.txt'
 );
 
-CREATE TABLE tbl_result (
-	id bigint,
-	name varchar,
-	age long
-) WITH (
-	type='file',
-	geaflow.dsl.file.path='${target}'
-);
+USE GRAPH modern;
 
-INSERT INTO tbl_result
-SELECT DISTINCT id, name, age
-FROM kafka_source
-ORDER BY id
-LIMIT 5
-;
+-- Test收敛性
+INSERT INTO inc_mst_perf_convergence_result
+CALL IncMST(5, 0.01, 'mst_perf_convergence_edges') YIELD (srcId, targetId, weight) 
+RETURN srcId, targetId, weight;
+
+-- Verify results
+SELECT * FROM inc_mst_perf_convergence_result;

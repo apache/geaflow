@@ -1,0 +1,10 @@
+medium1,5001
+medium2,5002
+medium3,5003
+medium4,5004
+medium5,5005
+medium6,5006
+medium7,5007
+medium8,5008
+medium9,5009
+medium10,5010

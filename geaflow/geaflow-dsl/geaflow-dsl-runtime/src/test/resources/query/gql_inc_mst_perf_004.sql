@@ -1,0 +1,47 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+/*
+ * Incremental Minimum Spanning Tree algorithm incremental update performance test
+ * Test performance in dynamic graph update scenarios
+ */
+CREATE TABLE inc_mst_perf_incremental_result (
+  srcId int,
+  targetId int,
+  weight double
+) WITH (
+    type='file',
+    geaflow.dsl.file.path = '${target}'
+);
+
+USE GRAPH modern;
+
+-- Initial MST calculation
+INSERT INTO inc_mst_perf_incremental_result
+CALL IncMST(50, 0.001, 'mst_perf_incremental_edges') YIELD (srcId, targetId, weight) 
+RETURN srcId, targetId, weight;
+
+-- Simulate edge updates
+INSERT INTO modern.relation VALUES (3001, 3002);
+INSERT INTO modern.relation VALUES (3002, 3003);
+
+-- MST calculation after incremental update
+INSERT INTO inc_mst_perf_incremental_result
+CALL IncMST(50, 0.001, 'mst_perf_incremental_edges') YIELD (srcId, targetId, weight) 
+RETURN srcId, targetId, weight;
