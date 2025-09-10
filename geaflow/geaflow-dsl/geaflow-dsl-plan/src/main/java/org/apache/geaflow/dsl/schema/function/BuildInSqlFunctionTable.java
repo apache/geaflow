@@ -74,13 +74,7 @@ import org.apache.geaflow.dsl.udf.table.date.Year;
 import org.apache.geaflow.dsl.udf.table.math.E;
 import org.apache.geaflow.dsl.udf.table.math.Log2;
 import org.apache.geaflow.dsl.udf.table.math.Round;
-import org.apache.geaflow.dsl.udf.table.other.EdgeSrcId;
-import org.apache.geaflow.dsl.udf.table.other.EdgeTargetId;
-import org.apache.geaflow.dsl.udf.table.other.EdgeTimestamp;
-import org.apache.geaflow.dsl.udf.table.other.If;
-import org.apache.geaflow.dsl.udf.table.other.IsDecimal;
-import org.apache.geaflow.dsl.udf.table.other.Label;
-import org.apache.geaflow.dsl.udf.table.other.VertexId;
+import org.apache.geaflow.dsl.udf.table.other.*;
 import org.apache.geaflow.dsl.udf.table.string.Ascii2String;
 import org.apache.geaflow.dsl.udf.table.string.Base64Decode;
 import org.apache.geaflow.dsl.udf.table.string.Base64Encode;
@@ -187,6 +181,7 @@ public class BuildInSqlFunctionTable extends ListSqlOperatorTable {
 
             // udf.table.other
             .add(GeaFlowFunction.of(If.class))
+            .add(GeaFlowFunction.of(Direction.class))
             .add(GeaFlowFunction.of(Label.class))
             .add(GeaFlowFunction.of(VertexId.class))
             .add(GeaFlowFunction.of(EdgeSrcId.class))
