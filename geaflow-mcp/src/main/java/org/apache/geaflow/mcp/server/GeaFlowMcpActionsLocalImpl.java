@@ -30,6 +30,7 @@ import java.util.stream.Collectors;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.geaflow.cluster.local.client.LocalEnvironment;
+import org.apache.geaflow.common.exception.GeaflowRuntimeException;
 import org.apache.geaflow.dsl.common.types.TableField;
 import org.apache.geaflow.dsl.schema.GeaFlowGraph;
 import org.apache.geaflow.dsl.schema.GeaFlowTable;
@@ -37,8 +38,12 @@ import org.apache.geaflow.env.IEnvironment;
 import org.apache.geaflow.mcp.server.util.McpLocalFileUtil;
 import org.apache.geaflow.mcp.server.util.QueryFormatUtil;
 import org.apache.geaflow.mcp.server.util.QueryLocalRunner;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class GeaFlowMcpActionsLocalImpl implements GeaFlowMcpActions {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(GeaFlowMcpActionsLocalImpl.class);
 
     private Map<String, Object> configs;
     private String user;
@@ -56,10 +61,12 @@ public class GeaFlowMcpActionsLocalImpl implements GeaFlowMcpActions {
         try {
             graph = runner.compileGraph();
         } catch (Throwable e) {
-            throw new RuntimeException("Compile error: " + e.getCause().getMessage());
+            LOGGER.error("Compile error: " + e.getCause().getMessage());
+            throw new GeaflowRuntimeException("Compile error: " + e.getCause().getMessage());
         }
         if (graph == null) {
-            throw new RuntimeException("Cannot create graph: " + graphName);
+            LOGGER.error("Cannot create graph: " + graphName);
+            throw new GeaflowRuntimeException("Cannot create graph: " + graphName);
         }
         //Store graph ddl to schema
         try {
@@ -78,17 +85,20 @@ public class GeaFlowMcpActionsLocalImpl implements GeaFlowMcpActions {
         try {
             ddl = McpLocalFileUtil.readFile(QueryLocalRunner.DSL_STATE_REMOTE_SCHEM_PATH, graphName);
         } catch (Throwable e) {
-            throw new RuntimeException("Cannot get graph schema for: " + graphName);
+            LOGGER.error("Cannot get graph schema for: " + graphName);
+            throw new GeaflowRuntimeException("Cannot get graph schema for: " + graphName);
         }
         compileRunner.withGraphName(graphName).withGraphDefine(ddl);
         GeaFlowGraph graph;
         try {
             graph = compileRunner.compileGraph();
         } catch (Throwable e) {
-            throw new RuntimeException("Compile error: " + compileRunner.getErrorMsg());
+            LOGGER.error("Compile error: " + compileRunner.getErrorMsg());
+            throw new GeaflowRuntimeException("Compile error: " + compileRunner.getErrorMsg());
         }
         if (graph == null) {
-            throw new RuntimeException("Cannot create graph: " + graphName);
+            LOGGER.error("Cannot create graph: " + graphName);
+            throw new GeaflowRuntimeException("Cannot create graph: " + graphName);
         }
 
         QueryLocalRunner runner = new QueryLocalRunner();
@@ -97,7 +107,8 @@ public class GeaFlowMcpActionsLocalImpl implements GeaFlowMcpActions {
         try {
             runner.execute();
         } catch (Throwable e) {
-            throw new RuntimeException("Run query error: " + e.getCause().getMessage());
+            LOGGER.error("Run query error: " + e.getCause().getMessage());
+            throw new GeaflowRuntimeException("Run query error: " + e.getCause().getMessage());
         }
         return "run query success: " + dml;
     }
@@ -109,6 +120,7 @@ public class GeaFlowMcpActionsLocalImpl implements GeaFlowMcpActions {
         try {
             ddl = McpLocalFileUtil.readFile(QueryLocalRunner.DSL_STATE_REMOTE_SCHEM_PATH, graphName);
         } catch (Throwable e) {
+            LOGGER.error("Cannot get graph schema for: " + graphName);
             return "Cannot get graph schema for: " + graphName;
         }
         compileRunner.withGraphName(graphName).withGraphDefine(ddl);
@@ -119,7 +131,8 @@ public class GeaFlowMcpActionsLocalImpl implements GeaFlowMcpActions {
             return compileRunner.getErrorMsg();
         }
         if (graph == null) {
-            throw new RuntimeException("Cannot create graph: " + graphName);
+            LOGGER.error("Cannot create graph: " + graphName);
+            throw new GeaflowRuntimeException("Cannot create graph: " + graphName);
         }
 
         QueryLocalRunner runner = new QueryLocalRunner();
@@ -143,7 +156,8 @@ public class GeaFlowMcpActionsLocalImpl implements GeaFlowMcpActions {
             }
         }
         if (resultTable == null) {
-            throw new RuntimeException("Cannot find type: " + type + " in graph: " + graphName);
+            LOGGER.error("Cannot find type: " + type + " in graph: " + graphName);
+            throw new GeaflowRuntimeException("Cannot find type: " + type + " in graph: " + graphName);
         }
         runner.withQuery(ddl + "\n" + QueryFormatUtil.makeUseGraph(graphName) + dql);
         String resultContent = "null";
@@ -164,6 +178,7 @@ public class GeaFlowMcpActionsLocalImpl implements GeaFlowMcpActions {
         try {
             ddl = McpLocalFileUtil.readFile(QueryLocalRunner.DSL_STATE_REMOTE_SCHEM_PATH, graphName);
         } catch (Throwable e) {
+            LOGGER.error("Cannot get graph schema for: " + graphName);
             return "Cannot get graph schema for: " + graphName;
         }
         return ddl;
