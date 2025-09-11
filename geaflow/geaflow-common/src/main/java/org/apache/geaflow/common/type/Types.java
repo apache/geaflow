@@ -94,7 +94,7 @@ public class Types {
         return TYPE_IMMUTABLE_MAP.get(type);
     }
 
-    public static IType<?> of(String typeName) {
+    public static IType<?> of(String typeName, int precision) {
         if (typeName == null) {
             throw new IllegalArgumentException("typeName is null");
         }
@@ -116,7 +116,7 @@ public class Types {
             case TYPE_NAME_DECIMAL:
                 return DECIMAL;
             case TYPE_NAME_BINARY_STRING:
-                return BINARY_STRING;
+                return new BinaryStringType(precision);
             case TYPE_NAME_TIMESTAMP:
                 return TIMESTAMP;
             case TYPE_NAME_DATE:
