@@ -246,12 +246,11 @@ public class MathUtil {
      * valid range.
      * @param value from which to search for next power of 2
      * @return The next power of 2 or the value itself if it is a power of 2.
-     * <p/>
      *      Special cases for return values are as follows:
-     * <ul>
-     *     <li>{@code <= 0} -> 1</li>
-     *     <li>{@code >= 2^30} -> 2^30</li>
-     * </ul>
+     *      <ul>
+     *          <li>{@code <= 0} -> 1</li>
+     *          <li>{@code >= 2^30} -> 2^30</li>
+     *      </ul>
      */
     public static int safeFindNextPositivePowerOfTwo(final int value) {
         return value <= 0 ? 1 : value >= 0x40000000 ? 0x40000000 : findNextPositivePowerOfTwo(value);

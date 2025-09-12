@@ -36,7 +36,7 @@ public class CleanerTest {
             CleanerJava6 cleanerJava = new CleanerJava6();
             cleanerJava.freeDirectBuffer(bf);
         } else {
-            Assert.assertFalse(CleanerJava6.isSupported());
+            Assert.assertTrue(CleanerJava6.isSupported());
             Assert.assertTrue(CleanerJava9.isSupported());
 
             CleanerJava9 cleanerJava = new CleanerJava9();

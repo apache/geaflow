@@ -26,7 +26,6 @@ import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import org.apache.geaflow.common.exception.GeaflowRuntimeException;
-import sun.misc.Unsafe;
 
 public class DataQueueOutputStream extends OutputStream {
     private static final int BUFFER_SIZE = 10 * 1024;
@@ -74,7 +73,7 @@ public class DataQueueOutputStream extends OutputStream {
             long nextPointIndex = getNextPointIndex(outputPointer, queueCapacity);
             int remainNum = (int) (nextPointIndex - outputPointer);
             int bytesToWrite = Math.min(size - currentOutputNum, remainNum);
-            int left = Unsafe.ARRAY_BYTE_BASE_OFFSET + offset + currentOutputNum;
+            int left = sun.misc.Unsafe.ARRAY_BYTE_BASE_OFFSET + offset + currentOutputNum;
             long right = dataExchangeQueue.getInitialQueueAddress() + (outputPointer & queueMask);
 
             UnSafeUtils.UNSAFE.copyMemory(buffer, left, null, right, bytesToWrite);

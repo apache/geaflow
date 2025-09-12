@@ -26,7 +26,6 @@ import java.nio.channels.FileChannel;
 import org.apache.geaflow.common.exception.GeaflowRuntimeException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import sun.nio.ch.FileChannelImpl;
 
 public class MemoryMapper implements Closeable {
 
@@ -42,8 +41,8 @@ public class MemoryMapper implements Closeable {
 
     static {
         try {
-            MEMORY_MAP_METHOD = getMethod(FileChannelImpl.class, MAP_0, int.class, long.class, long.class);
-            MEMORY_UN_MAP_METHOD = getMethod(FileChannelImpl.class, UNMAP_0, long.class, long.class);
+            MEMORY_MAP_METHOD = getMethod(sun.nio.ch.FileChannelImpl.class, MAP_0, int.class, long.class, long.class);
+            MEMORY_UN_MAP_METHOD = getMethod(sun.nio.ch.FileChannelImpl.class, UNMAP_0, long.class, long.class);
         } catch (Exception e) {
             throw new GeaflowRuntimeException(e);
         }

@@ -58,4 +58,4 @@ jobs:
           version: "21.7"
 
       - name: Build and Test On JDK 8
-        run: mvn -B -e clean test -Duser.timezone=Asia/Shanghai -Dlog4j.configuration="log4j.rootLogger=WARN, stdout"
+        run: mvn -B -e clean test -Pjdk8 -Duser.timezone=Asia/Shanghai -Dlog4j.configuration="log4j.rootLogger=WARN, stdout"
