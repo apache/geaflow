@@ -97,7 +97,7 @@ public class FunctionUtil {
 
     public static SqlOperandTypeChecker getSqlOperandTypeChecker(String name, Class<?> udfClass,
                                                                  GQLJavaTypeFactory typeFactory) {
-        final List<Class[]> types = FunctionCallUtils.getAllEvalParamTypes(udfClass);
+        final List<Class<?>[]> types = FunctionCallUtils.getAllEvalParamTypes(udfClass);
         return new SqlOperandTypeChecker() {
             @Override
             public boolean checkOperandTypes(SqlCallBinding callBinding,
