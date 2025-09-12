@@ -104,8 +104,9 @@ public class Page<T> implements PageMetric {
     }
 
     /**
+     * Free page.
      * @return {@code true} if this subpage is in use.
-     * {@code false} if this subpage is not used by its chunk and thus it's OK to be released.
+     *      {@code false} if this subpage is not used by its chunk and thus it's OK to be released.
      */
     boolean free(Page<T> head, int bitmapIdx) {
         if (elemSize == 0) {

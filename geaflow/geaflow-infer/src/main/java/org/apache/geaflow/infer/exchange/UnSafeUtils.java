@@ -24,21 +24,20 @@ import java.lang.reflect.Field;
 import org.apache.geaflow.common.exception.GeaflowRuntimeException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import sun.misc.Unsafe;
 
 public class UnSafeUtils {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(UnSafeUtils.class);
 
     private static final String THE_UNSAFE = "theUnsafe";
-    public static final Unsafe UNSAFE;
+    public static final sun.misc.Unsafe UNSAFE;
 
     static {
-        Unsafe instance;
+        sun.misc.Unsafe instance;
         try {
-            Field field = Unsafe.class.getDeclaredField(THE_UNSAFE);
+            Field field = sun.misc.Unsafe.class.getDeclaredField(THE_UNSAFE);
             field.setAccessible(true);
-            instance = (Unsafe) field.get(null);
+            instance = (sun.misc.Unsafe) field.get(null);
         } catch (Exception e) {
             LOGGER.error("get unsafe field failed", e);
             instance = initDeclaredConstructor();
@@ -46,9 +45,9 @@ public class UnSafeUtils {
         UNSAFE = instance;
     }
 
-    private static Unsafe initDeclaredConstructor() {
+    private static sun.misc.Unsafe initDeclaredConstructor() {
         try {
-            Constructor<Unsafe> c = Unsafe.class.getDeclaredConstructor();
+            Constructor<sun.misc.Unsafe> c = sun.misc.Unsafe.class.getDeclaredConstructor();
             c.setAccessible(true);
             return c.newInstance();
         } catch (Exception e) {
