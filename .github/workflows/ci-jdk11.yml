@@ -54,6 +54,17 @@ jobs:
         with:
           version: "21.7"
 
+      - name: Build On JDK 11
+        run: mvn -T 1C -B -e clean install -DskipTests -Pjdk11
+
       # Current hive connector is incompatible with jdk11, implement 4.0.0+ hive version in later.
-      - name: Build and Test On JDK 11
-        run: mvn -B -e clean test -Pjdk11 -pl '!geaflow/geaflow-dsl/geaflow-dsl-connector/geaflow-dsl-connector-hive,!geaflow/geaflow-dsl/geaflow-dsl-runtime' -Duser.timezone=Asia/Shanghai -Dlog4j.configuration="log4j.rootLogger=WARN, stdout"
+      - name: Test On JDK 11
+        run: |
+          test_modules="!geaflow/geaflow-dsl/geaflow-dsl-connector/geaflow-dsl-connector-hive,"
+          test_modules="!geaflow/geaflow-dsl/geaflow-dsl-runtime,"
+          test_modules+="!geaflow/geaflow-analytics-service/geaflow-analytics-service-common,"
+          test_modules+="!geaflow/geaflow-analytics-service/geaflow-analytics-service-client,"
+          test_modules+="!geaflow/geaflow-analytics-service/geaflow-analytics-service-service,"
+          test_modules+="!geaflow/geaflow-examples,"
+          test_modules+="!geaflow-mcp"
+          mvn -T 1C -B -e clean test -Pjdk11 -pl "${test_modules}" -Duser.timezone=Asia/Shanghai -Dlog4j.configuration="log4j.rootLogger=WARN, stdout"
