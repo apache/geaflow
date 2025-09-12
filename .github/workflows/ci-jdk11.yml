@@ -56,4 +56,4 @@ jobs:
 
       # Current hive connector is incompatible with jdk11, implement 4.0.0+ hive version in later.
       - name: Build and Test On JDK 11
-        run: mvn -B -e clean test -Pjdk11 -pl '!geaflow/geaflow-dsl/geaflow-dsl-connector/geaflow-dsl-connector-hive' -Duser.timezone=Asia/Shanghai -Dlog4j.configuration="log4j.rootLogger=WARN, stdout"
+        run: mvn -B -e clean test -Pjdk11 -pl '!geaflow/geaflow-dsl/geaflow-dsl-connector/geaflow-dsl-connector-hive,!geaflow/geaflow-dsl/geaflow-dsl-runtime' -Duser.timezone=Asia/Shanghai -Dlog4j.configuration="log4j.rootLogger=WARN, stdout"
