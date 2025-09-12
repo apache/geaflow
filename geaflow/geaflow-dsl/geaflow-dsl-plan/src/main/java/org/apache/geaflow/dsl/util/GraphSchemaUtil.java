@@ -21,6 +21,7 @@ package org.apache.geaflow.dsl.util;
 
 import java.util.Optional;
 import org.apache.calcite.rel.type.RelDataType;
+import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.geaflow.dsl.common.exception.GeaFlowDSLException;
 import org.apache.geaflow.dsl.planner.GQLJavaTypeFactory;
 
@@ -68,6 +69,10 @@ public class GraphSchemaUtil {
         } else {
             throw new GeaFlowDSLException("No vertex or edge table found in current graph {}", typeFactory.getCurrentGraph());
         }
+    }
+
+    public static RelDataType getCurrentGraphDirectionType(GQLJavaTypeFactory typeFactory) {
+        return typeFactory.createSqlType(SqlTypeName.VARCHAR);
     }
 
     public static Optional<RelDataType> getCurrentGraphEdgeTimestampType(GQLJavaTypeFactory typeFactory) {
