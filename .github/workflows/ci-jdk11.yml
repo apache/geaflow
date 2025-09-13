@@ -58,7 +58,7 @@ jobs:
       - name: Build and Test On JDK 11
         run: |
           test_modules="!geaflow/geaflow-dsl/geaflow-dsl-connector/geaflow-dsl-connector-hive,"
-          test_modules="!geaflow/geaflow-dsl/geaflow-dsl-runtime,"
+          test_modules+="!geaflow/geaflow-dsl/geaflow-dsl-runtime,"
           test_modules+="!geaflow/geaflow-analytics-service/geaflow-analytics-service-common,"
           test_modules+="!geaflow/geaflow-analytics-service/geaflow-analytics-service-client,"
           test_modules+="!geaflow/geaflow-analytics-service/geaflow-analytics-service-server,"
