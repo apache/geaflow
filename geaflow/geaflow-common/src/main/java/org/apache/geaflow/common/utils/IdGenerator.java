@@ -51,6 +51,7 @@ public class IdGenerator {
     private long sequence = 0L;
 
     /**
+     * Id generator.
      * @param containerId (0~65534).
      */
     public IdGenerator(long containerId) {

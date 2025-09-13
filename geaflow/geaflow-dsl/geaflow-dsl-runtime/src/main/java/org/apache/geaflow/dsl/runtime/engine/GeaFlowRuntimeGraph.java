@@ -290,7 +290,7 @@ public class GeaFlowRuntimeGraph implements RuntimeGraph {
         } else if (constantStartIds.size() > 0) { // request with constant ids.
             return ((PGraphTraversal<Object, ITreePath>) getDynamicVCTraversal(isAggTraversal, dynamicGraph,
                 executeDagGroup, maxTraversal, false, parallelism, enableIncrTraversal)).start(
-                new ArrayList<>(constantStartIds));
+                    new ArrayList<>(constantStartIds));
         } else { // dynamic traversal all
             boolean enableTraversalAllSplit = queryContext.getGlobalConf()
                 .getBoolean(DSLConfigKeys.GEAFLOW_DSL_TRAVERSAL_SPLIT_ENABLE);

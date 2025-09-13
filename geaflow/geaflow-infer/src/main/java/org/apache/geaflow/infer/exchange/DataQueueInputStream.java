@@ -28,7 +28,6 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import sun.misc.Unsafe;
 
 public class DataQueueInputStream extends InputStream {
 
@@ -117,7 +116,7 @@ public class DataQueueInputStream extends InputStream {
         }
         int readableNum = Math.min(remainByteNum, length);
         long left = this.initialAddress + (inputPointer & this.queueMask);
-        int right = Unsafe.ARRAY_BYTE_BASE_OFFSET + offset;
+        int right = sun.misc.Unsafe.ARRAY_BYTE_BASE_OFFSET + offset;
         UnSafeUtils.UNSAFE.copyMemory(null, left, buffer, right, readableNum);
         dataExchangeQueue.setInputPointer(inputPointer + readableNum);
         return readableNum;

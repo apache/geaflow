@@ -43,7 +43,7 @@ public class KeyGroup implements Serializable {
     }
 
     /**
-     * @return The number of key-groups in the range.
+     * Get the number of key-groups in the range.
      */
     public int getNumberOfKeyGroups() {
         return 1 + endKeyGroup - startKeyGroup;

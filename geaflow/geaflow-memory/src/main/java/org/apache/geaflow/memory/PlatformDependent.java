@@ -33,7 +33,6 @@ import java.security.PrivilegedAction;
 import org.apache.geaflow.common.utils.ReflectionUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import sun.misc.Unsafe;
 
 /**
  * This class is an adaptation of Netty's io.netty.util.internal.PlatformDependent.
@@ -42,7 +41,7 @@ public final class PlatformDependent implements Serializable {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(PlatformDependent.class);
 
-    static final Unsafe UNSAFE;
+    static final sun.misc.Unsafe UNSAFE;
     // constants borrowed from murmur3
     static final int HASH_CODE_ASCII_SEED = 0xc2b2ae35;
     static final int HASH_CODE_C1 = 0xcc9e2d51;
@@ -52,7 +51,7 @@ public final class PlatformDependent implements Serializable {
     private static final Constructor<?> DIRECT_BUFFER_CONSTRUCTOR;
     private static final Throwable UNSAFE_UNAVAILABILITY_CAUSE;
     /**
-     * Limits the number of bytes to copy per {@link Unsafe#copyMemory(long, long, long)} to allow
+     * Limits the number of bytes to copy per {@link sun.misc.Unsafe#copyMemory(long, long, long)} to allow
      * safepoint polling
      * during a large copy.
      */
@@ -62,7 +61,7 @@ public final class PlatformDependent implements Serializable {
         final ByteBuffer direct;
         Field addressField = null;
         Throwable unsafeUnavailabilityCause = null;
-        Unsafe unsafe;
+        sun.misc.Unsafe unsafe;
 
         direct = ByteBuffer.allocateDirect(1);
 
@@ -70,7 +69,7 @@ public final class PlatformDependent implements Serializable {
         final Object maybeUnsafe = AccessController
             .doPrivileged((PrivilegedAction<Object>) () -> {
                 try {
-                    final Field unsafeField = Unsafe.class.getDeclaredField("theUnsafe");
+                    final Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
                     // We always want to try using Unsafe as the access still works on java9
                     // as well and
                     // we need it for out native-transports and many optimizations.
@@ -95,7 +94,7 @@ public final class PlatformDependent implements Serializable {
             unsafe = null;
             unsafeUnavailabilityCause = (Throwable) maybeUnsafe;
         } else {
-            unsafe = (Unsafe) maybeUnsafe;
+            unsafe = (sun.misc.Unsafe) maybeUnsafe;
         }
 
         // ensure the unsafe supports all necessary methods to work around the mistake in the
@@ -103,7 +102,7 @@ public final class PlatformDependent implements Serializable {
         // https://github.com/netty/netty/issues/1061
         // http://www.mail-archive.com/jdk6-dev@openjdk.java.net/msg00698.html
         if (unsafe != null) {
-            final Unsafe finalUnsafe = unsafe;
+            final sun.misc.Unsafe finalUnsafe = unsafe;
             final Object maybeException = AccessController
                 .doPrivileged((PrivilegedAction<Object>) () -> {
                     try {
@@ -123,7 +122,7 @@ public final class PlatformDependent implements Serializable {
         }
 
         if (unsafe != null) {
-            final Unsafe finalUnsafe = unsafe;
+            final sun.misc.Unsafe finalUnsafe = unsafe;
 
             // attempt to access field Buffer#address
             final Object maybeAddressField = AccessController
@@ -185,7 +184,7 @@ public final class PlatformDependent implements Serializable {
                         try {
                             final Constructor<?> constructor = direct.getClass()
                                 .getDeclaredConstructor(long.class, int.class);
-                            Throwable cause = ReflectionUtil.trySetAccessible(constructor, true);
+                            Throwable cause = ReflectionUtil.trySetAccessible(constructor, false);
                             if (cause != null) {
                                 return cause;
                             }

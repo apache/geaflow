@@ -46,11 +46,11 @@ public class StreamWordPrintPipeline implements Serializable {
     public static final String REF_FILE_PATH = "data/reference/wordprint";
 
     public IPipelineResult submit(Environment environment) {
-        Pipeline pipeline = PipelineFactory.buildPipeline(environment);
         Map<String, String> config = new HashMap<>();
         config.put(FileSink.OUTPUT_DIR, RESULT_FILE_PATH);
         ResultValidator.cleanResult(RESULT_FILE_PATH);
         environment.getEnvironmentContext().withConfig(config);
+        Pipeline pipeline = PipelineFactory.buildPipeline(environment);
         pipeline.submit(new PipelineTask() {
             @Override
             public void execute(IPipelineTaskContext pipelineTaskCxt) {

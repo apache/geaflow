@@ -46,7 +46,6 @@
     </modules>
 
     <properties>
-        <java.version>8</java.version>
         <spring.version>2.7.10</spring.version>
         <mybatis.plus.version>3.5.1</mybatis.plus.version>
         <fastjson.version>2.0.29</fastjson.version>
@@ -243,10 +242,10 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.3</version>
+                <version>3.11.0</version>
                 <configuration>
-                    <source>${java.version}</source>
-                    <target>${java.version}</target>
+                    <source>${maven.compiler.source}</source>
+                    <target>${maven.compiler.source}</target>
                     <encoding>UTF-8</encoding>
                 </configuration>
             </plugin>
@@ -275,7 +274,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-source-plugin</artifactId>
-                <version>2.0.2</version>
+                <version>3.2.1</version>
                 <executions>
                     <execution>
                         <id>attach-sources</id>

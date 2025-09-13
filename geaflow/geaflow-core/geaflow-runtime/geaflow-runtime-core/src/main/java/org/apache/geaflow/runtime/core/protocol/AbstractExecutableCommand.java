@@ -101,10 +101,6 @@ public abstract class AbstractExecutableCommand implements IExecutableCommand {
 
     /**
      * Finish compute and tell scheduler finish.
-     *
-     * @param cycleId
-     * @param windowId
-     * @param eventType
      */
     protected <T> void sendDoneEvent(String driverId, EventType sourceEventType, T result, boolean sendMetrics) {
         AbstractWorkerContext workerContext = (AbstractWorkerContext) this.context;

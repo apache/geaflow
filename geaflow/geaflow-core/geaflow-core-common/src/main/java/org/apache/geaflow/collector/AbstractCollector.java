@@ -44,7 +44,9 @@ public abstract class AbstractCollector {
         return id;
     }
 
-    public void finish() {}
+    public void finish() {
+    }
 
-    public void close() {}
+    public void close() {
+    }
 }

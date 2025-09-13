@@ -104,7 +104,7 @@ public class ProcessUtil {
     public static synchronized int getProcessPid(Process p) {
         int pid = -1;
         try {
-            if (p.getClass().getName().equals("java.lang.UNIXProcess")) {
+            if (ReflectionUtil.JAVA_VERSION >= 9 || p.getClass().getName().equals("java.lang.UNIXProcess")) {
                 Field f = p.getClass().getDeclaredField("pid");
                 f.setAccessible(true);
                 pid = f.getInt(p);
