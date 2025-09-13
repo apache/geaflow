@@ -61,7 +61,7 @@ jobs:
           test_modules="!geaflow/geaflow-dsl/geaflow-dsl-runtime,"
           test_modules+="!geaflow/geaflow-analytics-service/geaflow-analytics-service-common,"
           test_modules+="!geaflow/geaflow-analytics-service/geaflow-analytics-service-client,"
-          test_modules+="!geaflow/geaflow-analytics-service/geaflow-analytics-service-service,"
+          test_modules+="!geaflow/geaflow-analytics-service/geaflow-analytics-service-server,"
           test_modules+="!geaflow/geaflow-examples,"
           test_modules+="!geaflow-mcp"
           mvn -B -e clean test -Pjdk11 -pl "${test_modules}" -Duser.timezone=Asia/Shanghai -Dlog4j.configuration="log4j.rootLogger=WARN, stdout"
