@@ -154,7 +154,7 @@
             <plugin>  
                 <groupId>org.apache.maven.plugins</groupId>  
                 <artifactId>maven-surefire-plugin</artifactId>  
-                <version>3.0.0-M7</version>
+                <version>${maven-surefire.version}</version>
                 <configuration>  
                     <!-- Optimize memory usage -->  
                     <argLine>-Xmx512m -XX:MaxMetaspaceSize=256m -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -Djava.awt.headless=true</argLine>  
@@ -190,7 +190,7 @@
                     <plugin>  
                         <groupId>org.apache.maven.plugins</groupId>  
                         <artifactId>maven-surefire-plugin</artifactId>  
-                        <version>3.0.0-M7</version>
+                        <version>${maven-surefire.version}</version>
                         <configuration>  
                             <argLine>-Xmx1024m -XX:MaxMetaspaceSize=512m -XX:+UseG1GC</argLine>  
                             <forkCount>1</forkCount>  

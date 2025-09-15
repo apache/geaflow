@@ -32,6 +32,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.version>3.6.3</maven.version>
         <mysql.version>8.0.30</mysql.version>
+        <maven-surefire.version>3.0.0-M7</maven-surefire.version>
 
         <!-- By default, JDK 8 is used -->
         <jdk.version>1.8</jdk.version>
@@ -190,7 +191,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
-                <version>3.0.0-M7</version>
+                <version>${maven-surefire.version}</version>
                 <executions>
                     <execution>
                         <id>default-test</id>
