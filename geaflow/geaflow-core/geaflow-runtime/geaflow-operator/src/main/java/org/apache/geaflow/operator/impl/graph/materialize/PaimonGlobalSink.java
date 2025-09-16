@@ -73,15 +73,13 @@ public class PaimonGlobalSink extends RichWindowFunction implements SinkFunction
 
     @Override
     public void finish() {
-        int messageSize = paimonMessages.size();
-        if (messageSize == 0) {
-            LOGGER.info("commit windowId{} empty messages", windowId);
+        if (paimonMessages.isEmpty()) {
+            LOGGER.info("commit windowId {} empty messages", windowId);
             return;
         }
 
         final long startTime = System.currentTimeMillis();
         final long checkpointId = paimonMessages.get(0).getCheckpointId();
-
         Map<String, List<CommitMessage>> tableMessages = new HashMap<>();
         for (PaimonMessage message : paimonMessages) {
             List<CommitMessage> messages = message.getMessages();
@@ -94,10 +92,8 @@ public class PaimonGlobalSink extends RichWindowFunction implements SinkFunction
         }
         long deserializeTime = System.currentTimeMillis() - startTime;
         if (!tableMessages.isEmpty()) {
-
             for (Map.Entry<String, List<CommitMessage>> entry : tableMessages.entrySet()) {
-                LOGGER.info("commit checkpointId: {} table: {} messages: {}",
-                    checkpointId, entry.getKey(), entry.getValue().size());
+                LOGGER.info("commit table:{} messages:{}", entry.getKey(), entry.getValue().size());
                 StreamWriteBuilder writeBuilder = getWriteBuilder(entry.getKey());
                 try (StreamTableCommit commit = writeBuilder.newCommit()) {
                     try {
@@ -112,11 +108,11 @@ public class PaimonGlobalSink extends RichWindowFunction implements SinkFunction
                     LOGGER.error("Failed to commit data into Paimon: {}", e.getMessage(), e);
                     throw new GeaflowRuntimeException("Failed to commit data into Paimon.", e);
                 }
-                paimonMessages.clear();
             }
         }
-        LOGGER.info("commit batchId: {} messages: {} deserialize time: {} ms", checkpointId,
-            messageSize, deserializeTime);
+        LOGGER.info("committed chkId:{} messages:{} deserializeCost:{}ms",
+            checkpointId, paimonMessages.size(), deserializeTime);
+        paimonMessages.clear();
     }
 
     private StreamWriteBuilder getWriteBuilder(String tableName) {
