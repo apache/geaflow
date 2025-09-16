@@ -69,6 +69,7 @@ public class PaimonDynamicGraphStateTest {
         config.put(FileConfigKeys.JSON_CONFIG.getKey(), GsonUtil.toJson(persistConfig));
         config.put(PaimonConfigKeys.PAIMON_STORE_WAREHOUSE.getKey(),
             "file:///tmp/PaimonDynamicGraphStateTest/");
+        config.put(PaimonConfigKeys.PAIMON_STORE_TABLE_AUTO_CREATE_ENABLE.getKey(), "true");
     }
 
     @AfterClass
@@ -202,6 +203,7 @@ public class PaimonDynamicGraphStateTest {
     public void testKeyGroup() {
         Map<String, String> conf = new HashMap<>(config);
         conf.put(PaimonConfigKeys.PAIMON_STORE_DISTRIBUTED_MODE_ENABLE.getKey(), "false");
+        conf.put(PaimonConfigKeys.PAIMON_STORE_TABLE_AUTO_CREATE_ENABLE.getKey(), "true");
         GraphState<String, String, String> graphState = getGraphState(StringType.INSTANCE, "testKeyGroup", conf);
 
         graphState.manage().operate().setCheckpointId(1);

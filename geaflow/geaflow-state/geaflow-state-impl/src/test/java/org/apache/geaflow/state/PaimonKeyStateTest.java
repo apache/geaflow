@@ -49,6 +49,7 @@ public class PaimonKeyStateTest {
         config.put(PaimonConfigKeys.PAIMON_STORE_WAREHOUSE.getKey(), "file:///tmp"
             + "/PaimonKeyStateTest/");
         config.put(PaimonConfigKeys.PAIMON_STORE_DISTRIBUTED_MODE_ENABLE.getKey(), "false");
+        config.put(PaimonConfigKeys.PAIMON_STORE_TABLE_AUTO_CREATE_ENABLE.getKey(), "true");
     }
 
     @AfterClass
@@ -74,7 +75,7 @@ public class PaimonKeyStateTest {
         Assert.assertEquals(mapState.get("hello").size(), 0);
         // commit chk = 1, now be able to read data.
         mapState.manage().operate().archive();
-        Assert.assertEquals(mapState.get("hello").size(), 5);
+        Assert.assertEquals(mapState.get("hello").size(), 6);
 
         // set chk = 2
         mapState.manage().operate().setCheckpointId(2L);
@@ -83,7 +84,7 @@ public class PaimonKeyStateTest {
         conf2.put("conf2", "test");
         mapState.put("hello2", conf2);
         // cannot read data with chk = 2 since chk2 not committed.
-        Assert.assertEquals(mapState.get("hello").size(), 5);
+        Assert.assertEquals(mapState.get("hello").size(), 6);
         Assert.assertEquals(mapState.get("hello2").size(), 0);
 
         // commit chk = 2
@@ -91,8 +92,8 @@ public class PaimonKeyStateTest {
         mapState.manage().operate().archive();
 
         // now be able to read data
-        Assert.assertEquals(mapState.get("hello").size(), 5);
-        Assert.assertEquals(mapState.get("hello2").size(), 6);
+        Assert.assertEquals(mapState.get("hello").size(), 6);
+        Assert.assertEquals(mapState.get("hello2").size(), 7);
 
         // read data which not exists
         Assert.assertEquals(mapState.get("hello3").size(), 0);

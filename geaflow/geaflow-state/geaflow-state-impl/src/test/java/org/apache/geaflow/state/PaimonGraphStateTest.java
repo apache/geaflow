@@ -21,7 +21,6 @@ package org.apache.geaflow.state;
 
 import static org.apache.geaflow.common.config.keys.StateConfigKeys.STATE_WRITE_ASYNC_ENABLE;
 import static org.apache.geaflow.store.paimon.config.PaimonConfigKeys.PAIMON_STORE_DATABASE;
-import static org.apache.geaflow.store.paimon.config.PaimonConfigKeys.PAIMON_STORE_DISTRIBUTED_MODE_ENABLE;
 import static org.apache.geaflow.store.paimon.config.PaimonConfigKeys.PAIMON_STORE_WAREHOUSE;
 
 import java.io.File;
@@ -64,6 +63,9 @@ public class PaimonGraphStateTest {
         config.put(FileConfigKeys.JSON_CONFIG.getKey(), GsonUtil.toJson(persistConfig));
         config.put(PaimonConfigKeys.PAIMON_STORE_WAREHOUSE.getKey(),
             "file:///tmp/PaimonGraphStateTest/");
+        config.put(PaimonConfigKeys.PAIMON_STORE_TABLE_AUTO_CREATE_ENABLE.getKey(), "true");
+        config.put(PaimonConfigKeys.PAIMON_STORE_DISTRIBUTED_MODE_ENABLE.getKey(), "false");
+
     }
 
     @AfterClass
@@ -153,9 +155,8 @@ public class PaimonGraphStateTest {
 
     @Test
     public void testBothWriteMode() {
-        Map<String, String> conf = new HashMap<>();
+        Map<String, String> conf = new HashMap<>(config);
         conf.put(STATE_WRITE_ASYNC_ENABLE.getKey(), Boolean.TRUE.toString());
-        conf.put(PAIMON_STORE_DISTRIBUTED_MODE_ENABLE.getKey(), "false");
         testWriteRead(conf);
 
         conf.put(STATE_WRITE_ASYNC_ENABLE.getKey(), Boolean.TRUE.toString());
@@ -164,9 +165,8 @@ public class PaimonGraphStateTest {
 
     @Test
     public void testBothWriteMode2() {
-        Map<String, String> conf = new HashMap<>();
+        Map<String, String> conf = new HashMap<>(config);
         conf.put(STATE_WRITE_ASYNC_ENABLE.getKey(), Boolean.TRUE.toString());
-        conf.put(PAIMON_STORE_DISTRIBUTED_MODE_ENABLE.getKey(), "false");
         conf.put(PAIMON_STORE_WAREHOUSE.getKey(), "/tmp/testBothWriteMode2");
         conf.put(PAIMON_STORE_DATABASE.getKey(), "graph");
         testWriteRead(conf);

@@ -19,9 +19,8 @@
 
 package org.apache.geaflow.dsl.runtime.query;
 
-import org.apache.geaflow.common.config.keys.DSLConfigKeys;
 import org.apache.geaflow.common.config.keys.FrameworkConfigKeys;
-import org.apache.geaflow.view.IViewDesc.BackendType;
+import org.apache.geaflow.store.paimon.config.PaimonConfigKeys;
 import org.testng.annotations.Test;
 
 public class GQLInsertTest {
@@ -121,7 +120,7 @@ public class GQLInsertTest {
     public void testInsertAndQuery_006() throws Exception {
         QueryTester
             .build()
-            .withConfig(DSLConfigKeys.GEAFLOW_DSL_STORE_TYPE.getKey(), BackendType.Paimon.name())
+            .withConfig(PaimonConfigKeys.PAIMON_STORE_TABLE_AUTO_CREATE_ENABLE.getKey(), "true")
             .withQueryPath("/query/gql_insert_and_graph_006.sql")
             .execute()
             .checkSinkResult();
