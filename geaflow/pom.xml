@@ -61,7 +61,7 @@
         <protobuf.version>3.8.0</protobuf.version>
         <hadoop.version>2.7.4</hadoop.version>
         <zookeeper.version>3.5.6</zookeeper.version>
-        <netty.version>4.1.30.Final</netty.version>
+        <netty.version>4.1.68.Final</netty.version>
         <pangu.dfs.version>1.0.4.2ant02-82e3b7d</pangu.dfs.version>
         <kotlin.version>1.5.10</kotlin.version>
         <oss.sdk.version>2.2.0</oss.sdk.version>
@@ -89,6 +89,7 @@
         <s3-transfer-manager.version>2.21.30</s3-transfer-manager.version>
         <aws-crt.version>0.28.10</aws-crt.version>
         <org.jetbrains.annotations>13.0</org.jetbrains.annotations>
+        <javax-api.version>1.3.2</javax-api.version>
     </properties>
 
     <modules>
@@ -416,6 +417,12 @@
                 <groupId>org.openjdk.jmh</groupId>
                 <artifactId>jmh-generator-annprocess</artifactId>
                 <version>${jmh.version}</version>
+                <scope>test</scope>
+            </dependency>
+            <dependency>
+                <groupId>javax.annotation</groupId>
+                <artifactId>javax.annotation-api</artifactId>
+                <version>${javax-api.version}</version>
                 <scope>test</scope>
             </dependency>
 

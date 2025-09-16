@@ -26,6 +26,7 @@ import org.apache.geaflow.analytics.service.client.AnalyticsClient;
 import org.apache.geaflow.analytics.service.client.AnalyticsClientBuilder;
 import org.apache.geaflow.analytics.service.query.QueryResults;
 import org.apache.geaflow.common.config.Configuration;
+import org.apache.geaflow.mcp.server.util.McpConstants;
 import org.apache.geaflow.mcp.util.YamlParser;
 import org.noear.solon.ai.annotation.ResourceMapping;
 import org.noear.solon.ai.annotation.ToolMapping;
@@ -34,7 +35,7 @@ import org.noear.solon.annotation.Param;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-@McpServerEndpoint(name = "geaflow-mcp-server", sseEndpoint = "/geaflow/sse")
+@McpServerEndpoint(name = "geaflow-mcp-server", channel = "sse", sseEndpoint = "/geaflow/sse")
 public class GeaFlowMcpServerTools {
     private static final Logger LOGGER = LoggerFactory.getLogger(GeaFlowMcpServerTools.class);
 
@@ -65,7 +66,6 @@ public class GeaFlowMcpServerTools {
      * @param query GQL query.
      * @return query result or error code.
      */
-    @ToolMapping(description = "execute query")
     public String executeQuery(@Param(name = "query", description = "query") String query) {
         AnalyticsClient analyticsClient = null;
 
@@ -114,4 +114,98 @@ public class GeaFlowMcpServerTools {
             }
         }
     }
+
+
+    /**
+     * A tool that provides create graph capabilities.
+     *
+     * @param graphName graph name to create.
+     * @param ddl Create graph ddl.
+     * @return execute result or error message.
+     */
+    @ToolMapping(description = ToolDesc.createGraph)
+    public String createGraph(@Param(name = McpConstants.GRAPH_NAME, description = "create graph name") String graphName,
+                              @Param(name = McpConstants.DDL, description = "create graph ddl") String ddl) {
+        try {
+            Map<String, Object> config = YamlParser.loadConfig();
+            GeaFlowMcpActions mcpActions = new GeaFlowMcpActionsLocalImpl(config);
+            if (config.containsKey(SERVER_USER)) {
+                mcpActions.withUser(config.get(SERVER_USER).toString());
+            }
+            return mcpActions.createGraph(graphName, ddl);
+        } catch (Exception e) {
+            LOGGER.error(e.getMessage(), e);
+            return e.getMessage();
+        }
+    }
+
+    /**
+     * A tool that get graph schema.
+     *
+     * @param graphName graphName to get.
+     * @return execute result or error message.
+     */
+    @ToolMapping(description = ToolDesc.getGraphSchema)
+    public String getGraphSchema(@Param(name = McpConstants.GRAPH_NAME, description = "get graph schema name") String graphName) {
+        try {
+            Map<String, Object> config = YamlParser.loadConfig();
+            GeaFlowMcpActions mcpActions = new GeaFlowMcpActionsLocalImpl(config);
+            if (config.containsKey(SERVER_USER)) {
+                mcpActions.withUser(config.get(SERVER_USER).toString());
+            }
+            return mcpActions.getGraphSchema(graphName);
+        } catch (Exception e) {
+            LOGGER.error(e.getMessage(), e);
+            return e.getMessage();
+        }
+    }
+
+
+    /**
+     * A tool that provides insert data into graph capabilities.
+     *
+     * @param graphName graph name to operate.
+     * @param dml dml to run with graph.
+     * @return execute result or error message.
+     */
+    @ToolMapping(description = ToolDesc.insertGraph)
+    public String insertGraph(@Param(name = McpConstants.GRAPH_NAME, description = "graph name") String graphName,
+                              @Param(name = McpConstants.DML, description = "dml insert values into graph") String dml) {
+        try {
+            Map<String, Object> config = YamlParser.loadConfig();
+            GeaFlowMcpActions mcpActions = new GeaFlowMcpActionsLocalImpl(config);
+            if (config.containsKey(SERVER_USER)) {
+                mcpActions.withUser(config.get(SERVER_USER).toString());
+            }
+            return mcpActions.queryGraph(graphName, dml);
+        } catch (Exception e) {
+            LOGGER.error(e.getMessage(), e);
+            return e.getMessage();
+        }
+    }
+
+
+    /**
+     * A tool that provides graph query capabilities.
+     *
+     * @param graphName graph name to query.
+     * @param type query graph entity type.
+     * @return execute result or error message.
+     */
+    @ToolMapping(description = ToolDesc.queryType)
+    public String queryType(@Param(name = McpConstants.GRAPH_NAME, description = "query graph name") String graphName,
+                            @Param(name = McpConstants.TYPE, description = "query graph vertex or edge type name") String type) {
+        try {
+            Map<String, Object> config = YamlParser.loadConfig();
+            GeaFlowMcpActions mcpActions = new GeaFlowMcpActionsLocalImpl(config);
+            if (config.containsKey(SERVER_USER)) {
+                mcpActions.withUser(config.get(SERVER_USER).toString());
+            }
+            return mcpActions.queryType(graphName, type);
+        } catch (Exception e) {
+            LOGGER.error(e.getMessage(), e);
+            return e.getMessage();
+        }
+    }
+
 }

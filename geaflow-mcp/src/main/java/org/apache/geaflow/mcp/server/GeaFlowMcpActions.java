@@ -17,36 +17,17 @@
  * under the License.
  */
 
-package org.apache.geaflow.collector;
+package org.apache.geaflow.mcp.server;
 
-import org.apache.geaflow.api.context.RuntimeContext;
-import org.apache.geaflow.metrics.common.api.Meter;
+public interface GeaFlowMcpActions {
 
-public abstract class AbstractCollector {
+    String createGraph(String graphName, String ddl);
 
-    protected int id;
-    protected RuntimeContext runtimeContext;
-    protected Meter outputMeter;
+    String queryGraph(String graphName, String gql);
 
-    public AbstractCollector(int id) {
-        this.id = id;
-    }
+    String queryType(String graphName, String type);
 
-    public void setUp(RuntimeContext runtimeContext) {
-        this.runtimeContext = runtimeContext;
-    }
+    String getGraphSchema(String graphName);
 
-    public void setOutputMetric(Meter outputMeter) {
-        this.outputMeter = outputMeter;
-    }
-
-    public int getId() {
-        return id;
-    }
-
-    public void finish() {
-    }
-
-    public void close() {
-    }
+    void withUser(String user);
 }

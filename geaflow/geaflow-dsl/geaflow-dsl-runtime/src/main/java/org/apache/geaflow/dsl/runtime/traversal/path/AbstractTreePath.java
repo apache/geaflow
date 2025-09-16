@@ -295,7 +295,6 @@ public abstract class AbstractTreePath implements ITreePath {
         if (ArrayUtil.isEmpty(pathIndices)) {
             return new ArrayList<>();
         }
-        Set<Path> selectPaths = new HashSet<>();
         int minIndex = pathIndices[0];
         int maxIndex = pathIndices[0];
         for (int index : pathIndices) {
@@ -317,6 +316,7 @@ public abstract class AbstractTreePath implements ITreePath {
             newIndices.add(index - minIndex);
         }
 
+        Set<Path> selectPaths = new HashSet<>();
         walkTree(paths -> {
             for (Path path : paths) {
                 selectPaths.add(path.subPath(newIndices));

@@ -17,36 +17,12 @@
  * under the License.
  */
 
-package org.apache.geaflow.collector;
+CREATE TABLE output_console(
+	res BIGINT
+) WITH (
+	type='file',
+	geaflow.dsl.file.path='/tmp/dsl/mcp/result'
+);
 
-import org.apache.geaflow.api.context.RuntimeContext;
-import org.apache.geaflow.metrics.common.api.Meter;
-
-public abstract class AbstractCollector {
-
-    protected int id;
-    protected RuntimeContext runtimeContext;
-    protected Meter outputMeter;
-
-    public AbstractCollector(int id) {
-        this.id = id;
-    }
-
-    public void setUp(RuntimeContext runtimeContext) {
-        this.runtimeContext = runtimeContext;
-    }
-
-    public void setOutputMetric(Meter outputMeter) {
-        this.outputMeter = outputMeter;
-    }
-
-    public int getId() {
-        return id;
-    }
-
-    public void finish() {
-    }
-
-    public void close() {
-    }
-}
+INSERT INTO output_console
+Match (a) return a.id;

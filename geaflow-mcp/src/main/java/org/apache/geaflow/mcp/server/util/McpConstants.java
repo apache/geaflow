@@ -17,36 +17,18 @@
  * under the License.
  */
 
-package org.apache.geaflow.collector;
+package org.apache.geaflow.mcp.server.util;
 
-import org.apache.geaflow.api.context.RuntimeContext;
-import org.apache.geaflow.metrics.common.api.Meter;
+public class McpConstants {
 
-public abstract class AbstractCollector {
-
-    protected int id;
-    protected RuntimeContext runtimeContext;
-    protected Meter outputMeter;
-
-    public AbstractCollector(int id) {
-        this.id = id;
-    }
-
-    public void setUp(RuntimeContext runtimeContext) {
-        this.runtimeContext = runtimeContext;
-    }
-
-    public void setOutputMetric(Meter outputMeter) {
-        this.outputMeter = outputMeter;
-    }
-
-    public int getId() {
-        return id;
-    }
-
-    public void finish() {
-    }
-
-    public void close() {
-    }
+    public static final String CREATE_GRAPH = "create_graph";
+    public static final String GRAPH_NAME = "graph_name";
+    public static final String DDL = "create_graph_ddl";
+    public static final String DQL = "query_graph_dql";
+    public static final String DML = "insert_graph_dml";
+    public static final String TYPE = "query_type_name";
+    public static final String CREATE_GRAPH_TOOL_NAME = "createGraph";
+    public static final String INSERT_GRAPH_TOOL_NAME = "insertGraph";
+    public static final String QUERY_GRAPH_TOOL_NAME = "queryGraph";
+    public static final String QUERY_TYPE_TOOL_NAME = "queryType";
 }

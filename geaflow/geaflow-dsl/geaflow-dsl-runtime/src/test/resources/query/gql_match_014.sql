@@ -17,36 +17,28 @@
  * under the License.
  */
 
-package org.apache.geaflow.collector;
+CREATE TABLE tbl_result (
+  a_id bigint,
+  weight double,
+  dir varchar,
+  flag bigint,
+  b_id bigint
+) WITH (
+	type='file',
+	geaflow.dsl.file.path='${target}'
+);
 
-import org.apache.geaflow.api.context.RuntimeContext;
-import org.apache.geaflow.metrics.common.api.Meter;
+USE GRAPH modern;
 
-public abstract class AbstractCollector {
-
-    protected int id;
-    protected RuntimeContext runtimeContext;
-    protected Meter outputMeter;
-
-    public AbstractCollector(int id) {
-        this.id = id;
-    }
-
-    public void setUp(RuntimeContext runtimeContext) {
-        this.runtimeContext = runtimeContext;
-    }
-
-    public void setOutputMetric(Meter outputMeter) {
-        this.outputMeter = outputMeter;
-    }
-
-    public int getId() {
-        return id;
-    }
-
-    public void finish() {
-    }
-
-    public void close() {
-    }
-}
+INSERT INTO tbl_result
+SELECT
+	a_id,
+	weight,
+	dir,
+	flag,
+	b_id
+FROM (
+MATCH (a:person where id = 1)-[e:knows|created]-(b:person) WHERE e.~label = 'knows' and b.id = 4
+RETURN a.id as a_id, e.weight as weight, direction(e) as dir,
+IF(direction(e) = 'OUT', 1, 0) as flag, b.id as b_id
+)

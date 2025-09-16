@@ -44,6 +44,7 @@ public class CompositeFileRegion extends AbstractFileRegion {
     private static final int NIO_BUFFER_LIMIT = 256 * 1024;
 
     /**
+     * Composite File Region.
      * @param header      the message header.
      * @param body        the message body. Must be either a {@link ByteBuf} or a {@link FileRegion}.
      * @param contentSize the length of the message body and header, in bytes.

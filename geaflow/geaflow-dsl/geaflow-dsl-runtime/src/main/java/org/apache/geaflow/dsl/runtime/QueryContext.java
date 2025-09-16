@@ -291,6 +291,10 @@ public class QueryContext {
         return graphs.get(graphName);
     }
 
+    public void addGraph(String graphName, GeaFlowGraph graph) {
+        graphs.put(graphName, graph);
+    }
+
     public void addMaterializedGraph(String graphName) {
         this.materializedGraphs.add(graphName);
     }

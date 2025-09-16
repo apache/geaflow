@@ -17,36 +17,6 @@
  * under the License.
  */
 
-package org.apache.geaflow.collector;
-
-import org.apache.geaflow.api.context.RuntimeContext;
-import org.apache.geaflow.metrics.common.api.Meter;
-
-public abstract class AbstractCollector {
-
-    protected int id;
-    protected RuntimeContext runtimeContext;
-    protected Meter outputMeter;
-
-    public AbstractCollector(int id) {
-        this.id = id;
-    }
-
-    public void setUp(RuntimeContext runtimeContext) {
-        this.runtimeContext = runtimeContext;
-    }
-
-    public void setOutputMetric(Meter outputMeter) {
-        this.outputMeter = outputMeter;
-    }
-
-    public int getId() {
-        return id;
-    }
-
-    public void finish() {
-    }
-
-    public void close() {
-    }
-}
+INSERT INTO modern.er(id, name, age)
+VALUES (1, 'jim', 20), (2, 'kate', 22)
+;
