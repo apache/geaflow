@@ -19,7 +19,9 @@
 
 package org.apache.geaflow.dsl.runtime.query;
 
+import org.apache.geaflow.common.config.keys.DSLConfigKeys;
 import org.apache.geaflow.common.config.keys.FrameworkConfigKeys;
+import org.apache.geaflow.view.IViewDesc.BackendType;
 import org.testng.annotations.Test;
 
 public class GQLInsertTest {
@@ -111,6 +113,16 @@ public class GQLInsertTest {
         QueryTester
             .build()
             .withQueryPath("/query/gql_insert_and_graph_005.sql")
+            .execute()
+            .checkSinkResult();
+    }
+
+    @Test
+    public void testInsertAndQuery_006() throws Exception {
+        QueryTester
+            .build()
+            .withConfig(DSLConfigKeys.GEAFLOW_DSL_STORE_TYPE.getKey(), BackendType.Paimon.name())
+            .withQueryPath("/query/gql_insert_and_graph_006.sql")
             .execute()
             .checkSinkResult();
     }

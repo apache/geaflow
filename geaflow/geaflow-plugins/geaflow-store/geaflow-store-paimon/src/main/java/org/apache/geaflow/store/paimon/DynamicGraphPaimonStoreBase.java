@@ -34,7 +34,6 @@ import org.apache.geaflow.store.api.graph.IDynamicGraphStore;
 import org.apache.geaflow.store.context.StoreContext;
 import org.apache.geaflow.store.paimon.proxy.IGraphMultiVersionedPaimonProxy;
 import org.apache.geaflow.store.paimon.proxy.PaimonProxyBuilder;
-import org.apache.paimon.catalog.Identifier;
 
 public class DynamicGraphPaimonStoreBase<K, VV, EV> extends BasePaimonGraphStore implements
     IDynamicGraphStore<K, VV, EV> {
@@ -47,17 +46,9 @@ public class DynamicGraphPaimonStoreBase<K, VV, EV> extends BasePaimonGraphStore
         int[] projection = new int[]{KEY_COLUMN_INDEX, VALUE_COLUMN_INDEX};
 
         // TODO: Use graph schema to create table instead of KV table.
-        String vertexTableName = String.format("%s#%s", "vertex", shardId);
-        Identifier vertexIdentifier = new Identifier(paimonStoreName, vertexTableName);
-        PaimonTableRWHandle vertexHandle = createKVTableHandle(vertexIdentifier);
-
-        String vertexIndexTableName = String.format("%s#%s", "vertex_index", shardId);
-        Identifier vertexIndexIdentifier = new Identifier(paimonStoreName, vertexIndexTableName);
-        PaimonTableRWHandle vertexIndexHandle = createKVTableHandle(vertexIndexIdentifier);
-
-        String edgeTableName = String.format("%s#%s", "edge", shardId);
-        Identifier edgeIdentifier = new Identifier(paimonStoreName, edgeTableName);
-        PaimonTableRWHandle edgeHandle = createKVTableHandle(edgeIdentifier);
+        PaimonTableRWHandle vertexHandle = createVertexTable(shardId);
+        PaimonTableRWHandle vertexIndexHandle = createIndexTable(shardId);
+        PaimonTableRWHandle edgeHandle = createEdgeTable(shardId);
 
         IGraphKVEncoder<K, VV, EV> encoder = GraphKVEncoderFactory.build(storeContext.getConfig(),
             storeContext.getGraphSchema());

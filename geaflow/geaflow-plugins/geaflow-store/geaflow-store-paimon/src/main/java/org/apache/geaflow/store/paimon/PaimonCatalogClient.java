@@ -19,12 +19,13 @@
 
 package org.apache.geaflow.store.paimon;
 
-import static org.apache.geaflow.store.paimon.PaimonConfigKeys.PAIMON_OPTIONS_META_STORE;
-import static org.apache.geaflow.store.paimon.PaimonConfigKeys.PAIMON_OPTIONS_WAREHOUSE;
+import static org.apache.geaflow.store.paimon.config.PaimonConfigKeys.PAIMON_STORE_META_STORE;
+import static org.apache.geaflow.store.paimon.config.PaimonConfigKeys.PAIMON_STORE_WAREHOUSE;
 
 import org.apache.geaflow.common.config.Configuration;
 import org.apache.geaflow.common.exception.GeaflowRuntimeException;
 import org.apache.paimon.catalog.Catalog;
+import org.apache.paimon.catalog.Catalog.TableNotExistException;
 import org.apache.paimon.catalog.CatalogContext;
 import org.apache.paimon.catalog.CatalogFactory;
 import org.apache.paimon.catalog.Identifier;
@@ -35,61 +36,36 @@ import org.apache.paimon.table.Table;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class PaimonTableCatalogClient {
+public class PaimonCatalogClient {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(PaimonTableCatalogClient.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(PaimonCatalogClient.class);
 
     private final Configuration config;
 
     private Catalog catalog;
 
-    public PaimonTableCatalogClient(Configuration config) {
+    public PaimonCatalogClient(Catalog catalog, Configuration config) {
         this.config = config;
+        this.catalog = catalog;
     }
 
     public Table createTable(Schema schema, Identifier identifier) {
-        this.catalog = createCatalog(config);
         try {
+            LOGGER.info("create table {}", identifier.getFullName());
             this.catalog.createDatabase(identifier.getDatabaseName(), true);
             this.catalog.createTable(identifier, schema, true);
+            return getTable(identifier);
         } catch (Exception e) {
             throw new GeaflowRuntimeException("Create database or table failed.", e);
         }
-        return getTable(identifier);
-    }
-
-    private Catalog createCatalog(Configuration config) {
-        Options options = new Options();
-
-        String metastore = config.getString(PAIMON_OPTIONS_META_STORE);
-        String warehouse = config.getString(PAIMON_OPTIONS_WAREHOUSE);
-
-        options.set(CatalogOptions.WAREHOUSE, warehouse.toLowerCase());
-        options.set(CatalogOptions.METASTORE, metastore.toLowerCase());
-        if (!metastore.equalsIgnoreCase("filesystem")) {
-            throw new UnsupportedOperationException("Not support meta store type " + metastore);
-        }
-
-        if (!warehouse.startsWith("file://")) {
-            throw new UnsupportedOperationException(
-                "Only support warehouse path prefix: [file://]");
-        }
-
-        CatalogContext context = CatalogContext.create(options);
-        return CatalogFactory.createCatalog(context);
     }
 
     public Catalog getCatalog() {
         return this.catalog;
     }
 
-    public Table getTable(Identifier identifier) {
-        try {
-            return this.catalog.getTable(identifier);
-        } catch (Catalog.TableNotExistException e) {
-            // do something
-            throw new GeaflowRuntimeException("table not exist", e);
-        }
+    public Table getTable(Identifier identifier) throws TableNotExistException {
+        return this.catalog.getTable(identifier);
     }
 
     public void close() {

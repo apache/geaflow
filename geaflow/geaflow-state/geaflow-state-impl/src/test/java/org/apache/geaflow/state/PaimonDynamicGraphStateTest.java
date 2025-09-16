@@ -45,7 +45,7 @@ import org.apache.geaflow.state.data.OneDegreeGraph;
 import org.apache.geaflow.state.descriptor.GraphStateDescriptor;
 import org.apache.geaflow.state.pushdown.filter.IEdgeFilter;
 import org.apache.geaflow.state.pushdown.filter.IVertexFilter;
-import org.apache.geaflow.store.paimon.PaimonConfigKeys;
+import org.apache.geaflow.store.paimon.config.PaimonConfigKeys;
 import org.apache.geaflow.utils.keygroup.DefaultKeyGroupAssigner;
 import org.apache.geaflow.utils.keygroup.KeyGroup;
 import org.testng.Assert;
@@ -67,7 +67,7 @@ public class PaimonDynamicGraphStateTest {
         config.put(FileConfigKeys.PERSISTENT_TYPE.getKey(), "LOCAL");
         config.put(FileConfigKeys.ROOT.getKey(), "/tmp/geaflow/chk/");
         config.put(FileConfigKeys.JSON_CONFIG.getKey(), GsonUtil.toJson(persistConfig));
-        config.put(PaimonConfigKeys.PAIMON_OPTIONS_WAREHOUSE.getKey(),
+        config.put(PaimonConfigKeys.PAIMON_STORE_WAREHOUSE.getKey(),
             "file:///tmp/PaimonDynamicGraphStateTest/");
     }
 
@@ -98,13 +98,23 @@ public class PaimonDynamicGraphStateTest {
 
     @Test
     public void testWriteRead() {
-        testApi(false);
+        Map<String, String> conf = new HashMap<>(config);
+        conf.put(StateConfigKeys.STATE_WRITE_ASYNC_ENABLE.getKey(), "false");
+        conf.put(PaimonConfigKeys.PAIMON_STORE_DISTRIBUTED_MODE_ENABLE.getKey(), "false");
+        testApi(conf);
     }
 
-    private void testApi(boolean async) {
-        Map<String, String> conf = config;
+    @Test
+    public void testWriteRead2() {
+        Map<String, String> conf = new HashMap<>(config);
+        conf.put(StateConfigKeys.STATE_WRITE_ASYNC_ENABLE.getKey(), "false");
+        conf.put(PaimonConfigKeys.PAIMON_STORE_DISTRIBUTED_MODE_ENABLE.getKey(), "false");
+        conf.put(PaimonConfigKeys.PAIMON_STORE_DATABASE.getKey(), "graph");
+        testApi(conf);
+    }
+
+    private void testApi(Map<String, String> conf) {
         conf.put(StateConfigKeys.STATE_WRITE_BUFFER_SIZE.getKey(), "100");
-        conf.put(StateConfigKeys.STATE_WRITE_ASYNC_ENABLE.getKey(), String.valueOf(async));
         GraphState<String, String, String> graphState = getGraphState(StringType.INSTANCE, "testApi", conf);
 
         graphState.manage().operate().setCheckpointId(1);
@@ -126,7 +136,6 @@ public class PaimonDynamicGraphStateTest {
         graphState.dynamicGraph().E().add(4L, new ValueEdge<>("1", "2", "6"));
         graphState.manage().operate().finish();
         graphState.manage().operate().archive();
-        ;
 
         List<IEdge<String, String>> list = graphState.dynamicGraph().E().query(1L, "1").asList();
         Assert.assertEquals(list.size(), 2);
@@ -191,7 +200,8 @@ public class PaimonDynamicGraphStateTest {
 
     @Test
     public void testKeyGroup() {
-        Map<String, String> conf = config;
+        Map<String, String> conf = new HashMap<>(config);
+        conf.put(PaimonConfigKeys.PAIMON_STORE_DISTRIBUTED_MODE_ENABLE.getKey(), "false");
         GraphState<String, String, String> graphState = getGraphState(StringType.INSTANCE, "testKeyGroup", conf);
 
         graphState.manage().operate().setCheckpointId(1);

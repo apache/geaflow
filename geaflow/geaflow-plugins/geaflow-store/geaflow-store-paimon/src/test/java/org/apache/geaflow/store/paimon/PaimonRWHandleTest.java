@@ -96,7 +96,7 @@ public class PaimonRWHandleTest {
             value.getBytes()       // value
         );
 
-        edgeHandle.write(row, 0);
+        edgeHandle.write(row);
         long checkpointId = 1L;
         edgeHandle.commit(checkpointId);
 
