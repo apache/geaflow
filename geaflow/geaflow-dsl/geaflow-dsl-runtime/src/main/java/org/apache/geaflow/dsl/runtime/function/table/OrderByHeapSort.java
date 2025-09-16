@@ -19,7 +19,8 @@
 
 package org.apache.geaflow.dsl.runtime.function.table;
 
-import com.google.common.collect.Lists;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.PriorityQueue;
 import org.apache.geaflow.dsl.common.data.Row;
@@ -64,8 +65,11 @@ public class OrderByHeapSort implements OrderByFunction {
 
     @Override
     public Iterable<Row> finish() {
-        List<Row> results = Lists.newArrayList(topNQueue.iterator());
-        results.sort(topNRowComparator);
+        List<Row> results = new ArrayList<>();
+        while (!topNQueue.isEmpty()) {
+            results.add(topNQueue.remove());
+        }
+        Collections.reverse(results);
         topNQueue.clear();
         return results;
     }
