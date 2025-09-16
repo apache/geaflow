@@ -96,6 +96,31 @@ public class FunctionCallUtils {
             this.sourceType = sourceType;
             this.targetTypes = targetTypes;
         }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj) {
+                return true;
+            }
+            if (obj == null || getClass() != obj.getClass()) {
+                return false;
+            }
+            TypeDegreeMapping that = (TypeDegreeMapping) obj;
+            return sourceType.equals(that.sourceType) && java.util.Arrays.equals(targetTypes, that.targetTypes);
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * sourceType.hashCode() + java.util.Arrays.hashCode(targetTypes);
+        }
+
+        @Override
+        public String toString() {
+            return "TypeDegreeMapping{"
+                + "sourceType=" + sourceType
+                + ", targetTypes=" + java.util.Arrays.toString(targetTypes)
+                + '}';
+        }
     }
 
     // Type mapping definitions to reduce duplication.
@@ -159,6 +184,31 @@ public class FunctionCallUtils {
         TypeMapping(Class<?> primitiveType, Class<?> wrapperType) {
             this.primitiveType = primitiveType;
             this.wrapperType = wrapperType;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj) {
+                return true;
+            }
+            if (obj == null || getClass() != obj.getClass()) {
+                return false;
+            }
+            TypeMapping that = (TypeMapping) obj;
+            return primitiveType.equals(that.primitiveType) && wrapperType.equals(that.wrapperType);
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * primitiveType.hashCode() + wrapperType.hashCode();
+        }
+
+        @Override
+        public String toString() {
+            return "TypeMapping{"
+                + "primitiveType=" + primitiveType
+                + ", wrapperType=" + wrapperType
+                + '}';
         }
     }
 
