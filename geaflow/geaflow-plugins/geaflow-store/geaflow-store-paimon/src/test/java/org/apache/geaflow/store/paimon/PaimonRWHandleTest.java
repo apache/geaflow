@@ -65,7 +65,7 @@ public class PaimonRWHandleTest {
 
         @Override
         public void drop() {
-
+            super.drop();
         }
     }
 
@@ -77,7 +77,8 @@ public class PaimonRWHandleTest {
         config.put(ExecutionConfigKeys.JOB_APP_NAME, "test_paimon_app");
         storeBase.init(new StoreContext("test_paimon_store").withConfig(config));
 
-        PaimonTableRWHandle edgeHandle = storeBase.createEdgeTableHandle(new Identifier("test_paimon_store", "edge"));
+        PaimonTableRWHandle edgeHandle = storeBase.createEdgeTableHandle(
+            new Identifier(storeBase.paimonStoreName, "edge"));
 
         // 写入一条数据 - 根据 schema 定义构造完整的行数据
         String srcId = "src1";
@@ -114,12 +115,16 @@ public class PaimonRWHandleTest {
             String readValue = new String(internalRow.getBinary(5));
 
             if (srcId.equals(readSrcId) && targetId.equals(readTargetId) && timestamp == readTs
-                && direction == readDirection && label.equals(readLabel) && value.equals(readValue)) {
+                && direction == readDirection && label.equals(readLabel) && value.equals(
+                readValue)) {
                 found = true;
                 break;
             }
         }
         iterator.close();
         assertTrue(found);
+
+        storeBase.drop();
+        storeBase.close();
     }
 }
