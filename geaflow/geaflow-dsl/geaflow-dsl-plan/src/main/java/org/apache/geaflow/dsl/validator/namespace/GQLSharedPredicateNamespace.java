@@ -46,17 +46,17 @@ import org.apache.geaflow.dsl.validator.namespace.GQLMatchNodeNamespace.MatchNod
 public class GQLSharedPredicateNamespace extends GQLBaseNamespace {
 
     /**
-     * The shared predicate pattern being validated
+     * The shared predicate pattern being validated.
      */
     private final SqlSharedPredicatePattern sharedPredicatePattern;
 
     /**
-     * Context for match node validation
+     * Context for match node validation.
      */
     private MatchNodeContext matchNodeContext;
 
     /**
-     * Constructor for GQLSharedPredicateNamespace
+     * Constructor for GQLSharedPredicateNamespace.
      *
      * @param validator the validator instance
      * @param sharedPredicatePattern the shared predicate pattern to validate
@@ -67,7 +67,7 @@ public class GQLSharedPredicateNamespace extends GQLBaseNamespace {
     }
 
     /**
-     * Set the match node context for validation
+     * Set the match node context for validation.
      *
      * @param matchNodeContext the match node context
      */
@@ -96,7 +96,7 @@ public class GQLSharedPredicateNamespace extends GQLBaseNamespace {
     }
 
     /**
-     * Validate a path pattern and add its type to the list
+     * Validate a path pattern and add its type to the list.
      *
      * @param pathPatternNode the path pattern node to validate
      * @param matchNodeContext the match node context
@@ -139,7 +139,7 @@ public class GQLSharedPredicateNamespace extends GQLBaseNamespace {
     }
 
     /**
-     * Validate the shared condition
+     * Validate the shared condition.
      *
      * @param predicate the predicate to validate
      * @param scope the validator scope
@@ -156,7 +156,7 @@ public class GQLSharedPredicateNamespace extends GQLBaseNamespace {
 
     /**
      * Validate that variables referenced in the predicate exist in all path patterns
-     * and have compatible types
+     * and have compatible types.
      *
      * @param predicate the predicate to validate
      * @param pathPatternTypes list of path pattern types
@@ -194,7 +194,7 @@ public class GQLSharedPredicateNamespace extends GQLBaseNamespace {
     }
 
     /**
-     * Collect all variable references from a SQL node
+     * Collect all variable references from a SQL node.
      *
      * @param node the SQL node to analyze
      * @return set of variable names
@@ -206,7 +206,7 @@ public class GQLSharedPredicateNamespace extends GQLBaseNamespace {
     }
 
     /**
-     * Recursively collect variable references from a SQL node
+     * Recursively collect variable references from a SQL node.
      *
      * @param node the SQL node to analyze
      * @param variables set to collect variable names

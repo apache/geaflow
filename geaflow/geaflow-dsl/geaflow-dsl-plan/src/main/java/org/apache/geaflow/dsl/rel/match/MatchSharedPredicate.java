@@ -23,7 +23,6 @@ import java.util.Arrays;
 import java.util.List;
 import org.apache.calcite.plan.RelOptCluster;
 import org.apache.calcite.plan.RelTraitSet;
-import org.apache.calcite.rel.AbstractRelNode;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.RelWriter;
 import org.apache.calcite.rel.type.RelDataType;
@@ -35,32 +34,32 @@ import org.apache.geaflow.dsl.rel.MatchNodeVisitor;
  * Relational operator for shared predicate pattern matching.
  * This operator represents a pattern where two path patterns share a common predicate condition.
  *
- * The shared predicate pattern is typically converted to a union + filter operation during optimization.
+ * <p>The shared predicate pattern is typically converted to a union + filter operation during optimization.
  */
 public class MatchSharedPredicate extends AbstractMatchNode {
 
     /**
-     * Left path pattern
+     * Left path pattern.
      */
     private final IMatchNode left;
 
     /**
-     * Right path pattern
+     * Right path pattern.
      */
     private final IMatchNode right;
 
     /**
-     * Shared predicate condition that must be satisfied by both path patterns
+     * Shared predicate condition that must be satisfied by both path patterns.
      */
     private final RexNode condition;
 
     /**
-     * Whether to use distinct semantics (true) or union all (false)
+     * Whether to use distinct semantics (true) or union all (false).
      */
     private final boolean isDistinct;
 
     /**
-     * Constructor for MatchSharedPredicate
+     * Constructor for MatchSharedPredicate.
      *
      * @param cluster the cluster
      * @param traits the trait set
@@ -125,7 +124,7 @@ public class MatchSharedPredicate extends AbstractMatchNode {
     }
 
     /**
-     * Get the left path pattern
+     * Get the left path pattern.
      *
      * @return left path pattern
      */
@@ -134,7 +133,7 @@ public class MatchSharedPredicate extends AbstractMatchNode {
     }
 
     /**
-     * Get the right path pattern
+     * Get the right path pattern.
      *
      * @return right path pattern
      */
@@ -143,7 +142,7 @@ public class MatchSharedPredicate extends AbstractMatchNode {
     }
 
     /**
-     * Get the shared predicate condition
+     * Get the shared predicate condition.
      *
      * @return predicate condition
      */
@@ -152,7 +151,7 @@ public class MatchSharedPredicate extends AbstractMatchNode {
     }
 
     /**
-     * Check if this pattern uses distinct semantics
+     * Check if this pattern uses distinct semantics.
      *
      * @return true if distinct, false if union all
      */
@@ -161,7 +160,7 @@ public class MatchSharedPredicate extends AbstractMatchNode {
     }
 
     /**
-     * Check if this pattern uses union all semantics
+     * Check if this pattern uses union all semantics.
      *
      * @return true if union all, false if distinct
      */
@@ -170,7 +169,7 @@ public class MatchSharedPredicate extends AbstractMatchNode {
     }
 
     /**
-     * Create a new MatchSharedPredicate
+     * Create a new MatchSharedPredicate.
      *
      * @param left left path pattern
      * @param right right path pattern

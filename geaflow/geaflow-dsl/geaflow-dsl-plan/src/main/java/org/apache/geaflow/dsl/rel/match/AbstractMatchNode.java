@@ -31,12 +31,12 @@ import org.apache.geaflow.dsl.calcite.PathRecordType;
 public abstract class AbstractMatchNode extends AbstractRelNode implements IMatchNode {
 
     /**
-     * The path schema for this match node
+     * The path schema for this match node.
      */
     protected final PathRecordType pathSchema;
 
     /**
-     * Constructor for AbstractMatchNode
+     * Constructor for AbstractMatchNode.
      *
      * @param cluster the cluster
      * @param traits the trait set

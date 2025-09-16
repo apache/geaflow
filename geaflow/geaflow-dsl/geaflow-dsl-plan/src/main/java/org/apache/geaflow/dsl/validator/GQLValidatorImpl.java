@@ -64,8 +64,8 @@ import org.apache.geaflow.dsl.validator.namespace.GQLMatchNodeWhereNamespace;
 import org.apache.geaflow.dsl.validator.namespace.GQLMatchPatternNamespace;
 import org.apache.geaflow.dsl.validator.namespace.GQLPathPatternNamespace;
 import org.apache.geaflow.dsl.validator.namespace.GQLReturnNamespace;
-import org.apache.geaflow.dsl.validator.namespace.GQLSubQueryNamespace;
 import org.apache.geaflow.dsl.validator.namespace.GQLSharedPredicateNamespace;
+import org.apache.geaflow.dsl.validator.namespace.GQLSubQueryNamespace;
 import org.apache.geaflow.dsl.validator.namespace.GQLUnionPathPatternNamespace;
 import org.apache.geaflow.dsl.validator.namespace.IdentifierCompleteNamespace;
 import org.apache.geaflow.dsl.validator.scope.GQLPathPatternScope;
@@ -266,7 +266,7 @@ public class GQLValidatorImpl extends SqlValidatorImpl {
                 // Handle shared predicate pattern
                 if (node instanceof SqlSharedPredicatePattern) {
                     SqlSharedPredicatePattern sharedPredicatePattern = (SqlSharedPredicatePattern) node;
-                    GQLScope sharedPredicateScope = new GQLScope(parentScope, sharedPredicatePattern);
+                    final GQLScope sharedPredicateScope = new GQLScope(parentScope, sharedPredicatePattern);
                     GQLSharedPredicateNamespace sharedPredicateNamespace = new GQLSharedPredicateNamespace(this, sharedPredicatePattern);
                     registerNamespace(usingScope, alias, sharedPredicateNamespace, forceNullable);
 
@@ -278,9 +278,11 @@ public class GQLValidatorImpl extends SqlValidatorImpl {
                     scopes.put(sharedPredicatePattern, sharedPredicateScope);
                     break;
                 }
+                break;
             default:
                 super.registerOtherKindQuery(parentScope, usingScope, node, enclosingNode, alias,
                     forceNullable, checkUpdate);
+                break;
         }
     }
 

@@ -24,29 +24,27 @@ import java.util.List;
 import org.apache.calcite.plan.RelOptRule;
 import org.apache.calcite.plan.RelOptRuleCall;
 import org.apache.calcite.rel.RelNode;
-import org.apache.calcite.rex.RexNode;
 import org.apache.geaflow.dsl.rel.match.MatchFilter;
 import org.apache.geaflow.dsl.rel.match.MatchSharedPredicate;
 import org.apache.geaflow.dsl.rel.match.MatchUnion;
-import org.apache.geaflow.dsl.util.GQLRexUtil;
 
 /**
  * Optimization rule for shared predicate patterns.
  * This rule converts MatchSharedPredicate to a more efficient MatchUnion + MatchFilter combination.
  *
- * The transformation is:
+ * <p>The transformation is:
  * MatchSharedPredicate(left, right, condition, distinct) ->
  * MatchFilter(MatchUnion(left, right, distinct), condition)
  */
 public class SharedPredicateOptimizationRule extends RelOptRule {
 
     /**
-     * Singleton instance of the rule
+     * Singleton instance of the rule.
      */
     public static final SharedPredicateOptimizationRule INSTANCE = new SharedPredicateOptimizationRule();
 
     /**
-     * Constructor for SharedPredicateOptimizationRule
+     * Constructor for SharedPredicateOptimizationRule.
      */
     private SharedPredicateOptimizationRule() {
         super(operand(MatchSharedPredicate.class, any()));
