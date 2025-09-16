@@ -58,7 +58,7 @@ public interface IViewDesc extends Serializable {
     }
 
     enum BackendType {
-        // Default view backend, current is cstore.
+        // Default view backend, current is pangu.
         Native,
         // RocksDB backend.
         RocksDB,
