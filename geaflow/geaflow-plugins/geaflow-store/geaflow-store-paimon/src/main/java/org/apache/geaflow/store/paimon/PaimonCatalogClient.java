@@ -19,18 +19,11 @@
 
 package org.apache.geaflow.store.paimon;
 
-import static org.apache.geaflow.store.paimon.config.PaimonConfigKeys.PAIMON_STORE_META_STORE;
-import static org.apache.geaflow.store.paimon.config.PaimonConfigKeys.PAIMON_STORE_WAREHOUSE;
-
 import org.apache.geaflow.common.config.Configuration;
 import org.apache.geaflow.common.exception.GeaflowRuntimeException;
 import org.apache.paimon.catalog.Catalog;
 import org.apache.paimon.catalog.Catalog.TableNotExistException;
-import org.apache.paimon.catalog.CatalogContext;
-import org.apache.paimon.catalog.CatalogFactory;
 import org.apache.paimon.catalog.Identifier;
-import org.apache.paimon.options.CatalogOptions;
-import org.apache.paimon.options.Options;
 import org.apache.paimon.schema.Schema;
 import org.apache.paimon.table.Table;
 import org.slf4j.Logger;
