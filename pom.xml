@@ -354,6 +354,39 @@
             <properties>
                 <jdk.version>1.8</jdk.version>
             </properties>
+            <dependencies>
+                <dependency>
+                    <groupId>org.apache.geaflow</groupId>
+                    <artifactId>geaflow-dsl-connector-hive</artifactId>
+                    <version>${project.version}</version>
+                    <exclusions>
+                        <exclusion>
+                            <groupId>com.google.guava</groupId>
+                            <artifactId>guava</artifactId>
+                        </exclusion>
+                        <exclusion>
+                            <groupId>org.eclipse.jetty</groupId>
+                            <artifactId>jetty-util</artifactId>
+                        </exclusion>
+                        <exclusion>
+                            <groupId>org.eclipse.jetty</groupId>
+                            <artifactId>jetty-http</artifactId>
+                        </exclusion>
+                        <exclusion>
+                            <groupId>org.eclipse.jetty</groupId>
+                            <artifactId>jetty-server</artifactId>
+                        </exclusion>
+                        <exclusion>
+                            <groupId>org.eclipse.jetty</groupId>
+                            <artifactId>jetty-continuation</artifactId>
+                        </exclusion>
+                        <exclusion>
+                            <groupId>org.eclipse.jetty</groupId>
+                            <artifactId>jetty-servlet</artifactId>
+                        </exclusion>
+                    </exclusions>
+                </dependency>
+            </dependencies>
         </profile>
 
         <!-- Profile 2: Activated when JDK 11+ is detected  -->
