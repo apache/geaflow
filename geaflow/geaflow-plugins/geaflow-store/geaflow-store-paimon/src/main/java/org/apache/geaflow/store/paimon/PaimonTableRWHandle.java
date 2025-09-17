@@ -87,7 +87,8 @@ public class PaimonTableRWHandle {
         flush(checkpointId, waitCompaction);
         List<CommitMessage> messages = new ArrayList<>();
         for (CommitMessage commitMessage : commitMessages) {
-            if (((CommitMessageImpl) commitMessage).isEmpty()) {
+            if (commitMessage instanceof CommitMessageImpl
+                && ((CommitMessageImpl) commitMessage).isEmpty()) {
                 continue;
             }
             messages.add(commitMessage);

@@ -122,7 +122,8 @@ public class PaimonGlobalSink extends RichWindowFunction implements SinkFunction
                     tableName));
                 return table.newStreamWriteBuilder().withCommitUser(jobName);
             } catch (Throwable e) {
-                throw new GeaflowRuntimeException(e);
+                String msg = String.format("%s.%s not exist.", dbName, tableName);
+                throw new GeaflowRuntimeException(msg, e);
             }
         });
     }
