@@ -51,7 +51,7 @@ import org.apache.geaflow.file.FileConfigKeys;
 import org.apache.geaflow.runtime.core.scheduler.resource.ScheduledWorkerManagerFactory;
 import org.testng.Assert;
 
-public class QueryTester implements Serializable {
+public class ConnectorTester implements Serializable {
 
     private int testTimeWaitSeconds = 0;
 
@@ -72,7 +72,7 @@ public class QueryTester implements Serializable {
 
     private final Map<String, String> config = new HashMap<>();
 
-    private QueryTester() {
+    private ConnectorTester() {
         try {
             initRemotePath();
         } catch (IOException e) {
@@ -80,22 +80,22 @@ public class QueryTester implements Serializable {
         }
     }
 
-    public static QueryTester build() {
-        return new QueryTester();
+    public static ConnectorTester build() {
+        return new ConnectorTester();
     }
 
 
-    public QueryTester withQueryPath(String queryPath) {
+    public ConnectorTester withQueryPath(String queryPath) {
         this.queryPath = queryPath;
         return this;
     }
 
-    public QueryTester withConfig(String key, Object value) {
+    public ConnectorTester withConfig(String key, Object value) {
         this.config.put(key, String.valueOf(value));
         return this;
     }
 
-    public QueryTester execute() throws Exception {
+    public ConnectorTester execute() throws Exception {
         if (queryPath == null) {
             throw new IllegalArgumentException("You should call withQueryPath() before execute().");
         }

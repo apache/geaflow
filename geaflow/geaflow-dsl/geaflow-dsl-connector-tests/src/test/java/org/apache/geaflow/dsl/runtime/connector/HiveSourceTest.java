@@ -26,7 +26,7 @@ public class HiveSourceTest {
 
     @Test(enabled = false)
     public void testHiveSource_001() throws Exception {
-        QueryTester
+        ConnectorTester
                 .build()
                 .withConfig(FrameworkConfigKeys.BATCH_NUMBER_PER_CHECKPOINT.getKey(), 1)
                 .withQueryPath("/query/hive_source_001.sql")
