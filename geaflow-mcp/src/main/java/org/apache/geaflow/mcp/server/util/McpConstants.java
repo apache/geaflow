@@ -17,20 +17,18 @@
  * under the License.
  */
 
-package org.apache.geaflow.dsl.runtime.query;
+package org.apache.geaflow.mcp.server.util;
 
-import org.apache.geaflow.common.config.keys.FrameworkConfigKeys;
-import org.testng.annotations.Test;
+public class McpConstants {
 
-public class HiveSourceTest {
-
-    @Test(enabled = false)
-    public void testHiveSource_001() throws Exception {
-        QueryTester
-                .build()
-                .withConfig(FrameworkConfigKeys.BATCH_NUMBER_PER_CHECKPOINT.getKey(), 1)
-                .withQueryPath("/query/hive_source_001.sql")
-                .execute()
-                .checkSinkResult();
-    }
+    public static final String CREATE_GRAPH = "create_graph";
+    public static final String GRAPH_NAME = "graph_name";
+    public static final String DDL = "create_graph_ddl";
+    public static final String DQL = "query_graph_dql";
+    public static final String DML = "insert_graph_dml";
+    public static final String TYPE = "query_type_name";
+    public static final String CREATE_GRAPH_TOOL_NAME = "createGraph";
+    public static final String INSERT_GRAPH_TOOL_NAME = "insertGraph";
+    public static final String QUERY_GRAPH_TOOL_NAME = "queryGraph";
+    public static final String QUERY_TYPE_TOOL_NAME = "queryType";
 }

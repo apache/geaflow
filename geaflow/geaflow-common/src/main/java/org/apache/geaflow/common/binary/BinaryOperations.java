@@ -21,11 +21,10 @@ package org.apache.geaflow.common.binary;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
-import sun.misc.Unsafe;
 
 public class BinaryOperations {
 
-    private static final Unsafe UNSAFE;
+    private static final sun.misc.Unsafe UNSAFE;
 
     public static final int BOOLEAN_ARRAY_OFFSET;
 
@@ -49,7 +48,7 @@ public class BinaryOperations {
     static {
         sun.misc.Unsafe unsafe;
         try {
-            Field unsafeField = Unsafe.class.getDeclaredField("theUnsafe");
+            Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
             unsafeField.setAccessible(true);
             unsafe = (sun.misc.Unsafe) unsafeField.get(null);
         } catch (Throwable cause) {

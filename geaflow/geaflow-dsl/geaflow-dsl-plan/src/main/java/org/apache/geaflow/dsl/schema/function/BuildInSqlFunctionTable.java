@@ -24,7 +24,11 @@ import com.google.common.collect.Lists;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import org.apache.calcite.sql.*;
+import org.apache.calcite.sql.SqlFunction;
+import org.apache.calcite.sql.SqlFunctionCategory;
+import org.apache.calcite.sql.SqlIdentifier;
+import org.apache.calcite.sql.SqlOperator;
+import org.apache.calcite.sql.SqlSyntax;
 import org.apache.calcite.sql.util.ListSqlOperatorTable;
 import org.apache.geaflow.dsl.common.exception.GeaFlowDSLException;
 import org.apache.geaflow.dsl.common.function.UDAF;
@@ -75,6 +79,7 @@ import org.apache.geaflow.dsl.udf.table.date.Year;
 import org.apache.geaflow.dsl.udf.table.math.E;
 import org.apache.geaflow.dsl.udf.table.math.Log2;
 import org.apache.geaflow.dsl.udf.table.math.Round;
+import org.apache.geaflow.dsl.udf.table.other.Direction;
 import org.apache.geaflow.dsl.udf.table.other.EdgeSrcId;
 import org.apache.geaflow.dsl.udf.table.other.EdgeTargetId;
 import org.apache.geaflow.dsl.udf.table.other.EdgeTimestamp;
@@ -188,6 +193,7 @@ public class BuildInSqlFunctionTable extends ListSqlOperatorTable {
 
             // udf.table.other
             .add(GeaFlowFunction.of(If.class))
+            .add(GeaFlowFunction.of(Direction.class))
             .add(GeaFlowFunction.of(Label.class))
             .add(GeaFlowFunction.of(VertexId.class))
             .add(GeaFlowFunction.of(EdgeSrcId.class))

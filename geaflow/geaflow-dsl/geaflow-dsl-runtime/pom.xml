@@ -73,11 +73,6 @@
 
         <dependency>
             <groupId>org.apache.geaflow</groupId>
-            <artifactId>geaflow-dsl-connector-hive</artifactId>
-        </dependency>
-
-        <dependency>
-            <groupId>org.apache.geaflow</groupId>
             <artifactId>geaflow-dsl-connector-socket</artifactId>
         </dependency>
 
@@ -148,4 +143,65 @@
             <artifactId>geaflow-view-meta</artifactId>
         </dependency>
     </dependencies>
+
+    <build>  
+        <plugins>  
+            <plugin>  
+                <groupId>org.apache.maven.plugins</groupId>  
+                <artifactId>maven-surefire-plugin</artifactId>  
+                <version>${maven-surefire.version}</version>
+                <configuration>  
+                    <!-- Optimize memory usage -->  
+                    <argLine>-Xmx512m -XX:MaxMetaspaceSize=256m -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -Djava.awt.headless=true</argLine>  
+                      
+                    <!-- Moderate parallel configuration -->  
+                    <forkCount>1</forkCount>  
+                    <reuseForks>false</reuseForks>  
+                    <parallel>classes</parallel>  
+                    <threadCount>2</threadCount>  
+                    <perCoreThreadCount>false</perCoreThreadCount>  
+                      
+                    <!-- Timeout and failure handling -->  
+                    <forkedProcessTimeoutInSeconds>300</forkedProcessTimeoutInSeconds>  
+                    <testFailureIgnore>false</testFailureIgnore>  
+                    <skipAfterFailureCount>1</skipAfterFailureCount>  
+                      
+                    <!-- System properties -->  
+                    <systemPropertyVariables>  
+                        <java.awt.headless>true</java.awt.headless>  
+                        <file.encoding>UTF-8</file.encoding>  
+                        <user.timezone>UTC</user.timezone>  
+                    </systemPropertyVariables>  
+                </configuration>  
+            </plugin>  
+        </plugins>  
+    </build>  
+      
+    <profiles>  
+        <profile>  
+            <id>integration-tests</id>  
+            <build>  
+                <plugins>  
+                    <plugin>  
+                        <groupId>org.apache.maven.plugins</groupId>  
+                        <artifactId>maven-surefire-plugin</artifactId>  
+                        <version>${maven-surefire.version}</version>
+                        <configuration>  
+                            <argLine>-Xmx1024m -XX:MaxMetaspaceSize=512m -XX:+UseG1GC</argLine>  
+                            <forkCount>1</forkCount>  
+                            <reuseForks>false</reuseForks>  
+                            <parallel>none</parallel>  
+                            <includes>  
+                                <include>**/GQLInsertTest.java</include>  
+                            </includes>  
+                            <excludes>  
+                                <exclude>none</exclude>  
+                            </excludes>  
+                            <forkedProcessTimeoutInSeconds>900</forkedProcessTimeoutInSeconds>  
+                        </configuration>  
+                    </plugin>  
+                </plugins>  
+            </build>  
+        </profile>  
+    </profiles>
 </project>

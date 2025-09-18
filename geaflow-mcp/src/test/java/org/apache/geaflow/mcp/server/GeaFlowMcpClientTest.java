@@ -19,10 +19,8 @@
 
 package org.apache.geaflow.mcp.server;
 
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
+import org.apache.commons.io.IOUtils;
+import org.apache.geaflow.mcp.server.util.McpConstants;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.noear.solon.ai.mcp.client.McpClientProvider;
@@ -30,10 +28,15 @@ import org.noear.solon.test.SolonTest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.nio.charset.Charset;
+import java.util.*;
+
 @SolonTest(GeaFlowMcpServer.class)
 public class GeaFlowMcpClientTest {
     private static final Logger LOGGER = LoggerFactory.getLogger(GeaFlowMcpClientTest.class);
 
+    private static final String SSE_CHANNEL = "sse";
     private static final String SSE_ENDPOINT = "http://localhost:8088/geaflow/sse";
     private static final String QUERY = "query";
     private static final String EXECUTE_QUERY_TOOL_NAME = "executeQuery";
@@ -60,7 +63,6 @@ public class GeaFlowMcpClientTest {
     /**
      * Call execute query tool.
      */
-    @Test
     public void testExecuteQuery() {
         McpClientProvider toolProvider = McpClientProvider.builder()
             .apiUrl(SSE_ENDPOINT)
@@ -77,6 +79,7 @@ public class GeaFlowMcpClientTest {
     @Test
     public void testGetServerVersion() {
         McpClientProvider toolProvider = McpClientProvider.builder()
+            .channel(SSE_CHANNEL)
             .apiUrl(SSE_ENDPOINT)
             .build();
 
@@ -87,6 +90,7 @@ public class GeaFlowMcpClientTest {
     @Test
     public void testListTools() {
         McpClientProvider toolProvider = McpClientProvider.builder()
+            .channel(SSE_CHANNEL)
             .apiUrl(SSE_ENDPOINT)
             .build();
 
@@ -95,7 +99,118 @@ public class GeaFlowMcpClientTest {
             LOGGER.info("Tool: {}, desc: {}, input schema: {}", tool.name(), tool.description(), tool.inputSchema());
             toolNames.add(tool.name());
         });
-        Assertions.assertTrue(toolNames.contains(EXECUTE_QUERY_TOOL_NAME));
+        Assertions.assertTrue(toolNames.contains(McpConstants.CREATE_GRAPH_TOOL_NAME));
     }
 
+    /**
+     * Call create graph tool.
+     */
+    @Test
+    public void testCreateGraph() throws IOException {
+        McpClientProvider toolProvider = McpClientProvider.builder()
+                .channel(SSE_CHANNEL)
+                .apiUrl(SSE_ENDPOINT)
+                .build();
+
+        String gql = IOUtils.resourceToString("/gql/modern", Charset.defaultCharset()).trim();
+        Map<String, Object> map = new HashMap<>();
+        map.put(McpConstants.DDL, gql);
+        map.put(McpConstants.GRAPH_NAME, "modern");
+
+        String queryResults = toolProvider.callToolAsText(McpConstants.CREATE_GRAPH_TOOL_NAME, map).getContent();
+        LOGGER.info("queryResults: {}", queryResults);
+        Assertions.assertEquals("Create graph modern success.",
+                queryResults);
+
+    }
+
+    /**
+     * Call insert graph tool.
+     */
+    @Test
+    public void testInsertGraph() throws IOException {
+        McpClientProvider toolProvider = McpClientProvider.builder()
+                .channel(SSE_CHANNEL)
+                .apiUrl(SSE_ENDPOINT)
+                .build();
+
+        String gql = IOUtils.resourceToString("/gql/insert1", Charset.defaultCharset()).trim();
+        Map<String, Object> map = new HashMap<>();
+        map.put(McpConstants.DML, gql);
+        map.put(McpConstants.GRAPH_NAME, "modern");
+
+        String queryResults = toolProvider.callToolAsText(McpConstants.INSERT_GRAPH_TOOL_NAME, map).getContent();
+        LOGGER.info("queryResults: {}", queryResults);
+        String licenseHead = IOUtils.resourceToString("/gql/licenseHead", Charset.defaultCharset());
+        Assertions.assertEquals("run query success: " + licenseHead + "INSERT INTO modern.person(id, name, age)\n" +
+                        "VALUES (1, 'jim', 20), (2, 'kate', 22)\n" +
+                        ";",
+                queryResults);
+
+    }
+
+    /**
+     * Call query graph tool.
+     */
+    @Test
+    public void testQueryGraphType() throws IOException {
+        McpClientProvider toolProvider = McpClientProvider.builder()
+                .channel(SSE_CHANNEL)
+                .apiUrl(SSE_ENDPOINT)
+                .build();
+
+        Map<String, Object> map = new HashMap<>();
+        map.put(McpConstants.TYPE, "person");
+        map.put(McpConstants.GRAPH_NAME, "modern");
+
+        String queryResults = toolProvider.callToolAsText(McpConstants.QUERY_TYPE_TOOL_NAME, map).getContent();
+        LOGGER.info("queryResults: {}", queryResults);
+        Assertions.assertTrue(queryResults.startsWith("type: person"));
+        Assertions.assertTrue(queryResults.contains("schema: id|name|age"));
+        Assertions.assertTrue(queryResults.contains("1,jim,20"));
+        Assertions.assertTrue(queryResults.contains("2,kate,22"));
+
+    }
+
+    /**
+     * Call create graph tool with error.
+     */
+    @Test
+    public void testCreateGraphFailed() throws IOException {
+        McpClientProvider toolProvider = McpClientProvider.builder()
+                .channel(SSE_CHANNEL)
+                .apiUrl(SSE_ENDPOINT)
+                .build();
+
+        String gql = IOUtils.resourceToString("/gql/modern_error", Charset.defaultCharset()).trim();
+        Map<String, Object> map = new HashMap<>();
+        map.put(McpConstants.DDL, gql);
+        map.put(McpConstants.GRAPH_NAME, "modern");
+
+        String queryResults = toolProvider.callToolAsText(McpConstants.CREATE_GRAPH_TOOL_NAME, map).getContent();
+        LOGGER.info("queryResults: {}", queryResults);
+        Assertions.assertTrue(queryResults.startsWith("Compile error: Encountered \"character\""));
+
+    }
+
+    /**
+     * Call insert graph tool.
+     */
+    @Test
+    public void testInsertGraphWithError() throws IOException {
+        McpClientProvider toolProvider = McpClientProvider.builder()
+                .channel(SSE_CHANNEL)
+                .apiUrl(SSE_ENDPOINT)
+                .build();
+
+        String gql = IOUtils.resourceToString("/gql/insert1_error", Charset.defaultCharset()).trim();
+        Map<String, Object> map = new HashMap<>();
+        map.put(McpConstants.DML, gql);
+        map.put(McpConstants.GRAPH_NAME, "modern");
+
+        String queryResults = toolProvider.callToolAsText(McpConstants.INSERT_GRAPH_TOOL_NAME, map).getContent();
+        LOGGER.info("queryResults: {}", queryResults);
+        Assertions.assertTrue(queryResults.contains("Field:er is not found"));
+
+    }
 }

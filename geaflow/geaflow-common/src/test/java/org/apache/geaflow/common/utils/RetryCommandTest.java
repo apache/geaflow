@@ -20,10 +20,14 @@
 package org.apache.geaflow.common.utils;
 
 import org.apache.geaflow.common.exception.GeaflowRuntimeException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 
 public class RetryCommandTest {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(RetryCommandTest.class);
 
     @Test(expectedExceptions = GeaflowRuntimeException.class)
     public void testFail() {
@@ -34,7 +38,7 @@ public class RetryCommandTest {
     @Test
     public void testRun() {
         Object result = RetryCommand.run(() -> {
-            System.out.println("hello");
+            LOGGER.info("hello");
             return "null";
         }, 1, 100);
         Assert.assertEquals(result, "null");
