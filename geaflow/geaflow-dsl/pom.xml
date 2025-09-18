@@ -40,6 +40,7 @@
         <module>geaflow-dsl-runtime</module>
         <module>geaflow-dsl-connector</module>
         <module>geaflow-dsl-catalog</module>
+        <module>geaflow-dsl-connector-tests</module>
     </modules>
 
     <properties>
@@ -151,38 +152,6 @@
                 <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-dsl-connector-odps</artifactId>
                 <version>${project.version}</version>
-            </dependency>
-
-            <dependency>
-                <groupId>org.apache.geaflow</groupId>
-                <artifactId>geaflow-dsl-connector-hive</artifactId>
-                <version>${project.version}</version>
-                <exclusions>
-                    <exclusion>
-                        <groupId>com.google.guava</groupId>
-                        <artifactId>guava</artifactId>
-                    </exclusion>
-                    <exclusion>
-                        <groupId>org.eclipse.jetty</groupId>
-                        <artifactId>jetty-util</artifactId>
-                    </exclusion>
-                    <exclusion>
-                        <groupId>org.eclipse.jetty</groupId>
-                        <artifactId>jetty-http</artifactId>
-                    </exclusion>
-                    <exclusion>
-                        <groupId>org.eclipse.jetty</groupId>
-                        <artifactId>jetty-server</artifactId>
-                    </exclusion>
-                    <exclusion>
-                        <groupId>org.eclipse.jetty</groupId>
-                        <artifactId>jetty-continuation</artifactId>
-                    </exclusion>
-                    <exclusion>
-                        <groupId>org.eclipse.jetty</groupId>
-                        <artifactId>jetty-servlet</artifactId>
-                    </exclusion>
-                </exclusions>
             </dependency>
 
             <dependency>

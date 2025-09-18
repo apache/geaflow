@@ -52,11 +52,11 @@ public class WindowKeyAggPipeline implements Serializable {
     public static final String SPLIT = ",";
 
     public IPipelineResult submit(Environment environment) {
-        Pipeline pipeline = PipelineFactory.buildPipeline(environment);
         Configuration envConfig = environment.getEnvironmentContext().getConfig();
         envConfig.getConfigMap().put(FileSink.OUTPUT_DIR, RESULT_FILE_PATH);
         envConfig.getConfigMap().put(FrameworkConfigKeys.INC_STREAM_MATERIALIZE_DISABLE.getKey(), Boolean.TRUE.toString());
         ResultValidator.cleanResult(RESULT_FILE_PATH);
+        Pipeline pipeline = PipelineFactory.buildPipeline(environment);
         pipeline.submit(new PipelineTask() {
             @Override
             public void execute(IPipelineTaskContext pipelineTaskCxt) {

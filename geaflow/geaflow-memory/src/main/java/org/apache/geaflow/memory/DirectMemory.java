@@ -33,7 +33,6 @@ import org.apache.geaflow.memory.cleaner.CleanerJava9;
 import org.apache.geaflow.memory.exception.GeaflowOutOfMemoryException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import sun.misc.Unsafe;
 
 /**
  * This class is an adaptation of Netty's io.netty.util.internal.DirectMemory.
@@ -284,7 +283,7 @@ public final class DirectMemory {
         return USE_DIRECT_BUFFER_NO_CLEANER;
     }
 
-    public static Unsafe unsafe() {
+    public static sun.misc.Unsafe unsafe() {
         return PlatformDependent.UNSAFE;
     }
 

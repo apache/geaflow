@@ -45,7 +45,7 @@ public class GeaFlowStaticVCAggTraversalFunction implements
     public void open(
         VertexCentricTraversalFuncContext<Object, Row, Row, MessageBox, ITreePath> vertexCentricFuncContext) {
         commonFunction.open(this.traversalRuntimeContext =
-            new GeaFlowStaticTraversalRuntimeContext(vertexCentricFuncContext));
+                new GeaFlowStaticTraversalRuntimeContext(vertexCentricFuncContext));
     }
 
     @Override
