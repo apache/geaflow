@@ -17,12 +17,13 @@
 
 package org.apache.geaflow.dsl.runtime.query;
 
+import java.io.File;
+import java.io.IOException;
+
+import org.apache.commons.io.FileUtils;
 import org.apache.geaflow.common.config.keys.DSLConfigKeys;
 import org.apache.geaflow.common.config.keys.FrameworkConfigKeys;
 import org.apache.geaflow.file.FileConfigKeys;
-import java.io.File;
-import java.io.IOException;
-import org.apache.commons.io.FileUtils;
 import org.testng.annotations.Test;
 
 /**

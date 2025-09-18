@@ -21,7 +21,6 @@ package org.apache.geaflow.dsl.udf.graph;
 
 import java.io.Serializable;
 import java.util.*;
-
 import org.apache.geaflow.common.type.primitive.IntegerType;
 import org.apache.geaflow.common.type.primitive.StringType;
 import org.apache.geaflow.dsl.common.algo.AlgorithmRuntimeContext;
