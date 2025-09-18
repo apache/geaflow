@@ -49,4 +49,13 @@ public class SortTest {
             .execute()
             .checkSinkResult();
     }
+
+    @Test
+    public void testSort_004() throws Exception {
+        QueryTester
+            .build()
+            .withQueryPath("/query/sort_004.sql")
+            .execute()
+            .checkSinkResult();
+    }
 }
