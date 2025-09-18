@@ -80,14 +80,14 @@ public abstract class PaimonBaseGraphProxy<K, VV, EV> implements IGraphPaimonPro
     public void addEdge(IEdge<K, EV> edge) {
         Tuple<byte[], byte[]> tuple = this.encoder.getEdgeEncoder().format(edge);
         GenericRow record = GenericRow.of(tuple.f0, tuple.f1);
-        this.edgeHandle.write(record, 0);
+        this.edgeHandle.write(record);
     }
 
     @Override
     public void addVertex(IVertex<K, VV> vertex) {
         Tuple<byte[], byte[]> tuple = this.encoder.getVertexEncoder().format(vertex);
         GenericRow record = GenericRow.of(tuple.f0, tuple.f1);
-        this.vertexHandle.write(record, 0);
+        this.vertexHandle.write(record);
     }
 
     @Override

@@ -23,6 +23,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.OptionalLong;
 import org.apache.geaflow.common.exception.GeaflowRuntimeException;
+import org.apache.geaflow.store.paimon.commit.PaimonCommitRegistry;
 import org.apache.paimon.catalog.Identifier;
 import org.apache.paimon.data.GenericRow;
 import org.apache.paimon.data.InternalRow;
@@ -31,27 +32,43 @@ import org.apache.paimon.reader.RecordReader;
 import org.apache.paimon.reader.RecordReaderIterator;
 import org.apache.paimon.table.Table;
 import org.apache.paimon.table.sink.CommitMessage;
+import org.apache.paimon.table.sink.CommitMessageImpl;
 import org.apache.paimon.table.sink.StreamTableCommit;
 import org.apache.paimon.table.sink.StreamTableWrite;
 import org.apache.paimon.table.source.ReadBuilder;
 import org.apache.paimon.table.source.Split;
 import org.apache.paimon.table.source.TableRead;
 import org.apache.paimon.utils.Filter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class PaimonTableRWHandle {
 
-    private Identifier identifier;
-
-    private Table table;
-
+    private static final Logger LOGGER = LoggerFactory.getLogger(PaimonTableRWHandle.class);
+    private final int shardId;
+    private final Identifier identifier;
+    private final Table table;
+    private final boolean isDistributedMode;
+    private final PaimonCommitRegistry registry;
     private StreamTableWrite streamTableWrite;
-
     private List<CommitMessage> commitMessages = new ArrayList<>();
 
-    public PaimonTableRWHandle(Identifier identifier, Table table) {
+    public PaimonTableRWHandle(Identifier identifier, Table table, int shardId) {
+        this(identifier, table, shardId, false);
+    }
+
+    public PaimonTableRWHandle(Identifier identifier, Table table, int shardId,
+                               boolean isDistributedMode) {
+        this.shardId = shardId;
         this.identifier = identifier;
         this.table = table;
         this.streamTableWrite = table.newStreamWriteBuilder().newWrite();
+        this.registry = PaimonCommitRegistry.initInstance();
+        this.isDistributedMode = isDistributedMode;
+    }
+
+    public void write(GenericRow row) {
+        write(row, shardId);
     }
 
     public void write(GenericRow row, int bucket) {
@@ -63,13 +80,34 @@ public class PaimonTableRWHandle {
     }
 
     public void commit(long checkpointId) {
-        try (StreamTableCommit commit = table.newStreamWriteBuilder().newCommit()) {
-            flush(checkpointId);
-            commit.commit(checkpointId, commitMessages);
-            commitMessages.clear();
-        } catch (Exception e) {
-            throw new GeaflowRuntimeException("Failed to commit data into Paimon.", e);
+        commit(checkpointId, false);
+    }
+
+    public void commit(long checkpointId, boolean waitCompaction) {
+        flush(checkpointId, waitCompaction);
+        List<CommitMessage> messages = new ArrayList<>();
+        for (CommitMessage commitMessage : commitMessages) {
+            if (commitMessage instanceof CommitMessageImpl
+                && ((CommitMessageImpl) commitMessage).isEmpty()) {
+                continue;
+            }
+            messages.add(commitMessage);
         }
+
+        if (isDistributedMode) {
+            LOGGER.info("{} pre commit chkId:{} messages:{} wait:{}",
+                this.identifier, checkpointId, messages.size(), waitCompaction);
+            registry.addMessages(shardId, table.name(), messages);
+        } else {
+            LOGGER.info("{} commit chkId:{} messages:{} wait:{}",
+                this.identifier, checkpointId, messages.size(), waitCompaction);
+            try (StreamTableCommit commit = table.newStreamWriteBuilder().newCommit()) {
+                commit.commit(checkpointId, messages);
+            } catch (Exception e) {
+                throw new GeaflowRuntimeException("Failed to commit data into Paimon.", e);
+            }
+        }
+        commitMessages.clear();
     }
 
     public void rollbackTo(long snapshotId) {
@@ -92,6 +130,8 @@ public class PaimonTableRWHandle {
             if (predicate != null) {
                 readBuilder.withFilter(predicate);
             }
+            readBuilder.withBucketFilter(bucketId -> bucketId == shardId);
+
             List<Split> splits = readBuilder.newScan().plan().splits();
             TableRead tableRead = readBuilder.newRead();
             if (predicate != null) {
@@ -108,8 +148,13 @@ public class PaimonTableRWHandle {
     }
 
     public void flush(long checkpointIdentifier) {
+        flush(checkpointIdentifier, false);
+    }
+
+    public void flush(long checkpointIdentifier, boolean waitCompaction) {
         try {
-            this.commitMessages.addAll(streamTableWrite.prepareCommit(false, checkpointIdentifier));
+            this.commitMessages.addAll(
+                streamTableWrite.prepareCommit(waitCompaction, checkpointIdentifier));
         } catch (Exception e) {
             throw new GeaflowRuntimeException("Failed to flush data into Paimon.", e);
         }

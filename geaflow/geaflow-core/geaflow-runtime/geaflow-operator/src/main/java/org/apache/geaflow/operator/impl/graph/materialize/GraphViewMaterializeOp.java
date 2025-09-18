@@ -24,6 +24,7 @@ import static org.apache.geaflow.operator.Constants.GRAPH_VERSION;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import java.io.IOException;
+import java.util.List;
 import org.apache.geaflow.api.graph.materialize.GraphMaterializeFunction;
 import org.apache.geaflow.api.trait.CheckpointTrait;
 import org.apache.geaflow.api.trait.TransactionTrait;
@@ -36,12 +37,17 @@ import org.apache.geaflow.state.DataModel;
 import org.apache.geaflow.state.GraphState;
 import org.apache.geaflow.state.StateFactory;
 import org.apache.geaflow.state.descriptor.GraphStateDescriptor;
+import org.apache.geaflow.store.paimon.commit.PaimonCommitRegistry;
+import org.apache.geaflow.store.paimon.commit.PaimonCommitRegistry.TaskCommitMessage;
+import org.apache.geaflow.store.paimon.commit.PaimonMessage;
 import org.apache.geaflow.utils.keygroup.IKeyGroupAssigner;
 import org.apache.geaflow.utils.keygroup.KeyGroup;
 import org.apache.geaflow.utils.keygroup.KeyGroupAssignerFactory;
 import org.apache.geaflow.utils.keygroup.KeyGroupAssignment;
+import org.apache.geaflow.view.IViewDesc.BackendType;
 import org.apache.geaflow.view.graph.GraphViewDesc;
 import org.apache.geaflow.view.meta.ViewMetaBookKeeper;
+import org.apache.paimon.table.sink.CommitMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -72,7 +78,8 @@ public class GraphViewMaterializeOp<K, VV, EV> extends AbstractOneInputOperator<
         int maxPara = graphViewDesc.getShardNum();
         int taskPara = runtimeContext.getTaskArgs().getParallelism();
         Preconditions.checkArgument(taskPara <= maxPara,
-            String.format("task parallelism '%s' must be <= shard num(max parallelism) '%s'", taskPara, maxPara));
+            String.format("task parallelism '%s' must be <= shard num(max parallelism) '%s'",
+                taskPara, maxPara));
 
         int taskIndex = runtimeContext.getTaskArgs().getTaskIndex();
         KeyGroup keyGroup = KeyGroupAssignment.computeKeyGroupRangeForOperatorIndex(maxPara,
@@ -85,7 +92,8 @@ public class GraphViewMaterializeOp<K, VV, EV> extends AbstractOneInputOperator<
         int taskId = runtimeContext.getTaskArgs().getTaskId();
         LOGGER.info("opName:{} taskId:{} taskIndex:{} keyGroup:{}", name, taskId,
             taskIndex, keyGroup);
-        this.graphState = StateFactory.buildGraphState(descriptor, runtimeContext.getConfiguration());
+        this.graphState = StateFactory.buildGraphState(descriptor,
+            runtimeContext.getConfiguration());
         recover();
         this.function = new DynamicGraphMaterializeFunction<>(graphState);
     }
@@ -105,12 +113,28 @@ public class GraphViewMaterializeOp<K, VV, EV> extends AbstractOneInputOperator<
         this.graphState.manage().operate().setCheckpointId(checkpointId);
         this.graphState.manage().operate().finish();
         this.graphState.manage().operate().archive();
+
+        if (graphViewDesc.getBackend() == BackendType.Paimon) {
+            int taskIndex = runtimeContext.getTaskArgs().getTaskIndex();
+
+            PaimonCommitRegistry registry = PaimonCommitRegistry.getInstance();
+            List<TaskCommitMessage> messages = registry.pollMessages(taskIndex);
+            if (messages != null && !messages.isEmpty()) {
+                for (TaskCommitMessage message : messages) {
+                    List<CommitMessage> msg = message.getMessages();
+                    LOGGER.info("task {} emits windowId:{} chkId:{} table:{} messages:{}",
+                        taskIndex, windowId, checkpointId, message.getTableName(),
+                        msg.size());
+                    collectValue(new PaimonMessage(checkpointId, message.getTableName(),
+                        msg));
+                }
+            }
+        }
         LOGGER.info("do checkpoint over, checkpointId: {}", checkpointId);
     }
 
     @Override
     public void finish(long windowId) {
-
     }
 
     @Override
@@ -159,7 +183,8 @@ public class GraphViewMaterializeOp<K, VV, EV> extends AbstractOneInputOperator<
         }
     }
 
-    public static class DynamicGraphMaterializeFunction<K, VV, EV> implements GraphMaterializeFunction<K, VV, EV> {
+    public static class DynamicGraphMaterializeFunction<K, VV, EV> implements
+        GraphMaterializeFunction<K, VV, EV> {
 
         private final GraphState<K, VV, EV> graphState;
 

@@ -35,8 +35,7 @@ public class WindowStreamSink<T> extends Stream<T> implements PStreamSink<T> {
         super(pipelineContext, operator);
     }
 
-    public WindowStreamSink(Stream stream,
-                            AbstractOperator operator) {
+    public WindowStreamSink(Stream stream, AbstractOperator operator) {
         super(stream, operator);
     }
 

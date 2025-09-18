@@ -60,6 +60,7 @@ import org.apache.geaflow.plan.graph.PipelineVertex;
 import org.apache.geaflow.plan.optimizer.PipelineGraphOptimizer;
 import org.apache.geaflow.view.GraphViewBuilder;
 import org.apache.geaflow.view.IViewDesc;
+import org.apache.geaflow.view.IViewDesc.BackendType;
 import org.apache.geaflow.view.graph.GraphViewDesc;
 import org.apache.geaflow.view.graph.PGraphView;
 import org.apache.geaflow.view.graph.PIncGraphView;
@@ -186,14 +187,15 @@ public class PipelinePlanTest extends BasePlanTest {
         Assert.assertEquals(vertexMap.size(), 8);
     }
 
-    @Test
-    public void testMaterialize() {
-        AtomicInteger idGenerator = new AtomicInteger(0);
-        AbstractPipelineContext context = mock(AbstractPipelineContext.class);
-        when(context.generateId()).then(invocation -> idGenerator.incrementAndGet());
+    public void testMaterialize(IViewDesc.BackendType backendType) {
         Configuration configuration = new Configuration();
         configuration.put(FrameworkConfigKeys.INC_STREAM_MATERIALIZE_DISABLE, Boolean.TRUE.toString());
-        when(context.getConfig()).thenReturn(configuration);
+        AbstractPipelineContext context = new AbstractPipelineContext(configuration) {
+            @Override
+            public int generateId() {
+                return idGenerator.incrementAndGet();
+            }
+        };
 
         PWindowSource<Integer> source1 =
             new WindowStreamSource<>(context, new CollectionSource<>(new ArrayList<>()), SizeTumblingWindow.of(10));
@@ -208,7 +210,7 @@ public class PipelinePlanTest extends BasePlanTest {
         final String graphName = "graph_view_name";
         GraphViewDesc graphViewDesc = GraphViewBuilder.createGraphView(graphName)
             .withShardNum(4)
-            .withBackend(IViewDesc.BackendType.RocksDB)
+            .withBackend(backendType)
             .withSchema(new GraphMetaType(IntegerType.INSTANCE, ValueVertex.class,
                 Integer.class, ValueEdge.class, IntegerType.class))
             .build();
@@ -219,7 +221,6 @@ public class PipelinePlanTest extends BasePlanTest {
                 vertices.window(WindowFactory.createSizeTumblingWindow(1)),
                 edges.window(WindowFactory.createSizeTumblingWindow(1)));
         incGraphView.materialize();
-        when(context.getActions()).thenReturn(ImmutableList.of(((IncGraphView) incGraphView).getMaterializedIncGraph()));
 
         PipelinePlanBuilder planBuilder = new PipelinePlanBuilder();
         PipelineGraph pipelineGraph = planBuilder.buildPlan(context);
@@ -227,8 +228,21 @@ public class PipelinePlanTest extends BasePlanTest {
         optimizer.optimizePipelineGraph(pipelineGraph);
 
         Map<Integer, PipelineVertex> vertexMap = pipelineGraph.getVertexMap();
-        Assert.assertEquals(vertexMap.size(), 3);
+        if (backendType == BackendType.Paimon) {
+            Assert.assertEquals(vertexMap.size(), 4);
+        } else {
+            Assert.assertEquals(vertexMap.size(), 3);
+        }
+    }
 
+    @Test
+    public void testRocksDBMaterialize() {
+        testMaterialize(BackendType.RocksDB);
+    }
+
+    @Test
+    public void testPaimonMaterialize() {
+        testMaterialize(BackendType.Paimon);
     }
 
     @Test

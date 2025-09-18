@@ -132,7 +132,7 @@ public class PaimonGraphMultiVersionedProxy<K, VV, EV> implements
         Tuple<byte[], byte[]> tuple = edgeEncoder.format(edge);
         byte[] bVersion = getBinaryVersion(version);
         GenericRow record = GenericRow.of(concat(bVersion, tuple.f0), tuple.f1);
-        this.edgeHandle.write(record, 0);
+        this.edgeHandle.write(record);
     }
 
     @Override
@@ -141,8 +141,8 @@ public class PaimonGraphMultiVersionedProxy<K, VV, EV> implements
         byte[] bVersion = getBinaryVersion(version);
         GenericRow record = GenericRow.of(concat(bVersion, tuple.f0), tuple.f1);
         GenericRow index = GenericRow.of(concat(tuple.f0, bVersion), EMPTY_BYTES);
-        this.vertexHandle.write(record, 0);
-        this.vertexIndexHandle.write(index, 0);
+        this.vertexHandle.write(record);
+        this.vertexIndexHandle.write(index);
     }
 
     @Override

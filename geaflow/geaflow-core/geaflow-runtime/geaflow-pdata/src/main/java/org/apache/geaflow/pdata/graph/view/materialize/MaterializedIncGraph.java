@@ -27,14 +27,19 @@ import org.apache.geaflow.model.graph.edge.IEdge;
 import org.apache.geaflow.model.graph.vertex.IVertex;
 import org.apache.geaflow.operator.base.AbstractOperator;
 import org.apache.geaflow.operator.impl.graph.materialize.GraphViewMaterializeOp;
+import org.apache.geaflow.operator.impl.graph.materialize.PaimonGlobalSink;
+import org.apache.geaflow.operator.impl.window.SinkOperator;
 import org.apache.geaflow.partitioner.IPartitioner;
 import org.apache.geaflow.partitioner.impl.KeyPartitioner;
 import org.apache.geaflow.pdata.graph.view.AbstractGraphView;
 import org.apache.geaflow.pdata.graph.window.WindowStreamGraph;
 import org.apache.geaflow.pdata.stream.Stream;
 import org.apache.geaflow.pdata.stream.TransformType;
+import org.apache.geaflow.pdata.stream.window.WindowStreamSink;
 import org.apache.geaflow.pipeline.context.IPipelineContext;
+import org.apache.geaflow.store.paimon.commit.PaimonMessage;
 import org.apache.geaflow.view.IViewDesc;
+import org.apache.geaflow.view.IViewDesc.BackendType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -67,7 +72,16 @@ public class MaterializedIncGraph<K, VV, EV> extends AbstractGraphView<K, VV, EV
             + "edgeStream parallelism must <= number of graph shard num";
         this.edgeStream = this.edgeStream
             .keyBy(new WindowStreamGraph.DefaultEdgePartition<>());
-        super.context.addPAction(this);
+
+        if (graphViewDesc.getBackend() == BackendType.Paimon) {
+            SinkOperator<PaimonMessage> operator =
+                new SinkOperator<>(new PaimonGlobalSink());
+            WindowStreamSink globalSink = new WindowStreamSink<>(this, operator);
+            globalSink.withParallelism(1);
+            super.context.addPAction(globalSink);
+        } else {
+            super.context.addPAction(this);
+        }
 
         assert this.getParallelism() == graphViewDesc.getShardNum() : "Materialize parallelism "
             + "must be equal to the graph shard num.";

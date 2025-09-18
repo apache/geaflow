@@ -19,6 +19,7 @@
 
 package org.apache.geaflow.dsl.runtime.engine;
 
+import com.google.common.base.Preconditions;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -73,6 +74,7 @@ import org.apache.geaflow.model.traversal.ITraversalRequest;
 import org.apache.geaflow.model.traversal.ITraversalResponse;
 import org.apache.geaflow.operator.impl.graph.traversal.dynamic.DynamicGraphHelper;
 import org.apache.geaflow.pipeline.job.IPipelineJobContext;
+import org.apache.geaflow.view.IViewDesc.BackendType;
 import org.apache.geaflow.view.graph.GraphViewDesc;
 import org.apache.geaflow.view.graph.PGraphView;
 import org.apache.geaflow.view.graph.PIncGraphView;
@@ -179,6 +181,9 @@ public class GeaFlowRuntimeGraph implements RuntimeGraph {
             responsePWindow = staticGraphTraversal(staticGraph, parameterStartIds,
                 constantStartIds, executeDagGroup, maxTraversal, isAggTraversal, parallelism);
         } else { // traversal on dynamic graph
+            Preconditions.checkArgument(graphViewDesc.getBackend() != BackendType.Paimon,
+                "paimon does not support dynamic graph traversal");
+
             boolean enableIncrTraversal = DynamicGraphHelper.enableIncrTraversal(maxTraversal, startIds.size(),
                 context.getConfig());
             if (maxTraversal != Integer.MAX_VALUE) {
@@ -357,6 +362,7 @@ public class GeaFlowRuntimeGraph implements RuntimeGraph {
         PWindowStream<ITraversalResponse<Row>> responsePWindow;
         assert graphView instanceof PIncGraphView : "Illegal graph view";
         queryContext.addMaterializedGraph(graph.getName());
+
         if (vertexStream == null && edgeStream == null) { // traversal on snapshot of the dynamic graph
             PGraphWindow<Object, Row, Row> staticGraph = graphView.snapshot(graphViewDesc.getCurrentVersion());
             boolean enableAlgorithmSplit = algorithm instanceof IncrementalAlgorithmUserFunction;
@@ -376,6 +382,9 @@ public class GeaFlowRuntimeGraph implements RuntimeGraph {
                         graphAlgorithm.getParams(), graphSchema, parallelism)).start();
             }
         } else { // traversal on dynamic graph
+            Preconditions.checkArgument(graphViewDesc.getBackend() != BackendType.Paimon,
+                "paimon does not support dynamic graph traversal");
+
             vertexStream = vertexStream != null ? vertexStream :
                 queryContext.getEngineContext().createRuntimeTable(queryContext, Collections.emptyList())
                     .getPlan();

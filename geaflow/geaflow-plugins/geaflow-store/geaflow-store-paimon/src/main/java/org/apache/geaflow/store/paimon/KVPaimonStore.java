@@ -102,14 +102,14 @@ public class KVPaimonStore<K, V> extends BasePaimonStore implements IKVStatefulS
         byte[] keyArray = this.kvSerializer.serializeKey(key);
         byte[] valueArray = this.kvSerializer.serializeValue(value);
         GenericRow record = GenericRow.of(keyArray, valueArray);
-        this.tableHandle.write(record, 0);
+        this.tableHandle.write(record);
     }
 
     @Override
     public void remove(K key) {
         byte[] keyArray = this.kvSerializer.serializeKey(key);
         GenericRow record = GenericRow.ofKind(RowKind.DELETE, keyArray, null);
-        this.tableHandle.write(record, 0);
+        this.tableHandle.write(record);
     }
 
     @Override
