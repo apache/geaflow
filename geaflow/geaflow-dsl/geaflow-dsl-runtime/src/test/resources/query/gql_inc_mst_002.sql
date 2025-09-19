@@ -17,31 +17,31 @@
  * under the License.
  */
 
-CREATE TABLE kafka_source (
-	id bigint,
-	name varchar,
-	age long
+/*
+ * Incremental Minimum Spanning Tree algorithm incremental update test
+ * Test dynamic edge addition and deletion scenarios
+ */
+CREATE TABLE inc_mst_incremental_result (
+  srcId int,
+  targetId int,
+  weight double
 ) WITH (
-	type='kafka',
-	geaflow.dsl.kafka.servers = 'localhost:9092',
-	geaflow.dsl.kafka.topic = 'scan_002',
-	geaflow.dsl.kafka.data.operation.timeout.seconds = 5,
-	geaflow.dsl.time.window.size=10,
-	geaflow.dsl.start.time='${stTime}'
+    type='file',
+    geaflow.dsl.file.path = '${target}'
 );
 
-CREATE TABLE tbl_result (
-	id bigint,
-	name varchar,
-	age long
-) WITH (
-	type='file',
-	geaflow.dsl.file.path='${target}'
-);
+USE GRAPH modern;
 
-INSERT INTO tbl_result
-SELECT DISTINCT id, name, age
-FROM kafka_source
-ORDER BY id
-LIMIT 5
-;
+-- Initial MST calculation
+INSERT INTO inc_mst_incremental_result
+CALL IncMST(50, 0.001, 'mst_incremental_edges') YIELD (srcId, targetId, weight)
+RETURN srcId, targetId, weight;
+
+-- Simulate edge updates
+INSERT INTO modern.relation VALUES (1001, 1002);
+INSERT INTO modern.relation VALUES (1002, 1003);
+
+-- MST calculation after incremental update
+INSERT INTO inc_mst_incremental_result
+CALL IncMST(50, 0.001, 'mst_incremental_edges') YIELD (srcId, targetId, weight)
+RETURN srcId, targetId, weight;
