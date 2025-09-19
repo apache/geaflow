@@ -21,6 +21,7 @@ package org.apache.geaflow.dsl.udf.graph;
 
 import java.util.Iterator;
 import java.util.Optional;
+import org.apache.geaflow.common.type.IType;
 import org.apache.geaflow.dsl.common.algo.AlgorithmRuntimeContext;
 import org.apache.geaflow.dsl.common.algo.AlgorithmUserFunction;
 import org.apache.geaflow.dsl.common.algo.IncrementalAlgorithmUserFunction;
@@ -32,6 +33,7 @@ import org.apache.geaflow.dsl.common.types.GraphSchema;
 import org.apache.geaflow.dsl.common.types.ObjectType;
 import org.apache.geaflow.dsl.common.types.StructType;
 import org.apache.geaflow.dsl.common.types.TableField;
+import org.apache.geaflow.dsl.common.util.TypeCastUtil;
 import org.apache.geaflow.dsl.udf.graph.mst.MSTEdge;
 import org.apache.geaflow.dsl.udf.graph.mst.MSTMessage;
 import org.apache.geaflow.dsl.udf.graph.mst.MSTVertexState;
@@ -59,10 +61,14 @@ public class IncMinimumSpanningTree implements AlgorithmUserFunction<Object, Obj
     private String keyFieldName = "mst_edges";
     private int maxIterations = 50; // Maximum number of iterations
     private double convergenceThreshold = 0.001; // Convergence threshold
+    private IType<?> idType; // Cache the ID type for better performance
 
     @Override
     public void init(AlgorithmRuntimeContext<Object, Object> context, Object[] parameters) {
         this.context = context;
+
+        // Cache the ID type for better performance and type safety
+        this.idType = context.getGraphSchema().getIdType();
 
         // Parse parameters: maxIterations, convergenceThreshold, keyFieldName
         if (parameters.length > 0) {
@@ -89,11 +95,12 @@ public class IncMinimumSpanningTree implements AlgorithmUserFunction<Object, Obj
 
         // Process incoming messages
         boolean stateChanged = false;
+        Object validatedVertexId = validateVertexId(vertex.getId());
         while (messages.hasNext()) {
             Object messageObj = messages.next();
             if (messageObj instanceof MSTMessage) {
                 MSTMessage message = (MSTMessage) messageObj;
-                if (processMessage(vertex.getId(), message, currentState)) {
+                if (processMessage(validatedVertexId, message, currentState)) {
                     stateChanged = true;
                 }
             }
@@ -125,9 +132,12 @@ public class IncMinimumSpanningTree implements AlgorithmUserFunction<Object, Obj
 
     @Override
     public StructType getOutputType(GraphSchema graphSchema) {
+        // Use the cached ID type for consistency and performance
+        IType<?> vertexIdType = (idType != null) ? idType : graphSchema.getIdType();
+
         // Return result type: vertex ID and MST edge set
         return new StructType(
-            new TableField("vertex_id", graphSchema.getIdType(), false),
+            new TableField("vertex_id", vertexIdType, false),
             new TableField(keyFieldName, ObjectType.INSTANCE, false)
         );
     }
@@ -137,7 +147,8 @@ public class IncMinimumSpanningTree implements AlgorithmUserFunction<Object, Obj
      * Each vertex is initialized as an independent component with itself as the root node.
      */
     private void initializeVertex(RowVertex vertex) {
-        Object vertexId = vertex.getId();
+        // Validate vertex ID from input
+        Object vertexId = validateVertexId(vertex.getId());
 
         // Create initial MST state
         MSTVertexState initialState = new MSTVertexState(vertexId);
@@ -173,9 +184,10 @@ public class IncMinimumSpanningTree implements AlgorithmUserFunction<Object, Obj
      * Update vertex component identifier.
      */
     private boolean handleComponentUpdate(Object vertexId, MSTMessage message, MSTVertexState state) {
-        Object newComponentId = message.getComponentId();
-        if (!newComponentId.equals(state.getComponentId())) {
-            state.setComponentId(newComponentId);
+        // Validate component ID using cached type information
+        Object validatedComponentId = validateVertexId(message.getComponentId());
+        if (!validatedComponentId.equals(state.getComponentId())) {
+            state.setComponentId(validatedComponentId);
             return true;
         }
         return false;
@@ -195,12 +207,17 @@ public class IncMinimumSpanningTree implements AlgorithmUserFunction<Object, Obj
      * Add MST edge and merge components.
      */
     private boolean handleEdgeAcceptance(Object vertexId, MSTMessage message, MSTVertexState state) {
-        // Create MST edge
-        MSTEdge mstEdge = new MSTEdge(vertexId, message.getSourceId(), message.getWeight());
+        // Validate vertex IDs using cached type information
+        Object validatedVertexId = validateVertexId(vertexId);
+        Object validatedSourceId = validateVertexId(message.getSourceId());
+
+        // Create MST edge with validated IDs
+        MSTEdge mstEdge = new MSTEdge(validatedVertexId, validatedSourceId, message.getWeight());
         state.addMSTEdge(mstEdge);
 
-        // Merge components
-        Object newComponentId = findMinComponentId(state.getComponentId(), message.getComponentId());
+        // Merge components with type validation
+        Object validatedMessageComponentId = validateVertexId(message.getComponentId());
+        Object newComponentId = findMinComponentId(state.getComponentId(), validatedMessageComponentId);
         state.setComponentId(newComponentId);
 
         return true;
@@ -229,6 +246,39 @@ public class IncMinimumSpanningTree implements AlgorithmUserFunction<Object, Obj
     }
 
     /**
+     * Validate and convert vertex ID to ensure type safety.
+     * Uses TypeCastUtil for comprehensive type validation and conversion.
+     *
+     * @param vertexId The vertex ID to validate
+     * @return The validated vertex ID
+     * @throws IllegalArgumentException if vertexId is null or type incompatible
+     */
+    private Object validateVertexId(Object vertexId) {
+        if (vertexId == null) {
+            throw new IllegalArgumentException("Vertex ID cannot be null");
+        }
+
+        // If idType is not initialized (should not happen in normal flow), return as-is
+        if (idType == null) {
+            return vertexId;
+        }
+
+        try {
+            // Use TypeCastUtil for type conversion - this handles all supported type conversions
+            return TypeCastUtil.cast(vertexId, idType.getTypeClass());
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException(
+                String.format("Invalid vertex ID type conversion: expected %s, got %s (value: %s). Error: %s",
+                    idType.getTypeClass().getSimpleName(),
+                    vertexId.getClass().getSimpleName(),
+                    vertexId,
+                    e.getMessage()
+                ), e
+            );
+        }
+    }
+
+    /**
      * Get current vertex state.
      * Create new state if it doesn't exist.
      */
@@ -239,7 +289,9 @@ public class IncMinimumSpanningTree implements AlgorithmUserFunction<Object, Obj
                 return (MSTVertexState) stateObj;
             }
         }
-        return new MSTVertexState(vertex.getId());
+        // Validate vertex ID when creating new state
+        Object validatedVertexId = validateVertexId(vertex.getId());
+        return new MSTVertexState(validatedVertexId);
     }
 
     /**
