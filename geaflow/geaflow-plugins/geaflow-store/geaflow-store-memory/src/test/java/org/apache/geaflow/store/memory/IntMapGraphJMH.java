@@ -84,7 +84,7 @@ public class IntMapGraphJMH {
             "%d{yyyy-MM-dd HH:mm:ss} [%t] %-5p %c{1}:%L - %m%n");
         PropertyConfigurator.configure(prop);
 
-        store = new StaticGraphMemoryStore<>();
+        store = new StaticGraphMemoryStore<Integer, Object, Object>();
         composeGraph();
     }
 

@@ -84,7 +84,7 @@ public class StringCSRMapGraphJMH {
             "%d{yyyy-MM-dd HH:mm:ss} [%t] %-5p %c{1}:%L - %m%n");
         PropertyConfigurator.configure(prop);
 
-        store = new StaticGraphMemoryCSRStore<>();
+        store = new StaticGraphMemoryCSRStore<String, Object, Object>();
         composeGraph();
     }
 
