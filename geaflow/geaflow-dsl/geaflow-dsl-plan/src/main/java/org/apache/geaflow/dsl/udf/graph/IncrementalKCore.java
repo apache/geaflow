@@ -65,7 +65,7 @@ public class IncrementalKCore implements AlgorithmUserFunction<Object, Increment
     private Map<Object, Integer> vertexCoreValues = new HashMap<>();
     private Map<Object, Integer> vertexDegrees = new HashMap<>();
     private Set<Object> affectedVertices = new HashSet<>();
-    private boolean hasConverged = false;
+    private long currentIteration = 0L; // Current iteration number
     
     @Override
     public void init(AlgorithmRuntimeContext<Object, KCoreMessage> context, Object[] parameters) {
@@ -95,8 +95,7 @@ public class IncrementalKCore implements AlgorithmUserFunction<Object, Increment
     public void process(RowVertex vertex, Optional<Row> updatedValues, Iterator<KCoreMessage> messages) {
         updatedValues.ifPresent(vertex::setValue);
 
-        Object vertexId = vertex.getId();
-        long currentIteration = context.getCurrentIterationId();
+        currentIteration = context.getCurrentIterationId();
 
         // First iteration: initialization
         if (currentIteration == 1L) {
@@ -104,12 +103,12 @@ public class IncrementalKCore implements AlgorithmUserFunction<Object, Increment
             return;
         }
 
-        // Check if converged or reached maximum iterations
-        if (hasConverged || currentIteration > maxIterations) {
+        // Check if reached maximum iterations
+        if (currentIteration > maxIterations) {
             return;
         }
 
-        // Process incremental updates
+        // Process incremental updates and K-Core computation
         processIncrementalUpdate(vertex, messages);
     }
     
@@ -146,7 +145,7 @@ public class IncrementalKCore implements AlgorithmUserFunction<Object, Increment
     }
     
     /**
-     * Process incremental update messages.
+     * Process incremental update messages and perform K-Core computation.
      * Handle different message types accordingly.
      */
     private void processIncrementalUpdate(RowVertex vertex, Iterator<KCoreMessage> messages) {
@@ -154,11 +153,11 @@ public class IncrementalKCore implements AlgorithmUserFunction<Object, Increment
         boolean needsRecomputation = false;
         Set<Object> changedNeighbors = new HashSet<>();
         Map<Object, Integer> neighborCores = new HashMap<>();
-        
+
         // Process received messages
         while (messages.hasNext()) {
             KCoreMessage message = messages.next();
-            
+
             switch (message.getType()) {
                 case EDGE_ADDED:
                     handleEdgeAdded(vertexId, message);
@@ -175,15 +174,15 @@ public class IncrementalKCore implements AlgorithmUserFunction<Object, Increment
                     break;
                 case INIT:
                     neighborCores.put(message.getSourceId(), message.getCoreValue());
-                    needsRecomputation = true;
                     break;
                 default:
                     LOGGER.warn("Unknown message type: {}", message.getType());
                     break;
             }
         }
-        
-        if (needsRecomputation) {
+
+        // Always perform K-Core computation if we have neighbor information
+        if (!neighborCores.isEmpty() || needsRecomputation) {
             recomputeKCore(vertex, neighborCores);
         }
     }
@@ -228,8 +227,9 @@ public class IncrementalKCore implements AlgorithmUserFunction<Object, Increment
 
         // Core logic of K-Core algorithm:
         // New K-Core value = min(valid neighbor count, current degree)
-        // If result < k, then vertex does not belong to k-core, value = 0
         int newCore = Math.min(validNeighborCount, currentDegree);
+
+        // If the core value is less than k, the vertex doesn't belong to k-core
         if (newCore < k) {
             newCore = 0;
         }
@@ -239,8 +239,9 @@ public class IncrementalKCore implements AlgorithmUserFunction<Object, Increment
             vertexCoreValues.put(vertexId, newCore);
             affectedVertices.add(vertexId);
 
-            // Update vertex value
-            String changeType = newCore > currentCore ? "INCREASED" : "DECREASED";
+            // Update vertex value with correct change status
+            String changeType = (currentIteration == 1L) ? "INIT" :
+                              (newCore > currentCore ? "INCREASED" : "DECREASED");
             context.updateVertexValue(ObjectRow.create(newCore, currentDegree, changeType));
 
             // Broadcast changes to neighbors
@@ -250,8 +251,13 @@ public class IncrementalKCore implements AlgorithmUserFunction<Object, Increment
 
             sendMessageToNeighbors(allEdges, new KCoreMessage(vertexId, newCore, KCoreMessage.MessageType.CORE_CHANGED));
 
-            LOGGER.debug("Vertex {} core changed from {} to {} (valid neighbors: {}, degree: {})",
-                        vertexId, currentCore, newCore, validNeighborCount, currentDegree);
+            LOGGER.debug("Vertex {} core changed from {} to {} (valid neighbors: {}, degree: {}, k: {})",
+                        vertexId, currentCore, newCore, validNeighborCount, currentDegree, k);
+        } else {
+            // Even if core value didn't change, update with UNCHANGED status if it's not the first iteration
+            if (currentIteration > 1L) {
+                context.updateVertexValue(ObjectRow.create(newCore, currentDegree, "UNCHANGED"));
+            }
         }
     }
     
@@ -311,13 +317,21 @@ public class IncrementalKCore implements AlgorithmUserFunction<Object, Increment
     @Override
     public void finish(RowVertex vertex, Optional<Row> updatedValues) {
         updatedValues.ifPresent(vertex::setValue);
-        
+
         Object vertexId = vertex.getId();
         int coreValue = vertexCoreValues.getOrDefault(vertexId, 0);
         int degree = vertexDegrees.getOrDefault(vertexId, 0);
-        
-        // Output results for all vertices, including those not belonging to k-core
-        String changeStatus = affectedVertices.contains(vertexId) ? "CHANGED" : "UNCHANGED";
+
+        // Determine change status based on whether vertex was affected during computation
+        String changeStatus;
+        if (currentIteration == 1L) {
+            changeStatus = "INIT";
+        } else if (affectedVertices.contains(vertexId)) {
+            changeStatus = "CHANGED";
+        } else {
+            changeStatus = "UNCHANGED";
+        }
+
         context.take(ObjectRow.create(vertexId, coreValue, degree, changeStatus));
     }
 
