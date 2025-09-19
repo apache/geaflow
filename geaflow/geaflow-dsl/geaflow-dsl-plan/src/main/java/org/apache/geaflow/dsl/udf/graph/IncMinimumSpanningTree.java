@@ -20,14 +20,12 @@
 package org.apache.geaflow.dsl.udf.graph;
 
 import java.util.Iterator;
-import java.util.List;
 import java.util.Optional;
 
 import org.apache.geaflow.dsl.common.algo.AlgorithmRuntimeContext;
 import org.apache.geaflow.dsl.common.algo.AlgorithmUserFunction;
 import org.apache.geaflow.dsl.common.algo.IncrementalAlgorithmUserFunction;
 import org.apache.geaflow.dsl.common.data.Row;
-import org.apache.geaflow.dsl.common.data.RowEdge;
 import org.apache.geaflow.dsl.common.data.RowVertex;
 import org.apache.geaflow.dsl.common.data.impl.ObjectRow;
 import org.apache.geaflow.dsl.common.function.Description;
@@ -35,10 +33,10 @@ import org.apache.geaflow.dsl.common.types.GraphSchema;
 import org.apache.geaflow.dsl.common.types.ObjectType;
 import org.apache.geaflow.dsl.common.types.StructType;
 import org.apache.geaflow.dsl.common.types.TableField;
+
 import org.apache.geaflow.dsl.udf.graph.mst.MSTEdge;
 import org.apache.geaflow.dsl.udf.graph.mst.MSTMessage;
 import org.apache.geaflow.dsl.udf.graph.mst.MSTVertexState;
-import org.apache.geaflow.model.graph.edge.EdgeDirection;
 
 /**
  * Incremental Minimum Spanning Tree algorithm implementation.
