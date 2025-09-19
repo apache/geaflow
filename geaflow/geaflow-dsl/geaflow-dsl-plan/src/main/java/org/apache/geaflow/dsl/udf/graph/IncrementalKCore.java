@@ -94,21 +94,21 @@ public class IncrementalKCore implements AlgorithmUserFunction<Object, Increment
     @Override
     public void process(RowVertex vertex, Optional<Row> updatedValues, Iterator<KCoreMessage> messages) {
         updatedValues.ifPresent(vertex::setValue);
-        
+
         Object vertexId = vertex.getId();
         long currentIteration = context.getCurrentIterationId();
-        
+
         // First iteration: initialization
         if (currentIteration == 1L) {
             initializeVertex(vertex);
             return;
         }
-        
+
         // Check if converged or reached maximum iterations
         if (hasConverged || currentIteration > maxIterations) {
             return;
         }
-        
+
         // Process incremental updates
         processIncrementalUpdate(vertex, messages);
     }
@@ -127,7 +127,8 @@ public class IncrementalKCore implements AlgorithmUserFunction<Object, Increment
         int totalDegree = staticEdges.size() + dynamicEdges.size();
         vertexDegrees.put(vertexId, totalDegree);
         
-        // Initial K-Core value set to degree
+        // Initialize K-Core value to degree (will be refined during iterations)
+        // In the true K-Core algorithm, all vertices have core values equal to their degree in the first round
         int initialCore = totalDegree;
         vertexCoreValues.put(vertexId, initialCore);
         
@@ -201,11 +202,11 @@ public class IncrementalKCore implements AlgorithmUserFunction<Object, Increment
     }
     
     /**
-     * 处理边删除事件.
-     * 减少顶点的度数并标记为受影响顶点.
+     * Handle edge deletion event.
+     * Decrease vertex degree and mark as affected vertex.
      */
     private void handleEdgeRemoved(Object vertexId, KCoreMessage message) {
-        // 减少度数
+        // Decrease degree
         int currentDegree = vertexDegrees.getOrDefault(vertexId, 0);
         vertexDegrees.put(vertexId, Math.max(0, currentDegree - 1));
         affectedVertices.add(vertexId);
@@ -214,48 +215,49 @@ public class IncrementalKCore implements AlgorithmUserFunction<Object, Increment
     }
     
     /**
-     * 重新计算K-Core值.
-     * 基于当前邻居的Core值和度数重新计算.
+     * Recompute K-Core value.
+     * Use standard K-Core algorithm logic: calculate valid neighbor count (neighbors with K-Core value >= k)
      */
     private void recomputeKCore(RowVertex vertex, Map<Object, Integer> neighborCores) {
         Object vertexId = vertex.getId();
         int currentCore = vertexCoreValues.getOrDefault(vertexId, 0);
-        
-        // 计算有效邻居数（K-Core值 >= k的邻居）
-        int validNeighbors = countValidNeighbors(vertex, neighborCores);
-        
-        // 重新计算K-Core值：取有效邻居数和当前度数的最小值
         int currentDegree = vertexDegrees.getOrDefault(vertexId, 0);
-        int newCore = Math.min(validNeighbors, currentDegree);
-        
-        // 如果新的core值小于k，则该顶点不属于k-core
+
+        // Calculate valid neighbor count: number of neighbors with K-Core value >= k
+        int validNeighborCount = countValidNeighbors(vertex, neighborCores);
+
+        // Core logic of K-Core algorithm:
+        // New K-Core value = min(valid neighbor count, current degree)
+        // If result < k, then vertex does not belong to k-core, value = 0
+        int newCore = Math.min(validNeighborCount, currentDegree);
         if (newCore < k) {
             newCore = 0;
         }
-        
-        // 如果Core值发生变化，更新状态并广播变化
+
+        // If core value changes, update state and broadcast changes
         if (newCore != currentCore) {
             vertexCoreValues.put(vertexId, newCore);
             affectedVertices.add(vertexId);
-            
-            // 更新顶点值
+
+            // Update vertex value
             String changeType = newCore > currentCore ? "INCREASED" : "DECREASED";
             context.updateVertexValue(ObjectRow.create(newCore, currentDegree, changeType));
-            
-            // 向邻居广播变化
+
+            // Broadcast changes to neighbors
             List<RowEdge> allEdges = new ArrayList<>();
             allEdges.addAll(context.loadStaticEdges(EdgeDirection.BOTH));
             allEdges.addAll(context.loadDynamicEdges(EdgeDirection.BOTH));
-            
+
             sendMessageToNeighbors(allEdges, new KCoreMessage(vertexId, newCore, KCoreMessage.MessageType.CORE_CHANGED));
-            
-            LOGGER.debug("Vertex {} core changed from {} to {}", vertexId, currentCore, newCore);
+
+            LOGGER.debug("Vertex {} core changed from {} to {} (valid neighbors: {}, degree: {})",
+                        vertexId, currentCore, newCore, validNeighborCount, currentDegree);
         }
     }
     
     /**
-     * 计算有效邻居数.
-     * 统计K-Core值 >= k的邻居数量.
+     * Calculate valid neighbor count.
+     * Count neighbors with K-Core value >= k.
      */
     private int countValidNeighbors(RowVertex vertex, Map<Object, Integer> neighborCores) {
         List<RowEdge> allEdges = new ArrayList<>();
@@ -281,25 +283,26 @@ public class IncrementalKCore implements AlgorithmUserFunction<Object, Increment
     /**
      * Send message to all neighbors.
      * Traverse all edges and send messages to neighbor vertices.
-     * 
+     *
      * @param edges List of edges to traverse
      * @param message Message to send to neighbors
      */
     private void sendMessageToNeighbors(List<RowEdge> edges, KCoreMessage message) {
         Object sourceId = message.getSourceId();
-        
+        Set<Object> sentTo = new HashSet<>(); // Avoid duplicate message sending
+
         for (RowEdge edge : edges) {
             Object targetId = edge.getTargetId();
             Object srcId = edge.getSrcId();
-            
-            // Send to target vertex if it's not the source
-            if (!targetId.equals(sourceId)) {
-                context.sendMessage(targetId, message);
-            }
-            
-            // Send to source vertex if it's not the source and different from target
-            if (!srcId.equals(sourceId) && !srcId.equals(targetId)) {
-                context.sendMessage(srcId, message);
+
+            // Determine neighbor node
+            Object neighborId = targetId.equals(sourceId) ? srcId : targetId;
+
+            // Only send messages to neighbors, avoiding duplicates
+            if (!neighborId.equals(sourceId) && !sentTo.contains(neighborId)) {
+                context.sendMessage(neighborId, message);
+                sentTo.add(neighborId);
+                LOGGER.debug("Sent {} message from {} to {}", message.getType(), sourceId, neighborId);
             }
         }
     }
@@ -313,11 +316,9 @@ public class IncrementalKCore implements AlgorithmUserFunction<Object, Increment
         int coreValue = vertexCoreValues.getOrDefault(vertexId, 0);
         int degree = vertexDegrees.getOrDefault(vertexId, 0);
         
-        // 只输出属于k-core的顶点
-        if (coreValue >= k) {
-            String changeStatus = affectedVertices.contains(vertexId) ? "CHANGED" : "UNCHANGED";
-            context.take(ObjectRow.create(vertexId, coreValue, degree, changeStatus));
-        }
+        // Output results for all vertices, including those not belonging to k-core
+        String changeStatus = affectedVertices.contains(vertexId) ? "CHANGED" : "UNCHANGED";
+        context.take(ObjectRow.create(vertexId, coreValue, degree, changeStatus));
     }
 
     @Override
@@ -331,8 +332,8 @@ public class IncrementalKCore implements AlgorithmUserFunction<Object, Increment
     }
     
     /**
-     * K-Core消息类.
-     * 用于顶点间通信的消息类型.
+     * K-Core message class.
+     * Used for inter-vertex communication.
      */
     public static class KCoreMessage implements Serializable {
         
