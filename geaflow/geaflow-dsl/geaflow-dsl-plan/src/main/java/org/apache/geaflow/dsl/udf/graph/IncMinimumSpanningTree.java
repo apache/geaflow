@@ -52,6 +52,9 @@ import org.apache.geaflow.dsl.udf.graph.mst.MSTVertexState;
 public class IncMinimumSpanningTree implements AlgorithmUserFunction<Object, Object>,
     IncrementalAlgorithmUserFunction {
 
+    /** Field index for vertex state in row value. */
+    private static final int STATE_FIELD_INDEX = 0;
+
     private AlgorithmRuntimeContext<Object, Object> context;
     private String keyFieldName = "mst_edges";
     private int maxIterations = 50; // Maximum number of iterations
@@ -110,7 +113,7 @@ public class IncMinimumSpanningTree implements AlgorithmUserFunction<Object, Obj
         // Output MST results for each vertex
         if (updatedValues.isPresent()) {
             Row values = updatedValues.get();
-            Object stateObj = values.getField(0, ObjectType.INSTANCE);
+            Object stateObj = values.getField(STATE_FIELD_INDEX, ObjectType.INSTANCE);
             if (stateObj instanceof MSTVertexState) {
                 MSTVertexState state = (MSTVertexState) stateObj;
                 if (!state.getMstEdges().isEmpty()) {
@@ -231,7 +234,7 @@ public class IncMinimumSpanningTree implements AlgorithmUserFunction<Object, Obj
      */
     private MSTVertexState getCurrentVertexState(RowVertex vertex) {
         if (vertex.getValue() != null) {
-            Object stateObj = vertex.getValue().getField(0, ObjectType.INSTANCE);
+            Object stateObj = vertex.getValue().getField(STATE_FIELD_INDEX, ObjectType.INSTANCE);
             if (stateObj instanceof MSTVertexState) {
                 return (MSTVertexState) stateObj;
             }

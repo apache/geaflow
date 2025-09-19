@@ -137,14 +137,15 @@ public class MSTEdge implements Serializable, Comparable<MSTEdge> {
         if (other == null || getClass() != other.getClass()) {
             return false;
         }
-        
-        // Check if forward and reverse are equal
-        boolean forwardEqual = Objects.equals(sourceId, other.sourceId) 
-            && Objects.equals(targetId, other.targetId);
-        boolean reverseEqual = Objects.equals(sourceId, other.targetId) 
-            && Objects.equals(targetId, other.sourceId);
-        
-        return (forwardEqual || reverseEqual) && Double.compare(other.weight, weight) == 0;
+
+        // Quick weight comparison first (fastest check)
+        if (Double.compare(other.weight, weight) != 0) {
+            return false;
+        }
+
+        // Short-circuit direction comparison using OR operator
+        return (Objects.equals(sourceId, other.sourceId) && Objects.equals(targetId, other.targetId))
+            || (Objects.equals(sourceId, other.targetId) && Objects.equals(targetId, other.sourceId));
     }
 
     @Override
