@@ -21,7 +21,6 @@ package org.apache.geaflow.dsl.udf.graph;
 
 import java.util.Iterator;
 import java.util.Optional;
-
 import org.apache.geaflow.dsl.common.algo.AlgorithmRuntimeContext;
 import org.apache.geaflow.dsl.common.algo.AlgorithmUserFunction;
 import org.apache.geaflow.dsl.common.algo.IncrementalAlgorithmUserFunction;
@@ -33,7 +32,6 @@ import org.apache.geaflow.dsl.common.types.GraphSchema;
 import org.apache.geaflow.dsl.common.types.ObjectType;
 import org.apache.geaflow.dsl.common.types.StructType;
 import org.apache.geaflow.dsl.common.types.TableField;
-
 import org.apache.geaflow.dsl.udf.graph.mst.MSTEdge;
 import org.apache.geaflow.dsl.udf.graph.mst.MSTMessage;
 import org.apache.geaflow.dsl.udf.graph.mst.MSTVertexState;
