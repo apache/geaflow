@@ -34,8 +34,6 @@ import org.testng.annotations.Test;
  */
 public class IncrementalKCoreTest {
 
-    private final String TEST_GRAPH_PATH = "/tmp/geaflow/dsl/inc_kcore/test/graph";
-
     @Test
     public void testIncrementalKCore_001_Basic() throws Exception {
         QueryTester

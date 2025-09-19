@@ -30,6 +30,7 @@ import org.apache.geaflow.dsl.common.data.Row;
 import org.apache.geaflow.dsl.common.data.RowEdge;
 import org.apache.geaflow.dsl.common.data.RowVertex;
 import org.apache.geaflow.dsl.common.data.impl.ObjectRow;
+import org.apache.geaflow.dsl.common.exception.GeaFlowDSLException;
 import org.apache.geaflow.dsl.common.function.Description;
 import org.apache.geaflow.dsl.common.types.GraphSchema;
 import org.apache.geaflow.dsl.common.types.StructType;
@@ -176,8 +177,7 @@ public class IncrementalKCore implements AlgorithmUserFunction<Object, Increment
                     neighborCores.put(message.getSourceId(), message.getCoreValue());
                     break;
                 default:
-                    LOGGER.warn("Unknown message type: {}", message.getType());
-                    break;
+                    throw new GeaFlowDSLException("Unknown message type: {}", message.getType());
             }
         }
 
