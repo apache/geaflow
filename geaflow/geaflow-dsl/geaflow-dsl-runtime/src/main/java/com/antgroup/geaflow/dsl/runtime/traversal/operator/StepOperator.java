@@ -30,6 +30,7 @@ import java.io.Serializable;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 public interface StepOperator<IN extends StepRecord, OUT extends StepRecord> extends Serializable {
 
@@ -109,5 +110,5 @@ public interface StepOperator<IN extends StepRecord, OUT extends StepRecord> ext
 
     StepOperator<IN, OUT> copy();
 
-    StepOperator<IN, OUT>  withFilteredFields(List<RexFieldAccess> fields);
+    StepOperator<IN, OUT>  withFilteredFields(Set<RexFieldAccess> fields);
 }

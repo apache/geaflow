@@ -45,7 +45,7 @@ public class EdgeMatch extends AbstractRelNode implements SingleMatchNode, IMatc
 
     private final String label;
 
-    private List<RexFieldAccess> fields;
+    private Set<RexFieldAccess> fields;
 
     private final ImmutableSet<String> edgeTypes;
 
@@ -57,7 +57,7 @@ public class EdgeMatch extends AbstractRelNode implements SingleMatchNode, IMatc
 
     protected EdgeMatch(RelOptCluster cluster, RelTraitSet traitSet, RelNode input, String label,
               Collection<String> edgeTypes, EdgeDirection direction, RelDataType nodeType,
-              PathRecordType pathType, List<RexFieldAccess> fields) {
+              PathRecordType pathType, Set<RexFieldAccess> fields) {
         super(cluster, traitSet);
         this.input = input;
         this.label = label;
@@ -75,7 +75,7 @@ public class EdgeMatch extends AbstractRelNode implements SingleMatchNode, IMatc
 
     public void addField(RexFieldAccess field) {
         if (fields == null) {
-            fields = new ArrayList<>();
+            fields = new HashSet<>();
         }
         fields.add(field);
     }
@@ -149,7 +149,7 @@ public class EdgeMatch extends AbstractRelNode implements SingleMatchNode, IMatc
     }
 
 
-    public List<RexFieldAccess> getFields() {return fields;}
+    public Set<RexFieldAccess> getFields() {return fields;}
 
     @Override
     public PathRecordType getPathSchema() {

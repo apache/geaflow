@@ -25,6 +25,7 @@ import com.antgroup.geaflow.dsl.sqlnode.SqlMatchEdge.EdgeDirection;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import org.apache.calcite.plan.RelOptCluster;
 import org.apache.calcite.plan.RelTraitSet;
@@ -39,7 +40,7 @@ public class OptionalEdgeMatch extends EdgeMatch {
                               RelNode input, String label,
                               Collection<String> edgeTypes, EdgeDirection direction,
                               RelDataType nodeType, PathRecordType pathType) {
-        super(cluster, traitSet, input, label, edgeTypes, direction, nodeType, pathType, new ArrayList<>());
+        super(cluster, traitSet, input, label, edgeTypes, direction, nodeType, pathType, new HashSet<>());
     }
 
     @Override

@@ -432,7 +432,7 @@ public class StepLogicalPlan implements Serializable {
         outputs.add(output);
     }
 
-    public StepLogicalPlan withFilteredFileds(List<RexFieldAccess> fields) {
+    public StepLogicalPlan withFilteredFileds(Set<RexFieldAccess> fields) {
         operator.withFilteredFields(fields);
         return this;
     }

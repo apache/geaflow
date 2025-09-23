@@ -198,7 +198,7 @@ public class SelectFieldPruneRule extends RelOptRule {
             List<RexFieldAccess> filteredElements = graphMatch.getFilteredElements();
 
             // 2. 将筛选信息传递给 LogicalGraphMatch
-            if (filteredElements.isEmpty()) {
+            if (!filteredElements.isEmpty()) {
                 transverseFilteredElements(filteredElements, graphMatch.getPathPattern());
             }
         }

@@ -67,12 +67,8 @@ import com.antgroup.geaflow.metrics.common.api.Histogram;
 import com.antgroup.geaflow.metrics.common.api.Meter;
 import com.antgroup.geaflow.metrics.common.api.MetricGroup;
 import com.google.common.base.Preconditions;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+
+import java.util.*;
 import java.util.stream.Collectors;
 
 import org.apache.calcite.rex.RexFieldAccess;
@@ -89,7 +85,7 @@ public abstract class AbstractStepOperator<FUNC extends StepFunction, IN extends
 
     protected String name;
 
-    protected List<RexFieldAccess> fields;
+    protected Set<RexFieldAccess> fields;
 
     protected final FUNC function;
     private final Map<Long, List<EndOfData>> caller2ReceiveEods = new HashMap<>();
@@ -615,7 +611,7 @@ public abstract class AbstractStepOperator<FUNC extends StepFunction, IN extends
         return this;
     }
 
-    public StepOperator<IN, OUT> withFilteredFields(List<RexFieldAccess> fields) {
+    public StepOperator<IN, OUT> withFilteredFields(Set<RexFieldAccess> fields) {
         this.fields = fields;
         return this;
     }

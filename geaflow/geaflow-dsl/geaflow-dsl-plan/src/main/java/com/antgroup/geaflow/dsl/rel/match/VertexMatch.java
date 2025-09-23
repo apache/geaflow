@@ -47,7 +47,7 @@ public class VertexMatch extends AbstractRelNode implements SingleMatchNode, IMa
 
     private final String label;
 
-    private List<RexFieldAccess> fields;
+    private Set<RexFieldAccess> fields;
 
     private final ImmutableSet<String> vertexTypes;
 
@@ -78,7 +78,7 @@ public class VertexMatch extends AbstractRelNode implements SingleMatchNode, IMa
     public VertexMatch(RelOptCluster cluster, RelTraitSet traitSet, RelNode input,
                        String label, Collection<String> vertexTypes, RelDataType nodeType,
                        PathRecordType pathType, RexNode pushDownFilter, Set<Object> idSet,
-                       List<RexFieldAccess> fields) {
+                       Set<RexFieldAccess> fields) {
         super(cluster, traitSet);
         this.input = input;
         this.label = label;
@@ -99,7 +99,7 @@ public class VertexMatch extends AbstractRelNode implements SingleMatchNode, IMa
 
     public void addField(RexFieldAccess field) {
         if (fields == null) {
-            fields = new ArrayList<>();
+            fields = new HashSet<>();
         }
         fields.add(field);
     }
@@ -135,7 +135,7 @@ public class VertexMatch extends AbstractRelNode implements SingleMatchNode, IMa
         return idSet;
     }
 
-    public List<RexFieldAccess> getFields() {return fields;}
+    public Set<RexFieldAccess> getFields() {return fields;}
 
     @Override
     public SingleMatchNode copy(List<RelNode> inputs, PathRecordType pathSchema) {
