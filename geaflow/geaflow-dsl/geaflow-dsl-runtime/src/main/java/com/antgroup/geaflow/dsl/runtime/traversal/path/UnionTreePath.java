@@ -27,6 +27,9 @@ import com.esotericsoftware.kryo.Serializer;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import com.google.common.collect.Lists;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
@@ -38,6 +41,8 @@ import java.util.stream.Collectors;
 public class UnionTreePath extends AbstractTreePath {
 
     private final List<ITreePath> nodes;
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(UnionTreePath.class);
 
     private UnionTreePath(List<ITreePath> nodes) {
         this.nodes = Objects.requireNonNull(nodes);
@@ -231,6 +236,7 @@ public class UnionTreePath extends AbstractTreePath {
 
     @Override
     public ITreePath extendTo(Set<Object> requestIds, List<RowEdge> edges) {
+        LOGGER.info("[{}@{}] Edge is: {}; ", this.getClass().getSimpleName(), System.identityHashCode(this), edges);
         EdgeSet edgeSet = new DefaultEdgeSet(edges);
         ITreePath newTreePath = EdgeTreePath.of(requestIds, edgeSet);
         for (ITreePath parent : nodes) {
@@ -241,6 +247,7 @@ public class UnionTreePath extends AbstractTreePath {
 
     @Override
     public ITreePath extendTo(Set<Object> requestIds, RowVertex vertex) {
+        LOGGER.info("[{}@{}] Vertex is: {}; ", this.getClass().getSimpleName(),System.identityHashCode(this), vertex);
         ITreePath newTreePath = VertexTreePath.of(requestIds, vertex);
         for (ITreePath parent : nodes) {
             newTreePath.addParent(parent);

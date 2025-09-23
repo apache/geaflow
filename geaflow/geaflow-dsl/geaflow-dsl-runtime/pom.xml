@@ -142,5 +142,11 @@
             <groupId>com.antgroup.tugraph</groupId>
             <artifactId>geaflow-view-meta</artifactId>
         </dependency>
+        <dependency>
+            <groupId>org.hibernate</groupId>
+            <artifactId>hibernate-validator</artifactId>
+            <version>5.2.5.Final</version>
+            <scope>compile</scope>
+        </dependency>
     </dependencies>
 </project>

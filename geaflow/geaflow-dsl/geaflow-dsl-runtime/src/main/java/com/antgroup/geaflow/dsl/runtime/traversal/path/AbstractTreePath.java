@@ -32,6 +32,9 @@ import com.antgroup.geaflow.dsl.runtime.traversal.data.FieldAlignPath;
 import com.antgroup.geaflow.dsl.runtime.traversal.message.IMessage;
 import com.antgroup.geaflow.dsl.runtime.traversal.message.MessageType;
 import com.google.common.collect.Lists;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -41,6 +44,8 @@ import java.util.Objects;
 import java.util.Set;
 
 public abstract class AbstractTreePath implements ITreePath {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(AbstractTreePath.class);
 
     @Override
     public boolean isEmpty() {
@@ -91,13 +96,13 @@ public abstract class AbstractTreePath implements ITreePath {
         }
 
         List<ITreePath> mergedParents = new ArrayList<>(optimizedParents.size());
-        mergedParents.add(optimizedParents.get(0).copy());
+        mergedParents.add(optimizedParents.get(0).copy()); //注意：这里copy是自定义的方法！
 
         for (int i = 1; i < optimizedParents.size(); i++) {
             ITreePath parent = optimizedParents.get(i);
             mergeParent(parent, mergedParents);
         }
-        return copy(mergedParents);
+        return copy(mergedParents); //注意：这里copy是自定义的方法！
     }
 
     private void mergeParent(ITreePath parent, List<ITreePath> mergedParents) {
@@ -121,6 +126,7 @@ public abstract class AbstractTreePath implements ITreePath {
 
     @Override
     public ITreePath extendTo(Set<Object> requestIds, List<RowEdge> edges) {
+        LOGGER.info("[{}@{}] Edge is: {}; ", this.getClass().getSimpleName(), System.identityHashCode(this), edges);
         EdgeSet edgeSet = new DefaultEdgeSet(edges);
         ITreePath newTreePath = EdgeTreePath.of(requestIds, edgeSet);
         newTreePath.addParent(this);
@@ -129,6 +135,7 @@ public abstract class AbstractTreePath implements ITreePath {
 
     @Override
     public ITreePath extendTo(Set<Object> requestIds, RowVertex vertex) {
+        LOGGER.info("[{}@{}] Vertex is: {}; ", this.getClass().getSimpleName(),System.identityHashCode(this), vertex);
         ITreePath newTreePath = VertexTreePath.of(requestIds, vertex);
         newTreePath.addParent(this);
         return newTreePath;
@@ -155,7 +162,7 @@ public abstract class AbstractTreePath implements ITreePath {
     @Override
     public ITreePath filter(PathFilterFunction filterFunction, int[] refPathIndices) {
         int depth = getDepth();
-        int[] mapping = createMappingIndices(refPathIndices, depth);
+        int[] mapping = createMappingIndices(refPathIndices, depth); //对于refPathIndices中的某个元素e，mapping[e]为逻辑深度(2)->实际储存深度(0)
         return filter(filterFunction, refPathIndices, mapping, new DefaultPath(), depth, new PathIdCounter());
     }
 
@@ -176,7 +183,7 @@ public abstract class AbstractTreePath implements ITreePath {
             }
             return EmptyTreePath.of();
         }
-        int pathIndex = maxDepth - currentPath.size() - 1;
+        int pathIndex = maxDepth - currentPath.size() - 1;  //按路径(实际)顺序, this 所在的位置索引
         int parentSize = getParents().size();
         switch (getNodeType()) {
             case VERTEX_TREE:
@@ -223,7 +230,7 @@ public abstract class AbstractTreePath implements ITreePath {
         }
         // reach the last referred path node. (refPathIndices is sorted, so refPathIndices[0] is the
         // last referred path field).
-        if (pathIndex == refPathIndices[0]) {
+        if (pathIndex == refPathIndices[0]) { //已经找到了对应索引的某一层
             // Align the field indices of the current path with the referred index in the function.
             FieldAlignPath alignPath = new FieldAlignPath(currentPath, fieldMapping);
             alignPath.setId(pathId.getAndInc());

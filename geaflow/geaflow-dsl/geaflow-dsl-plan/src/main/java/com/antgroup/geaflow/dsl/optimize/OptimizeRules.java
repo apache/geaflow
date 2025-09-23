@@ -19,25 +19,7 @@
 
 package com.antgroup.geaflow.dsl.optimize;
 
-import com.antgroup.geaflow.dsl.optimize.rule.AddVertexResetRule;
-import com.antgroup.geaflow.dsl.optimize.rule.FilterMatchNodeTransposeRule;
-import com.antgroup.geaflow.dsl.optimize.rule.FilterToMatchRule;
-import com.antgroup.geaflow.dsl.optimize.rule.GQLAggregateProjectMergeRule;
-import com.antgroup.geaflow.dsl.optimize.rule.GQLMatchUnionMergeRule;
-import com.antgroup.geaflow.dsl.optimize.rule.GQLProjectRemoveRule;
-import com.antgroup.geaflow.dsl.optimize.rule.MatchEdgeLabelFilterRemoveRule;
-import com.antgroup.geaflow.dsl.optimize.rule.MatchFilterMergeRule;
-import com.antgroup.geaflow.dsl.optimize.rule.MatchIdFilterSimplifyRule;
-import com.antgroup.geaflow.dsl.optimize.rule.MatchJoinMatchMergeRule;
-import com.antgroup.geaflow.dsl.optimize.rule.MatchJoinTableToGraphMatchRule;
-import com.antgroup.geaflow.dsl.optimize.rule.MatchSortToLogicalSortRule;
-import com.antgroup.geaflow.dsl.optimize.rule.PathInputReplaceRule;
-import com.antgroup.geaflow.dsl.optimize.rule.PathModifyMergeRule;
-import com.antgroup.geaflow.dsl.optimize.rule.PushConsecutiveJoinConditionRule;
-import com.antgroup.geaflow.dsl.optimize.rule.PushJoinFilterConditionRule;
-import com.antgroup.geaflow.dsl.optimize.rule.TableJoinMatchToGraphMatchRule;
-import com.antgroup.geaflow.dsl.optimize.rule.TableJoinTableToGraphRule;
-import com.antgroup.geaflow.dsl.optimize.rule.TableScanToGraphRule;
+import com.antgroup.geaflow.dsl.optimize.rule.*;
 import com.google.common.collect.ImmutableList;
 import java.util.List;
 import org.apache.calcite.plan.RelOptRule;
@@ -106,7 +88,9 @@ public class OptimizeRules {
         MatchFilterMergeRule.INSTANCE,
         TableScanToGraphRule.INSTANCE,
         MatchIdFilterSimplifyRule.INSTANCE,
-        MatchEdgeLabelFilterRemoveRule.INSTANCE
+        MatchEdgeLabelFilterRemoveRule.INSTANCE,
+        SelectFieldPruneRule.GRAPH_MATCH_INSTANCE,
+        SelectFieldPruneRule.PROJECT_INSTANCE
     );
 
     private static final List<RelOptRule> POST_OPTIMIZE_RULES = ImmutableList.of(

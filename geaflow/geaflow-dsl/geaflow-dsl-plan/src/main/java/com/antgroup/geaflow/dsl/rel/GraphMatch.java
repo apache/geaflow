@@ -36,6 +36,8 @@ import com.antgroup.geaflow.dsl.rel.match.SubQueryStart;
 import com.antgroup.geaflow.dsl.rel.match.VertexMatch;
 import com.antgroup.geaflow.dsl.rel.match.VirtualEdgeMatch;
 import com.antgroup.geaflow.dsl.util.GQLRelUtil;
+
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
@@ -47,6 +49,8 @@ import org.apache.calcite.rel.RelWriter;
 import org.apache.calcite.rel.SingleRel;
 import org.apache.calcite.rel.core.JoinRelType;
 import org.apache.calcite.rel.type.RelDataType;
+import org.apache.calcite.rex.RexCall;
+import org.apache.calcite.rex.RexFieldAccess;
 import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.rex.RexShuttle;
 import org.apache.calcite.sql.type.SqlTypeName;
@@ -63,6 +67,48 @@ public abstract class GraphMatch extends SingleRel {
         this.pathPattern = Objects.requireNonNull(pathPattern);
         validateInput(input);
     }
+
+
+    public List<RexFieldAccess> getFilteredElements() {
+        return extractFromMatchNode(this.pathPattern);
+    }
+
+    /**
+     * 递归遍历MatchNode提取RexFieldAccess
+     */
+    private List<RexFieldAccess> extractFromMatchNode(IMatchNode matchNode) {
+        //这里只会提取MatchFilter的字段
+        if (matchNode instanceof MatchFilter) {
+            MatchFilter filter = (MatchFilter) matchNode;
+            return extractFromRexNode(filter.getCondition());
+        }
+        return new ArrayList<>();
+    }
+
+    /**
+     * 从RexNode中提取RexFieldAccess
+     */
+    private List<RexFieldAccess> extractFromRexNode(RexNode rexNode) {
+        List<RexFieldAccess> fields = new ArrayList<>();
+        if (rexNode instanceof RexCall) {
+            RexCall rexCall = (RexCall) rexNode;
+            for (RexNode operand : rexCall.getOperands()) {
+                if (operand instanceof RexFieldAccess) {
+                    fields.add((RexFieldAccess) operand);
+                } else if (operand instanceof RexCall) {
+                    // 递归处理嵌套的RexCall
+                    fields.addAll(extractFromRexNode(operand));
+                }
+            }
+        }
+        return fields;
+    }
+
+
+    /**
+     * 获取筛选后的元素
+     */
+
 
     private void validateInput(RelNode input) {
         SqlTypeName inputType = input.getRowType().getSqlTypeName();

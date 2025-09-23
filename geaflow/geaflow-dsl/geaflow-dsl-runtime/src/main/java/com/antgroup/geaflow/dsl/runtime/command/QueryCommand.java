@@ -71,7 +71,6 @@ public class QueryCommand implements IQueryCommand {
 
         physicNode = (PhysicRelNode<?>) context.getPathAnalyzer().analyze(physicNode);
         LOGGER.info("After path analyzer:\n{}", RelOptUtil.toString(physicNode));
-
         RDataView dataView = physicNode.translate(context);
         context.setCurrentResultType(physicNode.getRowType());
 

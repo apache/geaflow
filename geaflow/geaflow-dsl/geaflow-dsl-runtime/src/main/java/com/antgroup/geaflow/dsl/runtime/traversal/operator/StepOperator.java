@@ -24,6 +24,8 @@ import com.antgroup.geaflow.dsl.common.data.StepRecord;
 import com.antgroup.geaflow.dsl.common.types.GraphSchema;
 import com.antgroup.geaflow.dsl.common.types.PathType;
 import com.antgroup.geaflow.dsl.runtime.traversal.TraversalRuntimeContext;
+import org.apache.calcite.rex.RexFieldAccess;
+
 import java.io.Serializable;
 import java.util.Collections;
 import java.util.List;
@@ -106,4 +108,6 @@ public interface StepOperator<IN extends StepRecord, OUT extends StepRecord> ext
     List<String> getSubQueryNames();
 
     StepOperator<IN, OUT> copy();
+
+    StepOperator<IN, OUT>  withFilteredFields(List<RexFieldAccess> fields);
 }

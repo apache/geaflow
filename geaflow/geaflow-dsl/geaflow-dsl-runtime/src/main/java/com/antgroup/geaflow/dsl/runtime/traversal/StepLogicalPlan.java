@@ -70,6 +70,9 @@ import com.antgroup.geaflow.dsl.runtime.traversal.operator.StepUnionOperator;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
+import org.apache.calcite.rex.RexFieldAccess;
+import org.hamcrest.Condition;
+
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -427,6 +430,11 @@ public class StepLogicalPlan implements Serializable {
     private void addOutput(StepLogicalPlan output) {
         assert !outputs.contains(output) : "Output has already added";
         outputs.add(output);
+    }
+
+    public StepLogicalPlan withFilteredFileds(List<RexFieldAccess> fields) {
+        operator.withFilteredFields(fields);
+        return this;
     }
 
     public StepLogicalPlan withName(String name) {

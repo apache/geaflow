@@ -27,17 +27,16 @@ import com.antgroup.geaflow.dsl.rel.MatchNodeVisitor;
 import com.antgroup.geaflow.dsl.sqlnode.SqlMatchEdge.EdgeDirection;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
-import java.util.Objects;
-import java.util.Set;
+
+import java.util.*;
+
 import org.apache.calcite.plan.RelOptCluster;
 import org.apache.calcite.plan.RelTraitSet;
 import org.apache.calcite.rel.AbstractRelNode;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.RelWriter;
 import org.apache.calcite.rel.type.RelDataType;
+import org.apache.calcite.rex.RexFieldAccess;
 import org.apache.calcite.sql.type.SqlTypeName;
 
 public class EdgeMatch extends AbstractRelNode implements SingleMatchNode, IMatchLabel {
@@ -45,6 +44,8 @@ public class EdgeMatch extends AbstractRelNode implements SingleMatchNode, IMatc
     private RelNode input;
 
     private final String label;
+
+    private List<RexFieldAccess> fields;
 
     private final ImmutableSet<String> edgeTypes;
 
@@ -56,7 +57,7 @@ public class EdgeMatch extends AbstractRelNode implements SingleMatchNode, IMatc
 
     protected EdgeMatch(RelOptCluster cluster, RelTraitSet traitSet, RelNode input, String label,
               Collection<String> edgeTypes, EdgeDirection direction, RelDataType nodeType,
-              PathRecordType pathType) {
+              PathRecordType pathType, List<RexFieldAccess> fields) {
         super(cluster, traitSet);
         this.input = input;
         this.label = label;
@@ -69,6 +70,14 @@ public class EdgeMatch extends AbstractRelNode implements SingleMatchNode, IMatc
         this.rowType = Objects.requireNonNull(pathType);
         this.pathType = Objects.requireNonNull(pathType);
         this.nodeType = Objects.requireNonNull(nodeType);
+        this.fields = fields;
+    }
+
+    public void addField(RexFieldAccess field) {
+        if (fields == null) {
+            fields = new ArrayList<>();
+        }
+        fields.add(field);
     }
 
     @Override
@@ -97,7 +106,7 @@ public class EdgeMatch extends AbstractRelNode implements SingleMatchNode, IMatc
     @Override
     public IMatchNode copy(List<RelNode> inputs, PathRecordType pathSchema) {
         return new EdgeMatch(getCluster(), traitSet, sole(inputs), label, edgeTypes,
-            direction, nodeType, pathSchema);
+            direction, nodeType, pathSchema, fields);
     }
 
     public EdgeDirection getDirection() {
@@ -108,7 +117,7 @@ public class EdgeMatch extends AbstractRelNode implements SingleMatchNode, IMatc
     public EdgeMatch copy(RelTraitSet traitSet, List<RelNode> inputs) {
         assert inputs.size() == 1;
         return new EdgeMatch(getCluster(), getTraitSet(), sole(inputs),
-            label, edgeTypes, direction, nodeType, pathType);
+            label, edgeTypes, direction, nodeType, pathType, fields);
     }
 
     @Override
@@ -136,8 +145,11 @@ public class EdgeMatch extends AbstractRelNode implements SingleMatchNode, IMatc
                                    EdgeDirection direction, RelDataType nodeType,
                                    PathRecordType pathType) {
         return new EdgeMatch(cluster, cluster.traitSet(), input, label, edgeTypes,
-            direction, nodeType, pathType);
+            direction, nodeType, pathType, null);
     }
+
+
+    public List<RexFieldAccess> getFields() {return fields;}
 
     @Override
     public PathRecordType getPathSchema() {

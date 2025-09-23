@@ -26,6 +26,9 @@ import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.KryoSerializable;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
@@ -42,6 +45,8 @@ public class EmptyTreePath extends AbstractSingleTreePath implements KryoSeriali
     public static EmptyTreePath of() {
         return (EmptyTreePath) INSTANCE;
     }
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(EmptyTreePath.class);
 
     @Override
     public RowVertex getVertex() {
@@ -110,13 +115,18 @@ public class EmptyTreePath extends AbstractSingleTreePath implements KryoSeriali
 
     @Override
     public ITreePath extendTo(Set<Object> requestIds, List<RowEdge> edges) {
+        LOGGER.info("[{}@{}] Edge is: {}; ", this.getClass().getSimpleName(), System.identityHashCode(this), edges);
         EdgeSet edgeSet = new DefaultEdgeSet(edges);
         return SourceEdgeTreePath.of(requestIds, edgeSet);
     }
 
     @Override
     public ITreePath extendTo(Set<Object> requestIds, RowVertex vertex) {
-        return SourceVertexTreePath.of(requestIds, vertex);
+        //return SourceVertexTreePath.of(requestIds, vertex);
+        SourceVertexTreePath result = SourceVertexTreePath.of(requestIds, vertex);
+        LOGGER.info("[SourceVertexTreePath@{}] constructed ｜ Origin: [{}@{}] Vertex is: {}; ", System.identityHashCode(result),
+                this.getClass().getSimpleName(), System.identityHashCode(this), vertex);
+        return result;
     }
 
     @Override

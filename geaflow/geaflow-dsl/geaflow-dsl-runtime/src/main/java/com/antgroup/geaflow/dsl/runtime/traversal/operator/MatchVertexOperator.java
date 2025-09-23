@@ -19,15 +19,25 @@
 
 package com.antgroup.geaflow.dsl.runtime.traversal.operator;
 
-import com.antgroup.geaflow.dsl.common.data.RowEdge;
-import com.antgroup.geaflow.dsl.common.data.RowVertex;
-import com.antgroup.geaflow.dsl.common.data.StepRecord;
+import com.antgroup.geaflow.common.type.IType;
+import com.antgroup.geaflow.dsl.common.binary.encoder.DefaultVertexEncoder;
+import com.antgroup.geaflow.dsl.common.binary.encoder.VertexEncoder;
+import com.antgroup.geaflow.dsl.common.data.*;
 import com.antgroup.geaflow.dsl.common.data.StepRecord.StepRecordType;
-import com.antgroup.geaflow.dsl.common.data.VirtualId;
+import com.antgroup.geaflow.dsl.common.data.impl.ObjectRow;
 import com.antgroup.geaflow.dsl.common.data.impl.VertexEdgeFactory;
+import com.antgroup.geaflow.dsl.common.data.impl.types.BinaryStringVertex;
+import com.antgroup.geaflow.dsl.common.data.impl.types.LongVertex;
+import com.antgroup.geaflow.dsl.common.types.TableField;
 import com.antgroup.geaflow.dsl.common.types.VertexType;
+import com.antgroup.geaflow.dsl.runtime.expression.Expression;
+import com.antgroup.geaflow.dsl.runtime.expression.construct.VertexConstructExpression;
+import com.antgroup.geaflow.dsl.runtime.expression.field.FieldExpression;
+import com.antgroup.geaflow.dsl.runtime.expression.literal.LiteralExpression;
 import com.antgroup.geaflow.dsl.runtime.function.graph.MatchVertexFunction;
 import com.antgroup.geaflow.dsl.runtime.function.graph.MatchVertexFunctionImpl;
+import com.antgroup.geaflow.dsl.runtime.function.table.ProjectFunction;
+import com.antgroup.geaflow.dsl.runtime.function.table.ProjectFunctionImpl;
 import com.antgroup.geaflow.dsl.runtime.traversal.TraversalRuntimeContext;
 import com.antgroup.geaflow.dsl.runtime.traversal.data.EdgeGroup;
 import com.antgroup.geaflow.dsl.runtime.traversal.data.EdgeGroupRecord;
@@ -36,7 +46,9 @@ import com.antgroup.geaflow.dsl.runtime.traversal.data.VertexRecord;
 import com.antgroup.geaflow.dsl.runtime.traversal.path.ITreePath;
 import com.antgroup.geaflow.metrics.common.MetricNameFormatter;
 import com.antgroup.geaflow.metrics.common.api.Histogram;
-import java.util.Set;
+
+import java.util.*;
+import java.util.stream.Collectors;
 
 public class MatchVertexOperator extends AbstractStepOperator<MatchVertexFunction, StepRecord,
     VertexRecord> implements LabeledStepOperator {
@@ -46,6 +58,8 @@ public class MatchVertexOperator extends AbstractStepOperator<MatchVertexFunctio
     private final boolean isOptionMatch;
 
     private Set<Object> idSet;
+
+    //private List<RexFieldAccess> filteredFields;
 
     public MatchVertexOperator(long id, MatchVertexFunction function) {
         super(id, function);
@@ -74,6 +88,62 @@ public class MatchVertexOperator extends AbstractStepOperator<MatchVertexFunctio
         }
     }
 
+    private RowVertex projectVertex(RowVertex vertex) {
+        List<TableField> graphSchemaFieldList = graphSchema.getFields();  //这里是图中的所有表集合
+
+        IType<?> outputType = this.getOutputType();
+        List<TableField> fieldsOfTable;  //这里的是一张表里的所有字段
+        if (outputType instanceof VertexType) {
+            fieldsOfTable = ((VertexType) outputType).getFields();
+        } else {
+            throw new IllegalArgumentException("Unsupported type: " + outputType.getClass());
+        }
+
+        List<TableField> tableOutputType = new ArrayList<>(); //记录新表格所有字段所包括的输出Type
+
+        //提取当前表格内，使用到的字段集合。
+        Set<String> fieldNames = (this.fields == null)
+                ? Collections.emptySet()
+                : this.fields.stream()
+                .map(e -> e.getField().getName())
+                .collect(Collectors.toSet());
+
+
+
+        List<Expression> expressions = new ArrayList<>();  //对于每个表，都需要一个expression
+        for (TableField tableField : graphSchemaFieldList) {  //枚举所有table，并构造List<Expression>
+            if (vertex.getLabel().equals(tableField.getName())){  //table名匹配 (如都为`person`)
+
+                List<Expression> inputs = new ArrayList<>();
+
+                for (int i = 0; i < fieldsOfTable.size(); i++) { //枚举表格内不同字段，并做属性筛选
+                    TableField column = fieldsOfTable.get(i);
+                    String columnName = column.getName();
+                    if (fieldNames.contains(columnName) || columnName.equals("id")) {  //存在已经筛选出的字段或是特殊的Id字段
+                        inputs.add(new FieldExpression(null, i, column.getType()));
+                        tableOutputType.add(column);
+                    }
+                    else if (columnName.equals("~label")) {  //补充label
+                        inputs.add(new LiteralExpression(vertex.getLabel(), column.getType()));
+                        tableOutputType.add(column);
+                    }
+                }
+
+                expressions.add(new VertexConstructExpression(inputs, null, new VertexType(tableOutputType)));
+            }
+        }
+
+        ProjectFunction projectFunction = new ProjectFunctionImpl(expressions);
+        ObjectRow projectVertex = (ObjectRow) projectFunction.project(vertex); //通过project进行属性筛选
+        RowVertex vertexDecoded = (RowVertex) projectVertex.getField(0, null);
+
+        //需要重构Fields，以定义VertexType，然后再进行encode
+        VertexType vertexType = new VertexType(tableOutputType);
+        VertexEncoder encoder = new DefaultVertexEncoder(vertexType);
+
+        return encoder.encode(vertexDecoded);
+    }
+
     private void processVertex(VertexRecord vertexRecord) {
         RowVertex vertex = vertexRecord.getVertex();
         if (vertex instanceof IdOnlyVertex && needLoadVertex(vertex.getId())) {
@@ -82,6 +152,7 @@ public class MatchVertexOperator extends AbstractStepOperator<MatchVertexFunctio
                 function.getVertexFilter(),
                 graphSchema,
                 addingVertexFieldTypes);
+            vertex = projectVertex(vertex);  //通过字段进行筛选
             loadVertexRt.update(System.currentTimeMillis() - startTs);
             if (vertex == null && !isOptionMatch) {
                 // load a non-exists vertex, just skip.

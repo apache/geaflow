@@ -152,7 +152,8 @@ function buildJarPackage() {
   checkMaven || return 1
 
   cd $MVN_BUILD_DIR
-  mvn clean install -DskipTests -Dcheckstyle.skip -T4 || return 1
+  mvn install -DskipTests -Dcheckstyle.skip -T8 || return 1
+  #mvn clean install -DskipTests -Dcheckstyle.skip -T4 || return 1
 }
 
 
