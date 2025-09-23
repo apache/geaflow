@@ -20,6 +20,10 @@
 package com.antgroup.geaflow.dsl.runtime.traversal.operator;
 
 import com.antgroup.geaflow.common.type.IType;
+import com.antgroup.geaflow.dsl.common.binary.encoder.DefaultEdgeEncoder;
+import com.antgroup.geaflow.dsl.common.binary.encoder.DefaultVertexEncoder;
+import com.antgroup.geaflow.dsl.common.binary.encoder.EdgeEncoder;
+import com.antgroup.geaflow.dsl.common.binary.encoder.VertexEncoder;
 import com.antgroup.geaflow.dsl.common.data.RowEdge;
 import com.antgroup.geaflow.dsl.common.data.RowVertex;
 import com.antgroup.geaflow.dsl.common.data.impl.ObjectRow;
@@ -80,17 +84,20 @@ public class MatchEdgeOperator extends AbstractStepOperator<MatchEdgeFunction, V
         }
 
         //提取当前表格内，使用到的字段集合。
-        Set<String> fieldNames = this.fields.stream()
+        Set<String> fieldNames = (this.fields == null)
+                ? Collections.emptySet()
+                : this.fields.stream()
                 .map(e -> e.getField().getName())
                 .collect(Collectors.toSet());
 
 
         List<Expression> expressions = new ArrayList<>();  //对于每个表，都需要一个expression
+        List<TableField> tableOutputType = null;
         for (TableField tableField : graphSchemaFieldList) {  //枚举所有table，并构造List<Expression>
-            if (edge.getLabel().equals(tableField.getName())){  //table名匹配 (如都为`knows`)
+            if (edge.getLabel().equals(tableField.getName())) {  //table名匹配 (如都为`knows`)
 
                 List<Expression> inputs = new ArrayList<>();
-                List<TableField> tableOutputType = new ArrayList<>(); //记录新表格所有字段所包括的输出Type
+                tableOutputType = new ArrayList<>();
 
                 for (int i = 0; i < fieldsOfTable.size(); i++) { //枚举表格内不同字段，并做属性筛选
                     TableField column = fieldsOfTable.get(i);
@@ -99,8 +106,7 @@ public class MatchEdgeOperator extends AbstractStepOperator<MatchEdgeFunction, V
                             || columnName.equals("targetId")) {  //存在已经筛选出的字段
                         inputs.add(new FieldExpression(null, i, column.getType()));
                         tableOutputType.add(column);
-                    }
-                    else if (columnName.equals("~label")) {  //补充label
+                    } else if (columnName.equals("~label")) {  //补充label
                         inputs.add(new LiteralExpression(edge.getLabel(), column.getType()));
                         tableOutputType.add(column);
                     }
@@ -112,7 +118,13 @@ public class MatchEdgeOperator extends AbstractStepOperator<MatchEdgeFunction, V
 
         ProjectFunction projectFunction = new ProjectFunctionImpl(expressions);
         ObjectRow projectEdge = (ObjectRow) projectFunction.project(edge);
-        return (RowEdge) projectEdge.getField(0, null);
+        RowEdge edgeDecoded = (RowEdge) projectEdge.getField(0, null);
+
+        //需要重构Fields，以定义EdgeType，然后再进行encode
+        EdgeType edgeType = new EdgeType(tableOutputType, false);
+        EdgeEncoder encoder = new DefaultEdgeEncoder(edgeType);
+
+        return encoder.encode(edgeDecoded);
     }
 
 
