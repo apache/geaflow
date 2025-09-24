@@ -71,6 +71,15 @@ public class KryoSerializer implements ISerializer {
             kryo.setInstantiatorStrategy(is);
 
             kryo.getFieldSerializerConfig().setOptimizedGenerics(false);
+            
+            // Configure reference resolver to prevent IndexOutOfBoundsException
+            // Disable references to avoid MapReferenceResolver issues
+            kryo.setReferences(false);
+            kryo.setRegistrationRequired(false);
+            
+            // Set additional safety configurations
+            kryo.setAutoReset(false);
+            kryo.setCopyReferences(false);
 
             kryo.register(Arrays.asList("").getClass(), new ArraysAsListSerializer());
             kryo.register(Collections.EMPTY_LIST.getClass(), new CollectionsEmptyListSerializer());
@@ -194,6 +203,16 @@ public class KryoSerializer implements ISerializer {
                 "org.apache.geaflow.dsl.runtime.traversal.path.UnionTreePath$UnionTreePathSerializer", 1062);
             registerClass(kryo, "org.apache.geaflow.dsl.runtime.traversal.path.VertexTreePath",
                 "org.apache.geaflow.dsl.runtime.traversal.path.VertexTreePath$VertexTreePathSerializer", 1063);
+
+            // Register MST algorithm related classes
+            registerClass(kryo, "org.apache.geaflow.dsl.udf.graph.mst.MSTMessage", 1064);
+            registerClass(kryo, "org.apache.geaflow.dsl.udf.graph.mst.MSTVertexState", 1065);
+            registerClass(kryo, "org.apache.geaflow.dsl.udf.graph.mst.MSTEdge", 1066);
+            registerClass(kryo, "org.apache.geaflow.dsl.udf.graph.mst.MSTMessage$MessageType", 1067);
+
+            // Register binary object related classes
+            registerClass(kryo, "org.apache.geaflow.common.binary.IBinaryObject", 106);
+            registerClass(kryo, "org.apache.geaflow.common.binary.HeapBinaryObject", 112);
 
             return kryo;
         }

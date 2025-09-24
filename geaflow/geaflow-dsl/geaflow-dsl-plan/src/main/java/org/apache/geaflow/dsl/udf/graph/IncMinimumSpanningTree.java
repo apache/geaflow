@@ -57,7 +57,7 @@ import org.slf4j.LoggerFactory;
  *
  * @author Geaflow Team
  */
-@Description(name = "inc_mst", description = "built-in udga for Incremental Minimum Spanning Tree")
+@Description(name = "IncMST", description = "built-in udga for Incremental Minimum Spanning Tree")
 public class IncMinimumSpanningTree implements AlgorithmUserFunction<Object, Object>,
     IncrementalAlgorithmUserFunction {
 
@@ -68,6 +68,11 @@ public class IncMinimumSpanningTree implements AlgorithmUserFunction<Object, Obj
 
     private AlgorithmRuntimeContext<Object, Object> context;
     private IType<?> idType; // Cache the ID type for better performance
+    
+    // Configuration parameters
+    private int maxIterations = 50; // Default maximum iterations
+    private double convergenceThreshold = 0.001; // Default convergence threshold
+    private String keyFieldName = "mst_edges"; // Default key field name
 
     @Override
     public void init(AlgorithmRuntimeContext<Object, Object> context, Object[] parameters) {
@@ -76,11 +81,52 @@ public class IncMinimumSpanningTree implements AlgorithmUserFunction<Object, Obj
         // Cache the ID type for better performance and type safety
         this.idType = context.getGraphSchema().getIdType();
 
-        // Validate parameters - this algorithm doesn't currently support configuration parameters
+        // Parse configuration parameters
         if (parameters != null && parameters.length > 0) {
-            throw new IllegalArgumentException(
-                "IncMinimumSpanningTree algorithm does not support configuration parameters");
+            if (parameters.length > 3) {
+                throw new IllegalArgumentException(
+                    "IncMinimumSpanningTree algorithm supports at most 3 parameters: "
+                    + "maxIterations, convergenceThreshold, keyFieldName");
+            }
+            
+            // Parse maxIterations (first parameter)
+            if (parameters.length > 0 && parameters[0] != null) {
+                try {
+                    this.maxIterations = Integer.parseInt(String.valueOf(parameters[0]));
+                    if (this.maxIterations <= 0) {
+                        throw new IllegalArgumentException("maxIterations must be positive");
+                    }
+                } catch (NumberFormatException e) {
+                    throw new IllegalArgumentException(
+                        "Invalid maxIterations parameter: " + parameters[0], e);
+                }
+            }
+            
+            // Parse convergenceThreshold (second parameter)
+            if (parameters.length > 1 && parameters[1] != null) {
+                try {
+                    this.convergenceThreshold = Double.parseDouble(String.valueOf(parameters[1]));
+                    if (this.convergenceThreshold < 0 || this.convergenceThreshold > 1) {
+                        throw new IllegalArgumentException(
+                            "convergenceThreshold must be between 0 and 1");
+                    }
+                } catch (NumberFormatException e) {
+                    throw new IllegalArgumentException(
+                        "Invalid convergenceThreshold parameter: " + parameters[1], e);
+                }
+            }
+            
+            // Parse keyFieldName (third parameter)
+            if (parameters.length > 2 && parameters[2] != null) {
+                this.keyFieldName = String.valueOf(parameters[2]);
+                if (this.keyFieldName.trim().isEmpty()) {
+                    throw new IllegalArgumentException("keyFieldName cannot be empty");
+                }
+            }
         }
+        
+        LOGGER.info("IncMinimumSpanningTree initialized with maxIterations={}, convergenceThreshold={}, keyFieldName='{}'",
+                   maxIterations, convergenceThreshold, keyFieldName);
     }
 
     @Override
@@ -143,8 +189,16 @@ public class IncMinimumSpanningTree implements AlgorithmUserFunction<Object, Obj
 
         // Vote to terminate if no state changes occurred and we've processed messages
         // This ensures the algorithm terminates after processing all edges
-        if (!stateChanged && updatedValues.isPresent()) {
-            context.voteToTerminate("MST_CONVERGED", 1);
+        // Also check if we've reached the maximum number of iterations
+        long currentIteration = context.getCurrentIterationId();
+        if ((!stateChanged && updatedValues.isPresent()) || currentIteration >= maxIterations) {
+            String terminationReason = currentIteration >= maxIterations 
+                ? "MAX_ITERATIONS_REACHED" : "MST_CONVERGED";
+            context.voteToTerminate(terminationReason, 1);
+            
+            if (currentIteration >= maxIterations) {
+                LOGGER.warn("IncMST algorithm reached maximum iterations ({}) without convergence", maxIterations);
+            }
         }
     }
 
