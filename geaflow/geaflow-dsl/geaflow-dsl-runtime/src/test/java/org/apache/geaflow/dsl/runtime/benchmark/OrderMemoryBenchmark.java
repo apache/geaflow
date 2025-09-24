@@ -19,18 +19,24 @@
 
 package org.apache.geaflow.dsl.runtime.benchmark;
 
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+import java.util.Random;
+import java.util.concurrent.TimeUnit;
 import org.apache.geaflow.common.type.Types;
 import org.apache.geaflow.dsl.common.data.Row;
 import org.apache.geaflow.dsl.common.data.impl.ObjectRow;
-import org.apache.geaflow.dsl.runtime.function.table.order.OrderByField;
-import org.apache.geaflow.dsl.runtime.function.table.order.OrderByField.ORDER;
-import org.apache.geaflow.dsl.runtime.function.table.order.SortInfo;
+import org.apache.geaflow.dsl.runtime.expression.Expression;
+import org.apache.geaflow.dsl.runtime.expression.field.FieldExpression;
 import org.apache.geaflow.dsl.runtime.function.table.OrderByFunction;
 import org.apache.geaflow.dsl.runtime.function.table.OrderByHeapSort;
 import org.apache.geaflow.dsl.runtime.function.table.OrderByRadixSort;
 import org.apache.geaflow.dsl.runtime.function.table.OrderByTimSort;
-import org.apache.geaflow.dsl.runtime.expression.Expression;
-import org.apache.geaflow.dsl.runtime.expression.field.FieldExpression;
+import org.apache.geaflow.dsl.runtime.function.table.order.OrderByField;
+import org.apache.geaflow.dsl.runtime.function.table.order.OrderByField.ORDER;
+import org.apache.geaflow.dsl.runtime.function.table.order.SortInfo;
 import org.openjdk.jmh.annotations.*;
 import org.openjdk.jmh.profile.GCProfiler;
 import org.openjdk.jmh.results.format.ResultFormatType;
@@ -38,13 +44,6 @@ import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
-
-import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
-import java.util.Random;
-import java.util.concurrent.TimeUnit;
 
 @BenchmarkMode(Mode.SingleShotTime)
 @OutputTimeUnit(TimeUnit.MILLISECONDS)

@@ -27,20 +27,30 @@ public class MultiFieldRadixSort {
 
     private static int dataSize;
 
-    private static int[] intValues, sortedIntValues, charCodes;
+    private static int[] intValues;
+
+    private static int[] sortedIntValues;
+
+    private static int[] charCodes;
 
     private static byte[] digits;
 
-    private static String[] stringValues, sortedStringValues;
+    private static String[] stringValues;
 
-    private static Row[] srcData, dstData;
-    
+    private static String[] sortedStringValues;
+
+    private static Row[] srcData;
+
+    private static Row[] dstData;
+
     /**
      * Multi-field radix sort.
      */
     public static void multiFieldRadixSort(List<Row> data, SortInfo sortInfo) {
         dataSize = data.size();
-        if (data == null || dataSize <= 1) return;
+        if (data == null || dataSize <= 1) {
+            return;
+        }
 
         // Init arrays.
         intValues = new int[dataSize];

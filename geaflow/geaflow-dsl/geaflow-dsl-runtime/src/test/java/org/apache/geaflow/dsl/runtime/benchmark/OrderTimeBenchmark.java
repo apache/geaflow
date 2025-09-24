@@ -19,33 +19,32 @@
 
 package org.apache.geaflow.dsl.runtime.benchmark;
 
-import org.apache.geaflow.common.binary.BinaryString;
-import org.apache.geaflow.common.type.IType;
-import org.apache.geaflow.common.type.Types;
-import org.apache.geaflow.dsl.common.data.Row;
-import org.apache.geaflow.dsl.common.data.impl.ObjectRow;
-import org.apache.geaflow.dsl.runtime.function.table.order.OrderByField;
-import org.apache.geaflow.dsl.runtime.function.table.order.OrderByField.ORDER;
-import org.apache.geaflow.dsl.runtime.function.table.order.SortInfo;
-import org.apache.geaflow.dsl.runtime.function.table.OrderByFunction;
-import org.apache.geaflow.dsl.runtime.function.table.OrderByHeapSort;
-import org.apache.geaflow.dsl.runtime.function.table.OrderByRadixSort;
-import org.apache.geaflow.dsl.runtime.function.table.OrderByTimSort;
-import org.apache.geaflow.dsl.runtime.expression.Expression;
-import org.apache.geaflow.dsl.runtime.expression.field.FieldExpression;
-import org.openjdk.jmh.annotations.*;
-import org.openjdk.jmh.results.format.ResultFormatType;
-import org.openjdk.jmh.runner.Runner;
-import org.openjdk.jmh.runner.RunnerException;
-import org.openjdk.jmh.runner.options.Options;
-import org.openjdk.jmh.runner.options.OptionsBuilder;
-
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
+import org.apache.geaflow.common.binary.BinaryString;
+import org.apache.geaflow.common.type.IType;
+import org.apache.geaflow.common.type.Types;
+import org.apache.geaflow.dsl.common.data.Row;
+import org.apache.geaflow.dsl.common.data.impl.ObjectRow;
+import org.apache.geaflow.dsl.runtime.expression.Expression;
+import org.apache.geaflow.dsl.runtime.expression.field.FieldExpression;
+import org.apache.geaflow.dsl.runtime.function.table.OrderByFunction;
+import org.apache.geaflow.dsl.runtime.function.table.OrderByHeapSort;
+import org.apache.geaflow.dsl.runtime.function.table.OrderByRadixSort;
+import org.apache.geaflow.dsl.runtime.function.table.OrderByTimSort;
+import org.apache.geaflow.dsl.runtime.function.table.order.OrderByField;
+import org.apache.geaflow.dsl.runtime.function.table.order.OrderByField.ORDER;
+import org.apache.geaflow.dsl.runtime.function.table.order.SortInfo;
+import org.openjdk.jmh.annotations.*;
+import org.openjdk.jmh.results.format.ResultFormatType;
+import org.openjdk.jmh.runner.Runner;
+import org.openjdk.jmh.runner.RunnerException;
+import org.openjdk.jmh.runner.options.Options;
+import org.openjdk.jmh.runner.options.OptionsBuilder;
 
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
@@ -135,6 +134,8 @@ public class OrderTimeBenchmark {
                 case "STRING":
                     values[0] = BinaryString.fromString(generateStringValue(i, random));
                     break;
+                default:
+                    return data;
             }
             
             // Generate the value of the secondary sort field
@@ -174,9 +175,9 @@ public class OrderTimeBenchmark {
             case "REVERSE_SORTED":
                 return (double) (dataSize - index) + random.nextDouble();
             case "PARTIAL_SORTED":
-                return index < dataSize * 0.7 ? 
-                    (double) index + random.nextDouble() : 
-                    random.nextDouble() * dataSize;
+                return index < dataSize * 0.7
+                ? (double) index + random.nextDouble()
+                : random.nextDouble() * dataSize;
             case "DUPLICATED":
                 return (double) (random.nextInt(dataSize / 10)) + random.nextDouble();
             default:
@@ -195,20 +196,17 @@ public class OrderTimeBenchmark {
             case "REVERSE_SORTED":
                 return String.format("R%0100d", dataSize - index);
             case "PARTIAL_SORTED":
-                return index < dataSize * 0.7 ? 
-                    String.format("R%0100d", index) :
-                    generateRandomString(1, 101, random);
+                return index < dataSize * 0.7
+                    ? String.format("R%0100d", index)
+                    : generateRandomString(1, 101, random);
             case "DUPLICATED":
-                return prefixes[random.nextInt(3)] + 
-                       String.format("%0100d", random.nextInt(dataSize / 10));
+                return prefixes[random.nextInt(3)]
+                    + String.format("%0100d", random.nextInt(dataSize / 10));
             default:
                 return String.format("R%0100d", random.nextInt(dataSize));
         }
     }
 
-    /**
-     * Generate a random string of fixed length
-     */
     private String generateRandomString(int length, Random random) {
         StringBuilder sb = new StringBuilder(length);
         for (int i = 0; i < length; i++) {
@@ -217,9 +215,6 @@ public class OrderTimeBenchmark {
         return sb.toString();
     }
 
-    /**
-     * Generate a random string of variable length
-     */
     private String generateRandomString(int minLength, int maxLength, Random random) {
         int length = minLength + random.nextInt(maxLength - minLength + 1);
         return generateRandomString(length, random);
