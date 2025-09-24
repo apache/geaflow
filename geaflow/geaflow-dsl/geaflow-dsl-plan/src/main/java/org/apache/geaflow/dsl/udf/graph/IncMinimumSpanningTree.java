@@ -20,12 +20,16 @@
 package org.apache.geaflow.dsl.udf.graph;
 
 import java.util.Iterator;
+import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import org.apache.geaflow.common.type.IType;
+import org.apache.geaflow.common.type.primitive.DoubleType;
 import org.apache.geaflow.dsl.common.algo.AlgorithmRuntimeContext;
 import org.apache.geaflow.dsl.common.algo.AlgorithmUserFunction;
 import org.apache.geaflow.dsl.common.algo.IncrementalAlgorithmUserFunction;
 import org.apache.geaflow.dsl.common.data.Row;
+import org.apache.geaflow.dsl.common.data.RowEdge;
 import org.apache.geaflow.dsl.common.data.RowVertex;
 import org.apache.geaflow.dsl.common.data.impl.ObjectRow;
 import org.apache.geaflow.dsl.common.function.Description;
@@ -37,6 +41,9 @@ import org.apache.geaflow.dsl.common.util.TypeCastUtil;
 import org.apache.geaflow.dsl.udf.graph.mst.MSTEdge;
 import org.apache.geaflow.dsl.udf.graph.mst.MSTMessage;
 import org.apache.geaflow.dsl.udf.graph.mst.MSTVertexState;
+import org.apache.geaflow.model.graph.edge.EdgeDirection;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Incremental Minimum Spanning Tree algorithm implementation.
@@ -54,13 +61,12 @@ import org.apache.geaflow.dsl.udf.graph.mst.MSTVertexState;
 public class IncMinimumSpanningTree implements AlgorithmUserFunction<Object, Object>,
     IncrementalAlgorithmUserFunction {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(IncMinimumSpanningTree.class);
+
     /** Field index for vertex state in row value. */
     private static final int STATE_FIELD_INDEX = 0;
 
     private AlgorithmRuntimeContext<Object, Object> context;
-    private String keyFieldName = "mst_edges";
-    private int maxIterations = 50; // Maximum number of iterations
-    private double convergenceThreshold = 0.001; // Convergence threshold
     private IType<?> idType; // Cache the ID type for better performance
 
     @Override
@@ -70,21 +76,10 @@ public class IncMinimumSpanningTree implements AlgorithmUserFunction<Object, Obj
         // Cache the ID type for better performance and type safety
         this.idType = context.getGraphSchema().getIdType();
 
-        // Parse parameters: maxIterations, convergenceThreshold, keyFieldName
-        if (parameters.length > 0) {
-            this.maxIterations = Integer.parseInt(String.valueOf(parameters[0]));
-        }
-        if (parameters.length > 1) {
-            this.convergenceThreshold = Double.parseDouble(String.valueOf(parameters[1]));
-        }
-        if (parameters.length > 2) {
-            this.keyFieldName = String.valueOf(parameters[2]);
-        }
-
-        if (parameters.length > 3) {
+        // Validate parameters - this algorithm doesn't currently support configuration parameters
+        if (parameters != null && parameters.length > 0) {
             throw new IllegalArgumentException(
-                "Only support up to 3 arguments: maxIterations, "
-                + "convergenceThreshold, keyFieldName");
+                "IncMinimumSpanningTree algorithm does not support configuration parameters");
         }
     }
 
@@ -98,11 +93,43 @@ public class IncMinimumSpanningTree implements AlgorithmUserFunction<Object, Obj
         Object validatedVertexId = validateVertexId(vertex.getId());
         while (messages.hasNext()) {
             Object messageObj = messages.next();
-            if (messageObj instanceof MSTMessage) {
-                MSTMessage message = (MSTMessage) messageObj;
-                if (processMessage(validatedVertexId, message, currentState)) {
-                    stateChanged = true;
-                }
+            if (!(messageObj instanceof MSTMessage)) {
+                throw new IllegalArgumentException(
+                    String.format("Invalid message type for IncMinimumSpanningTree: expected %s, got %s (value: %s)",
+                        MSTMessage.class.getSimpleName(),
+                        messageObj.getClass().getSimpleName(),
+                        messageObj)
+                );
+            }
+            MSTMessage message = (MSTMessage) messageObj;
+            if (processMessage(validatedVertexId, message, currentState)) {
+                stateChanged = true;
+            }
+        }
+
+        // If this is the first iteration and no messages were processed,
+        // load edges and propose them to neighbors
+        if (!updatedValues.isPresent() && !messages.hasNext()) {
+            // Load all outgoing edges and propose them to target vertices
+            List<RowEdge> outEdges = context.loadEdges(EdgeDirection.OUT);
+            for (RowEdge edge : outEdges) {
+                Object targetId = validateVertexId(edge.getTargetId());
+                double weight = (Double) edge.getValue().getField(0, DoubleType.INSTANCE);
+
+                // Create edge proposal message
+                MSTMessage proposalMessage = new MSTMessage(
+                    MSTMessage.MessageType.EDGE_PROPOSAL,
+                    validatedVertexId,
+                    targetId,
+                    weight,
+                    currentState.getComponentId()
+                );
+
+                // Send proposal to target vertex
+                context.sendMessage(targetId, proposalMessage);
+
+                LOGGER.debug("Sent edge proposal from {} to {} with weight {}",
+                           validatedVertexId, targetId, weight);
             }
         }
 
@@ -113,6 +140,12 @@ public class IncMinimumSpanningTree implements AlgorithmUserFunction<Object, Obj
             // First time initialization
             context.updateVertexValue(ObjectRow.create(currentState, true));
         }
+
+        // Vote to terminate if no state changes occurred and we've processed messages
+        // This ensures the algorithm terminates after processing all edges
+        if (!stateChanged && updatedValues.isPresent()) {
+            context.voteToTerminate("MST_CONVERGED", 1);
+        }
     }
 
     @Override
@@ -121,11 +154,23 @@ public class IncMinimumSpanningTree implements AlgorithmUserFunction<Object, Obj
         if (updatedValues.isPresent()) {
             Row values = updatedValues.get();
             Object stateObj = values.getField(STATE_FIELD_INDEX, ObjectType.INSTANCE);
-            if (stateObj instanceof MSTVertexState) {
-                MSTVertexState state = (MSTVertexState) stateObj;
-                if (!state.getMstEdges().isEmpty()) {
-                    context.take(ObjectRow.create(graphVertex.getId(), state.getMstEdges()));
-                }
+            if (!(stateObj instanceof MSTVertexState)) {
+                throw new IllegalStateException(
+                    String.format("Invalid vertex state type in finish(): expected %s, got %s (value: %s)",
+                        MSTVertexState.class.getSimpleName(),
+                        stateObj.getClass().getSimpleName(),
+                        stateObj)
+                );
+            }
+            MSTVertexState state = (MSTVertexState) stateObj;
+            // Output each MST edge as a separate record
+            for (MSTEdge mstEdge : state.getMstEdges()) {
+                // Validate IDs before outputting
+                Object validatedSrcId = validateVertexId(mstEdge.getSourceId());
+                Object validatedTargetId = validateVertexId(mstEdge.getTargetId());
+                double weight = mstEdge.getWeight();
+
+                context.take(ObjectRow.create(validatedSrcId, validatedTargetId, weight));
             }
         }
     }
@@ -135,10 +180,11 @@ public class IncMinimumSpanningTree implements AlgorithmUserFunction<Object, Obj
         // Use the cached ID type for consistency and performance
         IType<?> vertexIdType = (idType != null) ? idType : graphSchema.getIdType();
 
-        // Return result type: vertex ID and MST edge set
+        // Return result type: srcId, targetId, weight for each MST edge
         return new StructType(
-            new TableField("vertex_id", vertexIdType, false),
-            new TableField(keyFieldName, ObjectType.INSTANCE, false)
+            new TableField("srcId", vertexIdType, false),
+            new TableField("targetId", vertexIdType, false),
+            new TableField("weight", DoubleType.INSTANCE, false)
         );
     }
 
@@ -196,10 +242,56 @@ public class IncMinimumSpanningTree implements AlgorithmUserFunction<Object, Obj
     /**
      * Handle edge proposal message.
      * Check whether to accept new MST edge.
+     * In incremental MST, an edge can be accepted if its endpoints belong to different components.
      */
     private boolean handleEdgeProposal(Object vertexId, MSTMessage message, MSTVertexState state) {
-        // Simplified edge proposal handling
-        return false;
+        // Validate vertex IDs
+        Object validatedSourceId = validateVertexId(message.getSourceId());
+        Object validatedTargetId = validateVertexId(message.getTargetId());
+
+        // Check if edge endpoints belong to different components
+        // If they do, the edge can be accepted without creating a cycle
+        Object currentComponentId = state.getComponentId();
+        Object proposedComponentId = message.getComponentId();
+
+        // Only accept edge if endpoints are in different components
+        if (!Objects.equals(currentComponentId, proposedComponentId)) {
+            // Create acceptance message
+            MSTMessage acceptanceMessage = new MSTMessage(
+                MSTMessage.MessageType.EDGE_ACCEPTANCE,
+                validatedSourceId,
+                validatedTargetId,
+                message.getWeight(),
+                proposedComponentId
+            );
+
+            // Send acceptance message to the source vertex
+            context.sendMessage(validatedSourceId, acceptanceMessage);
+
+            LOGGER.debug("Accepted edge proposal: {} -- {} (weight: {}) between components {} and {}",
+                        validatedSourceId, validatedTargetId, message.getWeight(),
+                        currentComponentId, proposedComponentId);
+
+            return true;
+        } else {
+            // Edge endpoints are in the same component, would create a cycle
+            // Send rejection message
+            MSTMessage rejectionMessage = new MSTMessage(
+                MSTMessage.MessageType.EDGE_REJECTION,
+                validatedSourceId,
+                validatedTargetId,
+                message.getWeight(),
+                proposedComponentId
+            );
+
+            // Send rejection message to the source vertex
+            context.sendMessage(validatedSourceId, rejectionMessage);
+
+            LOGGER.debug("Rejected edge proposal: {} -- {} (weight: {}) - same component {}",
+                        validatedSourceId, validatedTargetId, message.getWeight(), currentComponentId);
+
+            return false;
+        }
     }
 
     /**
@@ -285,7 +377,15 @@ public class IncMinimumSpanningTree implements AlgorithmUserFunction<Object, Obj
     private MSTVertexState getCurrentVertexState(RowVertex vertex) {
         if (vertex.getValue() != null) {
             Object stateObj = vertex.getValue().getField(STATE_FIELD_INDEX, ObjectType.INSTANCE);
-            if (stateObj instanceof MSTVertexState) {
+            if (stateObj != null) {
+                if (!(stateObj instanceof MSTVertexState)) {
+                    throw new IllegalStateException(
+                        String.format("Invalid vertex state type in getCurrentVertexState(): expected %s, got %s (value: %s)",
+                            MSTVertexState.class.getSimpleName(),
+                            stateObj.getClass().getSimpleName(),
+                            stateObj)
+                    );
+                }
                 return (MSTVertexState) stateObj;
             }
         }
