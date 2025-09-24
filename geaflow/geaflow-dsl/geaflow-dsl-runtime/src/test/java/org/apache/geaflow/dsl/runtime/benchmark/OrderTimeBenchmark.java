@@ -176,8 +176,8 @@ public class OrderTimeBenchmark {
                 return (double) (dataSize - index) + random.nextDouble();
             case "PARTIAL_SORTED":
                 return index < dataSize * 0.7
-                ? (double) index + random.nextDouble()
-                : random.nextDouble() * dataSize;
+                    ? (double) index + random.nextDouble()
+                    : random.nextDouble() * dataSize;
             case "DUPLICATED":
                 return (double) (random.nextInt(dataSize / 10)) + random.nextDouble();
             default:
