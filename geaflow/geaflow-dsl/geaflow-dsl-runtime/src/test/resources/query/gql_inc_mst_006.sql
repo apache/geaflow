@@ -17,31 +17,21 @@
  * under the License.
  */
 
-CREATE TABLE kafka_source (
-	id bigint,
-	name varchar,
-	age long
+/*
+ * Incremental Minimum Spanning Tree algorithm connected components test
+ * Test disconnected graph scenarios
+ */
+CREATE TABLE inc_mst_conn_result (
+  srcId int,
+  targetId int,
+  weight double
 ) WITH (
-	type='kafka',
-	geaflow.dsl.kafka.servers = 'localhost:9092',
-	geaflow.dsl.kafka.topic = 'scan_002',
-	geaflow.dsl.kafka.data.operation.timeout.seconds = 5,
-	geaflow.dsl.time.window.size=10,
-	geaflow.dsl.start.time='${stTime}'
+    type='file',
+    geaflow.dsl.file.path = '${target}'
 );
 
-CREATE TABLE tbl_result (
-	id bigint,
-	name varchar,
-	age long
-) WITH (
-	type='file',
-	geaflow.dsl.file.path='${target}'
-);
+USE GRAPH disconnected_graph;
 
-INSERT INTO tbl_result
-SELECT DISTINCT id, name, age
-FROM kafka_source
-ORDER BY id
-LIMIT 5
-;
+INSERT INTO inc_mst_conn_result
+CALL IncMST(40, 0.001, 'mst_conn_edges') YIELD (srcId, targetId, weight)
+RETURN srcId, targetId, weight;

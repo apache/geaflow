@@ -150,4 +150,14 @@ public interface AlgorithmRuntimeContext<K, M> {
      * @return The Configuration object containing the settings.
      */
     Configuration getConfig();
+
+    /**
+     * Sends a termination vote to the coordinator to signal algorithm completion.
+     * This method allows vertices to vote for algorithm termination when they
+     * determine that no further computation is needed.
+     *
+     * @param terminationReason The reason for termination (e.g., "CONVERGED", "COMPLETED")
+     * @param voteValue The vote value (typically 1 for termination vote)
+     */
+    void voteToTerminate(String terminationReason, Object voteValue);
 }

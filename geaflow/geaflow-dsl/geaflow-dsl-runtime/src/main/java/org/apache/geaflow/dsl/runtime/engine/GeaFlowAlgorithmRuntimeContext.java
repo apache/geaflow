@@ -197,6 +197,35 @@ public class GeaFlowAlgorithmRuntimeContext implements AlgorithmRuntimeContext<O
         this.aggContext = Objects.requireNonNull(aggContext);
     }
 
+    @Override
+    public void voteToTerminate(String terminationReason, Object voteValue) {
+        // Send termination vote to coordinator through aggregation context
+        if (aggContext != null) {
+            aggContext.aggregate(new AlgorithmTerminationVote(terminationReason, voteValue));
+        }
+    }
+
+    /**
+     * Internal class representing a termination vote sent to the coordinator.
+     */
+    private static class AlgorithmTerminationVote implements ITraversalAgg {
+        private final String terminationReason;
+        private final Object voteValue;
+
+        public AlgorithmTerminationVote(String terminationReason, Object voteValue) {
+            this.terminationReason = terminationReason;
+            this.voteValue = voteValue;
+        }
+
+        public String getTerminationReason() {
+            return terminationReason;
+        }
+
+        public Object getVoteValue() {
+            return voteValue;
+        }
+    }
+
     private static class AlgorithmResponse implements ITraversalResponse<Row> {
 
         private final Row row;
