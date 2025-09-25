@@ -80,6 +80,10 @@ public class KryoSerializer implements ISerializer {
             // Set additional safety configurations
             kryo.setAutoReset(false);
             kryo.setCopyReferences(false);
+            
+            // Set buffer size to prevent Buffer underflow
+            kryo.getFieldSerializerConfig().setUseAsm(false);
+            kryo.getFieldSerializerConfig().setUseUnsafe(false);
 
             kryo.register(Arrays.asList("").getClass(), new ArraysAsListSerializer());
             kryo.register(Collections.EMPTY_LIST.getClass(), new CollectionsEmptyListSerializer());
@@ -266,10 +270,27 @@ public class KryoSerializer implements ISerializer {
 
     @Override
     public Object deserialize(byte[] bytes) {
-        // Use larger buffer size to prevent Buffer underflow
-        Input input = new Input(bytes);
-        input.setBuffer(bytes, 0, Math.max(bytes.length * 2, INITIAL_BUFFER_SIZE));
-        return local.get().readClassAndObject(input);
+        if (bytes == null || bytes.length == 0) {
+            throw new IllegalArgumentException("Cannot deserialize null or empty byte array");
+        }
+        
+        try {
+            // Use a more conservative approach with proper buffer sizing
+            Input input = new Input(bytes);
+            // Set buffer size to be at least as large as the data, but not too large to avoid overflow
+            int bufferSize = Math.max(bytes.length, INITIAL_BUFFER_SIZE);
+            input.setBuffer(bytes, 0, bufferSize);
+            return local.get().readClassAndObject(input);
+        } catch (Exception e) {
+            // If deserialization fails, try with a larger buffer
+            try {
+                Input input = new Input(bytes);
+                input.setBuffer(bytes, 0, bytes.length * 2);
+                return local.get().readClassAndObject(input);
+            } catch (Exception e2) {
+                throw new RuntimeException("Failed to deserialize byte array after retry", e2);
+            }
+        }
     }
 
     @Override
@@ -286,10 +307,58 @@ public class KryoSerializer implements ISerializer {
 
     @Override
     public Object deserialize(InputStream inputStream) {
-        // Use large but safe buffer size to prevent Buffer underflow
-        // For IncMST algorithm with large message sizes, use 128MB buffer (safe from integer overflow)
-        Input input = new Input(inputStream, INITIAL_BUFFER_SIZE * 2048); // 128MB buffer
-        return local.get().readClassAndObject(input);
+        try {
+            // First check if the input stream is available and has data
+            if (inputStream == null) {
+                throw new IllegalArgumentException("Input stream is null");
+            }
+            
+            // Try to read a small amount to check if stream has data
+            inputStream.mark(1);
+            int firstByte = inputStream.read();
+            if (firstByte == -1) {
+                throw new IllegalArgumentException("Input stream is empty");
+            }
+            inputStream.reset();
+            
+            // Use a more conservative approach with smaller buffer and error handling
+            Input input = new Input(inputStream, INITIAL_BUFFER_SIZE); // Use default 64KB buffer
+            return local.get().readClassAndObject(input);
+        } catch (Exception e) {
+            // If the first attempt fails, try reading all bytes first
+            try {
+                if (inputStream == null) {
+                    throw new IllegalArgumentException("Input stream is null");
+                }
+                
+                // Reset the stream if possible
+                try {
+                    inputStream.reset();
+                } catch (Exception resetException) {
+                    // Stream doesn't support reset, continue with reading
+                }
+                
+                byte[] buffer = new byte[4096]; // 4KB buffer
+                java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+                int bytesRead;
+                int totalBytes = 0;
+                while ((bytesRead = inputStream.read(buffer)) != -1) {
+                    baos.write(buffer, 0, bytesRead);
+                    totalBytes += bytesRead;
+                }
+                
+                if (totalBytes == 0) {
+                    throw new IllegalArgumentException("Input stream is empty");
+                }
+                
+                byte[] allBytes = baos.toByteArray();
+                
+                // Use the byte array deserialize method
+                return deserialize(allBytes);
+            } catch (Exception e2) {
+                throw new RuntimeException("Failed to deserialize from InputStream after retry", e2);
+            }
+        }
     }
 
     public Kryo getThreadKryo() {
