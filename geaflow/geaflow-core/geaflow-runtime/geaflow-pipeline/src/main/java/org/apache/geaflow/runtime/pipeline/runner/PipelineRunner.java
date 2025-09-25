@@ -68,8 +68,9 @@ public class PipelineRunner {
         }
 
         ICycleScheduler scheduler = CycleSchedulerFactory.create(context.getCycle());
+        long schedulerId = context.getCycle().getSchedulerId();
         if (scheduler instanceof IEventListener) {
-            eventDispatcher.registerListener(context.getCycle().getSchedulerId(), (IEventListener) scheduler);
+            eventDispatcher.registerListener(schedulerId, (IEventListener) scheduler);
         }
 
         scheduler.init(context);
@@ -77,7 +78,7 @@ public class PipelineRunner {
         LOGGER.info("final result of pipeline is {}", result.getResult());
         scheduler.close();
         if (scheduler instanceof IEventListener) {
-            eventDispatcher.removeListener(((ExecutionGraphCycleScheduler) scheduler).getSchedulerId());
+            eventDispatcher.removeListener(schedulerId);
         }
         return result;
     }
