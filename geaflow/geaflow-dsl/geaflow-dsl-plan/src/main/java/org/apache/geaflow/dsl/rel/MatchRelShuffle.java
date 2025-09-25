@@ -32,6 +32,7 @@ import org.apache.geaflow.dsl.rel.match.MatchFilter;
 import org.apache.geaflow.dsl.rel.match.MatchJoin;
 import org.apache.geaflow.dsl.rel.match.MatchPathModify;
 import org.apache.geaflow.dsl.rel.match.MatchPathSort;
+import org.apache.geaflow.dsl.rel.match.MatchSharedPredicate;
 import org.apache.geaflow.dsl.rel.match.MatchUnion;
 import org.apache.geaflow.dsl.rel.match.SubQueryStart;
 import org.apache.geaflow.dsl.rel.match.VertexMatch;
@@ -72,6 +73,11 @@ public class MatchRelShuffle extends AbstractMatchNodeVisitor<IMatchNode> {
     @Override
     public IMatchNode visitUnion(MatchUnion union) {
         return visitChildren(union);
+    }
+
+    @Override
+    public IMatchNode visitSharedPredicate(MatchSharedPredicate sharedPredicate) {
+        return visitChildren(sharedPredicate);
     }
 
     @Override
