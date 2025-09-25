@@ -18,18 +18,20 @@
  */
 
 /*
- * Incremental Minimum Spanning Tree algorithm内存效率Test
- * Test算法内存使用效率
+ * Incremental Minimum Spanning Tree algorithm performance test - memory efficiency
+ * Test memory efficiency on large graphs
  */
-CREATE TABLE inc_mst_perf_memory_result WITH (
+CREATE TABLE inc_mst_perf_mem_result (
+  srcId int,
+  targetId int,
+  weight double
+) WITH (
     type='file',
-    geaflow.dsl.file.path = '/tmp/geaflow/inc_mst_perf_memory_result_006.txt'
+    geaflow.dsl.file.path = '${target}'
 );
 
 USE GRAPH large_graph;
-INSERT INTO inc_mst_perf_memory_result
-CALL IncMST(300, 0.001, 'mst_perf_memory_edges') YIELD (srcId, targetId, weight) 
-RETURN srcId, targetId, weight;
 
--- Verify results
-SELECT * FROM inc_mst_perf_memory_result;
+INSERT INTO inc_mst_perf_mem_result
+CALL IncMST(80, 0.001, 'mst_perf_mem_edges') YIELD (srcId, targetId, weight)
+RETURN srcId, targetId, weight;

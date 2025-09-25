@@ -18,20 +18,20 @@
  */
 
 /*
- * Incremental Minimum Spanning Tree algorithm自定义参数Test
- * Test不同参数组合的效果
+ * Incremental Minimum Spanning Tree algorithm custom parameters test
+ * Test custom parameter configurations
  */
-CREATE TABLE inc_mst_custom_result WITH (
+CREATE TABLE inc_mst_custom_result (
+  srcId int,
+  targetId int,
+  weight double
+) WITH (
     type='file',
-    geaflow.dsl.file.path = '/tmp/geaflow/inc_mst_custom_result_009.txt'
+    geaflow.dsl.file.path = '${target}'
 );
 
 USE GRAPH modern;
 
--- Test不同参数组合
 INSERT INTO inc_mst_custom_result
-CALL IncMST(20, 0.005, 'mst_custom_edges') YIELD (srcId, targetId, weight) 
+CALL IncMST(20, 0.005, 'mst_custom_edges') YIELD (srcId, targetId, weight)
 RETURN srcId, targetId, weight;
-
--- Verify results
-SELECT * FROM inc_mst_custom_result;

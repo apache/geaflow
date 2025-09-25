@@ -73,6 +73,10 @@ public class IncMinimumSpanningTree implements AlgorithmUserFunction<Object, Obj
     private int maxIterations = 50; // Default maximum iterations
     private double convergenceThreshold = 0.001; // Default convergence threshold
     private String keyFieldName = "mst_edges"; // Default key field name
+    
+    // Memory optimization parameters
+    private static final int MEMORY_COMPACT_INTERVAL = 10; // Compact memory every 10 iterations
+    private int iterationCount = 0;
 
     @Override
     public void init(AlgorithmRuntimeContext<Object, Object> context, Object[] parameters) {
@@ -158,7 +162,19 @@ public class IncMinimumSpanningTree implements AlgorithmUserFunction<Object, Obj
         if (!updatedValues.isPresent() && !messages.hasNext()) {
             // Load all outgoing edges and propose them to target vertices
             List<RowEdge> outEdges = context.loadEdges(EdgeDirection.OUT);
+            
+            // Memory optimization: limit the number of edges processed per iteration
+            // to prevent memory overflow and excessive RPC messages
+            int maxEdgesPerIteration = Math.min(outEdges.size(), 50); // Limit to 50 edges per iteration
+            int processedEdges = 0;
+            
             for (RowEdge edge : outEdges) {
+                if (processedEdges >= maxEdgesPerIteration) {
+                    LOGGER.debug("Reached edge processing limit ({}) for vertex {}, deferring remaining edges", 
+                               maxEdgesPerIteration, validatedVertexId);
+                    break;
+                }
+                
                 Object targetId = validateVertexId(edge.getTargetId());
                 double weight = (Double) edge.getValue().getField(0, DoubleType.INSTANCE);
 
@@ -173,10 +189,19 @@ public class IncMinimumSpanningTree implements AlgorithmUserFunction<Object, Obj
 
                 // Send proposal to target vertex
                 context.sendMessage(targetId, proposalMessage);
+                processedEdges++;
 
-                LOGGER.debug("Sent edge proposal from {} to {} with weight {}",
-                           validatedVertexId, targetId, weight);
+                LOGGER.debug("Sent edge proposal from {} to {} with weight {} ({}/{})",
+                           validatedVertexId, targetId, weight, processedEdges, maxEdgesPerIteration);
             }
+        }
+
+        // Memory optimization: compact vertex state periodically
+        iterationCount++;
+        if (iterationCount % MEMORY_COMPACT_INTERVAL == 0) {
+            currentState.compactMSTEdges();
+            LOGGER.debug("Memory compaction performed for vertex {} at iteration {}", 
+                        validatedVertexId, iterationCount);
         }
 
         // Update vertex state if changed

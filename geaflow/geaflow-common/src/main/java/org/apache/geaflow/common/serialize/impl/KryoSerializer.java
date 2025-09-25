@@ -58,7 +58,7 @@ import org.slf4j.LoggerFactory;
 public class KryoSerializer implements ISerializer {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(KryoSerializer.class);
-    private static final int INITIAL_BUFFER_SIZE = 4096;
+    private static final int INITIAL_BUFFER_SIZE = 64 * 1024; // 64KB buffer to prevent Buffer underflow
     private static List<String> needRegisterClasses;
     private static Map<Class, Serializer> registeredSerializers;
 
@@ -266,7 +266,9 @@ public class KryoSerializer implements ISerializer {
 
     @Override
     public Object deserialize(byte[] bytes) {
+        // Use larger buffer size to prevent Buffer underflow
         Input input = new Input(bytes);
+        input.setBuffer(bytes, 0, Math.max(bytes.length * 2, INITIAL_BUFFER_SIZE));
         return local.get().readClassAndObject(input);
     }
 
@@ -284,7 +286,9 @@ public class KryoSerializer implements ISerializer {
 
     @Override
     public Object deserialize(InputStream inputStream) {
-        Input input = new Input(inputStream);
+        // Use much larger buffer size to prevent Buffer underflow
+        // For IncMST algorithm with large message sizes, use 256MB buffer
+        Input input = new Input(inputStream, INITIAL_BUFFER_SIZE * 4096); // 256MB buffer
         return local.get().readClassAndObject(input);
     }
 

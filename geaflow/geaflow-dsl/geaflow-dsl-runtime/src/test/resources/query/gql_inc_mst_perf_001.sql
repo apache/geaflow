@@ -18,8 +18,8 @@
  */
 
 /*
- * Incremental Minimum Spanning Tree algorithm small graph performance test
- * Test performance on modern graph
+ * Incremental Minimum Spanning Tree algorithm performance test
+ * Test small graph performance
  */
 CREATE TABLE inc_mst_perf_small_result (
   srcId int,
@@ -33,5 +33,5 @@ CREATE TABLE inc_mst_perf_small_result (
 USE GRAPH modern;
 
 INSERT INTO inc_mst_perf_small_result
-CALL IncMST(30, 0.001, 'mst_perf_small_edges') YIELD (srcId, targetId, weight)
+CALL IncMST(25, 0.001, 'mst_perf_small_edges') YIELD (srcId, targetId, weight)
 RETURN srcId, targetId, weight;

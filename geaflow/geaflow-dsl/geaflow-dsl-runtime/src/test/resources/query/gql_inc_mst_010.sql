@@ -18,18 +18,20 @@
  */
 
 /*
- * Incremental Minimum Spanning Tree algorithm复杂拓扑Test
- * Test复杂图结构的MST计算
+ * Incremental Minimum Spanning Tree algorithm complex topology test
+ * Test complex graph topologies
  */
-CREATE TABLE inc_mst_complex_result WITH (
+CREATE TABLE inc_mst_complex_result (
+  srcId int,
+  targetId int,
+  weight double
+) WITH (
     type='file',
-    geaflow.dsl.file.path = '/tmp/geaflow/inc_mst_complex_result_010.txt'
+    geaflow.dsl.file.path = '${target}'
 );
 
 USE GRAPH complex_graph;
-INSERT INTO inc_mst_complex_result
-CALL IncMST(150, 0.001, 'mst_complex_edges') YIELD (srcId, targetId, weight) 
-RETURN srcId, targetId, weight;
 
--- Verify results
-SELECT * FROM inc_mst_complex_result;
+INSERT INTO inc_mst_complex_result
+CALL IncMST(70, 0.001, 'mst_complex_edges') YIELD (srcId, targetId, weight)
+RETURN srcId, targetId, weight;

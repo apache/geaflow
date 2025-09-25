@@ -18,10 +18,10 @@
  */
 
 /*
- * Incremental Minimum Spanning Tree algorithm incremental update performance test
- * Test performance in dynamic graph update scenarios
+ * Incremental Minimum Spanning Tree algorithm performance test - incremental update
+ * Test incremental update performance
  */
-CREATE TABLE inc_mst_perf_incremental_result (
+CREATE TABLE inc_mst_perf_incr_result (
   srcId int,
   targetId int,
   weight double
@@ -30,18 +30,8 @@ CREATE TABLE inc_mst_perf_incremental_result (
     geaflow.dsl.file.path = '${target}'
 );
 
-USE GRAPH modern;
+USE GRAPH dynamic_graph;
 
--- Initial MST calculation
-INSERT INTO inc_mst_perf_incremental_result
-CALL IncMST(50, 0.001, 'mst_perf_incremental_edges') YIELD (srcId, targetId, weight) 
-RETURN srcId, targetId, weight;
-
--- Simulate edge updates
-INSERT INTO modern.relation VALUES (3001, 3002);
-INSERT INTO modern.relation VALUES (3002, 3003);
-
--- MST calculation after incremental update
-INSERT INTO inc_mst_perf_incremental_result
-CALL IncMST(50, 0.001, 'mst_perf_incremental_edges') YIELD (srcId, targetId, weight) 
+INSERT INTO inc_mst_perf_incr_result
+CALL IncMST(60, 0.001, 'mst_perf_incr_edges') YIELD (srcId, targetId, weight)
 RETURN srcId, targetId, weight;

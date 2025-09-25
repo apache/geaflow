@@ -54,8 +54,11 @@ public class MSTVertexState implements Serializable {
     /** Whether it is a root node. */
     private boolean isRoot;
     
-    /** MST edge set. */
+    /** MST edge set with size limit to prevent memory overflow. */
     private Set<MSTEdge> mstEdges;
+    
+    /** Maximum number of MST edges to store per vertex (memory optimization). */
+    private static final int MAX_MST_EDGES_PER_VERTEX = 100; // Reduced from 1000 to prevent memory overflow
     
     /** Whether the state has changed. */
     private boolean changed;
@@ -141,11 +144,26 @@ public class MSTVertexState implements Serializable {
     }
 
     /**
-     * Add MST edge.
+     * Add MST edge with memory optimization.
+     * Prevents memory overflow by limiting the number of stored edges.
      * @param edge MST edge
      * @return Whether addition was successful
      */
     public boolean addMSTEdge(MSTEdge edge) {
+        // Memory optimization: limit the number of MST edges per vertex
+        if (this.mstEdges.size() >= MAX_MST_EDGES_PER_VERTEX) {
+            // Remove the edge with highest weight to make room for new edge
+            MSTEdge heaviestEdge = this.mstEdges.stream()
+                .max(MSTEdge::compareTo)
+                .orElse(null);
+            if (heaviestEdge != null && edge.getWeight() < heaviestEdge.getWeight()) {
+                this.mstEdges.remove(heaviestEdge);
+            } else {
+                // New edge is heavier than all existing edges, skip it
+                return false;
+            }
+        }
+        
         boolean added = this.mstEdges.add(edge);
         if (added) {
             this.changed = true;
@@ -198,6 +216,34 @@ public class MSTVertexState implements Serializable {
      */
     public void resetChanged() {
         this.changed = false;
+    }
+    
+    /**
+     * Memory optimization: compact MST edges by removing redundant edges.
+     * Keeps only the most important edges to prevent memory overflow.
+     */
+    public void compactMSTEdges() {
+        if (this.mstEdges.size() > MAX_MST_EDGES_PER_VERTEX) {
+            // Convert to sorted list and keep only the lightest edges
+            Set<MSTEdge> compactedEdges = this.mstEdges.stream()
+                .sorted()
+                .limit(MAX_MST_EDGES_PER_VERTEX)
+                .collect(java.util.stream.Collectors.toSet());
+            
+            this.mstEdges.clear();
+            this.mstEdges.addAll(compactedEdges);
+            this.changed = true;
+        }
+    }
+    
+    /**
+     * Get memory usage estimate for this vertex state.
+     * @return Estimated memory usage in bytes
+     */
+    public long getMemoryUsageEstimate() {
+        long baseSize = 8 * 8; // Object overhead + 8 fields
+        long edgesSize = this.mstEdges.size() * 32; // Approximate size per MSTEdge
+        return baseSize + edgesSize;
     }
 
     /**

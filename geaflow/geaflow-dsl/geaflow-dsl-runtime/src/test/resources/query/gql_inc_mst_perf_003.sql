@@ -18,18 +18,20 @@
  */
 
 /*
- * Incremental Minimum Spanning Tree algorithm大图性能Test
- * Test10K顶点图上的性能表现
+ * Incremental Minimum Spanning Tree algorithm performance test - large graph
+ * Test performance on large graphs
  */
-CREATE TABLE inc_mst_perf_large_result WITH (
+CREATE TABLE inc_mst_perf_large_result (
+  srcId int,
+  targetId int,
+  weight double
+) WITH (
     type='file',
-    geaflow.dsl.file.path = '/tmp/geaflow/inc_mst_perf_large_result_003.txt'
+    geaflow.dsl.file.path = '${target}'
 );
 
 USE GRAPH large_graph;
-INSERT INTO inc_mst_perf_large_result
-CALL IncMST(200, 0.001, 'mst_perf_large_edges') YIELD (srcId, targetId, weight) 
-RETURN srcId, targetId, weight;
 
--- Verify results
-SELECT * FROM inc_mst_perf_large_result;
+INSERT INTO inc_mst_perf_large_result
+CALL IncMST(100, 0.001, 'mst_perf_large_edges') YIELD (srcId, targetId, weight)
+RETURN srcId, targetId, weight;

@@ -30,7 +30,7 @@ CREATE TABLE inc_mst_large_result (
     geaflow.dsl.file.path = '${target}'
 );
 
-USE GRAPH modern;
+USE GRAPH large_graph;
 
 INSERT INTO inc_mst_large_result
 CALL IncMST(100, 0.001, 'mst_large_edges') YIELD (srcId, targetId, weight)

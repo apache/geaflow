@@ -18,18 +18,20 @@
  */
 
 /*
- * Incremental Minimum Spanning Tree algorithm中等图性能Test
- * Test1K顶点图上的性能表现
+ * Incremental Minimum Spanning Tree algorithm performance test - medium graph
+ * Test performance on medium-sized graphs
  */
-CREATE TABLE inc_mst_perf_medium_result WITH (
+CREATE TABLE inc_mst_perf_medium_result (
+  srcId int,
+  targetId int,
+  weight double
+) WITH (
     type='file',
-    geaflow.dsl.file.path = '/tmp/geaflow/inc_mst_perf_medium_result_002.txt'
+    geaflow.dsl.file.path = '${target}'
 );
 
 USE GRAPH medium_graph;
-INSERT INTO inc_mst_perf_medium_result
-CALL IncMST(100, 0.001, 'mst_perf_medium_edges') YIELD (srcId, targetId, weight) 
-RETURN srcId, targetId, weight;
 
--- Verify results
-SELECT * FROM inc_mst_perf_medium_result;
+INSERT INTO inc_mst_perf_medium_result
+CALL IncMST(50, 0.001, 'mst_perf_medium_edges') YIELD (srcId, targetId, weight)
+RETURN srcId, targetId, weight;

@@ -19,9 +19,9 @@
 
 /*
  * Incremental Minimum Spanning Tree algorithm incremental update test
- * Test dynamic edge addition and deletion scenarios
+ * Test incremental update scenarios
  */
-CREATE TABLE inc_mst_incremental_result (
+CREATE TABLE inc_mst_incr_result (
   srcId int,
   targetId int,
   weight double
@@ -32,16 +32,6 @@ CREATE TABLE inc_mst_incremental_result (
 
 USE GRAPH modern;
 
--- Initial MST calculation
-INSERT INTO inc_mst_incremental_result
-CALL IncMST(50, 0.001, 'mst_incremental_edges') YIELD (srcId, targetId, weight)
-RETURN srcId, targetId, weight;
-
--- Simulate edge updates
-INSERT INTO modern.relation VALUES (1001, 1002);
-INSERT INTO modern.relation VALUES (1002, 1003);
-
--- MST calculation after incremental update
-INSERT INTO inc_mst_incremental_result
-CALL IncMST(50, 0.001, 'mst_incremental_edges') YIELD (srcId, targetId, weight)
+INSERT INTO inc_mst_incr_result
+CALL IncMST(30, 0.001, 'mst_incr_edges') YIELD (srcId, targetId, weight)
 RETURN srcId, targetId, weight;

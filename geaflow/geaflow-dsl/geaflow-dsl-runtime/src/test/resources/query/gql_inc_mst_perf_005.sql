@@ -18,20 +18,20 @@
  */
 
 /*
- * Incremental Minimum Spanning Tree algorithm收敛性性能Test
- * Test算法收敛性能
+ * Incremental Minimum Spanning Tree algorithm performance test - convergence
+ * Test convergence performance
  */
-CREATE TABLE inc_mst_perf_convergence_result WITH (
+CREATE TABLE inc_mst_perf_conv_result (
+  srcId int,
+  targetId int,
+  weight double
+) WITH (
     type='file',
-    geaflow.dsl.file.path = '/tmp/geaflow/inc_mst_perf_convergence_result_005.txt'
+    geaflow.dsl.file.path = '${target}'
 );
 
 USE GRAPH modern;
 
--- Test收敛性
-INSERT INTO inc_mst_perf_convergence_result
-CALL IncMST(5, 0.01, 'mst_perf_convergence_edges') YIELD (srcId, targetId, weight) 
+INSERT INTO inc_mst_perf_conv_result
+CALL IncMST(40, 0.0001, 'mst_perf_conv_edges') YIELD (srcId, targetId, weight)
 RETURN srcId, targetId, weight;
-
--- Verify results
-SELECT * FROM inc_mst_perf_convergence_result;

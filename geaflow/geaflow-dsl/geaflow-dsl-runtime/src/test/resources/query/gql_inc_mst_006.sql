@@ -19,9 +19,9 @@
 
 /*
  * Incremental Minimum Spanning Tree algorithm connected components test
- * Test MST calculation on disconnected graphs
+ * Test disconnected graph scenarios
  */
-CREATE TABLE inc_mst_connected_result (
+CREATE TABLE inc_mst_conn_result (
   srcId int,
   targetId int,
   weight double
@@ -30,8 +30,8 @@ CREATE TABLE inc_mst_connected_result (
     geaflow.dsl.file.path = '${target}'
 );
 
-USE GRAPH modern;
+USE GRAPH disconnected_graph;
 
-INSERT INTO inc_mst_connected_result
-CALL IncMST(100, 0.001, 'mst_connected_edges') YIELD (srcId, targetId, weight)
+INSERT INTO inc_mst_conn_result
+CALL IncMST(40, 0.001, 'mst_conn_edges') YIELD (srcId, targetId, weight)
 RETURN srcId, targetId, weight;

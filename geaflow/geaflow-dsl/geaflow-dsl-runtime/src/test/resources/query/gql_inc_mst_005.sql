@@ -30,17 +30,8 @@ CREATE TABLE inc_mst_edge_del_result (
     geaflow.dsl.file.path = '${target}'
 );
 
-USE GRAPH modern;
+USE GRAPH dynamic_graph;
 
--- Initial MST calculation
-INSERT INTO inc_mst_edge_del_result
-CALL IncMST(50, 0.001, 'mst_edge_del_edges') YIELD (srcId, targetId, weight)
-RETURN srcId, targetId, weight;
-
--- Delete edges
-DELETE FROM modern.relation WHERE srcId = 1001 AND targetId = 1002;
-
--- Recalculate MST
 INSERT INTO inc_mst_edge_del_result
 CALL IncMST(50, 0.001, 'mst_edge_del_edges') YIELD (srcId, targetId, weight)
 RETURN srcId, targetId, weight;

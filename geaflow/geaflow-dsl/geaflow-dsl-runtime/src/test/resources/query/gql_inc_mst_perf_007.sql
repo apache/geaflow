@@ -18,18 +18,20 @@
  */
 
 /*
- * Incremental Minimum Spanning Tree algorithm可扩展性Test
- * Test100K顶点图上的可扩展性
+ * Incremental Minimum Spanning Tree algorithm performance test - scalability
+ * Test scalability on very large graphs
  */
-CREATE TABLE inc_mst_perf_scalability_result WITH (
+CREATE TABLE inc_mst_perf_scale_result (
+  srcId int,
+  targetId int,
+  weight double
+) WITH (
     type='file',
-    geaflow.dsl.file.path = '/tmp/geaflow/inc_mst_perf_scalability_result_007.txt'
+    geaflow.dsl.file.path = '${target}'
 );
 
 USE GRAPH scalability_graph;
-INSERT INTO inc_mst_perf_scalability_result
-CALL IncMST(500, 0.001, 'mst_perf_scalability_edges') YIELD (srcId, targetId, weight) 
-RETURN srcId, targetId, weight;
 
--- Verify results
-SELECT * FROM inc_mst_perf_scalability_result;
+INSERT INTO inc_mst_perf_scale_result
+CALL IncMST(120, 0.001, 'mst_perf_scale_edges') YIELD (srcId, targetId, weight)
+RETURN srcId, targetId, weight;
