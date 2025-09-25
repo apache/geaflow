@@ -286,9 +286,9 @@ public class KryoSerializer implements ISerializer {
 
     @Override
     public Object deserialize(InputStream inputStream) {
-        // Use much larger buffer size to prevent Buffer underflow
-        // For IncMST algorithm with large message sizes, use 256MB buffer
-        Input input = new Input(inputStream, INITIAL_BUFFER_SIZE * 4096); // 256MB buffer
+        // Use large but safe buffer size to prevent Buffer underflow
+        // For IncMST algorithm with large message sizes, use 128MB buffer (safe from integer overflow)
+        Input input = new Input(inputStream, INITIAL_BUFFER_SIZE * 2048); // 128MB buffer
         return local.get().readClassAndObject(input);
     }
 

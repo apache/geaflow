@@ -33,5 +33,5 @@ CREATE TABLE inc_mst_result (
 USE GRAPH modern;
 
 INSERT INTO inc_mst_result
-CALL IncMST() YIELD (srcId, targetId, weight)
+CALL IncMST(100, 0.001, 'mst_edges') YIELD (srcId, targetId, weight)
 RETURN srcId, targetId, weight;
