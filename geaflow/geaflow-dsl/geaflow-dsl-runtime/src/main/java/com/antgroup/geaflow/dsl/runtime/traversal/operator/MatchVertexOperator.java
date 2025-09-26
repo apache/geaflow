@@ -26,8 +26,6 @@ import com.antgroup.geaflow.dsl.common.data.*;
 import com.antgroup.geaflow.dsl.common.data.StepRecord.StepRecordType;
 import com.antgroup.geaflow.dsl.common.data.impl.ObjectRow;
 import com.antgroup.geaflow.dsl.common.data.impl.VertexEdgeFactory;
-import com.antgroup.geaflow.dsl.common.data.impl.types.BinaryStringVertex;
-import com.antgroup.geaflow.dsl.common.data.impl.types.LongVertex;
 import com.antgroup.geaflow.dsl.common.types.TableField;
 import com.antgroup.geaflow.dsl.common.types.VertexType;
 import com.antgroup.geaflow.dsl.runtime.expression.Expression;
@@ -60,6 +58,9 @@ public class MatchVertexOperator extends AbstractStepOperator<MatchVertexFunctio
     private Set<Object> idSet;
 
     //private List<RexFieldAccess> filteredFields;
+    private ProjectFunction projectFunction = null;
+    private List<TableField> tableOutputType = null;
+    //也可以用这两个变量保证每个节点/边匹配只会被初始化一次
 
     public MatchVertexOperator(long id, MatchVertexFunction function) {
         super(id, function);
@@ -88,7 +89,22 @@ public class MatchVertexOperator extends AbstractStepOperator<MatchVertexFunctio
         }
     }
 
-    private RowVertex projectVertex(RowVertex vertex) {
+    private RowVertex projectVertex(RowVertex vertex){
+        if (this.projectFunction== null) {
+            initializeProject(vertex);
+        }
+
+        //进行projection
+        ObjectRow projectVertex = (ObjectRow) this.projectFunction.project(vertex); //通过project进行属性筛选
+        RowVertex vertexDecoded = (RowVertex) projectVertex.getField(0, null);
+
+        //需要重构Fields，以定义VertexType，然后再进行encode
+        VertexType vertexType = new VertexType(this.tableOutputType);
+        VertexEncoder encoder = new DefaultVertexEncoder(vertexType);
+        return encoder.encode(vertexDecoded);
+    }
+
+    private void initializeProject(RowVertex vertex) {
         List<TableField> graphSchemaFieldList = graphSchema.getFields();  //这里是图中的所有表集合
 
         IType<?> outputType = this.getOutputType();
@@ -109,7 +125,6 @@ public class MatchVertexOperator extends AbstractStepOperator<MatchVertexFunctio
                 .collect(Collectors.toSet());
 
 
-
         List<Expression> expressions = new ArrayList<>();  //对于每个表，都需要一个expression
         for (TableField tableField : graphSchemaFieldList) {  //枚举所有table，并构造List<Expression>
             if (vertex.getLabel().equals(tableField.getName())){  //table名匹配 (如都为`person`)
@@ -127,21 +142,22 @@ public class MatchVertexOperator extends AbstractStepOperator<MatchVertexFunctio
                         inputs.add(new LiteralExpression(vertex.getLabel(), column.getType()));
                         tableOutputType.add(column);
                     }
+                    else {  //被剔除掉的特征需要使用null占位
+                        inputs.add(new LiteralExpression(null, column.getType()));
+                        tableOutputType.add(column);
+                    }
                 }
 
                 expressions.add(new VertexConstructExpression(inputs, null, new VertexType(tableOutputType)));
             }
         }
 
+        //封装映射函数
         ProjectFunction projectFunction = new ProjectFunctionImpl(expressions);
-        ObjectRow projectVertex = (ObjectRow) projectFunction.project(vertex); //通过project进行属性筛选
-        RowVertex vertexDecoded = (RowVertex) projectVertex.getField(0, null);
 
-        //需要重构Fields，以定义VertexType，然后再进行encode
-        VertexType vertexType = new VertexType(tableOutputType);
-        VertexEncoder encoder = new DefaultVertexEncoder(vertexType);
-
-        return encoder.encode(vertexDecoded);
+        //储存project预备阶段的中间值
+        this.projectFunction = projectFunction;
+        this.tableOutputType = tableOutputType;
     }
 
     private void processVertex(VertexRecord vertexRecord) {

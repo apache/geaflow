@@ -69,46 +69,6 @@ public abstract class GraphMatch extends SingleRel {
     }
 
 
-    public List<RexFieldAccess> getFilteredElements() {
-        return extractFromMatchNode(this.pathPattern);
-    }
-
-    /**
-     * 递归遍历MatchNode提取RexFieldAccess
-     */
-    private List<RexFieldAccess> extractFromMatchNode(IMatchNode matchNode) {
-        //这里只会提取MatchFilter的字段
-        if (matchNode instanceof MatchFilter) {
-            MatchFilter filter = (MatchFilter) matchNode;
-            return extractFromRexNode(filter.getCondition());
-        }
-        return new ArrayList<>();
-    }
-
-    /**
-     * 从RexNode中提取RexFieldAccess
-     */
-    private List<RexFieldAccess> extractFromRexNode(RexNode rexNode) {
-        List<RexFieldAccess> fields = new ArrayList<>();
-        if (rexNode instanceof RexCall) {
-            RexCall rexCall = (RexCall) rexNode;
-            for (RexNode operand : rexCall.getOperands()) {
-                if (operand instanceof RexFieldAccess) {
-                    fields.add((RexFieldAccess) operand);
-                } else if (operand instanceof RexCall) {
-                    // 递归处理嵌套的RexCall
-                    fields.addAll(extractFromRexNode(operand));
-                }
-            }
-        }
-        return fields;
-    }
-
-
-    /**
-     * 获取筛选后的元素
-     */
-
 
     private void validateInput(RelNode input) {
         SqlTypeName inputType = input.getRowType().getSqlTypeName();

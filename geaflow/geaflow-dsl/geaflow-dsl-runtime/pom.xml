@@ -148,5 +148,11 @@
             <version>5.2.5.Final</version>
             <scope>compile</scope>
         </dependency>
+        <dependency>
+            <groupId>org.openjdk.jol</groupId>
+            <artifactId>jol-core</artifactId>
+            <version>0.16</version>
+            <scope>compile</scope>
+        </dependency>
     </dependencies>
 </project>

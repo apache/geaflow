@@ -59,6 +59,10 @@ public class MatchEdgeOperator extends AbstractStepOperator<MatchEdgeFunction, V
 
     private final boolean isOptionMatch;
 
+    private ProjectFunction projectFunction = null;
+    private List<TableField> tableOutputType = null;
+    //也可以用这两个变量保证每个节点/边匹配只会被初始化一次
+
     public MatchEdgeOperator(long id, MatchEdgeFunction function) {
         super(id, function);
         isOptionMatch = function instanceof MatchEdgeFunctionImpl
@@ -73,6 +77,22 @@ public class MatchEdgeOperator extends AbstractStepOperator<MatchEdgeFunction, V
     }
 
     private RowEdge projectEdge(RowEdge edge) {
+        if (this.projectFunction== null) {
+            initializeProject(edge);
+        }
+
+        //进行projection
+        ObjectRow projectEdge = (ObjectRow) this.projectFunction.project(edge); //通过project进行属性筛选
+        RowEdge edgeDecoded = (RowEdge) projectEdge.getField(0, null);
+
+        //需要重构Fields，以定义EdgeType，然后再进行encode
+        EdgeType edgeType = new EdgeType(this.tableOutputType, false);
+        EdgeEncoder encoder = new DefaultEdgeEncoder(edgeType);
+        return encoder.encode(edgeDecoded);
+    }
+
+
+    private void initializeProject(RowEdge edge) {
         List<TableField> graphSchemaFieldList = graphSchema.getFields();  //这里是图中的所有表集合
 
         IType<?> outputType = this.getOutputType();
@@ -92,6 +112,9 @@ public class MatchEdgeOperator extends AbstractStepOperator<MatchEdgeFunction, V
 
 
         List<Expression> expressions = new ArrayList<>();  //对于每个表，都需要一个expression
+        int[] currentIndicesMapping = new int[graphSchemaFieldList.size()]; //在当前匹配下，原index到裁剪后index的映射
+        Arrays.fill(currentIndicesMapping, -1);
+
         List<TableField> tableOutputType = null;
         for (TableField tableField : graphSchemaFieldList) {  //枚举所有table，并构造List<Expression>
             if (edge.getLabel().equals(tableField.getName())) {  //table名匹配 (如都为`knows`)
@@ -106,8 +129,15 @@ public class MatchEdgeOperator extends AbstractStepOperator<MatchEdgeFunction, V
                             || columnName.equals("targetId")) {  //存在已经筛选出的字段
                         inputs.add(new FieldExpression(null, i, column.getType()));
                         tableOutputType.add(column);
+                        currentIndicesMapping[i] = inputs.size();  //记录原始索引->新索引的映射
+
                     } else if (columnName.equals("~label")) {  //补充label
                         inputs.add(new LiteralExpression(edge.getLabel(), column.getType()));
+                        tableOutputType.add(column);
+                        currentIndicesMapping[i] = inputs.size();
+                    }
+                    else {  //被剔除掉的特征需要使用null占位
+                        inputs.add(new LiteralExpression(null, column.getType()));
                         tableOutputType.add(column);
                     }
                 }
@@ -117,14 +147,10 @@ public class MatchEdgeOperator extends AbstractStepOperator<MatchEdgeFunction, V
         }
 
         ProjectFunction projectFunction = new ProjectFunctionImpl(expressions);
-        ObjectRow projectEdge = (ObjectRow) projectFunction.project(edge);
-        RowEdge edgeDecoded = (RowEdge) projectEdge.getField(0, null);
 
-        //需要重构Fields，以定义EdgeType，然后再进行encode
-        EdgeType edgeType = new EdgeType(tableOutputType, false);
-        EdgeEncoder encoder = new DefaultEdgeEncoder(edgeType);
+        this.projectFunction = projectFunction;
+        this.tableOutputType = tableOutputType;
 
-        return encoder.encode(edgeDecoded);
     }
 
 

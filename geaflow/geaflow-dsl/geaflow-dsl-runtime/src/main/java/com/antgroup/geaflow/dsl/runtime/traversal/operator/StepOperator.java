@@ -27,10 +27,7 @@ import com.antgroup.geaflow.dsl.runtime.traversal.TraversalRuntimeContext;
 import org.apache.calcite.rex.RexFieldAccess;
 
 import java.io.Serializable;
-import java.util.Collections;
-import java.util.List;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 
 public interface StepOperator<IN extends StepRecord, OUT extends StepRecord> extends Serializable {
 

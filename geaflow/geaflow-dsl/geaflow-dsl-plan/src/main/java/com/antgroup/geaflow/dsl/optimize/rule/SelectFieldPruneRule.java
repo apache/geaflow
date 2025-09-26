@@ -20,6 +20,7 @@
 package com.antgroup.geaflow.dsl.optimize.rule;
 
 import com.antgroup.geaflow.dsl.calcite.PathRecordType;
+import com.antgroup.geaflow.dsl.rel.GraphMatch;
 import com.antgroup.geaflow.dsl.rel.logical.LogicalGraphMatch;
 import com.antgroup.geaflow.dsl.rel.match.*;
 import com.antgroup.geaflow.dsl.rex.PathInputRef;
@@ -32,10 +33,7 @@ import org.apache.calcite.rel.logical.LogicalProject;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeField;
 import org.apache.calcite.rel.type.RelRecordType;
-import org.apache.calcite.rex.RexBuilder;
-import org.apache.calcite.rex.RexFieldAccess;
-import org.apache.calcite.rex.RexInputRef;
-import org.apache.calcite.rex.RexNode;
+import org.apache.calcite.rex.*;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -49,6 +47,38 @@ public class SelectFieldPruneRule extends RelOptRule {
     static {
     PROJECT_INSTANCE = new ProjectPruneRule(LogicalProject.class);
     GRAPH_MATCH_INSTANCE = new GraphMatchPruneRule(LogicalGraphMatch.class);
+    }
+
+    //将只有index作为索引转换为带label的完整fields
+    private static List<RexFieldAccess> convertToPathRefs(List<RexFieldAccess> fieldAccesses, RexBuilder rexBuilder, PathRecordType pathRecordType) {
+        for (int i = 0; i < fieldAccesses.size(); i++) {
+            RexFieldAccess fieldAccess = fieldAccesses.get(i);
+            RexNode referenceExpr = fieldAccess.getReferenceExpr();
+
+            // 只处理输入引用类型的字段访问
+            if (referenceExpr instanceof RexInputRef) {
+                RexInputRef inputRef = (RexInputRef) referenceExpr;
+
+                // 从 PathRecordType 中获取对应的路径字段信息
+                RelDataTypeField pathField = pathRecordType.getFieldList().get(inputRef.getIndex());
+
+                // 创建真正的 PathInputRef
+                PathInputRef pathInputRef = new PathInputRef(
+                        pathField.getName(),     // 路径变量名 (如 "a", "b", "c")
+                        pathField.getIndex(),    // 字段索引
+                        pathField.getType()      // 字段类型
+                );
+
+                // 用新的路径引用重新创建 RexFieldAccess，替换原来的元素
+                RexFieldAccess newFieldAccess = (RexFieldAccess) rexBuilder.makeFieldAccess(
+                        pathInputRef,
+                        fieldAccess.getField().getIndex()
+                );
+                fieldAccesses.set(i, newFieldAccess);
+            }
+        }
+
+        return fieldAccesses;
     }
 
     // 内部类：处理 LogicalProject 的规则并下推
@@ -146,40 +176,10 @@ public class SelectFieldPruneRule extends RelOptRule {
 
             RelDataType inputRowType = project.getInput(0).getRowType();
             PathRecordType pathRecordType = new PathRecordType(inputRowType.getFieldList());
-            //PathRecordType pathRecordType = ((IMatchNode) GQLRelUtil.toRel(project.getInput(0))).getPathSchema();
-            return convertToPathRefs(fieldAccesses, project.getCluster().getRexBuilder(), pathRecordType);
+            //PathRecordType pathRecordType = (PathRecordType) project.getRowType();
+            return SelectFieldPruneRule.convertToPathRefs(fieldAccesses, project.getCluster().getRexBuilder(), pathRecordType);
         }
 
-        private List<RexFieldAccess> convertToPathRefs(List<RexFieldAccess> fieldAccesses, RexBuilder rexBuilder, PathRecordType pathRecordType) {
-            for (int i = 0; i < fieldAccesses.size(); i++) {
-                RexFieldAccess fieldAccess = fieldAccesses.get(i);
-                RexNode referenceExpr = fieldAccess.getReferenceExpr();
-
-                // 只处理输入引用类型的字段访问
-                if (referenceExpr instanceof RexInputRef) {
-                    RexInputRef inputRef = (RexInputRef) referenceExpr;
-
-                    // 从 PathRecordType 中获取对应的路径字段信息
-                    RelDataTypeField pathField = pathRecordType.getFieldList().get(inputRef.getIndex());
-
-                    // 创建真正的 PathInputRef
-                    PathInputRef pathInputRef = new PathInputRef(
-                            pathField.getName(),     // 路径变量名 (如 "a", "b", "c")
-                            pathField.getIndex(),    // 字段索引
-                            pathField.getType()      // 字段类型
-                    );
-
-                    // 用新的路径引用重新创建 RexFieldAccess，替换原来的元素
-                    RexFieldAccess newFieldAccess = (RexFieldAccess) rexBuilder.makeFieldAccess(
-                            pathInputRef,
-                            fieldAccess.getField().getIndex()
-                    );
-                    fieldAccesses.set(i, newFieldAccess);
-                }
-            }
-
-            return fieldAccesses;
-        }
     }
 
 
@@ -195,7 +195,7 @@ public class SelectFieldPruneRule extends RelOptRule {
             LogicalGraphMatch graphMatch = call.rel(0);
             // 处理 LogicalGraphMatch 的优化逻辑
             // 1. 从 LogicalGraphMatch 中提取字段访问信息
-            List<RexFieldAccess> filteredElements = graphMatch.getFilteredElements();
+            List<RexFieldAccess> filteredElements = getFilteredElements(graphMatch);
 
             // 2. 将筛选信息传递给 LogicalGraphMatch
             if (!filteredElements.isEmpty()) {
@@ -203,5 +203,59 @@ public class SelectFieldPruneRule extends RelOptRule {
             }
         }
 
+
+        public List<RexFieldAccess> getFilteredElements(GraphMatch graphMatch) {
+            List<RexFieldAccess> rawFields = extractFromMatchNode(graphMatch.getPathPattern()); //递归提取condition中的属性使用
+
+            //RelDataType inputRowType = graphMatch.getInput(0).getRowType();
+            //PathRecordType pathRecordType = new PathRecordType(inputRowType.getFieldList());
+            PathRecordType pathRecordType = (PathRecordType) graphMatch.getRowType();  //获取边的Type类型
+            return SelectFieldPruneRule.convertToPathRefs(rawFields, graphMatch.getCluster().getRexBuilder(), pathRecordType);
         }
+
+        /**
+         * 递归遍历MatchNode提取RexFieldAccess
+         */
+        private List<RexFieldAccess> extractFromMatchNode(IMatchNode matchNode) {
+            //这里只会提取MatchFilter的字段
+            /*if (matchNode instanceof MatchFilter) {
+                MatchFilter filter = (MatchFilter) matchNode;
+                return extractFromRexNode(filter.getCondition());
+            }*/
+            IMatchNode currentNode = matchNode;
+            List<RexFieldAccess> allFilteredFields = new ArrayList<>();
+
+            while (currentNode != null) { //这里默认所有RexNode均为线性结构，不存在多个children
+                if (currentNode instanceof MatchFilter) {
+                    MatchFilter filterNode = (MatchFilter) currentNode;
+                    allFilteredFields.addAll(extractFromRexNode(filterNode.getCondition()));
+                }
+
+                if (currentNode.getInputs() == null || currentNode.getInputs().isEmpty()) {
+                    break; // 没有子节点，退出循环
+                }
+                currentNode = (IMatchNode) currentNode.getInput(0);
+            }
+            return allFilteredFields;
+        }
+
+        /**
+         * 从RexNode中提取RexFieldAccess
+         */
+        private List<RexFieldAccess> extractFromRexNode(RexNode rexNode) {
+            List<RexFieldAccess> fields = new ArrayList<>();
+            if (rexNode instanceof RexCall) {
+                RexCall rexCall = (RexCall) rexNode;
+                for (RexNode operand : rexCall.getOperands()) {
+                    if (operand instanceof RexFieldAccess) {
+                        fields.add((RexFieldAccess) operand);
+                    } else if (operand instanceof RexCall) {
+                        // 递归处理嵌套的RexCall
+                        fields.addAll(extractFromRexNode(operand));
+                    }
+                }
+            }
+            return fields;
+        }
+    }
 }
