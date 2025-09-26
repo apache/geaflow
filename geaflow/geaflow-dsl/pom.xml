@@ -44,7 +44,7 @@
     </modules>
 
     <properties>
-        <calcite.version>1.18.0-geaflow_1.0</calcite.version>
+        <calcite.version>1.18.0-geaflow_1.1</calcite.version>
         <kafka.version>2.4.1</kafka.version>
         <kafka.scala.binary.version>2.11</kafka.scala.binary.version>
         <h2.version>2.1.214</h2.version>

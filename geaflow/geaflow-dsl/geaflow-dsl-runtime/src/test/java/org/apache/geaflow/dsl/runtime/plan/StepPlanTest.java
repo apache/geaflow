@@ -175,7 +175,7 @@ public class StepPlanTest {
     }
 
     private GraphSchema createGraph() {
-        TableField idField = new TableField("id", Types.of("Long"), false);
+        TableField idField = new TableField("id", Types.of("Long", -1), false);
         VertexTable vTable = new VertexTable("default", "testV", Collections.singletonList(idField), "id");
         GeaFlowGraph graph = new GeaFlowGraph("default", "test", Lists.newArrayList(vTable),
             new ArrayList<>(), new HashMap<>(), new HashMap<>(), false, false);

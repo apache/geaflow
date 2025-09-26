@@ -38,7 +38,9 @@ import org.apache.geaflow.dsl.runtime.RuntimeTable;
 import org.apache.geaflow.dsl.runtime.expression.ExpressionTranslator;
 import org.apache.geaflow.dsl.runtime.expression.field.FieldExpression;
 import org.apache.geaflow.dsl.runtime.function.table.OrderByFunction;
-import org.apache.geaflow.dsl.runtime.function.table.OrderByFunctionImpl;
+import org.apache.geaflow.dsl.runtime.function.table.OrderByHeapSort;
+import org.apache.geaflow.dsl.runtime.function.table.OrderByRadixSort;
+import org.apache.geaflow.dsl.runtime.function.table.OrderByTimSort;
 import org.apache.geaflow.dsl.runtime.function.table.order.OrderByField;
 import org.apache.geaflow.dsl.runtime.function.table.order.OrderByField.ORDER;
 import org.apache.geaflow.dsl.runtime.function.table.order.SortInfo;
@@ -69,8 +71,15 @@ public class PhysicSortRelNode extends Sort implements PhysicRelNode<RuntimeTabl
     public RuntimeTable translate(QueryContext context) {
         SortInfo sortInfo = buildSortInfo();
         RDataView dataView = ((PhysicRelNode<?>) getInput()).translate(context);
-
-        OrderByFunction orderByFunction = new OrderByFunctionImpl(sortInfo);
+        
+        OrderByFunction orderByFunction;
+        if (sortInfo.fetch > 0) {
+            orderByFunction = new OrderByHeapSort(sortInfo);
+        } else if (sortInfo.isRadixSortable()) {
+            orderByFunction = new OrderByRadixSort(sortInfo);
+        } else {
+            orderByFunction = new OrderByTimSort(sortInfo);
+        }
         if (dataView.getType() == ViewType.TABLE) {
             return ((RuntimeTable) dataView).orderBy(orderByFunction);
         } else {
