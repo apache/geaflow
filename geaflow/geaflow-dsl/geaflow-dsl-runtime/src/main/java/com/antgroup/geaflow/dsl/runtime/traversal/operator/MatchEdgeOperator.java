@@ -81,6 +81,10 @@ public class MatchEdgeOperator extends AbstractStepOperator<MatchEdgeFunction, V
             initializeProject(edge);
         }
 
+        if (edge == null) {  //找不到符合条件节点，无法映射
+            return null;
+        }
+
         //进行projection
         ObjectRow projectEdge = (ObjectRow) this.projectFunction.project(edge); //通过project进行属性筛选
         RowEdge edgeDecoded = (RowEdge) projectEdge.getField(0, null);
@@ -121,10 +125,22 @@ public class MatchEdgeOperator extends AbstractStepOperator<MatchEdgeFunction, V
 
                 List<Expression> inputs = new ArrayList<>();
                 tableOutputType = new ArrayList<>();
+                String edgeLabel = edge.getLabel();
 
                 for (int i = 0; i < fieldsOfTable.size(); i++) { //枚举表格内不同字段，并做属性筛选
                     TableField column = fieldsOfTable.get(i);
                     String columnName = column.getName();
+
+                    //标准化，将形如personId改为id
+                    if (columnName.startsWith(edgeLabel)) {
+                        String suffix = columnName.substring(edgeLabel.length());
+                        if (!suffix.isEmpty()) {
+                            suffix = Character.toLowerCase(suffix.charAt(0)) + suffix.substring(1);
+                            columnName = suffix;
+                        }
+                    }
+
+
                     if (fieldNames.contains(columnName) || columnName.equals("srcId")
                             || columnName.equals("targetId")) {  //存在已经筛选出的字段
                         inputs.add(new FieldExpression(null, i, column.getType()));
@@ -173,7 +189,7 @@ public class MatchEdgeOperator extends AbstractStepOperator<MatchEdgeFunction, V
         if (needAddToPath) {
             int numEdge = 0;
             for (RowEdge edge : edgeGroup) {
-                edge =  projectEdge(edge); //替换原有变
+                //edge =  projectEdge(edge); //替换原有边
 
                 // add edge to path.
                 if (!targetTreePaths.containsKey(edge.getTargetId())) {

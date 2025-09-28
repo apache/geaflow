@@ -24,6 +24,7 @@ import com.antgroup.geaflow.dsl.rel.GraphMatch;
 import com.antgroup.geaflow.dsl.rel.logical.LogicalGraphMatch;
 import com.antgroup.geaflow.dsl.rel.match.*;
 import com.antgroup.geaflow.dsl.rex.PathInputRef;
+import com.antgroup.geaflow.dsl.schema.function.GeaFlowUserDefinedScalarFunction;
 import com.antgroup.geaflow.dsl.util.GQLRelUtil;
 import org.apache.calcite.plan.RelOptRule;
 import org.apache.calcite.plan.RelOptRuleCall;
@@ -170,9 +171,25 @@ public class SelectFieldPruneRule extends RelOptRule {
         //从LogicalProject中提取字段并转换为语义信息($0.id -> a.id)
         private List<RexFieldAccess> extractFields(LogicalProject project) {
             List<RexNode> fields = project.getChildExps();
-            final List<RexFieldAccess> fieldAccesses = fields.stream()
-                    .map(node -> (RexFieldAccess) node)
-                    .collect(Collectors.toList());
+            List<RexFieldAccess> fieldAccesses = new ArrayList<>();
+            for (RexNode node : fields) {
+                if (node instanceof RexFieldAccess) { //如果可以直接转换
+                    fieldAccesses.add((RexFieldAccess) node);
+                } else if (node instanceof RexCall) {  //自定义方法，需要提取元素转换
+                    RexCall rexCall = (RexCall) node;
+                    RexNode ref = rexCall.getOperands().get(0); //获取哪个表
+                    String fieldName = rexCall.getOperator().getName();  //获取字段名
+                    fieldName = "id".equals(fieldName)     ? "~id" :  //特殊字段手动替换
+                                "label".equals(fieldName)  ? "~label" :
+                                "srcId".equals(fieldName)  ? "~srcId" :
+                                "targetId".equals(fieldName)  ? "~targetId" :
+                                fieldName;
+                    RexBuilder rexBuilder = project.getCluster().getRexBuilder();
+                    fieldAccesses.add((RexFieldAccess) rexBuilder.makeFieldAccess(ref, fieldName, false));
+                } else{
+                    throw new IllegalArgumentException("Unsupported type: " + node.getClass());
+                }
+            }
 
             RelDataType inputRowType = project.getInput(0).getRowType();
             PathRecordType pathRecordType = new PathRecordType(inputRowType.getFieldList());

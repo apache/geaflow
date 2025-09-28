@@ -90,6 +90,10 @@ public class MatchVertexOperator extends AbstractStepOperator<MatchVertexFunctio
     }
 
     private RowVertex projectVertex(RowVertex vertex){
+        if (vertex == null) {  //找不到符合条件节点，无法映射
+            return null;
+        }
+
         if (this.projectFunction== null) {
             initializeProject(vertex);
         }
@@ -130,10 +134,21 @@ public class MatchVertexOperator extends AbstractStepOperator<MatchVertexFunctio
             if (vertex.getLabel().equals(tableField.getName())){  //table名匹配 (如都为`person`)
 
                 List<Expression> inputs = new ArrayList<>();
+                String vertexLabel = vertex.getLabel();
 
                 for (int i = 0; i < fieldsOfTable.size(); i++) { //枚举表格内不同字段，并做属性筛选
                     TableField column = fieldsOfTable.get(i);
                     String columnName = column.getName();
+
+                    //标准化，将形如personId改为id
+                    if (columnName.startsWith(vertexLabel)) {
+                        String suffix = columnName.substring(vertexLabel.length());
+                        if (!suffix.isEmpty()) {
+                            suffix = Character.toLowerCase(suffix.charAt(0)) + suffix.substring(1);
+                            columnName = suffix;
+                        }
+                    }
+
                     if (fieldNames.contains(columnName) || columnName.equals("id")) {  //存在已经筛选出的字段或是特殊的Id字段
                         inputs.add(new FieldExpression(null, i, column.getType()));
                         tableOutputType.add(column);
