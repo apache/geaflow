@@ -505,7 +505,7 @@
                         <executions>
                             <execution>
                                 <id>source-release-assembly</id>
-                                <phase>package</phase> <!-- 改为package或其他合适的阶段 -->
+                                <phase>package</phase>
                                 <goals>
                                     <goal>single</goal>
                                 </goals>
