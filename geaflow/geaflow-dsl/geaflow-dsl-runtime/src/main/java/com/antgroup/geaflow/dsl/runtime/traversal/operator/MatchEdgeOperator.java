@@ -189,7 +189,7 @@ public class MatchEdgeOperator extends AbstractStepOperator<MatchEdgeFunction, V
         if (needAddToPath) {
             int numEdge = 0;
             for (RowEdge edge : edgeGroup) {
-                //edge =  projectEdge(edge); //替换原有边
+                edge =  projectEdge(edge); //替换原有边
 
                 // add edge to path.
                 if (!targetTreePaths.containsKey(edge.getTargetId())) {
