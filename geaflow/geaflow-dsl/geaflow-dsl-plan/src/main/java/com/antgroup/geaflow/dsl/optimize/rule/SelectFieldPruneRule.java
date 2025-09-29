@@ -50,6 +50,11 @@ public class SelectFieldPruneRule extends RelOptRule {
     GRAPH_MATCH_INSTANCE = new GraphMatchPruneRule(LogicalGraphMatch.class);
     }
 
+    //尝试通过thread判断是否访问过
+    public static void resetState() {
+        ProjectPruneRule.visitedProjectsThreadLocal.remove();
+    }
+
     //将只有index作为索引转换为带label的完整fields
     private static List<RexFieldAccess> convertToPathRefs(List<RexFieldAccess> fieldAccesses, RexBuilder rexBuilder, PathRecordType pathRecordType) {
         for (int i = 0; i < fieldAccesses.size(); i++) {
@@ -140,8 +145,10 @@ public class SelectFieldPruneRule extends RelOptRule {
     // 内部类：处理 LogicalProject 的规则
     private static class ProjectPruneRule extends SelectFieldPruneRule {
 
-        private final Set<RelDataType> visitedProjects =
-                Collections.newSetFromMap(new IdentityHashMap<>());
+        // 使用 ThreadLocal 替代实例字段
+        private static final ThreadLocal<Set<RelDataType>> visitedProjectsThreadLocal =
+                ThreadLocal.withInitial(() -> Collections.newSetFromMap(new IdentityHashMap<>()));
+
         private ProjectPruneRule(Class<? extends LogicalProject> clazz) {
             super(operand(clazz, operand(LogicalGraphMatch.class, any())),
                     "SelectFieldPruneRule(Project2GraphMatch)");
@@ -152,6 +159,9 @@ public class SelectFieldPruneRule extends RelOptRule {
         public void onMatch(RelOptRuleCall call) {
             LogicalProject project = call.rel(0);           // 获取 LogicalProject
             LogicalGraphMatch graphMatch = call.rel(1);     // 获取 LogicalGraphMatch (直接子节点)
+
+            // 从 ThreadLocal 获取当前线程的 visitedProjects
+            Set<RelDataType> visitedProjects = visitedProjectsThreadLocal.get();
 
             // 检查是否已经访问过，并标记
             if (visitedProjects.contains(project.getRowType())) {

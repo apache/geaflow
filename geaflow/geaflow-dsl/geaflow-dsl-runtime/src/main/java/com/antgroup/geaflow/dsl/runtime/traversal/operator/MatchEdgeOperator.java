@@ -77,12 +77,12 @@ public class MatchEdgeOperator extends AbstractStepOperator<MatchEdgeFunction, V
     }
 
     private RowEdge projectEdge(RowEdge edge) {
-        if (this.projectFunction== null) {
-            initializeProject(edge);
-        }
-
         if (edge == null) {  //找不到符合条件节点，无法映射
             return null;
+        }
+
+        if (this.projectFunction== null) {
+            initializeProject(edge);
         }
 
         //进行projection

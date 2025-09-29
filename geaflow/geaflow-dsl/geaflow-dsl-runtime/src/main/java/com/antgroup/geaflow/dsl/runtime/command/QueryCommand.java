@@ -23,6 +23,7 @@ import com.antgroup.geaflow.dsl.common.binary.decoder.DefaultRowDecoder;
 import com.antgroup.geaflow.dsl.common.binary.decoder.RowDecoder;
 import com.antgroup.geaflow.dsl.common.data.Row;
 import com.antgroup.geaflow.dsl.common.types.StructType;
+import com.antgroup.geaflow.dsl.optimize.rule.SelectFieldPruneRule;
 import com.antgroup.geaflow.dsl.planner.GQLContext;
 import com.antgroup.geaflow.dsl.runtime.QueryContext;
 import com.antgroup.geaflow.dsl.runtime.QueryResult;
@@ -62,6 +63,7 @@ public class QueryCommand implements IQueryCommand {
         RelNode logicalPlan = gqlContext.toRelNode(validateQuery);
         LOGGER.info("Convert sql to logical plan:\n{}", RelOptUtil.toString(logicalPlan));
 
+        SelectFieldPruneRule.resetState(); //尝试清空状态
         RelNode optimizedNode = gqlContext.optimize(context.getLogicalRules(), logicalPlan);
         LOGGER.info("After optimize logical plan:\n{}", RelOptUtil.toString(optimizedNode));
 
