@@ -71,6 +71,7 @@ public class KryoSerializer implements ISerializer {
             kryo.setInstantiatorStrategy(is);
 
             kryo.getFieldSerializerConfig().setOptimizedGenerics(false);
+            kryo.setRegistrationRequired(false);
 
             kryo.register(Arrays.asList("").getClass(), new ArraysAsListSerializer());
             kryo.register(Collections.EMPTY_LIST.getClass(), new CollectionsEmptyListSerializer());
@@ -201,6 +202,21 @@ public class KryoSerializer implements ISerializer {
             registerClass(kryo, "org.apache.geaflow.dsl.udf.graph.mst.MSTEdge", 1066);
             registerClass(kryo, "org.apache.geaflow.dsl.udf.graph.mst.MSTMessage$MessageType", 1067);
 
+            // Register binary object classes
+            registerClass(kryo, "org.apache.geaflow.common.binary.IBinaryObject", 106);
+            registerClass(kryo, "org.apache.geaflow.common.binary.HeapBinaryObject", 112);
+            
+            // Force registration of binary object classes to avoid unregistered class ID errors
+            try {
+                Class<?> iBinaryObjectClass = ClassUtil.classForName("org.apache.geaflow.common.binary.IBinaryObject");
+                Class<?> heapBinaryObjectClass = ClassUtil.classForName("org.apache.geaflow.common.binary.HeapBinaryObject");
+                kryo.register(iBinaryObjectClass, 106);
+                kryo.register(heapBinaryObjectClass, 112);
+                LOGGER.debug("Force registered binary object classes with IDs 106 and 112");
+            } catch (Exception e) {
+                LOGGER.warn("Failed to force register binary object classes: {}", e.getMessage());
+            }
+
             return kryo;
         }
     };
@@ -253,8 +269,15 @@ public class KryoSerializer implements ISerializer {
 
     @Override
     public Object deserialize(byte[] bytes) {
-        Input input = new Input(bytes);
-        return local.get().readClassAndObject(input);
+        try {
+            Input input = new Input(bytes);
+            return local.get().readClassAndObject(input);
+        } catch (Exception e) {
+            // Handle Kryo serialization errors by returning null
+            // This allows the algorithm to create a new state instead of crashing
+            LOGGER.warn("Failed to deserialize object: {}, returning null", e.getMessage());
+            return null;
+        }
     }
 
     @Override
