@@ -120,36 +120,59 @@ public class RpcClient implements Serializable {
     public <T> void registerContainer(String masterId, T info,
                                       RpcCallback<RegisterResponse> callback) {
         doRpcWithRetry(() -> {
-            connectMaster(masterId).registerContainer(info,
-                new DefaultRpcCallbackImpl<>(callback, masterId, haService));
+            MasterEndpointRef endpointRef = connectMaster(masterId);
+            if (endpointRef == null) {
+                LOGGER.warn("Cannot register container with master {}: endpoint not available", masterId);
+                return;
+            }
+            endpointRef.registerContainer(info, new DefaultRpcCallbackImpl<>(callback, masterId, haService));
         }, masterId, MASTER);
     }
 
     public void sendHeartBeat(String masterId, Heartbeat heartbeat,
                               RpcCallback<HeartbeatResponse> callback) {
         doRpcWithRetry(() -> {
-            connectMaster(masterId).sendHeartBeat(heartbeat,
-                new DefaultRpcCallbackImpl<>(callback, masterId, haService));
+            MasterEndpointRef endpointRef = connectMaster(masterId);
+            if (endpointRef == null) {
+                LOGGER.warn("Cannot send heartbeat to master {}: endpoint not available", masterId);
+                return;
+            }
+            endpointRef.sendHeartBeat(heartbeat, new DefaultRpcCallbackImpl<>(callback, masterId, haService));
         }, masterId, MASTER);
     }
 
     public Empty sendException(String masterId, Integer containerId, String containerName,
                                Throwable throwable) {
-        return doRpcWithRetry(
-            () -> connectMaster(masterId).sendException(containerId, containerName,
-                throwable.getMessage()), masterId, MASTER);
+        return doRpcWithRetry(() -> {
+            MasterEndpointRef endpointRef = connectMaster(masterId);
+            if (endpointRef == null) {
+                LOGGER.warn("Cannot send exception to master {}: endpoint not available", masterId);
+                return Empty.getDefaultInstance();
+            }
+            return endpointRef.sendException(containerId, containerName, throwable.getMessage());
+        }, masterId, MASTER);
     }
 
     // Container endpoint ref.
     public Future processContainer(String containerId, IEvent event) {
-        return doRpcWithRetry(() -> connectContainer(containerId).process(event,
-            new DefaultRpcCallbackImpl(null, containerId, haService)), containerId, CONTAINER);
+        return doRpcWithRetry(() -> {
+            ContainerEndpointRef endpointRef = connectContainer(containerId);
+            if (endpointRef == null) {
+                LOGGER.warn("Cannot process container event for {}: endpoint not available", containerId);
+                return null;
+            }
+            return endpointRef.process(event, new DefaultRpcCallbackImpl(null, containerId, haService));
+        }, containerId, CONTAINER);
     }
 
     public void processContainer(String containerId, IEvent event, RpcCallback<Response> callback) {
         doRpcWithRetry(() -> {
-            connectContainer(containerId).process(event,
-                new DefaultRpcCallbackImpl<>(callback, containerId, haService));
+            ContainerEndpointRef endpointRef = connectContainer(containerId);
+            if (endpointRef == null) {
+                LOGGER.warn("Cannot process container event for {}: endpoint not available", containerId);
+                return;
+            }
+            endpointRef.process(event, new DefaultRpcCallbackImpl<>(callback, containerId, haService));
         }, containerId, CONTAINER);
     }
 
@@ -203,19 +226,38 @@ public class RpcClient implements Serializable {
 
     // Close endpoint connection.
     public void closeMasterConnection(String masterId) {
-        connectMaster(masterId).closeEndpoint();
+        MasterEndpointRef endpointRef = connectMaster(masterId);
+        if (endpointRef != null) {
+            endpointRef.closeEndpoint();
+        } else {
+            LOGGER.debug("No endpoint reference found for master: {}, skipping close", masterId);
+        }
     }
 
     public void closeDriverConnection(String driverId) {
-        connectDriver(driverId).closeEndpoint();
+        DriverEndpointRef endpointRef = connectDriver(driverId);
+        if (endpointRef != null) {
+            endpointRef.closeEndpoint();
+        } else {
+            LOGGER.debug("No endpoint reference found for driver: {}, skipping close", driverId);
+        }
     }
 
     public void closeContainerConnection(String containerId) {
-        connectContainer(containerId).closeEndpoint();
+        ContainerEndpointRef endpointRef = connectContainer(containerId);
+        if (endpointRef != null) {
+            endpointRef.closeEndpoint();
+        } else {
+            LOGGER.debug("No endpoint reference found for container: {}, skipping close", containerId);
+        }
     }
 
     private MasterEndpointRef connectMaster(String masterId) {
         ResourceData resourceData = getResourceData(masterId);
+        if (resourceData == null) {
+            LOGGER.warn("Resource data not found for master: {}, skipping connection", masterId);
+            return null;
+        }
         return refFactory.connectMaster(resourceData.getHost(), resourceData.getRpcPort());
     }
 
@@ -226,11 +268,19 @@ public class RpcClient implements Serializable {
 
     private DriverEndpointRef connectDriver(String driverId) {
         ResourceData resourceData = getResourceData(driverId);
+        if (resourceData == null) {
+            LOGGER.warn("Resource data not found for driver: {}, skipping connection", driverId);
+            return null;
+        }
         return refFactory.connectDriver(resourceData.getHost(), resourceData.getRpcPort());
     }
 
     private ContainerEndpointRef connectContainer(String containerId) {
         ResourceData resourceData = getResourceData(containerId);
+        if (resourceData == null) {
+            LOGGER.warn("Resource data not found for container: {}, skipping connection", containerId);
+            return null;
+        }
         return refFactory.connectContainer(resourceData.getHost(), resourceData.getRpcPort());
     }
 
@@ -311,7 +361,15 @@ public class RpcClient implements Serializable {
     }
 
     protected ResourceData getResourceData(String resourceId) {
-        return haService.resolveResource(resourceId);
+        if (haService == null) {
+            LOGGER.warn("HAService is not initialized, cannot resolve resource: {}", resourceId);
+            return null;
+        }
+        ResourceData resourceData = haService.resolveResource(resourceId);
+        if (resourceData == null) {
+            LOGGER.warn("Resource data not found for resource: {}", resourceId);
+        }
+        return resourceData;
     }
 
     public ExecutorService getExecutor() {

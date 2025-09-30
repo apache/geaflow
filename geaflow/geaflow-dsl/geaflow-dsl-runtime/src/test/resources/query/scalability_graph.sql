@@ -17,31 +17,29 @@
  * under the License.
  */
 
-CREATE TABLE kafka_source (
-	id bigint,
-	name varchar,
-	age long
-) WITH (
-	type='kafka',
-	geaflow.dsl.kafka.servers = 'localhost:9092',
-	geaflow.dsl.kafka.topic = 'scan_002',
-	geaflow.dsl.kafka.data.operation.timeout.seconds = 5,
-	geaflow.dsl.time.window.size=10,
-	geaflow.dsl.start.time='${stTime}'
-);
-
-CREATE TABLE tbl_result (
-	id bigint,
-	name varchar,
-	age long
+CREATE TABLE v_scalability_node (
+  name varchar,
+  id bigint
 ) WITH (
 	type='file',
-	geaflow.dsl.file.path='${target}'
+	geaflow.dsl.window.size = -1,
+	geaflow.dsl.file.path = 'resource:///data/scalability_vertex.txt'
 );
 
-INSERT INTO tbl_result
-SELECT DISTINCT id, name, age
-FROM kafka_source
-ORDER BY id
-LIMIT 5
-;
+CREATE TABLE e_scalability_edge (
+  srcId bigint,
+  targetId bigint,
+  weight double
+) WITH (
+	type='file',
+	geaflow.dsl.window.size = -1,
+	geaflow.dsl.file.path = 'resource:///data/scalability_edge.txt'
+);
+
+CREATE GRAPH scalability_graph (
+	Vertex node using v_scalability_node WITH ID(id),
+	Edge connects using e_scalability_edge WITH ID(srcId, targetId)
+) WITH (
+	storeType='memory',
+	shardCount = 8
+);
