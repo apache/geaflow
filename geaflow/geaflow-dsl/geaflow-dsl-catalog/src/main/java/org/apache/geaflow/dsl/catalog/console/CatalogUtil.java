@@ -98,7 +98,7 @@ public class CatalogUtil {
                 idFieldName = fieldModel.getName();
             }
             String typeName = convertTypeName(fieldModel.getType().name());
-            IType<?> fieldType = Types.of(typeName);
+            IType<?> fieldType = Types.of(typeName, -1);
             TableField field = new TableField(fieldModel.getName(), fieldType, false);
             fields.add(field);
         }
@@ -154,7 +154,7 @@ public class CatalogUtil {
                 default:
             }
             String typeName = convertTypeName(fieldModel.getType().name());
-            IType<?> fieldType = Types.of(typeName);
+            IType<?> fieldType = Types.of(typeName, -1);
             TableField field = new TableField(fieldModel.getName(), fieldType, false);
             fields.add(field);
         }
@@ -237,7 +237,7 @@ public class CatalogUtil {
         List<TableField> fields = new ArrayList<>(fieldModels.size());
         for (FieldModel fieldModel : fieldModels) {
             String typeName = convertTypeName(fieldModel.getType().name());
-            IType<?> fieldType = Types.of(typeName);
+            IType<?> fieldType = Types.of(typeName, -1);
             TableField field = new TableField(fieldModel.getName(), fieldType, false);
             fields.add(field);
         }
