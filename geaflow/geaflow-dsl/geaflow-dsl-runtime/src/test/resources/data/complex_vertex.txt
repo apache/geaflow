@@ -1,8 +1,8 @@
-1	person	0.8	user
-2	person	0.9	admin
-3	person	0.7	user
-4	person	0.6	moderator
-5	person	0.5	user
-6	person	0.4	guest
-7	person	0.3	user
-8	person	0.2	admin
+complex1,4001
+complex2,4002
+complex3,4003
+complex4,4004
+complex5,4005
+complex6,4006
+complex7,4007
+complex8,4008

@@ -3,7 +3,9 @@
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
  * regarding copyright ownership.  The ASF licenses this file
- * to you under the License.  You may obtain a copy of the License at
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
  *   http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -15,33 +17,29 @@
  * under the License.
  */
 
--- 大图定义，用于测试增量K-Core算法的性能
-
-CREATE TABLE v_large_nodes (
-  id bigint,
-  label varchar,
-  weight double
+CREATE TABLE v_large_node (
+  name varchar,
+  id bigint
 ) WITH (
-type='file',
-geaflow.dsl.window.size = -1,
-geaflow.dsl.file.path = 'resource:///data/large_vertex.txt'
+	type='file',
+	geaflow.dsl.window.size = -1,
+	geaflow.dsl.file.path = 'resource:///data/large_vertex.txt'
 );
 
-CREATE TABLE e_large_edges (
+CREATE TABLE e_large_edge (
   srcId bigint,
   targetId bigint,
-  weight double,
-  timestamp bigint
+  weight double
 ) WITH (
-type='file',
-geaflow.dsl.window.size = -1,
-geaflow.dsl.file.path = 'resource:///data/large_edge.txt'
+	type='file',
+	geaflow.dsl.window.size = -1,
+	geaflow.dsl.file.path = 'resource:///data/large_edge.txt'
 );
 
 CREATE GRAPH large_graph (
-Vertex nodes using v_large_nodes WITH ID(id),
-Edge edges using e_large_edges WITH ID(srcId, targetId)
+	Vertex node using v_large_node WITH ID(id),
+	Edge connects using e_large_edge WITH ID(srcId, targetId)
 ) WITH (
-storeType='memory',
-shardCount = 8
+	storeType='memory',
+	shardCount = 4
 );

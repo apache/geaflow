@@ -19,10 +19,15 @@
 
 package org.apache.geaflow.store.paimon;
 
+import static org.apache.geaflow.store.paimon.config.PaimonConfigKeys.PAIMON_STORE_DISTRIBUTED_MODE_ENABLE;
+import static org.apache.geaflow.store.paimon.config.PaimonConfigKeys.PAIMON_STORE_TABLE_AUTO_CREATE_ENABLE;
+
 import org.apache.geaflow.common.config.keys.ExecutionConfigKeys;
+import org.apache.geaflow.common.exception.GeaflowRuntimeException;
 import org.apache.geaflow.store.IStatefulStore;
 import org.apache.geaflow.store.api.graph.BaseGraphStore;
 import org.apache.geaflow.store.context.StoreContext;
+import org.apache.paimon.catalog.Catalog.TableNotExistException;
 import org.apache.paimon.catalog.Identifier;
 import org.apache.paimon.schema.Schema;
 import org.apache.paimon.table.Table;
@@ -42,19 +47,25 @@ public abstract class BasePaimonStore extends BaseGraphStore implements IStatefu
     protected static final String DIRECTION_COLUMN_NAME = "direction";
     protected static final String LABEL_COLUMN_NAME = "label";
 
-    protected PaimonTableCatalogClient client;
+    protected PaimonCatalogClient client;
     protected int shardId;
     protected String jobName;
     protected String paimonStoreName;
     protected long lastCheckpointId;
+    protected boolean isDistributedMode;
+    protected boolean enableAutoCreate;
 
     @Override
     public void init(StoreContext storeContext) {
         this.shardId = storeContext.getShardId();
         this.jobName = storeContext.getConfig().getString(ExecutionConfigKeys.JOB_APP_NAME);
         this.paimonStoreName = this.jobName + "#" + this.shardId;
-        this.client = new PaimonTableCatalogClient(storeContext.getConfig());
+        this.client = PaimonCatalogManager.getCatalogClient(storeContext.getConfig());
         this.lastCheckpointId = Long.MAX_VALUE;
+        this.isDistributedMode = storeContext.getConfig()
+            .getBoolean(PAIMON_STORE_DISTRIBUTED_MODE_ENABLE);
+        this.enableAutoCreate = storeContext.getConfig()
+            .getBoolean(PAIMON_STORE_TABLE_AUTO_CREATE_ENABLE);
     }
 
     @Override
@@ -68,13 +79,23 @@ public abstract class BasePaimonStore extends BaseGraphStore implements IStatefu
     }
 
     protected PaimonTableRWHandle createKVTableHandle(Identifier identifier) {
-        Schema.Builder schemaBuilder = Schema.newBuilder();
-        schemaBuilder.primaryKey(KEY_COLUMN_NAME);
-        schemaBuilder.column(KEY_COLUMN_NAME, DataTypes.BYTES());
-        schemaBuilder.column(VALUE_COLUMN_NAME, DataTypes.BYTES());
-        Schema schema = schemaBuilder.build();
-        Table vertexTable = this.client.createTable(schema, identifier);
-        return new PaimonTableRWHandle(identifier, vertexTable);
+        Table vertexTable;
+        try {
+            vertexTable = this.client.getTable(identifier);
+        } catch (TableNotExistException e) {
+            if (enableAutoCreate) {
+                Schema.Builder schemaBuilder = Schema.newBuilder();
+                schemaBuilder.primaryKey(KEY_COLUMN_NAME);
+                schemaBuilder.column(KEY_COLUMN_NAME, DataTypes.BYTES());
+                schemaBuilder.column(VALUE_COLUMN_NAME, DataTypes.BYTES());
+                Schema schema = schemaBuilder.build();
+                vertexTable = this.client.createTable(schema, identifier);
+            } else {
+                throw new GeaflowRuntimeException("Table " + identifier + " not exist.");
+            }
+        }
+
+        return new PaimonTableRWHandle(identifier, vertexTable, shardId, isDistributedMode);
     }
 
     protected PaimonTableRWHandle createEdgeTableHandle(Identifier identifier) {
@@ -92,7 +113,7 @@ public abstract class BasePaimonStore extends BaseGraphStore implements IStatefu
         schemaBuilder.column(VALUE_COLUMN_NAME, DataTypes.BYTES());
         Schema schema = schemaBuilder.build();
         Table vertexTable = this.client.createTable(schema, identifier);
-        return new PaimonTableRWHandle(identifier, vertexTable);
+        return new PaimonTableRWHandle(identifier, vertexTable, shardId);
     }
 
     protected PaimonTableRWHandle createVertexTableHandle(Identifier identifier) {
@@ -104,6 +125,6 @@ public abstract class BasePaimonStore extends BaseGraphStore implements IStatefu
         schemaBuilder.column(VALUE_COLUMN_NAME, DataTypes.BYTES());
         Schema schema = schemaBuilder.build();
         Table vertexTable = this.client.createTable(schema, identifier);
-        return new PaimonTableRWHandle(identifier, vertexTable);
+        return new PaimonTableRWHandle(identifier, vertexTable, shardId);
     }
 }

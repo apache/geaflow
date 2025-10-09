@@ -27,7 +27,7 @@ import org.apache.geaflow.common.config.Configuration;
 import org.apache.geaflow.common.config.keys.ExecutionConfigKeys;
 import org.apache.geaflow.file.FileConfigKeys;
 import org.apache.geaflow.state.descriptor.KeyMapStateDescriptor;
-import org.apache.geaflow.store.paimon.PaimonConfigKeys;
+import org.apache.geaflow.store.paimon.config.PaimonConfigKeys;
 import org.apache.geaflow.utils.keygroup.DefaultKeyGroupAssigner;
 import org.apache.geaflow.utils.keygroup.KeyGroup;
 import org.testng.Assert;
@@ -46,7 +46,10 @@ public class PaimonKeyStateTest {
         config.put(ExecutionConfigKeys.JOB_APP_NAME.getKey(), "PaimonKeyStateTest");
         config.put(FileConfigKeys.PERSISTENT_TYPE.getKey(), "LOCAL");
         config.put(FileConfigKeys.ROOT.getKey(), "/tmp/geaflow/chk/");
-        config.put(PaimonConfigKeys.PAIMON_OPTIONS_WAREHOUSE.getKey(), "file:///tmp/PaimonKeyStateTest/");
+        config.put(PaimonConfigKeys.PAIMON_STORE_WAREHOUSE.getKey(), "file:///tmp"
+            + "/PaimonKeyStateTest/");
+        config.put(PaimonConfigKeys.PAIMON_STORE_DISTRIBUTED_MODE_ENABLE.getKey(), "false");
+        config.put(PaimonConfigKeys.PAIMON_STORE_TABLE_AUTO_CREATE_ENABLE.getKey(), "true");
     }
 
     @AfterClass
@@ -72,7 +75,7 @@ public class PaimonKeyStateTest {
         Assert.assertEquals(mapState.get("hello").size(), 0);
         // commit chk = 1, now be able to read data.
         mapState.manage().operate().archive();
-        Assert.assertEquals(mapState.get("hello").size(), 4);
+        Assert.assertEquals(mapState.get("hello").size(), 6);
 
         // set chk = 2
         mapState.manage().operate().setCheckpointId(2L);
@@ -81,7 +84,7 @@ public class PaimonKeyStateTest {
         conf2.put("conf2", "test");
         mapState.put("hello2", conf2);
         // cannot read data with chk = 2 since chk2 not committed.
-        Assert.assertEquals(mapState.get("hello").size(), 4);
+        Assert.assertEquals(mapState.get("hello").size(), 6);
         Assert.assertEquals(mapState.get("hello2").size(), 0);
 
         // commit chk = 2
@@ -89,8 +92,8 @@ public class PaimonKeyStateTest {
         mapState.manage().operate().archive();
 
         // now be able to read data
-        Assert.assertEquals(mapState.get("hello").size(), 4);
-        Assert.assertEquals(mapState.get("hello2").size(), 5);
+        Assert.assertEquals(mapState.get("hello").size(), 6);
+        Assert.assertEquals(mapState.get("hello2").size(), 7);
 
         // read data which not exists
         Assert.assertEquals(mapState.get("hello3").size(), 0);

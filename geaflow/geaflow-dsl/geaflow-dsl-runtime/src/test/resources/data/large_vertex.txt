@@ -1,10 +1,10 @@
-1	person	0.8
-2	person	0.9
-3	person	0.7
-4	person	0.6
-5	person	0.5
-6	person	0.4
-7	person	0.3
-8	person	0.2
-9	person	0.1
-10	person	0.0
+node1,1
+node2,2
+node3,3
+node4,4
+node5,5
+node6,6
+node7,7
+node8,8
+node9,9
+node10,10

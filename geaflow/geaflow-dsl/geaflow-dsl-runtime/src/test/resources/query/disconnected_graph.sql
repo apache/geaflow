@@ -3,7 +3,9 @@
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
  * regarding copyright ownership.  The ASF licenses this file
- * to you under the License.  You may obtain a copy of the License at
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
  *   http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -15,34 +17,29 @@
  * under the License.
  */
 
--- 不连通图定义，用于测试增量K-Core算法在多个不连通组件上的表现
-
-CREATE TABLE v_disconnected_nodes (
-  id bigint,
-  label varchar,
-  weight double,
-  component varchar
+CREATE TABLE v_disconnected_node (
+  name varchar,
+  id bigint
 ) WITH (
-type='file',
-geaflow.dsl.window.size = -1,
-geaflow.dsl.file.path = 'resource:///data/disconnected_vertex.txt'
+	type='file',
+	geaflow.dsl.window.size = -1,
+	geaflow.dsl.file.path = 'resource:///data/disconnected_vertex.txt'
 );
 
-CREATE TABLE e_disconnected_edges (
+CREATE TABLE e_disconnected_edge (
   srcId bigint,
   targetId bigint,
-  weight double,
-  timestamp bigint
+  weight double
 ) WITH (
-type='file',
-geaflow.dsl.window.size = -1,
-geaflow.dsl.file.path = 'resource:///data/disconnected_edge.txt'
+	type='file',
+	geaflow.dsl.window.size = -1,
+	geaflow.dsl.file.path = 'resource:///data/disconnected_edge.txt'
 );
 
 CREATE GRAPH disconnected_graph (
-Vertex nodes using v_disconnected_nodes WITH ID(id),
-Edge edges using e_disconnected_edges WITH ID(srcId, targetId)
+	Vertex node using v_disconnected_node WITH ID(id),
+	Edge connects using e_disconnected_edge WITH ID(srcId, targetId)
 ) WITH (
-storeType='memory',
-shardCount = 4
+	storeType='memory',
+	shardCount = 2
 );

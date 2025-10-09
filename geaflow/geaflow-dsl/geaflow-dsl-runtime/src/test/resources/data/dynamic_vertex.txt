@@ -1,5 +1,5 @@
-1001	person	0.8
-1002	person	0.9
-1003	person	0.7
-1004	person	0.6
-1005	person	0.5
+dynamic1,1001
+dynamic2,1002
+dynamic3,1003
+dynamic4,1004
+dynamic5,1005
