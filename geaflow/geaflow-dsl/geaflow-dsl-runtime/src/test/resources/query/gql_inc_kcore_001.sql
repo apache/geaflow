@@ -32,6 +32,6 @@ CREATE TABLE inc_kcore_result (
 USE GRAPH modern;
 
 INSERT INTO inc_kcore_result
-CALL incremental_kcore(2) YIELD (vid, core_value, degree, change_status)
+CALL incremental_kcore(2, 100, 0.001) YIELD (vid, core_value, degree, change_status)
 RETURN vid, core_value, degree, change_status
 ORDER BY vid;

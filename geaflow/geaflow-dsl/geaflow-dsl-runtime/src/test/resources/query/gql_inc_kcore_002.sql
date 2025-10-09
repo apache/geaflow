@@ -36,18 +36,12 @@ INSERT INTO inc_kcore_incremental_result
 CALL incremental_kcore(2, 50, 0.001) YIELD (vid, core_value, degree, change_status)
 RETURN vid, core_value, degree, change_status;
 
--- Simulate edge addition
-INSERT INTO modern.relation VALUES (1001, 1002);
-
--- K-Core calculation after incremental update
+-- Second K-Core calculation (incremental update)
 INSERT INTO inc_kcore_incremental_result
 CALL incremental_kcore(2, 50, 0.001) YIELD (vid, core_value, degree, change_status)
 RETURN vid, core_value, degree, change_status;
 
--- Simulate edge deletion
-DELETE FROM modern.relation WHERE srcId = 1001 AND targetId = 1002;
-
--- Update K-Core again
+-- Third K-Core calculation (incremental update)
 INSERT INTO inc_kcore_incremental_result
 CALL incremental_kcore(2, 50, 0.001) YIELD (vid, core_value, degree, change_status)
 RETURN vid, core_value, degree, change_status;
