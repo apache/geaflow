@@ -29,7 +29,7 @@ CREATE TABLE inc_kcore_complex_topology_result (
     geaflow.dsl.file.path = '${target}'
 );
 
-USE GRAPH modern;
+USE GRAPH complex_graph;
 
 -- Execute K-Core algorithm on complex topology graph
 INSERT INTO inc_kcore_complex_topology_result

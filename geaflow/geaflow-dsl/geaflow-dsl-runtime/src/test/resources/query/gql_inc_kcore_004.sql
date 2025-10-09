@@ -29,7 +29,7 @@ CREATE TABLE inc_kcore_edge_remove_result (
     geaflow.dsl.file.path = '${target}'
 );
 
-USE GRAPH modern;
+USE GRAPH dynamic_graph;
 
 -- Initial K-Core calculation
 INSERT INTO inc_kcore_edge_remove_result
@@ -38,7 +38,7 @@ RETURN vid, core_value, degree, change_status
 ORDER BY vid;
 
 -- Delete edges
-DELETE FROM modern.relation WHERE srcId = 1001 AND targetId = 1002;
+DELETE FROM dynamic_graph.connects WHERE srcId = 1001 AND targetId = 1002;
 
 -- K-Core calculation after incremental update
 INSERT INTO inc_kcore_edge_remove_result

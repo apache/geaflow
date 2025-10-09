@@ -29,7 +29,7 @@ CREATE TABLE inc_kcore_edge_add_result (
     geaflow.dsl.file.path = '${target}'
 );
 
-USE GRAPH modern;
+USE GRAPH dynamic_graph;
 
 -- Initial K-Core calculation
 INSERT INTO inc_kcore_edge_add_result
@@ -38,7 +38,7 @@ RETURN vid, core_value, degree, change_status
 ORDER BY vid;
 
 -- Add new edge
-INSERT INTO modern.relation VALUES (1001, 1002);
+INSERT INTO dynamic_graph.connects VALUES (1001, 1002, 1.0);
 
 -- K-Core calculation after incremental update
 INSERT INTO inc_kcore_edge_add_result

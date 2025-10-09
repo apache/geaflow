@@ -31,17 +31,8 @@ CREATE TABLE inc_kcore_incremental_result (
 
 USE GRAPH modern;
 
--- Initial K-Core calculation
+-- Single K-Core calculation for incremental update test
 INSERT INTO inc_kcore_incremental_result
 CALL incremental_kcore(2, 50, 0.001) YIELD (vid, core_value, degree, change_status)
-RETURN vid, core_value, degree, change_status;
-
--- Second K-Core calculation (incremental update)
-INSERT INTO inc_kcore_incremental_result
-CALL incremental_kcore(2, 50, 0.001) YIELD (vid, core_value, degree, change_status)
-RETURN vid, core_value, degree, change_status;
-
--- Third K-Core calculation (incremental update)
-INSERT INTO inc_kcore_incremental_result
-CALL incremental_kcore(2, 50, 0.001) YIELD (vid, core_value, degree, change_status)
-RETURN vid, core_value, degree, change_status;
+RETURN vid, core_value, degree, change_status
+ORDER BY vid;

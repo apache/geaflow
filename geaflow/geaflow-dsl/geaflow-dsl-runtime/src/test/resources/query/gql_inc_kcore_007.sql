@@ -29,7 +29,7 @@ CREATE TABLE inc_kcore_performance_result (
     geaflow.dsl.file.path = '${target}'
 );
 
-USE GRAPH modern;
+USE GRAPH large_graph;
 
 -- Execute performance test
 INSERT INTO inc_kcore_performance_result

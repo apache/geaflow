@@ -29,7 +29,7 @@ CREATE TABLE inc_kcore_disconnected_result (
     geaflow.dsl.file.path = '${target}'
 );
 
-USE GRAPH modern;
+USE GRAPH disconnected_graph;
 
 -- Execute K-Core algorithm on graph containing disconnected components
 INSERT INTO inc_kcore_disconnected_result
