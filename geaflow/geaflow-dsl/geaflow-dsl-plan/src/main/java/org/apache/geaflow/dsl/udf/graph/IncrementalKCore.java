@@ -115,32 +115,33 @@ public class IncrementalKCore implements AlgorithmUserFunction<Object, Increment
     
     /**
      * Initialize vertex state.
-     * Calculate initial degree and K-Core value.
+     * Calculate initial degree and set initial K-Core value to degree.
      */
     private void initializeVertex(RowVertex vertex) {
         Object vertexId = vertex.getId();
         
-        // Calculate initial degree (including static and dynamic edges)
-        List<RowEdge> staticEdges = context.loadStaticEdges(EdgeDirection.BOTH);
-        List<RowEdge> dynamicEdges = context.loadDynamicEdges(EdgeDirection.BOTH);
+        // Calculate initial degree: IN + OUT (treat as undirected graph)
+        List<RowEdge> inEdges = context.loadStaticEdges(EdgeDirection.IN);
+        List<RowEdge> outEdges = context.loadStaticEdges(EdgeDirection.OUT);
+        List<RowEdge> dynamicInEdges = context.loadDynamicEdges(EdgeDirection.IN);
+        List<RowEdge> dynamicOutEdges = context.loadDynamicEdges(EdgeDirection.OUT);
         
-        int totalDegree = staticEdges.size() + dynamicEdges.size();
+        int totalDegree = inEdges.size() + outEdges.size() + dynamicInEdges.size() + dynamicOutEdges.size();
         vertexDegrees.put(vertexId, totalDegree);
         
-        // Initialize K-Core value to degree (will be refined during iterations)
-        // In the true K-Core algorithm, all vertices have core values equal to their degree in the first round
-        int initialCore = totalDegree;
+        // Initially assume all neighbors are active, so core value = min(degree, k)
+        // This will be refined in subsequent iterations
+        int initialCore = Math.min(totalDegree, k);
         vertexCoreValues.put(vertexId, initialCore);
         
         // Update vertex value: core_value, degree, change_status
         context.updateVertexValue(ObjectRow.create(initialCore, totalDegree, "INIT"));
         
-        // Send initialization messages to neighbors
-        List<RowEdge> allEdges = new ArrayList<>();
-        allEdges.addAll(staticEdges);
-        allEdges.addAll(dynamicEdges);
-        
-        sendMessageToNeighbors(allEdges, new KCoreMessage(vertexId, initialCore, KCoreMessage.MessageType.INIT));
+        // Send initialization messages to neighbors (both IN and OUT)
+        sendMessageToNeighbors(inEdges, new KCoreMessage(vertexId, initialCore, KCoreMessage.MessageType.INIT));
+        sendMessageToNeighbors(outEdges, new KCoreMessage(vertexId, initialCore, KCoreMessage.MessageType.INIT));
+        sendMessageToNeighbors(dynamicInEdges, new KCoreMessage(vertexId, initialCore, KCoreMessage.MessageType.INIT));
+        sendMessageToNeighbors(dynamicOutEdges, new KCoreMessage(vertexId, initialCore, KCoreMessage.MessageType.INIT));
         
         LOGGER.debug("Initialized vertex {} with degree={}, core={}", vertexId, totalDegree, initialCore);
     }
@@ -215,23 +216,26 @@ public class IncrementalKCore implements AlgorithmUserFunction<Object, Increment
     
     /**
      * Recompute K-Core value.
-     * Use standard K-Core algorithm logic: calculate valid neighbor count (neighbors with K-Core value >= k)
+     * Use standard K-Core algorithm logic: iteratively remove vertices with degree < k
      */
     private void recomputeKCore(RowVertex vertex, Map<Object, Integer> neighborCores) {
         Object vertexId = vertex.getId();
         int currentCore = vertexCoreValues.getOrDefault(vertexId, 0);
         int currentDegree = vertexDegrees.getOrDefault(vertexId, 0);
 
-        // Calculate valid neighbor count: number of neighbors with K-Core value >= k
-        int validNeighborCount = countValidNeighbors(vertex, neighborCores);
+        // For K-Core algorithm: count neighbors that are still active (not removed)
+        // A neighbor is active if its core value >= k
+        int activeNeighborCount = countActiveNeighbors(vertex, neighborCores);
 
-        // Core logic of K-Core algorithm:
-        // New K-Core value = min(valid neighbor count, current degree)
-        int newCore = Math.min(validNeighborCount, currentDegree);
-
-        // If the core value is less than k, the vertex doesn't belong to k-core
-        if (newCore < k) {
-            newCore = 0;
+        // K-Core algorithm: if active neighbor count < k, this vertex should be removed (core = degree)
+        // Otherwise, set core to minimum of k and degree
+        int newCore;
+        if (activeNeighborCount < k) {
+            // This vertex will be removed from k-core, but its core value is its degree
+            newCore = Math.min(currentDegree, activeNeighborCount);
+        } else {
+            // This vertex remains in k-core
+            newCore = Math.min(k, currentDegree);
         }
 
         // If core value changes, update state and broadcast changes
@@ -244,15 +248,19 @@ public class IncrementalKCore implements AlgorithmUserFunction<Object, Increment
                               (newCore > currentCore ? "INCREASED" : "DECREASED");
             context.updateVertexValue(ObjectRow.create(newCore, currentDegree, changeType));
 
-            // Broadcast changes to neighbors
-            List<RowEdge> allEdges = new ArrayList<>();
-            allEdges.addAll(context.loadStaticEdges(EdgeDirection.BOTH));
-            allEdges.addAll(context.loadDynamicEdges(EdgeDirection.BOTH));
+            // Broadcast changes to neighbors (both IN and OUT)
+            List<RowEdge> inEdges = context.loadStaticEdges(EdgeDirection.IN);
+            List<RowEdge> outEdges = context.loadStaticEdges(EdgeDirection.OUT);
+            List<RowEdge> dynamicInEdges = context.loadDynamicEdges(EdgeDirection.IN);
+            List<RowEdge> dynamicOutEdges = context.loadDynamicEdges(EdgeDirection.OUT);
 
-            sendMessageToNeighbors(allEdges, new KCoreMessage(vertexId, newCore, KCoreMessage.MessageType.CORE_CHANGED));
+            sendMessageToNeighbors(inEdges, new KCoreMessage(vertexId, newCore, KCoreMessage.MessageType.CORE_CHANGED));
+            sendMessageToNeighbors(outEdges, new KCoreMessage(vertexId, newCore, KCoreMessage.MessageType.CORE_CHANGED));
+            sendMessageToNeighbors(dynamicInEdges, new KCoreMessage(vertexId, newCore, KCoreMessage.MessageType.CORE_CHANGED));
+            sendMessageToNeighbors(dynamicOutEdges, new KCoreMessage(vertexId, newCore, KCoreMessage.MessageType.CORE_CHANGED));
 
-            LOGGER.debug("Vertex {} core changed from {} to {} (valid neighbors: {}, degree: {}, k: {})",
-                        vertexId, currentCore, newCore, validNeighborCount, currentDegree, k);
+            LOGGER.debug("Vertex {} core changed from {} to {} (active neighbors: {}, degree: {}, k: {})",
+                        vertexId, currentCore, newCore, activeNeighborCount, currentDegree, k);
         } else {
             // Even if core value didn't change, update with UNCHANGED status if it's not the first iteration
             if (currentIteration > 1L) {
@@ -262,33 +270,43 @@ public class IncrementalKCore implements AlgorithmUserFunction<Object, Increment
     }
     
     /**
-     * Calculate valid neighbor count.
-     * Count neighbors with K-Core value >= k.
+     * Calculate active neighbor count.
+     * Count neighbors that are still in the k-core (core value >= k).
      */
-    private int countValidNeighbors(RowVertex vertex, Map<Object, Integer> neighborCores) {
-        List<RowEdge> allEdges = new ArrayList<>();
-        allEdges.addAll(context.loadStaticEdges(EdgeDirection.BOTH));
-        allEdges.addAll(context.loadDynamicEdges(EdgeDirection.BOTH));
+    private int countActiveNeighbors(RowVertex vertex, Map<Object, Integer> neighborCores) {
+        // Load all edges: IN + OUT (treat as undirected graph)
+        List<RowEdge> inEdges = context.loadStaticEdges(EdgeDirection.IN);
+        List<RowEdge> outEdges = context.loadStaticEdges(EdgeDirection.OUT);
+        List<RowEdge> dynamicInEdges = context.loadDynamicEdges(EdgeDirection.IN);
+        List<RowEdge> dynamicOutEdges = context.loadDynamicEdges(EdgeDirection.OUT);
         
-        int validCount = 0;
+        List<RowEdge> allEdges = new ArrayList<>();
+        allEdges.addAll(inEdges);
+        allEdges.addAll(outEdges);
+        allEdges.addAll(dynamicInEdges);
+        allEdges.addAll(dynamicOutEdges);
+        
+        int activeCount = 0;
         for (RowEdge edge : allEdges) {
             Object neighborId = edge.getTargetId().equals(vertex.getId()) 
                 ? edge.getSrcId() : edge.getTargetId();
             
+            // Get neighbor's current core value
             int neighborCore = neighborCores.getOrDefault(neighborId, 
                 vertexCoreValues.getOrDefault(neighborId, 0));
             
+            // A neighbor is active if its core value >= k (still in k-core)
             if (neighborCore >= k) {
-                validCount++;
+                activeCount++;
             }
         }
         
-        return validCount;
+        return activeCount;
     }
     
     /**
-     * Send message to all neighbors.
-     * Traverse all edges and send messages to neighbor vertices.
+     * Send message to neighbors.
+     * Handle both incoming and outgoing edges properly.
      *
      * @param edges List of edges to traverse
      * @param message Message to send to neighbors
@@ -301,8 +319,15 @@ public class IncrementalKCore implements AlgorithmUserFunction<Object, Increment
             Object targetId = edge.getTargetId();
             Object srcId = edge.getSrcId();
 
-            // Determine neighbor node
-            Object neighborId = targetId.equals(sourceId) ? srcId : targetId;
+            // Determine neighbor node - for incoming edges, neighbor is source; for outgoing edges, neighbor is target
+            Object neighborId;
+            if (targetId.equals(sourceId)) {
+                neighborId = srcId;  // This is an incoming edge
+            } else if (srcId.equals(sourceId)) {
+                neighborId = targetId;  // This is an outgoing edge
+            } else {
+                continue; // This edge doesn't involve current vertex
+            }
 
             // Only send messages to neighbors, avoiding duplicates
             if (!neighborId.equals(sourceId) && !sentTo.contains(neighborId)) {
