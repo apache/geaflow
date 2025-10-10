@@ -26,6 +26,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import org.apache.geaflow.common.exception.GeaflowRuntimeException;
 import org.apache.geaflow.common.type.primitive.IntegerType;
 import org.apache.geaflow.common.type.primitive.StringType;
 import org.apache.geaflow.dsl.common.algo.AlgorithmRuntimeContext;
@@ -185,6 +186,15 @@ public class IncrementalKCore implements AlgorithmUserFunction<Object, Object>,
                 Object msg = messages.next();
                 if (msg instanceof Integer && (Integer) msg > 0) {
                     activeNeighborCount += (Integer) msg;
+                } else if (msg instanceof Integer) {
+                    // Handle zero or negative messages (valid but no contribution)
+                    // Do nothing - these are valid control messages
+                } else {
+                    // Handle unknown message types with GeaflowRuntimeException
+                    String messageType = msg != null ? msg.getClass().getSimpleName() : "null";
+                    throw new GeaflowRuntimeException(
+                        "Unknown message type: " + messageType + " for vertex " + vertexId
+                    );
                 }
             }
             
