@@ -31,16 +31,10 @@ CREATE TABLE inc_kcore_edge_add_result (
 
 USE GRAPH dynamic_graph;
 
--- Initial K-Core calculation
-INSERT INTO inc_kcore_edge_add_result
-CALL incremental_kcore(2) YIELD (vid, core_value, degree, change_status)
-RETURN vid, core_value, degree, change_status
-ORDER BY vid;
-
--- Add new edge
+-- Add new edge for testing edge addition scenario
 INSERT INTO dynamic_graph.connects VALUES (1001, 1002, 1.0);
 
--- K-Core calculation after incremental update
+-- K-Core calculation with the added edge
 INSERT INTO inc_kcore_edge_add_result
 CALL incremental_kcore(2) YIELD (vid, core_value, degree, change_status)
 RETURN vid, core_value, degree, change_status
