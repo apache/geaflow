@@ -23,6 +23,9 @@ import com.google.common.collect.Lists;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
+import org.apache.geaflow.common.binary.BinaryString;
+import org.apache.geaflow.common.type.IType;
+import org.apache.geaflow.common.type.primitive.BinaryStringType;
 
 public class SortInfo implements Serializable {
 
@@ -35,5 +38,22 @@ public class SortInfo implements Serializable {
         sortInfo.orderByFields = Lists.newArrayList(orderByFields);
         sortInfo.fetch = this.fetch;
         return sortInfo;
+    }
+
+    public boolean isRadixSortable() {
+        for (int i = 0; i < this.orderByFields.size(); i++) {
+            OrderByField field = this.orderByFields.get(i);
+            IType<?> orderType = field.expression.getOutputType();
+            if (orderType.getTypeClass() != Integer.class && orderType.getTypeClass() != BinaryString.class) {
+                return false;
+            } else if (orderType.getTypeClass() == BinaryString.class) {
+                int precision = ((BinaryStringType) orderType).getPrecision();
+                // MongoDB ObjectId: 24-character hexadecimal
+                if (precision > 24 || precision < 0) {
+                    return false;  
+                }
+            }
+        }
+        return true;
     }
 }
