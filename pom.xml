@@ -388,7 +388,7 @@
         </profile>
 
         <profile>
-            <id>release</id>
+            <id>maven-release</id>
             <build>
                 <plugins>
                     <plugin>
@@ -403,6 +403,7 @@
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-source-plugin</artifactId>
+                        <version>3.2.1</version>
                         <executions>
                             <execution>
                                 <id>attach-sources</id>
@@ -410,20 +411,6 @@
                                 <goals>
                                     <goal>jar-no-fork</goal>
                                     <goal>test-jar-no-fork</goal>
-                                </goals>
-                            </execution>
-                        </executions>
-                    </plugin>
-                    <!-- Source -->
-                    <plugin>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-source-plugin</artifactId>
-                        <version>2.2.1</version>
-                        <executions>
-                            <execution>
-                                <phase>package</phase>
-                                <goals>
-                                    <goal>jar-no-fork</goal>
                                 </goals>
                             </execution>
                         </executions>
@@ -457,8 +444,8 @@
                         <artifactId>maven-compiler-plugin</artifactId>
                         <version>3.0</version>
                         <configuration>
-                            <source>1.8</source>
-                            <target>1.8</target>
+                            <source>${maven.compiler.source}</source>
+                            <target>${maven.compiler.target}</target>
                             <fork>true</fork>
                             <verbose>true</verbose>
                             <encoding>UTF-8</encoding>
@@ -474,7 +461,7 @@
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-gpg-plugin</artifactId>
-                        <version>1.6</version>
+                        <version>3.1.0</version>
                         <executions>
                             <execution>
                                 <phase>install</phase>
