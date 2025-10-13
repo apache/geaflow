@@ -27,6 +27,37 @@ public class BinaryStringType implements IType<BinaryString> {
 
     public static final BinaryStringType INSTANCE = new BinaryStringType();
 
+    private int precision;
+
+    public BinaryStringType() {
+
+    }
+
+    public BinaryStringType(int precision) {
+        this.precision = precision;
+    }
+
+    public int getPrecision() {
+        return precision;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) {
+            return true;
+        }
+
+        if (obj == null) {
+            return false;
+        }
+
+        if (getClass() != obj.getClass()) {
+            return false;
+        }
+
+        return true;
+    }
+
     @Override
     public String getName() {
         return Types.TYPE_NAME_BINARY_STRING;
