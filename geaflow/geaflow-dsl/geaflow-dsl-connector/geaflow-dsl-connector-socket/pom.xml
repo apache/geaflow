@@ -24,7 +24,7 @@
     <parent>
         <artifactId>geaflow-dsl-connector</artifactId>
         <groupId>org.apache.geaflow</groupId>
-        <version>0.6.8-SNAPSHOT</version>
+        <version>0.7.0</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
