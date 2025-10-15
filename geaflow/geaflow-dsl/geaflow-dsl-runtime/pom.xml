@@ -23,8 +23,8 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xstd">
     <parent>
         <artifactId>geaflow-dsl</artifactId>
-        <groupId>com.antgroup.tugraph</groupId>
-        <version>0.6.4-SNAPSHOT</version>
+        <groupId>org.apache.geaflow</groupId>
+        <version>0.6.8-SNAPSHOT</version>
     </parent>
 
     <modelVersion>4.0.0</modelVersion>
@@ -32,88 +32,99 @@
 
     <dependencies>
         <dependency>
-            <groupId>com.antgroup.tugraph</groupId>
+            <groupId>org.apache.geaflow</groupId>
             <artifactId>geaflow-dsl-common</artifactId>
         </dependency>
 
         <dependency>
-            <groupId>com.antgroup.tugraph</groupId>
+            <groupId>org.apache.geaflow</groupId>
             <artifactId>geaflow-dsl-plan</artifactId>
         </dependency>
 
         <dependency>
-            <groupId>com.antgroup.tugraph</groupId>
+            <groupId>org.apache.geaflow</groupId>
             <artifactId>geaflow-dsl-connector-api</artifactId>
         </dependency>
 
         <dependency>
-            <groupId>com.antgroup.tugraph</groupId>
+            <groupId>org.apache.geaflow</groupId>
             <artifactId>geaflow-dsl-connector-console</artifactId>
         </dependency>
 
         <dependency>
-            <groupId>com.antgroup.tugraph</groupId>
+            <groupId>org.apache.geaflow</groupId>
+            <artifactId>geaflow-dsl-connector-random</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.geaflow</groupId>
             <artifactId>geaflow-dsl-connector-file</artifactId>
         </dependency>
 
         <dependency>
-            <groupId>com.antgroup.tugraph</groupId>
+            <groupId>org.apache.geaflow</groupId>
             <artifactId>geaflow-dsl-connector-kafka</artifactId>
         </dependency>
 
         <dependency>
-            <groupId>com.antgroup.tugraph</groupId>
+            <groupId>org.apache.geaflow</groupId>
             <artifactId>geaflow-dsl-connector-pulsar</artifactId>
         </dependency>
 
         <dependency>
-            <groupId>com.antgroup.tugraph</groupId>
-            <artifactId>geaflow-dsl-connector-hive</artifactId>
-        </dependency>
-
-        <dependency>
-            <groupId>com.antgroup.tugraph</groupId>
+            <groupId>org.apache.geaflow</groupId>
             <artifactId>geaflow-dsl-connector-socket</artifactId>
         </dependency>
 
         <dependency>
-            <groupId>com.antgroup.tugraph</groupId>
+            <groupId>org.apache.geaflow</groupId>
             <artifactId>geaflow-dsl-connector-jdbc</artifactId>
         </dependency>
 
         <dependency>
-            <groupId>com.antgroup.tugraph</groupId>
+            <groupId>org.apache.geaflow</groupId>
             <artifactId>geaflow-dsl-connector-odps</artifactId>
         </dependency>
 
         <dependency>
-            <groupId>com.antgroup.tugraph</groupId>
+            <groupId>org.apache.geaflow</groupId>
             <artifactId>geaflow-api</artifactId>
         </dependency>
 
         <dependency>
-            <groupId>com.antgroup.tugraph</groupId>
+            <groupId>org.apache.geaflow</groupId>
             <artifactId>geaflow-pdata</artifactId>
         </dependency>
 
         <dependency>
-            <groupId>com.antgroup.tugraph</groupId>
+            <groupId>org.apache.geaflow</groupId>
             <artifactId>geaflow-cluster</artifactId>
         </dependency>
 
         <dependency>
-            <groupId>com.antgroup.tugraph</groupId>
+            <groupId>org.apache.geaflow</groupId>
             <artifactId>geaflow-on-local</artifactId>
         </dependency>
 
         <dependency>
-            <groupId>com.antgroup.tugraph</groupId>
+            <groupId>org.apache.geaflow</groupId>
             <artifactId>geaflow-pipeline</artifactId>
         </dependency>
 
         <dependency>
             <groupId>org.testng</groupId>
             <artifactId>testng</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.openjdk.jmh</groupId>
+            <artifactId>jmh-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.openjdk.jmh</groupId>
+            <artifactId>jmh-generator-annprocess</artifactId>
+            <scope>test</scope>
         </dependency>
 
         <dependency>
@@ -139,7 +150,7 @@
         </dependency>
 
         <dependency>
-            <groupId>com.antgroup.tugraph</groupId>
+            <groupId>org.apache.geaflow</groupId>
             <artifactId>geaflow-view-meta</artifactId>
         </dependency>
         <dependency>
@@ -155,4 +166,67 @@
             <scope>compile</scope>
         </dependency>
     </dependencies>
+
+    <build>  
+        <plugins>  
+            <plugin>  
+                <groupId>org.apache.maven.plugins</groupId>  
+                <artifactId>maven-surefire-plugin</artifactId>  
+                <version>${maven-surefire.version}</version>
+                <configuration>  
+                    <!-- Increase memory allocation for GeaFlow framework -->  
+                    <argLine>-Xmx1024m -XX:MaxMetaspaceSize=512m -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -Djava.awt.headless=true -Dfile.encoding=UTF-8</argLine>  
+                      
+                    <!-- Disable parallel execution to avoid resource conflicts -->  
+                    <forkCount>1</forkCount>  
+                    <reuseForks>false</reuseForks>  
+                    <parallel>none</parallel>  
+                    <threadCount>1</threadCount>  
+                    <perCoreThreadCount>false</perCoreThreadCount>  
+                      
+                    <!-- Increase timeout for distributed operations -->  
+                    <forkedProcessTimeoutInSeconds>600</forkedProcessTimeoutInSeconds>  
+                    <testFailureIgnore>false</testFailureIgnore>  
+                    <skipAfterFailureCount>1</skipAfterFailureCount>  
+                      
+                    <!-- System properties for stability -->  
+                    <systemPropertyVariables>  
+                        <java.awt.headless>true</java.awt.headless>  
+                        <file.encoding>UTF-8</file.encoding>  
+                        <user.timezone>UTC</user.timezone>  
+                        <geaflow.cluster.type>local</geaflow.cluster.type>  
+                        <geaflow.debug.mode>false</geaflow.debug.mode>  
+                    </systemPropertyVariables>  
+                </configuration>  
+            </plugin>  
+        </plugins>  
+    </build>  
+      
+    <profiles>  
+        <profile>  
+            <id>integration-tests</id>  
+            <build>  
+                <plugins>  
+                    <plugin>  
+                        <groupId>org.apache.maven.plugins</groupId>  
+                        <artifactId>maven-surefire-plugin</artifactId>  
+                        <version>${maven-surefire.version}</version>
+                        <configuration>  
+                            <argLine>-Xmx1024m -XX:MaxMetaspaceSize=512m -XX:+UseG1GC</argLine>  
+                            <forkCount>1</forkCount>  
+                            <reuseForks>false</reuseForks>  
+                            <parallel>none</parallel>  
+                            <includes>  
+                                <include>**/GQLInsertTest.java</include>  
+                            </includes>  
+                            <excludes>  
+                                <exclude>none</exclude>  
+                            </excludes>  
+                            <forkedProcessTimeoutInSeconds>900</forkedProcessTimeoutInSeconds>  
+                        </configuration>  
+                    </plugin>  
+                </plugins>  
+            </build>  
+        </profile>  
+    </profiles>
 </project>

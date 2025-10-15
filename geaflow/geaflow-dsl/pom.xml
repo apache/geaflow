@@ -23,9 +23,9 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xstd">
 
     <parent>
-        <groupId>com.antgroup.tugraph</groupId>
+        <groupId>org.apache.geaflow</groupId>
         <artifactId>geaflow</artifactId>
-        <version>0.6.4-SNAPSHOT</version>
+        <version>0.6.8-SNAPSHOT</version>
     </parent>
 
     <modelVersion>4.0.0</modelVersion>
@@ -40,10 +40,11 @@
         <module>geaflow-dsl-runtime</module>
         <module>geaflow-dsl-connector</module>
         <module>geaflow-dsl-catalog</module>
+        <module>geaflow-dsl-connector-tests</module>
     </modules>
 
     <properties>
-        <calcite.version>1.18.0-geaflow_1.0</calcite.version>
+        <calcite.version>1.18.0-geaflow_1.1</calcite.version>
         <kafka.version>2.4.1</kafka.version>
         <kafka.scala.binary.version>2.11</kafka.scala.binary.version>
         <h2.version>2.1.214</h2.version>
@@ -76,107 +77,81 @@
             </dependency>
 
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-dsl-common</artifactId>
                 <version>${project.version}</version>
             </dependency>
 
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-dsl-parser</artifactId>
                 <version>${project.version}</version>
             </dependency>
 
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-dsl-catalog</artifactId>
                 <version>${project.version}</version>
             </dependency>
 
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-dsl-plan</artifactId>
                 <version>${project.version}</version>
             </dependency>
 
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-dsl-runtime</artifactId>
                 <version>${project.version}</version>
             </dependency>
 
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-dsl-connector-api</artifactId>
                 <version>${project.version}</version>
             </dependency>
 
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-dsl-connector-console</artifactId>
                 <version>${project.version}</version>
             </dependency>
 
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
+                <artifactId>geaflow-dsl-connector-random</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-dsl-connector-file</artifactId>
                 <version>${project.version}</version>
             </dependency>
 
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-dsl-connector-kafka</artifactId>
                 <version>${project.version}</version>
             </dependency>
 
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-dsl-connector-socket</artifactId>
                 <version>${project.version}</version>
             </dependency>
 
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-dsl-connector-jdbc</artifactId>
                 <version>${project.version}</version>
             </dependency>
 
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-dsl-connector-odps</artifactId>
                 <version>${project.version}</version>
-            </dependency>
-
-            <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
-                <artifactId>geaflow-dsl-connector-hive</artifactId>
-                <version>${project.version}</version>
-                <exclusions>
-                    <exclusion>
-                        <groupId>com.google.guava</groupId>
-                        <artifactId>guava</artifactId>
-                    </exclusion>
-                    <exclusion>
-                        <groupId>org.eclipse.jetty</groupId>
-                        <artifactId>jetty-util</artifactId>
-                    </exclusion>
-                    <exclusion>
-                        <groupId>org.eclipse.jetty</groupId>
-                        <artifactId>jetty-http</artifactId>
-                    </exclusion>
-                    <exclusion>
-                        <groupId>org.eclipse.jetty</groupId>
-                        <artifactId>jetty-server</artifactId>
-                    </exclusion>
-                    <exclusion>
-                        <groupId>org.eclipse.jetty</groupId>
-                        <artifactId>jetty-continuation</artifactId>
-                    </exclusion>
-                    <exclusion>
-                        <groupId>org.eclipse.jetty</groupId>
-                        <artifactId>jetty-servlet</artifactId>
-                    </exclusion>
-                </exclusions>
             </dependency>
 
             <dependency>
@@ -208,7 +183,7 @@
             </dependency>
 
             <dependency>
-                <groupId>com.antgroup.tugraph</groupId>
+                <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-dsl-connector-pulsar</artifactId>
                 <version>${project.version}</version>
             </dependency>

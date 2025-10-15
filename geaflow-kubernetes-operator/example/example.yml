@@ -25,7 +25,7 @@ spec:
   image: geaflow:0.1
   imagePullPolicy: IfNotPresent
   serviceAccount: geaflow
-  entryClass: com.antgroup.geaflow.example.graph.statical.compute.khop.KHop
+  entryClass: org.apache.geaflow.example.graph.statical.compute.khop.KHop
   masterSpec:
     resource:
       cpuCores: 1

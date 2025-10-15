@@ -22,7 +22,7 @@ syntax = "proto3";
 import "google/protobuf/empty.proto";
 
 option java_multiple_files = false;
-option java_package = "com.antgroup.geaflow.rpc.proto";
+option java_package = "org.apache.geaflow.rpc.proto";
 
 service ContainerService {
 

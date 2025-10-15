@@ -53,7 +53,7 @@ const genJobList = (current: number, pageSize: number) => {
             "url": "http://xxxx/rayag-1.0-comile-test.jar"
           }
         ],
-        "entryClass": "com.antgroup.geaflow.example.graph.dynamic.IncrGraphCompute",
+        "entryClass": "dynamic.graph.example.org.apache.geaflow.IncrGraphCompute",
         "image": "geaflow:0.1-heartbeat-register-fix",
         "imagePullPolicy": "Never",
         "masterSpec": {

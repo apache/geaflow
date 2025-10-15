@@ -23,8 +23,8 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <parent>
         <artifactId>geaflow-deploy</artifactId>
-        <groupId>com.antgroup.tugraph</groupId>
-        <version>0.6.4-SNAPSHOT</version>
+        <groupId>org.apache.geaflow</groupId>
+        <version>0.6.8-SNAPSHOT</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
@@ -51,39 +51,39 @@
 
         <!-- geaflow dependencies -->
         <dependency>
-            <groupId>com.antgroup.tugraph</groupId>
+            <groupId>org.apache.geaflow</groupId>
             <artifactId>geaflow-cluster</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.antgroup.tugraph</groupId>
+            <groupId>org.apache.geaflow</groupId>
             <artifactId>geaflow-rpc-proto</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.antgroup.tugraph</groupId>
+            <groupId>org.apache.geaflow</groupId>
             <artifactId>geaflow-on-k8s</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.antgroup.tugraph</groupId>
+            <groupId>org.apache.geaflow</groupId>
             <artifactId>geaflow-examples</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.antgroup.tugraph</groupId>
+            <groupId>org.apache.geaflow</groupId>
             <artifactId>geaflow-metrics-influxdb</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.antgroup.tugraph</groupId>
+            <groupId>org.apache.geaflow</groupId>
             <artifactId>geaflow-metrics-prometheus</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.antgroup.tugraph</groupId>
+            <groupId>org.apache.geaflow</groupId>
             <artifactId>geaflow-dsl-runtime</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.antgroup.tugraph</groupId>
+            <groupId>org.apache.geaflow</groupId>
             <artifactId>geaflow-on-ray</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.antgroup.tugraph</groupId>
+            <groupId>org.apache.geaflow</groupId>
             <artifactId>geaflow-dashboard</artifactId>
         </dependency>
     </dependencies>
@@ -102,7 +102,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>
-                <version>3.2.1</version>
+                <version>3.5.1</version>
                 <executions>
                     <execution>
                         <phase>package</phase>
@@ -116,7 +116,7 @@
                                     <exclude>de.ruedigermoeller:fst</exclude>
                                     <exclude>io.ray:ray-runtime</exclude>
                                     <exclude>io.ray:ray-api</exclude>
-<!--                                    <exclude>commons-codec:commons-codec</exclude>-->
+                                    <!--                                    <exclude>commons-codec:commons-codec</exclude>-->
                                     <exclude>sofa:bolt</exclude>
                                 </excludes>
                             </artifactSet>
@@ -138,7 +138,7 @@
                             </filters>
                             <transformers>
                                 <transformer
-                                    implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+                                        implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
                             </transformers>
                             <relocations>
                                 <relocation>
