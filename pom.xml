@@ -392,15 +392,6 @@
             <build>
                 <plugins>
                     <plugin>
-                        <groupId>org.sonatype.central</groupId>
-                        <artifactId>central-publishing-maven-plugin</artifactId>
-                        <version>0.8.0</version>
-                        <extensions>true</extensions>
-                        <configuration>
-                            <publishingServerId>central</publishingServerId>
-                        </configuration>
-                    </plugin>
-                    <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-source-plugin</artifactId>
                         <version>3.2.1</version>
@@ -546,9 +537,15 @@
     </repositories>
 
     <distributionManagement>
-        <repository>
-            <id>ossrh</id>
-            <url>https://oss.sonatype.org/service/local/staging/deploy/maven2/</url>
-        </repository>
+    	<repository>
+      	    <id>apache.releases.https</id>
+            <name>Apache Release Distribution Repository</name>
+      	    <url>https://repository.apache.org/service/local/staging/deploy/maven2/</url>
+    	</repository>
+    	<snapshotRepository>
+      	    <id>apache.snapshots.https</id>
+      	    <name>Apache Snapshot Distribution Repository</name>
+      	    <url>https://repository.apache.org/content/repositories/snapshots/</url>
+    	</snapshotRepository>
     </distributionManagement>
 </project>
