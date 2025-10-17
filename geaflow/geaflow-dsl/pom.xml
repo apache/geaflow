@@ -41,6 +41,7 @@
         <module>geaflow-dsl-connector</module>
         <module>geaflow-dsl-catalog</module>
         <module>geaflow-dsl-connector-tests</module>
+        <module>geaflow-dsl-gremlin</module>
     </modules>
 
     <properties>
@@ -185,6 +186,30 @@
             <dependency>
                 <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-dsl-connector-pulsar</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.apache.geaflow</groupId>
+                <artifactId>geaflow-dsl-gremlin</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.apache.geaflow</groupId>
+                <artifactId>geaflow-dsl-gremlin-parser</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.apache.geaflow</groupId>
+                <artifactId>geaflow-dsl-gremlin-plan</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.apache.geaflow</groupId>
+                <artifactId>geaflow-dsl-gremlin-runtime</artifactId>
                 <version>${project.version}</version>
             </dependency>
 

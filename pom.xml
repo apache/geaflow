@@ -384,6 +384,15 @@
         </profile>
 
         <profile>
+            <id>skip-dashboard</id>
+            <modules>
+                <module>geaflow</module>
+                <module>geaflow-console</module>
+                <module>geaflow-mcp</module>
+            </modules>
+        </profile>
+
+        <profile>
             <id>release</id>
             <build>
                 <plugins>
