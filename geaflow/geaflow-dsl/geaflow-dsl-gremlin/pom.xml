@@ -36,6 +36,7 @@
         <module>geaflow-gremlin-parser</module>
         <module>geaflow-gremlin-plan</module>
         <module>geaflow-gremlin-runtime</module>
+        <module>geaflow-gremlin-integration-tests</module>
     </modules>
 
     <properties>
@@ -59,6 +60,12 @@
             <dependency>
                 <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-dsl-gremlin-runtime</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.apache.geaflow</groupId>
+                <artifactId>geaflow-dsl-gremlin-integration-tests</artifactId>
                 <version>${project.version}</version>
             </dependency>
 

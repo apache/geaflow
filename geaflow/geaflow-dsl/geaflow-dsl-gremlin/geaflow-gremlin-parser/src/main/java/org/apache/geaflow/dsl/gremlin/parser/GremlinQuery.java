@@ -19,14 +19,13 @@
 
 package org.apache.geaflow.dsl.gremlin.parser;
 
+import java.io.Serializable;
+import java.util.List;
+import java.util.Objects;
 import org.apache.tinkerpop.gremlin.process.traversal.Bytecode;
 import org.apache.tinkerpop.gremlin.process.traversal.Step;
 import org.apache.tinkerpop.gremlin.process.traversal.Traversal;
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversal;
-
-import java.io.Serializable;
-import java.util.List;
-import java.util.Objects;
 
 /**
  * Represents a parsed Gremlin query.
@@ -103,21 +102,25 @@ public class GremlinQuery implements Serializable {
 
     @Override
     public String toString() {
-        return "GremlinQuery{" +
-                "queryString='" + queryString + '\'' +
-                ", bytecode=" + bytecode +
-                ", traversal=" + traversal +
-                '}';
+        return "GremlinQuery{"
+            + "queryString='" + queryString + '\'' + ", "
+            + "bytecode=" + bytecode + ", "
+            + "traversal=" + traversal
+            + '}';
     }
     
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
         GremlinQuery that = (GremlinQuery) o;
-        return Objects.equals(queryString, that.queryString) &&
-               Objects.equals(bytecode, that.bytecode) &&
-               Objects.equals(traversal, that.traversal);
+        return Objects.equals(queryString, that.queryString)
+            && Objects.equals(bytecode, that.bytecode)
+            && Objects.equals(traversal, that.traversal);
     }
     
     @Override

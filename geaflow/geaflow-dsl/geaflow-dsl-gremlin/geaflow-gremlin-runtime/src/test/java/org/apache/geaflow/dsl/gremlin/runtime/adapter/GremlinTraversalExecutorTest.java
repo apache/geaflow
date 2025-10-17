@@ -22,18 +22,39 @@ package org.apache.geaflow.dsl.gremlin.runtime.adapter;
 import org.apache.calcite.rel.RelNode;
 import org.apache.geaflow.api.graph.traversal.VertexCentricTraversal;
 import org.apache.geaflow.dsl.runtime.traversal.TraversalRuntimeContext;
+import org.junit.Assert;
+import org.junit.Before;
+import org.junit.Test;
+import org.mockito.Mockito;
 
 /**
- * Interface for executing Gremlin traversals using GeaFlow's VertexCentricTraversal API.
+ * Unit tests for GremlinTraversalExecutor implementations.
  */
-public interface GremlinTraversalExecutor {
+public class GremlinTraversalExecutorTest {
 
-    /**
-     * Execute a Gremlin traversal by converting it to a VertexCentricTraversal.
-     *
-     * @param relNode the RelNode representation of the Gremlin traversal
-     * @param traversalContext the traversal context
-     * @return the VertexCentricTraversal that can be executed
-     */
-    VertexCentricTraversal execute(RelNode relNode, TraversalRuntimeContext traversalContext);
+    private GeaFlowGremlinTraversalExecutor executor;
+
+    @Before
+    public void setUp() {
+        executor = new GeaFlowGremlinTraversalExecutor();
+    }
+
+    @Test
+    public void testExecutorInitialization() {
+        // Test that the executor can be instantiated
+        Assert.assertNotNull(executor);
+    }
+    
+    @Test
+    public void testExecuteMethodExists() {
+        // Test that the execute method exists and can be called
+        RelNode mockRelNode = Mockito.mock(RelNode.class);
+        TraversalRuntimeContext mockContext = Mockito.mock(TraversalRuntimeContext.class);
+        
+        // This should not throw an exception
+        VertexCentricTraversal traversal = executor.execute(mockRelNode, mockContext);
+        
+        // The result should not be null
+        Assert.assertNotNull(traversal);
+    }
 }

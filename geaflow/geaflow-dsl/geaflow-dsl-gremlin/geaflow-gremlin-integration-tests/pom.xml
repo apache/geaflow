@@ -29,25 +29,13 @@
 
     <modelVersion>4.0.0</modelVersion>
 
-    <artifactId>geaflow-dsl-gremlin-parser</artifactId>
+    <artifactId>geaflow-dsl-gremlin-integration-tests</artifactId>
 
     <dependencies>
-        <!-- TinkerPop core dependency -->
-        <dependency>
-            <groupId>org.apache.tinkerpop</groupId>
-            <artifactId>gremlin-core</artifactId>
-        </dependency>
-
-        <!-- GeaFlow DSL common -->
+        <!-- GeaFlow Gremlin parser -->
         <dependency>
             <groupId>org.apache.geaflow</groupId>
-            <artifactId>geaflow-dsl-common</artifactId>
-        </dependency>
-
-        <!-- GeaFlow DSL parser -->
-        <dependency>
-            <groupId>org.apache.geaflow</groupId>
-            <artifactId>geaflow-dsl-parser</artifactId>
+            <artifactId>geaflow-dsl-gremlin-parser</artifactId>
         </dependency>
 
         <!-- GeaFlow Gremlin plan -->
@@ -60,6 +48,19 @@
         <dependency>
             <groupId>org.apache.geaflow</groupId>
             <artifactId>geaflow-dsl-gremlin-runtime</artifactId>
+        </dependency>
+
+        <!-- GeaFlow DSL plan -->
+        <dependency>
+            <groupId>org.apache.geaflow</groupId>
+            <artifactId>geaflow-dsl-plan</artifactId>
+        </dependency>
+
+        <!-- Google Guava for Sets utility -->
+        <dependency>
+            <groupId>com.google.guava</groupId>
+            <artifactId>guava</artifactId>
+            <version>31.1-jre</version>
         </dependency>
 
         <!-- Test dependencies -->

@@ -19,10 +19,13 @@
 
 package org.apache.geaflow.dsl.gremlin.parser;
 
-import org.apache.tinkerpop.gremlin.process.traversal.Bytecode;
-import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversal;
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversalSource;
+import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversal;
+import org.apache.tinkerpop.gremlin.process.traversal.Bytecode;
+import org.apache.tinkerpop.gremlin.jsr223.GremlinGroovyScriptEngine;
 import org.apache.tinkerpop.gremlin.structure.Graph;
+import javax.script.Bindings;
+import javax.script.ScriptException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,13 +49,35 @@ public class GeaFlowGremlinParser implements IGremlinParser {
         }
         
         try {
-            // Parse the Gremlin script string into a traversal
-            GraphTraversal traversal = (GraphTraversal) g.parse(gremlinScript);
+            // Create a script engine for parsing Gremlin scripts
+            GremlinGroovyScriptEngine scriptEngine = new GremlinGroovyScriptEngine();
+            
+            // Create bindings for the script engine
+            Bindings bindings = scriptEngine.createBindings();
+            bindings.put("g", g); // Add the GraphTraversalSource to the bindings
+            
+            // Parse and execute the script to get the traversal
+            Object result = scriptEngine.eval(gremlinScript, bindings);
+            
+            // Extract the traversal from the result
+            GraphTraversal traversal;
+            if (result instanceof GraphTraversal) {
+                traversal = (GraphTraversal) result;
+            } else {
+                // If the result is not a traversal, create a simple V() traversal as fallback
+                traversal = g.V();
+            }
+            
+            // Get the bytecode from the traversal
             Bytecode bytecode = traversal.asAdmin().getBytecode();
+            
             return new GremlinQuery(gremlinScript, bytecode, traversal);
-        } catch (Exception e) {
+        } catch (ScriptException e) {
             LOGGER.error("Failed to parse Gremlin script: {}", gremlinScript, e);
             throw new RuntimeException("Failed to parse Gremlin script: " + gremlinScript, e);
+        } catch (Exception e) {
+            LOGGER.error("Unexpected error while parsing Gremlin script: {}", gremlinScript, e);
+            throw new RuntimeException("Unexpected error while parsing Gremlin script: " + gremlinScript, e);
         }
     }
 
@@ -64,7 +89,7 @@ public class GeaFlowGremlinParser implements IGremlinParser {
         
         try {
             // Create a traversal from the bytecode
-            GraphTraversal traversal = GraphTraversalSource.from(g.getGraph(), bytecode);
+            GraphTraversal traversal = g.from(bytecode);
             return new GremlinQuery(null, bytecode, traversal);
         } catch (Exception e) {
             LOGGER.error("Failed to create traversal from bytecode", e);

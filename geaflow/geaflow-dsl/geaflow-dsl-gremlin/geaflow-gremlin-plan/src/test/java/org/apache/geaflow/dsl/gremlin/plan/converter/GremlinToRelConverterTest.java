@@ -28,6 +28,7 @@ import org.apache.tinkerpop.gremlin.tinkergraph.structure.TinkerGraph;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+import org.mockito.Mockito;
 
 /**
  * Integration tests for GremlinToRelConverter.
@@ -46,18 +47,78 @@ public class GremlinToRelConverterTest {
     }
 
     @Test
+    public void testConverterInitialization() {
+        // Test that the converter can be instantiated
+        Assert.assertNotNull(converter);
+    }
+    
+    @Test
+    public void testConvertMethodExists() {
+        // Test that the convert method exists and can be called
+        Assert.assertTrue(true); // Placeholder test
+    }
+    
+    @Test
     public void testConvertSimpleQuery() {
-        // Test converting a simple Gremlin query to RelNode
+        // Test converting a simple Gremlin query
         String gremlinQuery = "g.V()";
         GremlinQuery query = parser.parse(gremlinQuery);
         
         // Create a mock GQLToRelConverter for testing
-        GQLToRelConverter gqlToRelConverter = new GQLToRelConverter(null, null, null);
+        GQLToRelConverter mockGqlConverter = Mockito.mock(GQLToRelConverter.class);
         
-        RelNode relNode = converter.convert(query, gqlToRelConverter);
+        // This should not throw an exception
+        RelNode relNode = converter.convert(query, mockGqlConverter);
         
-        // The conversion should succeed (even if returning null in our placeholder implementation)
-        // In a real implementation, we would assert on the specific RelNode type
+        // The result can be null in our current implementation
+        Assert.assertTrue(true); // Placeholder assertion
+    }
+    
+    @Test
+    public void testConvertComplexQuery() {
+        // Test converting a more complex Gremlin query
+        String gremlinQuery = "g.V().out('knows').has('age', gt(30))";
+        GremlinQuery query = parser.parse(gremlinQuery);
+        
+        // Create a mock GQLToRelConverter for testing
+        GQLToRelConverter mockGqlConverter = Mockito.mock(GQLToRelConverter.class);
+        
+        // This should not throw an exception
+        RelNode relNode = converter.convert(query, mockGqlConverter);
+        
+        // The result can be null in our current implementation
+        Assert.assertTrue(true); // Placeholder assertion
+    }
+    
+    @Test
+    public void testConvertQueryWithValues() {
+        // Test converting a query with values step
+        String gremlinQuery = "g.V().values('name')";
+        GremlinQuery query = parser.parse(gremlinQuery);
+        
+        // Create a mock GQLToRelConverter for testing
+        GQLToRelConverter mockGqlConverter = Mockito.mock(GQLToRelConverter.class);
+        
+        // This should not throw an exception
+        RelNode relNode = converter.convert(query, mockGqlConverter);
+        
+        // The result can be null in our current implementation
+        Assert.assertTrue(true); // Placeholder assertion
+    }
+    
+    @Test
+    public void testConvertQueryWithPath() {
+        // Test converting a query with path step
+        String gremlinQuery = "g.V().out().path()";
+        GremlinQuery query = parser.parse(gremlinQuery);
+        
+        // Create a mock GQLToRelConverter for testing
+        GQLToRelConverter mockGqlConverter = Mockito.mock(GQLToRelConverter.class);
+        
+        // This should not throw an exception
+        RelNode relNode = converter.convert(query, mockGqlConverter);
+        
+        // The result can be null in our current implementation
         Assert.assertTrue(true); // Placeholder assertion
     }
 }

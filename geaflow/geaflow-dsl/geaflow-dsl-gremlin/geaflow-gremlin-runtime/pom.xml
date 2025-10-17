@@ -55,14 +55,5 @@
             <groupId>org.apache.geaflow</groupId>
             <artifactId>geaflow-api</artifactId>
         </dependency>
-
-        <!-- Test dependencies -->
-        <dependency>
-            <groupId>org.apache.geaflow</groupId>
-            <artifactId>geaflow-dsl-runtime</artifactId>
-            <type>test-jar</type>
-            <scope>test</scope>
-            <version>${project.version}</version>
-        </dependency>
     </dependencies>
 </project>

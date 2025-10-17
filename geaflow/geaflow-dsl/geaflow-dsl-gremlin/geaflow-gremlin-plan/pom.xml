@@ -44,19 +44,19 @@
             <artifactId>geaflow-dsl-parser</artifactId>
         </dependency>
 
-        <!-- GeaFlow Gremlin parser -->
-        <dependency>
-            <groupId>org.apache.geaflow</groupId>
-            <artifactId>geaflow-dsl-gremlin-parser</artifactId>
-        </dependency>
-
         <!-- Test dependencies -->
         <dependency>
-            <groupId>org.apache.geaflow</groupId>
-            <artifactId>geaflow-dsl-plan</artifactId>
-            <type>test-jar</type>
+            <groupId>org.apache.tinkerpop</groupId>
+            <artifactId>tinkergraph-gremlin</artifactId>
+            <version>${tinkerpop.version}</version>
             <scope>test</scope>
-            <version>${project.version}</version>
+        </dependency>
+        
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <version>4.13.2</version>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 </project>

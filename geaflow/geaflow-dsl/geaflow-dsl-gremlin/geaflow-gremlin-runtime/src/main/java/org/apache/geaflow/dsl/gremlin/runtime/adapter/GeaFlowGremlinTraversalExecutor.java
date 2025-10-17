@@ -20,10 +20,10 @@
 package org.apache.geaflow.dsl.gremlin.runtime.adapter;
 
 import org.apache.calcite.rel.RelNode;
+import org.apache.geaflow.api.graph.function.vc.VertexCentricCombineFunction;
 import org.apache.geaflow.api.graph.traversal.VertexCentricTraversal;
-import org.apache.geaflow.dsl.runtime.traversal.TraversalContext;
-import org.apache.geaflow.model.traversal.ITreePath;
-import org.apache.geaflow.model.traversal.MessageBox;
+import org.apache.geaflow.dsl.runtime.traversal.TraversalRuntimeContext;
+import org.apache.geaflow.model.graph.message.IGraphMessage;
 
 /**
  * Implementation of GremlinTraversalExecutor for GeaFlow.
@@ -31,16 +31,22 @@ import org.apache.geaflow.model.traversal.MessageBox;
 public class GeaFlowGremlinTraversalExecutor implements GremlinTraversalExecutor {
 
     @Override
-    public VertexCentricTraversal execute(RelNode relNode, TraversalContext traversalContext) {
+    public VertexCentricTraversal execute(RelNode relNode, TraversalRuntimeContext traversalContext) {
         // Convert the RelNode to a VertexCentricTraversal
         // This is where we would implement the logic to translate the RelNode
         // into a VertexCentricTraversal that can be executed by GeaFlow
         
-        // For now, we'll return a placeholder implementation
-        return new VertexCentricTraversal<Object, Object, Object, MessageBox, ITreePath>(10) {
+        // Create and return a VertexCentricTraversal with the GremlinVertexProgram
+        return new VertexCentricTraversal<Object, Object, Object, IGraphMessage, Object>(10) {
             @Override
-            public org.apache.geaflow.api.graph.function.vc.VertexCentricTraversalFunction<Object, Object, Object, MessageBox, ITreePath> getTraversalFunction() {
-                return null; // Placeholder
+            public org.apache.geaflow.api.graph.function.vc.VertexCentricTraversalFunction<Object, Object, Object, IGraphMessage, Object> getTraversalFunction() {
+                return new GremlinVertexProgram();
+            }
+            
+            @Override
+            public VertexCentricCombineFunction<IGraphMessage> getCombineFunction() {
+                // Return null for now, as we don't need a combine function for Gremlin traversals
+                return null;
             }
         };
     }
