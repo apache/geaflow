@@ -134,6 +134,7 @@ public class MatchEdgeOperator extends AbstractStepOperator<MatchEdgeFunction, V
                         }
                     }
 
+
                     if (fieldNames.contains(columnName) || columnName.equals("srcId")
                             || columnName.equals("targetId")) {  //存在已经筛选出的字段
                         inputs.add(new FieldExpression(null, i, column.getType()));
@@ -181,7 +182,10 @@ public class MatchEdgeOperator extends AbstractStepOperator<MatchEdgeFunction, V
         if (needAddToPath) {
             int numEdge = 0;
             for (RowEdge edge : edgeGroup) {
-                edge =  projectEdge(edge); //替换原有边
+                // 如果没有字段，说明未能成功识别该节点（可能由于嵌套），则不进行投影
+                if (fields != null) {
+                    edge = projectEdge(edge); //替换原有边
+                }
 
                 // add edge to path.
                 if (!targetTreePaths.containsKey(edge.getTargetId())) {
