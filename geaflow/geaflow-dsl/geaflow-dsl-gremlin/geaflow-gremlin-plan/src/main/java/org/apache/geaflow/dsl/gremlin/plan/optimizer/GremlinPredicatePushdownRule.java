@@ -181,7 +181,7 @@ public class GremlinPredicatePushdownRule implements GremlinOptimizationRule {
     }
     
     private RelNode pushPredicateToGraphScan(GraphScan graphScan, PredicateAnalysisResult result) {
-        // Implement logic to push predicate to GraphScan
+        // Push predicates down to GraphScan for early filtering at storage layer
         LOGGER.info("Pushing predicate down to GraphScan");
         
         if (!result.getPushablePredicates().isEmpty()) {
@@ -189,19 +189,37 @@ public class GremlinPredicatePushdownRule implements GremlinOptimizationRule {
             RexBuilder rexBuilder = graphScan.getCluster().getRexBuilder();
             RexNode combinedCondition = combinePredicatesWithAnd(rexBuilder, result.getPushablePredicates());
             
-            // For a full implementation, we would create a new GraphScan with the filter
-            // For now, we'll just log the condition that would be pushed down
-            LOGGER.info("Would push down condition to GraphScan: {}", combinedCondition);
+            LOGGER.info("Pushing down condition to GraphScan: {}", combinedCondition);
             
-            // TODO: In a real implementation, we would create a new GraphScan with the pushed-down predicates
-            // This would require modifying the GraphScan implementation to accept filter conditions
+            // Get existing filter from GraphScan
+            RexNode existingFilter = graphScan.getFilters();
+            
+            // Combine with existing filter if present
+            RexNode newFilter;
+            if (existingFilter != null) {
+                newFilter = rexBuilder.makeCall(
+                    SqlStdOperatorTable.AND,
+                    existingFilter,
+                    combinedCondition
+                );
+            } else {
+                newFilter = combinedCondition;
+            }
+            
+            // Create a new GraphScan with the combined filter
+            return graphScan.copy(
+                graphScan.getTraitSet(),
+                graphScan.getGraph(),
+                newFilter,
+                graphScan.getRowType()
+            );
         }
         
         return graphScan;
     }
     
     private RelNode pushPredicateToGraphMatch(GraphMatch graphMatch, PredicateAnalysisResult result) {
-        // Implement logic to push predicate to GraphMatch
+        // Push predicates down to GraphMatch for filtering during traversal
         LOGGER.info("Pushing predicate down to GraphMatch");
         
         if (!result.getPushablePredicates().isEmpty()) {
@@ -209,15 +227,105 @@ public class GremlinPredicatePushdownRule implements GremlinOptimizationRule {
             RexBuilder rexBuilder = graphMatch.getCluster().getRexBuilder();
             RexNode combinedCondition = combinePredicatesWithAnd(rexBuilder, result.getPushablePredicates());
             
-            // For a full implementation, we would create a new GraphMatch with the filter
-            // For now, we'll just log the condition that would be pushed down
-            LOGGER.info("Would push down condition to GraphMatch: {}", combinedCondition);
+            LOGGER.info("Pushing down condition to GraphMatch: {}", combinedCondition);
             
-            // TODO: In a real implementation, we would add the condition to the graph match's filter list
-            // This would require modifying the GraphMatch implementation to accept additional filter conditions
+            // Get the path pattern from GraphMatch
+            org.apache.geaflow.dsl.rel.match.IMatchNode pathPattern = graphMatch.getPathPattern();
+            
+            // Push the filter down to the appropriate match node
+            org.apache.geaflow.dsl.rel.match.IMatchNode updatedPattern = pushFilterToMatchNode(
+                pathPattern, 
+                combinedCondition,
+                rexBuilder
+            );
+            
+            // Create a new GraphMatch with the updated pattern
+            if (updatedPattern != pathPattern) {
+                return graphMatch.copy(
+                    graphMatch.getTraitSet(),
+                    graphMatch.getInput(),
+                    updatedPattern,
+                    graphMatch.getRowType()
+                );
+            }
         }
         
         return graphMatch;
+    }
+    
+    /**
+     * Push a filter down to the appropriate match node in the pattern.
+     * 
+     * @param matchNode the match node to push the filter to
+     * @param filter the filter to push down
+     * @param rexBuilder the RexBuilder to use
+     * @return the updated match node
+     */
+    private org.apache.geaflow.dsl.rel.match.IMatchNode pushFilterToMatchNode(
+            org.apache.geaflow.dsl.rel.match.IMatchNode matchNode,
+            RexNode filter,
+            RexBuilder rexBuilder) {
+        
+        // If this is a VertexMatch or EdgeMatch, we can push the filter down
+        if (matchNode instanceof org.apache.geaflow.dsl.rel.match.VertexMatch) {
+            org.apache.geaflow.dsl.rel.match.VertexMatch vertexMatch = 
+                (org.apache.geaflow.dsl.rel.match.VertexMatch) matchNode;
+            
+            // Get existing filter
+            RexNode existingFilter = vertexMatch.getPushDownFilter();
+            
+            // Combine with new filter
+            RexNode newFilter;
+            if (existingFilter != null) {
+                newFilter = rexBuilder.makeCall(
+                    SqlStdOperatorTable.AND,
+                    existingFilter,
+                    filter
+                );
+            } else {
+                newFilter = filter;
+            }
+            
+            // Create a new VertexMatch with the combined filter
+            return vertexMatch.copy(newFilter);
+        } else if (matchNode instanceof org.apache.geaflow.dsl.rel.match.EdgeMatch) {
+            org.apache.geaflow.dsl.rel.match.EdgeMatch edgeMatch = 
+                (org.apache.geaflow.dsl.rel.match.EdgeMatch) matchNode;
+            
+            // Get existing filter
+            RexNode existingFilter = edgeMatch.getPushDownFilter();
+            
+            // Combine with new filter
+            RexNode newFilter;
+            if (existingFilter != null) {
+                newFilter = rexBuilder.makeCall(
+                    SqlStdOperatorTable.AND,
+                    existingFilter,
+                    filter
+                );
+            } else {
+                newFilter = filter;
+            }
+            
+            // Create a new EdgeMatch with the combined filter
+            return edgeMatch.copy(newFilter);
+        } else if (matchNode instanceof org.apache.geaflow.dsl.rel.match.SingleMatchNode) {
+            // For other SingleMatchNode types, recursively push down to the input
+            org.apache.geaflow.dsl.rel.match.SingleMatchNode singleMatch = 
+                (org.apache.geaflow.dsl.rel.match.SingleMatchNode) matchNode;
+            
+            if (singleMatch.getInput() != null) {
+                org.apache.geaflow.dsl.rel.match.IMatchNode updatedInput = 
+                    pushFilterToMatchNode(singleMatch.getInput(), filter, rexBuilder);
+                
+                if (updatedInput != singleMatch.getInput()) {
+                    return singleMatch.copy(updatedInput);
+                }
+            }
+        }
+        
+        // If we can't push down, return the original node
+        return matchNode;
     }
     
     /**
