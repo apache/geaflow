@@ -19,23 +19,21 @@
 
 package org.apache.geaflow.dsl.gremlin.plan.optimizer;
 
+import java.util.ArrayList;
+import java.util.List;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.core.Filter;
+import org.apache.calcite.rex.RexBuilder;
 import org.apache.calcite.rex.RexCall;
 import org.apache.calcite.rex.RexInputRef;
 import org.apache.calcite.rex.RexLiteral;
 import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
-import org.apache.geaflow.dsl.rel.GraphScan;
 import org.apache.geaflow.dsl.rel.GraphMatch;
-import org.apache.geaflow.dsl.rel.match.MatchFilter;
-import org.apache.calcite.rex.RexBuilder;
-import org.apache.calcite.rel.type.RelDataType;
+import org.apache.geaflow.dsl.rel.GraphScan;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * Optimization rule for pushing predicates down to graph scans in Gremlin queries.
@@ -116,22 +114,19 @@ public class GremlinPredicatePushdownRule implements GremlinOptimizationRule {
                         unpushablePredicates.add(operand);
                     }
                 }
-            }
-            // Handle OR conditions - these are generally not pushable
-            else if (kind == SqlKind.OR) {
+            } else if (kind == SqlKind.OR) {
+                // Handle OR conditions - these are generally not pushable
                 unpushablePredicates.add(condition);
-            }
-            // Handle comparison operations (=, !=, <, >, <=, >=)
-            else if (isComparisonOperator(kind)) {
+            } else if (isComparisonOperator(kind)) {
+                // Handle comparison operations (=, !=, <, >, <=, >=)
                 // Check if this comparison can be pushed down
                 if (isPushableComparison(call)) {
                     pushablePredicates.add(condition);
                 } else {
                     unpushablePredicates.add(condition);
                 }
-            }
-            // Handle other operators
-            else {
+            } else {
+                // Handle other operators
                 // For now, assume other operators are not pushable
                 unpushablePredicates.add(condition);
             }
@@ -153,12 +148,12 @@ public class GremlinPredicatePushdownRule implements GremlinOptimizationRule {
      * @return true if it's a comparison operator, false otherwise
      */
     private boolean isComparisonOperator(SqlKind kind) {
-        return kind == SqlKind.EQUALS || 
-               kind == SqlKind.NOT_EQUALS || 
-               kind == SqlKind.LESS_THAN || 
-               kind == SqlKind.GREATER_THAN || 
-               kind == SqlKind.LESS_THAN_OR_EQUAL || 
-               kind == SqlKind.GREATER_THAN_OR_EQUAL;
+        return kind == SqlKind.EQUALS
+               || kind == SqlKind.NOT_EQUALS
+               || kind == SqlKind.LESS_THAN
+               || kind == SqlKind.GREATER_THAN
+               || kind == SqlKind.LESS_THAN_OR_EQUAL
+               || kind == SqlKind.GREATER_THAN_OR_EQUAL;
     }
     
     /**
@@ -181,8 +176,8 @@ public class GremlinPredicatePushdownRule implements GremlinOptimizationRule {
         RexNode right = operands.get(1);
         
         // Check if one operand is a field reference and the other is a literal
-        return (left instanceof RexInputRef && right instanceof RexLiteral) ||
-               (left instanceof RexLiteral && right instanceof RexInputRef);
+        return (left instanceof RexInputRef && right instanceof RexLiteral)
+               || (left instanceof RexLiteral && right instanceof RexInputRef);
     }
     
     private RelNode pushPredicateToGraphScan(GraphScan graphScan, PredicateAnalysisResult result) {
