@@ -28,7 +28,6 @@ import org.apache.calcite.rel.logical.LogicalProject;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeField;
 import org.apache.calcite.rex.*;
-import org.apache.geaflow.dsl.common.types.TableField;
 import org.apache.geaflow.dsl.rel.GraphMatch;
 import org.apache.geaflow.dsl.rel.PathModify.PathModifyExpression;
 import org.apache.geaflow.dsl.rel.logical.LogicalGraphMatch;
@@ -93,7 +92,7 @@ public class SelectFieldPruneRule extends RelOptRule {
     }
 
     // 从RexNode向下递归，挖掘所有可能的特征
-    private static Set<RexFieldAccess> collectAllFieldAccesses(RexBuilder rexBuilder, RexNode rootNode){
+    private static Set<RexFieldAccess> collectAllFieldAccesses(RexBuilder rexBuilder, RexNode rootNode) {
         Set<RexFieldAccess> fieldAccesses = new HashSet<>();
         Queue<RexNode> queue = new LinkedList<>();
         queue.offer(rootNode);
@@ -115,8 +114,11 @@ public class SelectFieldPruneRule extends RelOptRule {
                     String fieldName = rexCall.getOperator().getName();
 
                     // 如果是特殊字段，按原来的映射处理
-                    if ("id".equals(fieldName) || "label".equals(fieldName) ||
-                            "srcId".equals(fieldName) || "targetId".equals(fieldName)) {
+                    if ("id".equals(fieldName)
+                            || "label".equals(fieldName)
+                            || "srcId".equals(fieldName)
+                            || "targetId".equals(fieldName)) {
+
                         String mappedFieldName = "id".equals(fieldName)     ? "~id" :
                                 "label".equals(fieldName)  ? "~label" :
                                         "srcId".equals(fieldName)  ? "~srcId" :
