@@ -29,7 +29,7 @@ import org.apache.geaflow.dsl.common.binary.decoder.DefaultRowDecoder;
 import org.apache.geaflow.dsl.common.binary.decoder.RowDecoder;
 import org.apache.geaflow.dsl.common.data.Row;
 import org.apache.geaflow.dsl.common.types.StructType;
-import org.apache.geaflow.dsl.optimize.rule.SelectFieldPruneRule;
+import org.apache.geaflow.dsl.optimize.rule.ProjectFieldPruneRule;
 import org.apache.geaflow.dsl.planner.GQLContext;
 import org.apache.geaflow.dsl.runtime.QueryContext;
 import org.apache.geaflow.dsl.runtime.QueryResult;
@@ -63,7 +63,6 @@ public class QueryCommand implements IQueryCommand {
         RelNode logicalPlan = gqlContext.toRelNode(validateQuery);
         LOGGER.info("Convert sql to logical plan:\n{}", RelOptUtil.toString(logicalPlan));
 
-        SelectFieldPruneRule.resetState(); //尝试清空状态
         RelNode optimizedNode = gqlContext.optimize(context.getLogicalRules(), logicalPlan);
         LOGGER.info("After optimize logical plan:\n{}", RelOptUtil.toString(optimizedNode));
 

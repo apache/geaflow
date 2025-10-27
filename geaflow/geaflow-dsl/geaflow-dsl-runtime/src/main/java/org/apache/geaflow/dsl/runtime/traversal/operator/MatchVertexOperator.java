@@ -21,6 +21,7 @@ package org.apache.geaflow.dsl.runtime.traversal.operator;
 
 import java.util.*;
 import java.util.stream.Collectors;
+import org.apache.calcite.rex.RexFieldAccess;
 import org.apache.geaflow.common.type.IType;
 import org.apache.geaflow.dsl.common.binary.encoder.DefaultVertexEncoder;
 import org.apache.geaflow.dsl.common.binary.encoder.VertexEncoder;
@@ -48,7 +49,10 @@ import org.apache.geaflow.metrics.common.MetricNameFormatter;
 import org.apache.geaflow.metrics.common.api.Histogram;
 
 public class MatchVertexOperator extends AbstractStepOperator<MatchVertexFunction, StepRecord,
-    VertexRecord> implements LabeledStepOperator {
+    VertexRecord> implements FilteredFieldsOperator, LabeledStepOperator {
+
+    private static final String ID = "id";
+    private static final String LABEL = "~label";
 
     private Histogram loadVertexRt;
 
@@ -56,10 +60,17 @@ public class MatchVertexOperator extends AbstractStepOperator<MatchVertexFunctio
 
     private Set<Object> idSet;
 
-    //private List<RexFieldAccess> filteredFields;
+    private Set<RexFieldAccess> fields;
+
+    // For each schema type，project will only be initialized once.
     private Map<String, ProjectFunction> projectFunctions = new HashMap<>();
     private Map<String, List<TableField>> tableOutputTypes = new HashMap<>();
-    //也可以用这两个变量保证每个节点/边匹配只会被初始化一次
+
+    @Override
+    public StepOperator<StepRecord, VertexRecord> withFilteredFields(Set<RexFieldAccess> fields) {
+        this.fields = fields;
+        return this;
+    }
 
     public MatchVertexOperator(long id, MatchVertexFunction function) {
         super(id, function);
@@ -89,27 +100,26 @@ public class MatchVertexOperator extends AbstractStepOperator<MatchVertexFunctio
     }
 
     private RowVertex projectVertex(RowVertex vertex) {
-        if (vertex == null) {  //找不到符合条件节点，无法映射
+        if (vertex == null) {
             return null;
         }
 
-        String compactedVertexLabel = vertex.getLabel();  // 原始变量
+        // Handle the case of global variables
+        String compactedVertexLabel = vertex.getLabel();
         for (String addingName: addingVertexFieldNames) {
-            compactedVertexLabel += "_" + addingName;  // 将addingVariable后的label设为新的一类
+            compactedVertexLabel += "_" + addingName;
         }
 
-        // 当前表projectFunction未定义
+        // Initialize
         if (this.projectFunctions.get(compactedVertexLabel) == null) {
             initializeProject(vertex, compactedVertexLabel, addingVertexFieldTypes, addingVertexFieldNames);
         }
 
-        //进行projection
+        // Utilize project functions to filter Fields
         ProjectFunction currentProjectFunction = this.projectFunctions.get(compactedVertexLabel);
-        ObjectRow projectVertex = (ObjectRow) currentProjectFunction.project(vertex); //通过project进行属性筛选
+        ObjectRow projectVertex = (ObjectRow) currentProjectFunction.project(vertex);
         RowVertex vertexDecoded = (RowVertex) projectVertex.getField(0, null);
 
-
-        //需要重构Fields，以定义VertexType，然后再进行encode
         VertexType vertexType = new VertexType(this.tableOutputTypes.get(compactedVertexLabel));
         VertexEncoder encoder = new DefaultVertexEncoder(vertexType);
         return encoder.encode(vertexDecoded);
@@ -117,13 +127,13 @@ public class MatchVertexOperator extends AbstractStepOperator<MatchVertexFunctio
 
     private void initializeProject(RowVertex vertex, String compactedLabel,
                                    IType<?>[] globalTypes, String[] globalNames) {
-        List<TableField> graphSchemaFieldList = graphSchema.getFields();  //这里是图中的所有表集合
+        List<TableField> graphSchemaFieldList = graphSchema.getFields();
 
-        List<TableField> fieldsOfTable;  //这里的是一张表里的所有字段
+        List<TableField> fieldsOfTable;
 
-        List<TableField> tableOutputType = new ArrayList<>(); //记录新表格所有字段所包括的输出Type
+        List<TableField> tableOutputType = new ArrayList<>();
 
-        //提取当前表格内，使用到的字段集合。
+        // Extract field names from RexFieldAccess list into a set
         Set<String> fieldNames = (this.fields == null)
                 ? Collections.emptySet()
                 : this.fields.stream()
@@ -131,21 +141,20 @@ public class MatchVertexOperator extends AbstractStepOperator<MatchVertexFunctio
                 .collect(Collectors.toSet());
 
 
-        //对于每个表，都需要一个expression
-        List<Expression> expressions = new ArrayList<>();  //对于每个表，都需要一个expression
+        List<Expression> expressions = new ArrayList<>();
         String vertexLabel = vertex.getLabel();
 
-        for (TableField tableField : graphSchemaFieldList) {  //枚举所有table，并构造List<Expression>
-            if (vertexLabel.equals(tableField.getName())) {  //table名匹配 (如都为`person`)
+        for (TableField tableField : graphSchemaFieldList) {  // Enumerate list of fields in every table.
+            if (vertexLabel.equals(tableField.getName())) {
 
                 List<Expression> inputs = new ArrayList<>();
                 fieldsOfTable = ((VertexType)tableField.getType()).getFields();
 
-                for (int i = 0; i < fieldsOfTable.size(); i++) { //枚举表格内不同字段，并做属性筛选
+                for (int i = 0; i < fieldsOfTable.size(); i++) { // Enumerate list of fields in the targeted table.
                     TableField column = fieldsOfTable.get(i);
                     String columnName = column.getName();
 
-                    //标准化，将形如personId改为id
+                    // Normalize: convert fields like `personId` to `id`
                     if (columnName.startsWith(vertexLabel)) {
                         String suffix = columnName.substring(vertexLabel.length());
                         if (!suffix.isEmpty()) {
@@ -154,19 +163,23 @@ public class MatchVertexOperator extends AbstractStepOperator<MatchVertexFunctio
                         }
                     }
 
-                    if (fieldNames.contains(columnName) || columnName.equals("id")) {  //存在已经筛选出的字段或是特殊的Id字段
+                    if (fieldNames.contains(columnName) || columnName.equals(ID)) {
+                        // Include a field if it's in fieldNames or is ID column
                         inputs.add(new FieldExpression(null, i, column.getType()));
                         tableOutputType.add(column);
-                    } else if (columnName.equals("~label")) {  //补充label
+                    } else if (columnName.equals(LABEL)) {
+                        // Add vertex label for LABEL column
                         inputs.add(new LiteralExpression(vertex.getLabel(), column.getType()));
                         tableOutputType.add(column);
-                    } else {  //被剔除掉的特征需要使用null占位
+                    } else {
+                        // Use null placeholder for excluded fields
                         inputs.add(new LiteralExpression(null, column.getType()));
                         tableOutputType.add(column);
                     }
                 }
 
-                if (globalNames.length > 0) { // 存在新的变量
+                // Handle additional mapping when all global variables exist
+                if (globalNames.length > 0) {
                     for (int j = 0; j < globalNames.length; j++) {
                         int fieldIndex = j + fieldsOfTable.size();
                         inputs.add(new FieldExpression(null, fieldIndex, globalTypes[j]));
@@ -178,10 +191,9 @@ public class MatchVertexOperator extends AbstractStepOperator<MatchVertexFunctio
             }
         }
 
-        //封装映射函数
         ProjectFunction projectFunction = new ProjectFunctionImpl(expressions);
 
-        //储存project预备阶段的中间值（使用复合标签）
+        // Store project functions
         this.projectFunctions.put(compactedLabel, projectFunction);
         this.tableOutputTypes.put(compactedLabel, tableOutputType);
     }
@@ -195,9 +207,8 @@ public class MatchVertexOperator extends AbstractStepOperator<MatchVertexFunctio
                 graphSchema,
                 addingVertexFieldTypes);
 
-            // 如果没有字段，说明未能成功识别该节点（可能由于嵌套），则不进行投影
             if (fields != null) {
-                vertex = projectVertex(vertex);  //通过字段进行筛选
+                vertex = projectVertex(vertex);
             }
             loadVertexRt.update(System.currentTimeMillis() - startTs);
             if (vertex == null && !isOptionMatch) {

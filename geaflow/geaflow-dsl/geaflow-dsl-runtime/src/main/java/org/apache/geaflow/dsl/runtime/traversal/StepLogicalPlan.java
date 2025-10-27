@@ -57,6 +57,7 @@ import org.apache.geaflow.dsl.runtime.function.graph.StepPathModifyFunction;
 import org.apache.geaflow.dsl.runtime.function.graph.StepSortFunction;
 import org.apache.geaflow.dsl.runtime.function.graph.StepSortFunctionImpl;
 import org.apache.geaflow.dsl.runtime.function.graph.TraversalFromVertexFunction;
+import org.apache.geaflow.dsl.runtime.traversal.operator.FilteredFieldsOperator;
 import org.apache.geaflow.dsl.runtime.traversal.operator.MatchEdgeOperator;
 import org.apache.geaflow.dsl.runtime.traversal.operator.MatchVertexOperator;
 import org.apache.geaflow.dsl.runtime.traversal.operator.MatchVirtualEdgeOperator;
@@ -429,8 +430,10 @@ public class StepLogicalPlan implements Serializable {
         outputs.add(output);
     }
 
-    public StepLogicalPlan withFilteredFileds(Set<RexFieldAccess> fields) {
-        operator.withFilteredFields(fields);
+    public StepLogicalPlan withFilteredFields(Set<RexFieldAccess> fields) {
+        if (operator instanceof FilteredFieldsOperator) {
+            ((FilteredFieldsOperator) operator).withFilteredFields(fields);
+        }
         return this;
     }
 

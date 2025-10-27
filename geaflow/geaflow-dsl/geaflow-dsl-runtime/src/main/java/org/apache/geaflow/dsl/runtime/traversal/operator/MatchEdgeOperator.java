@@ -21,6 +21,7 @@ package org.apache.geaflow.dsl.runtime.traversal.operator;
 
 import java.util.*;
 import java.util.stream.Collectors;
+import org.apache.calcite.rex.RexFieldAccess;
 import org.apache.geaflow.common.type.IType;
 import org.apache.geaflow.dsl.common.binary.encoder.DefaultEdgeEncoder;
 import org.apache.geaflow.dsl.common.binary.encoder.EdgeEncoder;
@@ -46,16 +47,28 @@ import org.apache.geaflow.metrics.common.MetricNameFormatter;
 import org.apache.geaflow.metrics.common.api.Histogram;
 
 public class MatchEdgeOperator extends AbstractStepOperator<MatchEdgeFunction, VertexRecord, EdgeGroupRecord>
-    implements LabeledStepOperator {
+    implements FilteredFieldsOperator, LabeledStepOperator {
+
+    private static final String SOURCE_ID = "srcId";
+    private static final String TARGET_ID = "targetId";
+    private static final String LABEL = "~label";
 
     private Histogram loadEdgeHg;
     private Histogram loadEdgeRt;
 
     private final boolean isOptionMatch;
 
+    private Set<RexFieldAccess> fields;
+
+    // For each schema type，project will only be initialized once.
     private ProjectFunction projectFunction = null;
     private List<TableField> tableOutputType = null;
-    //也可以用这两个变量保证每个节点/边匹配只会被初始化一次
+
+    @Override
+    public StepOperator<VertexRecord, EdgeGroupRecord> withFilteredFields(Set<RexFieldAccess> fields) {
+        this.fields = fields;
+        return this;
+    }
 
     public MatchEdgeOperator(long id, MatchEdgeFunction function) {
         super(id, function);
@@ -71,7 +84,7 @@ public class MatchEdgeOperator extends AbstractStepOperator<MatchEdgeFunction, V
     }
 
     private RowEdge projectEdge(RowEdge edge) {
-        if (edge == null) {  //找不到符合条件节点，无法映射
+        if (edge == null) {
             return null;
         }
 
@@ -79,11 +92,10 @@ public class MatchEdgeOperator extends AbstractStepOperator<MatchEdgeFunction, V
             initializeProject(edge);
         }
 
-        //进行projection
+        // Utilize project functions to filter Fields
         ObjectRow projectEdge = (ObjectRow) this.projectFunction.project(edge); //通过project进行属性筛选
         RowEdge edgeDecoded = (RowEdge) projectEdge.getField(0, null);
 
-        //需要重构Fields，以定义EdgeType，然后再进行encode
         EdgeType edgeType = new EdgeType(this.tableOutputType, false);
         EdgeEncoder encoder = new DefaultEdgeEncoder(edgeType);
         return encoder.encode(edgeDecoded);
@@ -101,7 +113,7 @@ public class MatchEdgeOperator extends AbstractStepOperator<MatchEdgeFunction, V
             throw new IllegalArgumentException("Unsupported type: " + outputType.getClass());
         }
 
-        //提取当前表格内，使用到的字段集合。
+        // Extract field names from RexFieldAccess list into a set
         Set<String> fieldNames = (this.fields == null)
                 ? Collections.emptySet()
                 : this.fields.stream()
@@ -109,23 +121,21 @@ public class MatchEdgeOperator extends AbstractStepOperator<MatchEdgeFunction, V
                 .collect(Collectors.toSet());
 
 
-        List<Expression> expressions = new ArrayList<>();  //对于每个表，都需要一个expression
-        int[] currentIndicesMapping = new int[graphSchemaFieldList.size()]; //在当前匹配下，原index到裁剪后index的映射
-        Arrays.fill(currentIndicesMapping, -1);
+        List<Expression> expressions = new ArrayList<>();
 
         List<TableField> tableOutputType = null;
-        for (TableField tableField : graphSchemaFieldList) {  //枚举所有table，并构造List<Expression>
-            if (edge.getLabel().equals(tableField.getName())) {  //table名匹配 (如都为`knows`)
+        for (TableField tableField : graphSchemaFieldList) {  // Enumerate list of fields in every table.
+            if (edge.getLabel().equals(tableField.getName())) {
 
                 List<Expression> inputs = new ArrayList<>();
                 tableOutputType = new ArrayList<>();
                 String edgeLabel = edge.getLabel();
 
-                for (int i = 0; i < fieldsOfTable.size(); i++) { //枚举表格内不同字段，并做属性筛选
+                for (int i = 0; i < fieldsOfTable.size(); i++) { // Enumerate list of fields in the targeted table.
                     TableField column = fieldsOfTable.get(i);
                     String columnName = column.getName();
 
-                    //标准化，将形如personId改为id
+                    // Normalize: convert fields like `personId` to `id`
                     if (columnName.startsWith(edgeLabel)) {
                         String suffix = columnName.substring(edgeLabel.length());
                         if (!suffix.isEmpty()) {
@@ -135,17 +145,17 @@ public class MatchEdgeOperator extends AbstractStepOperator<MatchEdgeFunction, V
                     }
 
 
-                    if (fieldNames.contains(columnName) || columnName.equals("srcId")
-                            || columnName.equals("targetId")) {  //存在已经筛选出的字段
+                    if (fieldNames.contains(columnName) || columnName.equals(SOURCE_ID)
+                            || columnName.equals(TARGET_ID)) {
+                        // Include a field if it's in fieldNames or is ID column
                         inputs.add(new FieldExpression(null, i, column.getType()));
                         tableOutputType.add(column);
-                        currentIndicesMapping[i] = inputs.size();  //记录原始索引->新索引的映射
-
-                    } else if (columnName.equals("~label")) {  //补充label
+                    } else if (columnName.equals(LABEL)) {
+                        // Add vertex label for LABEL column
                         inputs.add(new LiteralExpression(edge.getLabel(), column.getType()));
                         tableOutputType.add(column);
-                        currentIndicesMapping[i] = inputs.size();
-                    } else {  //被剔除掉的特征需要使用null占位
+                    } else {
+                        // Use null placeholder for excluded fields
                         inputs.add(new LiteralExpression(null, column.getType()));
                         tableOutputType.add(column);
                     }
@@ -182,9 +192,8 @@ public class MatchEdgeOperator extends AbstractStepOperator<MatchEdgeFunction, V
         if (needAddToPath) {
             int numEdge = 0;
             for (RowEdge edge : edgeGroup) {
-                // 如果没有字段，说明未能成功识别该节点（可能由于嵌套），则不进行投影
                 if (fields != null) {
-                    edge = projectEdge(edge); //替换原有边
+                    edge = projectEdge(edge);
                 }
 
                 // add edge to path.

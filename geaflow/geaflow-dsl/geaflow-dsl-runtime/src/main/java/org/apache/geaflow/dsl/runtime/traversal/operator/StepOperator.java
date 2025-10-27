@@ -21,7 +21,6 @@ package org.apache.geaflow.dsl.runtime.traversal.operator;
 
 import java.io.Serializable;
 import java.util.*;
-import org.apache.calcite.rex.RexFieldAccess;
 import org.apache.geaflow.common.type.IType;
 import org.apache.geaflow.dsl.common.data.StepRecord;
 import org.apache.geaflow.dsl.common.types.GraphSchema;
@@ -105,6 +104,4 @@ public interface StepOperator<IN extends StepRecord, OUT extends StepRecord> ext
     List<String> getSubQueryNames();
 
     StepOperator<IN, OUT> copy();
-
-    StepOperator<IN, OUT>  withFilteredFields(Set<RexFieldAccess> fields);
 }

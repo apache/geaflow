@@ -233,7 +233,7 @@ public class StepLogicalPlanTranslator {
                 .withModifyGraphSchema(input.getModifyGraphSchema())
                 .withOutputPathSchema(outputPath)
                 .withOutputType(nodeType)
-                .withFilteredFileds(vertexMatch.getFields());
+                .withFilteredFields(vertexMatch.getFields());
             planCache.put(label, plan);
             return plan;
         }
@@ -287,7 +287,7 @@ public class StepLogicalPlanTranslator {
                 .withModifyGraphSchema(input.getModifyGraphSchema())
                 .withOutputPathSchema(outputPath)
                 .withOutputType(nodeType)
-                .withFilteredFileds(edgeMatch.getFields());;
+                .withFilteredFields(edgeMatch.getFields());;
             planCache.put(label, plan);
             return plan;
         }

@@ -90,8 +90,8 @@ public class OptimizeRules {
         TableScanToGraphRule.INSTANCE,
         MatchIdFilterSimplifyRule.INSTANCE,
         MatchEdgeLabelFilterRemoveRule.INSTANCE,
-        SelectFieldPruneRule.GRAPH_MATCH_INSTANCE,
-        SelectFieldPruneRule.PROJECT_INSTANCE
+        GraphMatchFieldPruneRule.INSTANCE,
+        ProjectFieldPruneRule.INSTANCE
     );
 
     private static final List<RelOptRule> POST_OPTIMIZE_RULES = ImmutableList.of(

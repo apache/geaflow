@@ -28,9 +28,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.stream.Collectors;
-import org.apache.calcite.rex.RexFieldAccess;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.geaflow.common.config.keys.ExecutionConfigKeys;
 import org.apache.geaflow.common.type.IType;
@@ -88,9 +86,6 @@ public abstract class AbstractStepOperator<FUNC extends StepFunction, IN extends
     protected final long id;
 
     protected String name;
-
-    protected Set<RexFieldAccess> fields;
-
     protected final FUNC function;
     private final Map<Long, List<EndOfData>> caller2ReceiveEods = new HashMap<>();
     protected List<PathType> inputPathSchemas;
@@ -612,11 +607,6 @@ public abstract class AbstractStepOperator<FUNC extends StepFunction, IN extends
     @Override
     public StepOperator<IN, OUT> withName(String name) {
         this.name = Objects.requireNonNull(name);
-        return this;
-    }
-
-    public StepOperator<IN, OUT> withFilteredFields(Set<RexFieldAccess> fields) {
-        this.fields = fields;
         return this;
     }
 }
