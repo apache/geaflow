@@ -20,38 +20,22 @@
 package org.apache.geaflow.dsl.runtime.traversal.operator;
 
 import java.util.*;
-import java.util.stream.Collectors;
 import org.apache.calcite.rex.RexFieldAccess;
-import org.apache.geaflow.common.type.IType;
-import org.apache.geaflow.dsl.common.binary.encoder.DefaultEdgeEncoder;
-import org.apache.geaflow.dsl.common.binary.encoder.EdgeEncoder;
 import org.apache.geaflow.dsl.common.data.RowEdge;
-import org.apache.geaflow.dsl.common.data.impl.ObjectRow;
-import org.apache.geaflow.dsl.common.types.EdgeType;
-import org.apache.geaflow.dsl.common.types.TableField;
-import org.apache.geaflow.dsl.runtime.expression.Expression;
-import org.apache.geaflow.dsl.runtime.expression.construct.EdgeConstructExpression;
-import org.apache.geaflow.dsl.runtime.expression.field.FieldExpression;
-import org.apache.geaflow.dsl.runtime.expression.literal.LiteralExpression;
 import org.apache.geaflow.dsl.runtime.function.graph.MatchEdgeFunction;
 import org.apache.geaflow.dsl.runtime.function.graph.MatchEdgeFunctionImpl;
-import org.apache.geaflow.dsl.runtime.function.table.ProjectFunction;
-import org.apache.geaflow.dsl.runtime.function.table.ProjectFunctionImpl;
 import org.apache.geaflow.dsl.runtime.traversal.TraversalRuntimeContext;
 import org.apache.geaflow.dsl.runtime.traversal.data.EdgeGroup;
 import org.apache.geaflow.dsl.runtime.traversal.data.EdgeGroupRecord;
 import org.apache.geaflow.dsl.runtime.traversal.data.VertexRecord;
 import org.apache.geaflow.dsl.runtime.traversal.path.ITreePath;
+import org.apache.geaflow.dsl.runtime.util.EdgeProjectorUtil;
 import org.apache.geaflow.dsl.sqlnode.SqlMatchEdge.EdgeDirection;
 import org.apache.geaflow.metrics.common.MetricNameFormatter;
 import org.apache.geaflow.metrics.common.api.Histogram;
 
 public class MatchEdgeOperator extends AbstractStepOperator<MatchEdgeFunction, VertexRecord, EdgeGroupRecord>
     implements FilteredFieldsOperator, LabeledStepOperator {
-
-    private static final String SOURCE_ID = "srcId";
-    private static final String TARGET_ID = "targetId";
-    private static final String LABEL = "~label";
 
     private Histogram loadEdgeHg;
     private Histogram loadEdgeRt;
@@ -60,9 +44,7 @@ public class MatchEdgeOperator extends AbstractStepOperator<MatchEdgeFunction, V
 
     private Set<RexFieldAccess> fields;
 
-    // For each schema type，project will only be initialized once.
-    private ProjectFunction projectFunction = null;
-    private List<TableField> tableOutputType = null;
+    private EdgeProjectorUtil edgeProjector = null;
 
     @Override
     public StepOperator<VertexRecord, EdgeGroupRecord> withFilteredFields(Set<RexFieldAccess> fields) {
@@ -83,96 +65,6 @@ public class MatchEdgeOperator extends AbstractStepOperator<MatchEdgeFunction, V
         this.loadEdgeRt = metricGroup.histogram(MetricNameFormatter.loadEdgeTimeRtName(getName()));
     }
 
-    private RowEdge projectEdge(RowEdge edge) {
-        if (edge == null) {
-            return null;
-        }
-
-        if (this.projectFunction == null) {
-            initializeProject(edge);
-        }
-
-        // Utilize project functions to filter Fields
-        ObjectRow projectEdge = (ObjectRow) this.projectFunction.project(edge); //通过project进行属性筛选
-        RowEdge edgeDecoded = (RowEdge) projectEdge.getField(0, null);
-
-        EdgeType edgeType = new EdgeType(this.tableOutputType, false);
-        EdgeEncoder encoder = new DefaultEdgeEncoder(edgeType);
-        return encoder.encode(edgeDecoded);
-    }
-
-
-    private void initializeProject(RowEdge edge) {
-        List<TableField> graphSchemaFieldList = graphSchema.getFields();  //这里是图中的所有表集合
-
-        IType<?> outputType = this.getOutputType();
-        List<TableField> fieldsOfTable;  //这里的是一张表里的所有字段
-        if (outputType instanceof EdgeType) {
-            fieldsOfTable = ((EdgeType) outputType).getFields();
-        } else {
-            throw new IllegalArgumentException("Unsupported type: " + outputType.getClass());
-        }
-
-        // Extract field names from RexFieldAccess list into a set
-        Set<String> fieldNames = (this.fields == null)
-                ? Collections.emptySet()
-                : this.fields.stream()
-                .map(e -> e.getField().getName())
-                .collect(Collectors.toSet());
-
-
-        List<Expression> expressions = new ArrayList<>();
-
-        List<TableField> tableOutputType = null;
-        for (TableField tableField : graphSchemaFieldList) {  // Enumerate list of fields in every table.
-            if (edge.getLabel().equals(tableField.getName())) {
-
-                List<Expression> inputs = new ArrayList<>();
-                tableOutputType = new ArrayList<>();
-                String edgeLabel = edge.getLabel();
-
-                for (int i = 0; i < fieldsOfTable.size(); i++) { // Enumerate list of fields in the targeted table.
-                    TableField column = fieldsOfTable.get(i);
-                    String columnName = column.getName();
-
-                    // Normalize: convert fields like `personId` to `id`
-                    if (columnName.startsWith(edgeLabel)) {
-                        String suffix = columnName.substring(edgeLabel.length());
-                        if (!suffix.isEmpty()) {
-                            suffix = Character.toLowerCase(suffix.charAt(0)) + suffix.substring(1);
-                            columnName = suffix;
-                        }
-                    }
-
-
-                    if (fieldNames.contains(columnName) || columnName.equals(SOURCE_ID)
-                            || columnName.equals(TARGET_ID)) {
-                        // Include a field if it's in fieldNames or is ID column
-                        inputs.add(new FieldExpression(null, i, column.getType()));
-                        tableOutputType.add(column);
-                    } else if (columnName.equals(LABEL)) {
-                        // Add vertex label for LABEL column
-                        inputs.add(new LiteralExpression(edge.getLabel(), column.getType()));
-                        tableOutputType.add(column);
-                    } else {
-                        // Use null placeholder for excluded fields
-                        inputs.add(new LiteralExpression(null, column.getType()));
-                        tableOutputType.add(column);
-                    }
-                }
-
-                expressions.add(new EdgeConstructExpression(inputs, new EdgeType(tableOutputType, false)));
-            }
-        }
-
-        ProjectFunction projectFunction = new ProjectFunctionImpl(expressions);
-
-        this.projectFunction = projectFunction;
-        this.tableOutputType = tableOutputType;
-
-    }
-
-
     @Override
     public void processRecord(VertexRecord vertex) {
         long startTs = System.currentTimeMillis();
@@ -192,8 +84,15 @@ public class MatchEdgeOperator extends AbstractStepOperator<MatchEdgeFunction, V
         if (needAddToPath) {
             int numEdge = 0;
             for (RowEdge edge : edgeGroup) {
+                if (edgeProjector == null) {
+                    edgeProjector = new EdgeProjectorUtil(
+                        graphSchema,
+                        fields,
+                        getOutputType()
+                    );
+                }
                 if (fields != null) {
-                    edge = projectEdge(edge);
+                    edge = edgeProjector.projectEdge(edge);
                 }
 
                 // add edge to path.

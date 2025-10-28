@@ -20,39 +20,25 @@
 package org.apache.geaflow.dsl.runtime.traversal.operator;
 
 import java.util.*;
-import java.util.stream.Collectors;
 import org.apache.calcite.rex.RexFieldAccess;
-import org.apache.geaflow.common.type.IType;
-import org.apache.geaflow.dsl.common.binary.encoder.DefaultVertexEncoder;
-import org.apache.geaflow.dsl.common.binary.encoder.VertexEncoder;
 import org.apache.geaflow.dsl.common.data.*;
 import org.apache.geaflow.dsl.common.data.StepRecord.StepRecordType;
-import org.apache.geaflow.dsl.common.data.impl.ObjectRow;
 import org.apache.geaflow.dsl.common.data.impl.VertexEdgeFactory;
-import org.apache.geaflow.dsl.common.types.TableField;
 import org.apache.geaflow.dsl.common.types.VertexType;
-import org.apache.geaflow.dsl.runtime.expression.Expression;
-import org.apache.geaflow.dsl.runtime.expression.construct.VertexConstructExpression;
-import org.apache.geaflow.dsl.runtime.expression.field.FieldExpression;
-import org.apache.geaflow.dsl.runtime.expression.literal.LiteralExpression;
 import org.apache.geaflow.dsl.runtime.function.graph.MatchVertexFunction;
 import org.apache.geaflow.dsl.runtime.function.graph.MatchVertexFunctionImpl;
-import org.apache.geaflow.dsl.runtime.function.table.ProjectFunction;
-import org.apache.geaflow.dsl.runtime.function.table.ProjectFunctionImpl;
 import org.apache.geaflow.dsl.runtime.traversal.TraversalRuntimeContext;
 import org.apache.geaflow.dsl.runtime.traversal.data.EdgeGroup;
 import org.apache.geaflow.dsl.runtime.traversal.data.EdgeGroupRecord;
 import org.apache.geaflow.dsl.runtime.traversal.data.IdOnlyVertex;
 import org.apache.geaflow.dsl.runtime.traversal.data.VertexRecord;
 import org.apache.geaflow.dsl.runtime.traversal.path.ITreePath;
+import org.apache.geaflow.dsl.runtime.util.VertexProjectorUtil;
 import org.apache.geaflow.metrics.common.MetricNameFormatter;
 import org.apache.geaflow.metrics.common.api.Histogram;
 
 public class MatchVertexOperator extends AbstractStepOperator<MatchVertexFunction, StepRecord,
     VertexRecord> implements FilteredFieldsOperator, LabeledStepOperator {
-
-    private static final String ID = "id";
-    private static final String LABEL = "~label";
 
     private Histogram loadVertexRt;
 
@@ -62,9 +48,7 @@ public class MatchVertexOperator extends AbstractStepOperator<MatchVertexFunctio
 
     private Set<RexFieldAccess> fields;
 
-    // For each schema type，project will only be initialized once.
-    private Map<String, ProjectFunction> projectFunctions = new HashMap<>();
-    private Map<String, List<TableField>> tableOutputTypes = new HashMap<>();
+    private VertexProjectorUtil vertexProjector = null;
 
     @Override
     public StepOperator<StepRecord, VertexRecord> withFilteredFields(Set<RexFieldAccess> fields) {
@@ -99,104 +83,6 @@ public class MatchVertexOperator extends AbstractStepOperator<MatchVertexFunctio
         }
     }
 
-    private RowVertex projectVertex(RowVertex vertex) {
-        if (vertex == null) {
-            return null;
-        }
-
-        // Handle the case of global variables
-        String compactedVertexLabel = vertex.getLabel();
-        for (String addingName: addingVertexFieldNames) {
-            compactedVertexLabel += "_" + addingName;
-        }
-
-        // Initialize
-        if (this.projectFunctions.get(compactedVertexLabel) == null) {
-            initializeProject(vertex, compactedVertexLabel, addingVertexFieldTypes, addingVertexFieldNames);
-        }
-
-        // Utilize project functions to filter Fields
-        ProjectFunction currentProjectFunction = this.projectFunctions.get(compactedVertexLabel);
-        ObjectRow projectVertex = (ObjectRow) currentProjectFunction.project(vertex);
-        RowVertex vertexDecoded = (RowVertex) projectVertex.getField(0, null);
-
-        VertexType vertexType = new VertexType(this.tableOutputTypes.get(compactedVertexLabel));
-        VertexEncoder encoder = new DefaultVertexEncoder(vertexType);
-        return encoder.encode(vertexDecoded);
-    }
-
-    private void initializeProject(RowVertex vertex, String compactedLabel,
-                                   IType<?>[] globalTypes, String[] globalNames) {
-        List<TableField> graphSchemaFieldList = graphSchema.getFields();
-
-        List<TableField> fieldsOfTable;
-
-        List<TableField> tableOutputType = new ArrayList<>();
-
-        // Extract field names from RexFieldAccess list into a set
-        Set<String> fieldNames = (this.fields == null)
-                ? Collections.emptySet()
-                : this.fields.stream()
-                .map(e -> e.getField().getName())
-                .collect(Collectors.toSet());
-
-
-        List<Expression> expressions = new ArrayList<>();
-        String vertexLabel = vertex.getLabel();
-
-        for (TableField tableField : graphSchemaFieldList) {  // Enumerate list of fields in every table.
-            if (vertexLabel.equals(tableField.getName())) {
-
-                List<Expression> inputs = new ArrayList<>();
-                fieldsOfTable = ((VertexType)tableField.getType()).getFields();
-
-                for (int i = 0; i < fieldsOfTable.size(); i++) { // Enumerate list of fields in the targeted table.
-                    TableField column = fieldsOfTable.get(i);
-                    String columnName = column.getName();
-
-                    // Normalize: convert fields like `personId` to `id`
-                    if (columnName.startsWith(vertexLabel)) {
-                        String suffix = columnName.substring(vertexLabel.length());
-                        if (!suffix.isEmpty()) {
-                            suffix = Character.toLowerCase(suffix.charAt(0)) + suffix.substring(1);
-                            columnName = suffix;
-                        }
-                    }
-
-                    if (fieldNames.contains(columnName) || columnName.equals(ID)) {
-                        // Include a field if it's in fieldNames or is ID column
-                        inputs.add(new FieldExpression(null, i, column.getType()));
-                        tableOutputType.add(column);
-                    } else if (columnName.equals(LABEL)) {
-                        // Add vertex label for LABEL column
-                        inputs.add(new LiteralExpression(vertex.getLabel(), column.getType()));
-                        tableOutputType.add(column);
-                    } else {
-                        // Use null placeholder for excluded fields
-                        inputs.add(new LiteralExpression(null, column.getType()));
-                        tableOutputType.add(column);
-                    }
-                }
-
-                // Handle additional mapping when all global variables exist
-                if (globalNames.length > 0) {
-                    for (int j = 0; j < globalNames.length; j++) {
-                        int fieldIndex = j + fieldsOfTable.size();
-                        inputs.add(new FieldExpression(null, fieldIndex, globalTypes[j]));
-                        tableOutputType.add(new TableField(globalNames[j], globalTypes[j]));
-                    }
-                }
-
-                expressions.add(new VertexConstructExpression(inputs, null, new VertexType(tableOutputType)));
-            }
-        }
-
-        ProjectFunction projectFunction = new ProjectFunctionImpl(expressions);
-
-        // Store project functions
-        this.projectFunctions.put(compactedLabel, projectFunction);
-        this.tableOutputTypes.put(compactedLabel, tableOutputType);
-    }
 
     private void processVertex(VertexRecord vertexRecord) {
         RowVertex vertex = vertexRecord.getVertex();
@@ -206,11 +92,20 @@ public class MatchVertexOperator extends AbstractStepOperator<MatchVertexFunctio
                 function.getVertexFilter(),
                 graphSchema,
                 addingVertexFieldTypes);
-
-            if (fields != null) {
-                vertex = projectVertex(vertex);
-            }
             loadVertexRt.update(System.currentTimeMillis() - startTs);
+
+            if (vertexProjector == null) {
+                vertexProjector = new VertexProjectorUtil(
+                    graphSchema,
+                    fields,
+                    addingVertexFieldNames,
+                    addingVertexFieldTypes
+                );
+            }
+            if (fields != null) {
+                vertex = vertexProjector.projectVertex(vertex);
+            }
+
             if (vertex == null && !isOptionMatch) {
                 // load a non-exists vertex, just skip.
                 return;

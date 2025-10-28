@@ -29,7 +29,6 @@ import org.apache.geaflow.dsl.common.binary.decoder.DefaultRowDecoder;
 import org.apache.geaflow.dsl.common.binary.decoder.RowDecoder;
 import org.apache.geaflow.dsl.common.data.Row;
 import org.apache.geaflow.dsl.common.types.StructType;
-import org.apache.geaflow.dsl.optimize.rule.ProjectFieldPruneRule;
 import org.apache.geaflow.dsl.planner.GQLContext;
 import org.apache.geaflow.dsl.runtime.QueryContext;
 import org.apache.geaflow.dsl.runtime.QueryResult;
