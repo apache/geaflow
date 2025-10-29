@@ -19,6 +19,9 @@
 
 package org.apache.geaflow.dsl.optimize.rule;
 
+import static org.apache.geaflow.dsl.common.types.EdgeType.*;
+import static org.apache.geaflow.dsl.common.types.VertexType.DEFAULT_ID_FIELD_NAME;
+
 import java.util.*;
 import org.apache.calcite.plan.RelOptRule;
 import org.apache.calcite.plan.RelOptRuleCall;
@@ -45,10 +48,10 @@ public class ProjectFieldPruneRule extends RelOptRule {
 
     static {
         SPECIAL_FIELD_MAP = new HashMap<>();
-        SPECIAL_FIELD_MAP.put("id", "~id");
-        SPECIAL_FIELD_MAP.put("label", "~label");
-        SPECIAL_FIELD_MAP.put("srcId", "~srcId");
-        SPECIAL_FIELD_MAP.put("targetId", "~targetId");
+        SPECIAL_FIELD_MAP.put("id", DEFAULT_ID_FIELD_NAME);
+        SPECIAL_FIELD_MAP.put("label", DEFAULT_LABEL_NAME);
+        SPECIAL_FIELD_MAP.put("srcId", DEFAULT_SRC_ID_NAME );
+        SPECIAL_FIELD_MAP.put("targetId", DEFAULT_TARGET_ID_NAME);
     }
 
     private ProjectFieldPruneRule() {

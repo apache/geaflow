@@ -91,7 +91,7 @@ public class MatchEdgeOperator extends AbstractStepOperator<MatchEdgeFunction, V
                         getOutputType()
                     );
                 }
-                if (fields != null) {
+                if (fields != null && !fields.isEmpty()) {
                     edge = edgeProjector.projectEdge(edge);
                 }
 

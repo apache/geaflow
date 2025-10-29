@@ -102,7 +102,7 @@ public class MatchVertexOperator extends AbstractStepOperator<MatchVertexFunctio
                     addingVertexFieldTypes
                 );
             }
-            if (fields != null) {
+            if (fields != null && !fields.isEmpty()) {
                 vertex = vertexProjector.projectVertex(vertex);
             }
 
