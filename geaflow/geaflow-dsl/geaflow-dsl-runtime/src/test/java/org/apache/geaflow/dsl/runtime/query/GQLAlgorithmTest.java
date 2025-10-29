@@ -144,6 +144,16 @@ public class GQLAlgorithmTest {
     }
 
     @Test
+    public void testAlgorithmClusterCoefficient() throws Exception {
+        QueryTester
+            .build()
+            .withGraphDefine("/query/modern_graph.sql")
+            .withQueryPath("/query/gql_algorithm_cluster_coefficient.sql")
+            .execute()
+            .checkSinkResult();
+    }
+
+    @Test
     public void testIncGraphAlgorithm_001() throws Exception {
         QueryTester
             .build()
