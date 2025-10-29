@@ -19,11 +19,17 @@
 
 package org.apache.geaflow.dsl.gremlin.examples;
 
+import org.apache.calcite.rel.RelNode;
+import org.apache.geaflow.api.graph.traversal.VertexCentricTraversal;
 import org.apache.geaflow.dsl.gremlin.parser.GeaFlowGremlinParser;
 import org.apache.geaflow.dsl.gremlin.parser.GremlinQuery;
+
 import org.apache.geaflow.dsl.gremlin.plan.converter.GeaFlowGremlinToRelConverter;
 import org.apache.geaflow.dsl.gremlin.runtime.adapter.GeaFlowGremlinTraversalExecutor;
+import org.apache.geaflow.dsl.runtime.traversal.TraversalRuntimeContext;
+import org.apache.geaflow.dsl.runtime.plan.PhysicRelNode;
 import org.apache.tinkerpop.gremlin.structure.Graph;
+import org.apache.tinkerpop.gremlin.structure.Vertex;
 import org.apache.tinkerpop.gremlin.tinkergraph.structure.TinkerGraph;
 
 /**
@@ -41,16 +47,23 @@ public class GremlinExample {
         // Parse a Gremlin query
         String gremlinQuery = "g.V().out('knows').has('age', gt(30)).values('name')";
         GremlinQuery query = parser.parse(gremlinQuery);
-        
-        // Convert to RelNode
+    
+        // 2. 转换为 GeaFlow 统一 IR (RelNode)
         GeaFlowGremlinToRelConverter converter = new GeaFlowGremlinToRelConverter();
-        // RelNode relNode = converter.convert(query, gqlToRelConverter); // Would need a real GQLToRelConverter
-        
-        // Execute using the traversal executor
-        GeaFlowGremlinTraversalExecutor executor = new GeaFlowGremlinTraversalExecutor();
-        // VertexCentricTraversal traversal = executor.execute(relNode, traversalContext); // Would need real context
-        
-        System.out.println("Successfully parsed Gremlin query: " + gremlinQuery);
-        System.out.println("Bytecode: " + query.getBytecode());
+        RelNode relNode = converter.convert(query, gqlToRelConverter);
+    
+        // 3. 优化 RelNode
+        RelNode optimizedRelNode = optimizer.optimize(relNode);
+    
+        // 4. 转换为 Physical Plan
+        PhysicRelNode physicalPlan = planner.toPhysical(optimizedRelNode);
+    
+        // 5. 转换为 VertexCentricTraversal
+        VertexCentricTraversal traversal = executor.execute(physicalPlan, context);
+    
+        // 6. 执行并获取结果
+        PWindowStream<ITraversalResponse<R>> results = graph.traversalOnVertexCentric(traversal);
+        List<R> finalResults = results.collect();
     }
+    
 }
