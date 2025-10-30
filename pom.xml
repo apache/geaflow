@@ -62,6 +62,8 @@
             -Djdk.reflect.useDirectMethodHandle=false
             -Dio.netty.tryReflectionSetAccessible=true
         </extraJavaTestArgs>
+
+        <incubating.suffix></incubating.suffix>
     </properties>
 
     <modules>
@@ -89,9 +91,9 @@
     </developers>
 
     <scm>
-        <connection>https://github.com/TuGraph-family/tugraph-analytics.git</connection>
-        <developerConnection>https://github.com/TuGraph-family/analytics.git</developerConnection>
-        <url>https://github.com/TuGraph-family/analytics</url>
+        <connection>https://github.com/apache/geaflow.git</connection>
+        <developerConnection>https://github.com/apache/geaflow.git</developerConnection>
+        <url>https://github.com/apache/geaflow</url>
     </scm>
 
     <name>${project.groupId}:${project.artifactId}</name>
@@ -142,6 +144,22 @@
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>3.4.1</version>
+                <configuration>
+                    <finalName>${project.artifactId}-${project.version}${incubating.suffix}</finalName>
+                    <archive>
+                        <addMavenDescriptor>false</addMavenDescriptor>
+                        <manifest>
+                            <addDefaultImplementationEntries>true</addDefaultImplementationEntries>
+                        </manifest>
+                    </archive>
+                    <skipIfEmpty>false</skipIfEmpty>
+                    <forceCreation>true</forceCreation>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-source-plugin</artifactId>
                 <version>3.2.1</version>
                 <executions>
@@ -151,6 +169,9 @@
                         <goals>
                             <goal>jar</goal>
                         </goals>
+                        <configuration>
+                            <finalName>${project.artifactId}-${project.version}${incubating.suffix}</finalName>
+                        </configuration>
                     </execution>
                 </executions>
             </plugin>
@@ -267,6 +288,9 @@
                         <goals>
                             <goal>jar</goal>
                         </goals>
+                        <configuration>
+                            <finalName>${project.artifactId}-${project.version}${incubating.suffix}</finalName>
+                        </configuration>
                     </execution>
                 </executions>
             </plugin>
@@ -281,69 +305,69 @@
                         <goals>
                             <goal>check</goal>
                         </goals>
-                        <configuration>
-                            <consoleOutput>true</consoleOutput>
-                            <excludeSubProjects>false</excludeSubProjects>
-                            <numUnapprovedLicenses>0</numUnapprovedLicenses>
-                            <licenses>
-                                <license>
-                                    <family>AL2</family>
-                                    <notes></notes>
-                                    <text>Licensed to the Apache Software Foundation (ASF) under one</text>
-                                </license>
-                            </licenses>
-                            <families>
-                                <family>
-                                    <id>AL2</id>
-                                    <name>ApacheLicense 2.0</name>
-                                </family>
-                            </families>
-                            <approvedLicenses>
-                                <id>AL2</id>
-                            </approvedLicenses>
-                            <addDefaultLicenses>false</addDefaultLicenses>
-                            <excludes>
-                                <!-- Docs related -->
-                                <exclude>docs/**/**</exclude>
-                                <exclude>ci/**/**</exclude>
-                                <exclude>.github/**/**</exclude>
-                                <exclude>tools/**/*</exclude>
-                                <exclude>geaflow-web/**/**</exclude>
-                                <exclude>**/geaflow-web/**</exclude>
-                                <exclude>**/target/**</exclude>
-                                <exclude>**/docs/**</exclude>
-                                <exclude>**/ci/**</exclude>
-                                <exclude>**/web-dashboard/**</exclude>
-                                <exclude>**/codegen/**</exclude>
-                                <exclude>**/template/*.vm</exclude>
-                                <exclude>**/resources/data/**</exclude>
-                                <exclude>**/resources/expect/**</exclude>
-                                <exclude>**/resources/zip_test2.txt</exclude>
-                                <exclude>**/resources/zip_test.txt</exclude>
-                                <exclude>**/resources/demo/demo_job_data.txt</exclude>
-                                <exclude>**/resources/input/**</exclude>
-                                <exclude>**/resources/i18n/**</exclude>
-                                <exclude>**/resources/public/**</exclude>
-                                <exclude>**/dependency-reduced-pom.xml</exclude>
-                                <exclude>**/*.log</exclude>
-                                <exclude>**/*.md</exclude>
-                                <exclude>**/**/data/geaflow.sql</exclude>
-                                <exclude>**/**/Filter.template</exclude>
-                                <exclude>**/**/version.txt</exclude>
-                                <exclude>**/**/graph_data.fbs</exclude>
-                                <exclude>**/**/*.toml</exclude>
-                                <exclude>**/**/.helmignore</exclude>
-                                <exclude>**/**/templates/NOTES.txt</exclude>
-                                <exclude>.readthedocs.yaml</exclude>
-                                <exclude>.aci-plugin-outputs.sh</exclude>
-                                <exclude>.aci.yml</exclude>
-                                <exclude>mkdocs.yml</exclude>
-                                <exclude>data/**</exclude>
-                                <exclude>sync_code.sh</exclude>
-                            </excludes>
-                        </configuration>
                     </execution>
                 </executions>
+                <configuration>
+                    <consoleOutput>true</consoleOutput>
+                    <excludeSubProjects>false</excludeSubProjects>
+                    <numUnapprovedLicenses>0</numUnapprovedLicenses>
+                    <licenses>
+                        <license>
+                            <family>AL2</family>
+                            <notes></notes>
+                            <text>Licensed to the Apache Software Foundation (ASF) under one</text>
+                        </license>
+                    </licenses>
+                    <families>
+                        <family>
+                            <id>AL2</id>
+                            <name>ApacheLicense 2.0</name>
+                        </family>
+                    </families>
+                    <approvedLicenses>
+                        <id>AL2</id>
+                    </approvedLicenses>
+                    <addDefaultLicenses>false</addDefaultLicenses>
+                    <excludes>
+                        <!-- Docs related -->
+                        <exclude>docs/**/**</exclude>
+                        <exclude>ci/**/**</exclude>
+                        <exclude>.github/**/**</exclude>
+                        <exclude>tools/**/*</exclude>
+                        <exclude>geaflow-web/**/**</exclude>
+                        <exclude>**/geaflow-web/**</exclude>
+                        <exclude>**/target/**</exclude>
+                        <exclude>**/docs/**</exclude>
+                        <exclude>**/ci/**</exclude>
+                        <exclude>**/web-dashboard/**</exclude>
+                        <exclude>**/codegen/**</exclude>
+                        <exclude>**/template/*.vm</exclude>
+                        <exclude>**/resources/data/**</exclude>
+                        <exclude>**/resources/expect/**</exclude>
+                        <exclude>**/resources/zip_test2.txt</exclude>
+                        <exclude>**/resources/zip_test.txt</exclude>
+                        <exclude>**/resources/demo/demo_job_data.txt</exclude>
+                        <exclude>**/resources/input/**</exclude>
+                        <exclude>**/resources/i18n/**</exclude>
+                        <exclude>**/resources/public/**</exclude>
+                        <exclude>**/dependency-reduced-pom.xml</exclude>
+                        <exclude>**/*.log</exclude>
+                        <exclude>**/*.md</exclude>
+                        <exclude>**/**/data/geaflow.sql</exclude>
+                        <exclude>**/**/Filter.template</exclude>
+                        <exclude>**/**/version.txt</exclude>
+                        <exclude>**/**/graph_data.fbs</exclude>
+                        <exclude>**/**/*.toml</exclude>
+                        <exclude>**/**/.helmignore</exclude>
+                        <exclude>**/**/templates/NOTES.txt</exclude>
+                        <exclude>.readthedocs.yaml</exclude>
+                        <exclude>.aci-plugin-outputs.sh</exclude>
+                        <exclude>.aci.yml</exclude>
+                        <exclude>mkdocs.yml</exclude>
+                        <exclude>data/**</exclude>
+                        <exclude>sync_code.sh</exclude>
+                    </excludes>
+                </configuration>
             </plugin>
         </plugins>
     </build>
@@ -389,6 +413,9 @@
 
         <profile>
             <id>maven-release</id>
+            <properties>
+                <incubating.suffix>-incubating</incubating.suffix>
+            </properties>
             <build>
                 <plugins>
                     <plugin>
@@ -403,6 +430,9 @@
                                     <goal>jar-no-fork</goal>
                                     <goal>test-jar-no-fork</goal>
                                 </goals>
+                                <configuration>
+                                    <finalName>${project.artifactId}-${project.version}${incubating.suffix}</finalName>
+                                </configuration>
                             </execution>
                         </executions>
                     </plugin>
@@ -426,6 +456,9 @@
                                 <goals>
                                     <goal>jar</goal>
                                 </goals>
+                                <configuration>
+                                    <finalName>${project.artifactId}-${project.version}${incubating.suffix}</finalName>
+                                </configuration>
                             </execution>
                         </executions>
                     </plugin>
@@ -468,6 +501,9 @@
 
         <profile>
             <id>apache-release</id>
+            <properties>
+                <incubating.suffix>-incubating</incubating.suffix>
+            </properties>
             <build>
                 <plugins>
                     <plugin>
@@ -492,8 +528,16 @@
                                     <descriptorRefs>
                                         <descriptorRef>source-release</descriptorRef>
                                     </descriptorRefs>
-                                    <finalName>apache-geaflow-${project.version}-src</finalName>
+                                    <finalName>apache-geaflow-${project.version}${incubating.suffix}-src</finalName>
                                     <appendAssemblyId>false</appendAssemblyId>
+                                    <!-- Output file format: tar.gz -->
+                                    <formats>
+                                        <format>tar.gz</format>
+                                    </formats>
+                                    <tarLongFileMode>gnu</tarLongFileMode>
+                                    <archive>
+                                        <addMavenDescriptor>false</addMavenDescriptor>
+                                    </archive>
                                 </configuration>
                             </execution>
                         </executions>
