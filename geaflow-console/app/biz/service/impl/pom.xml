@@ -24,11 +24,11 @@
     <parent>
         <groupId>org.apache.geaflow</groupId>
         <artifactId>geaflow-console</artifactId>
-        <version>0.7.0</version>
+        <version>0.7.0-incubating</version>
         <relativePath>../../../../pom.xml</relativePath>
     </parent>
     <artifactId>geaflow-console-biz-service-impl</artifactId>
-    <version>0.7.0</version>
+    <version>0.7.0-incubating</version>
 
     <dependencies>
         <dependency>

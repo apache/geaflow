@@ -24,7 +24,7 @@
     <parent>
         <artifactId>geaflow-dsl</artifactId>
         <groupId>org.apache.geaflow</groupId>
-        <version>0.7.0</version>
+        <version>0.7.0-incubating</version>
     </parent>
 
     <modelVersion>4.0.0</modelVersion>

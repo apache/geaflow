@@ -25,11 +25,11 @@
     <parent>
         <groupId>org.apache.geaflow</groupId>
         <artifactId>geaflow-console</artifactId>
-        <version>0.7.0</version>
+        <version>0.7.0-incubating</version>
         <relativePath>../../pom.xml</relativePath>
     </parent>
     <artifactId>geaflow-console-test</artifactId>
-    <version>0.7.0</version>
+    <version>0.7.0-incubating</version>
     <dependencies>
         <dependency>
             <groupId>org.apache.geaflow</groupId>
