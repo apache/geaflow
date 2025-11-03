@@ -28,7 +28,7 @@ export default {
   "i18n.key.password": "Password",
   "i18n.key.new.user": "Register as a new user",
   "i18n.key.geaflow.title": "Streaming Graph Computing",
-  "i18n.key.geaflow.subtitle": "Opensourced by Ant Group",
+  "i18n.key.geaflow.subtitle": "Apache GeaFlow(Incubating)",
   "i18n.key.to.register": "Welcome to register",
   "i18n.key.nickName": "NickName",
   "i18n.key.confirmation.password": "Please enter the confirmation password",
