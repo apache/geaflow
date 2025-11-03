@@ -22,8 +22,28 @@ name: Java CI with Maven On JDK 11
 on:
   push:
     branches: [ "master" ]
+    paths-ignore:
+      - '.github/**'
+      - 'docs/**'
+      - '**.md'
+      - 'LICENSE'
+      - 'CODE_OF_CONDUCT.md'
+      - 'GOVERNANCE.md'
+      - 'SECURITY.md'
+      - 'LEGAL.md'
   pull_request:
     branches: [ "master" ]
+    paths-ignore:
+      - '.github/**'
+      - 'docs/**'
+      - '**.md'
+      - 'LICENSE'
+      - 'CODE_OF_CONDUCT.md'
+      - 'GOVERNANCE.md'
+      - 'SECURITY.md'
+      - 'LEGAL.md'
+  # Allow manual triggering of the workflow
+  workflow_dispatch:
 
 env:
   JAVA_TOOL_OPTIONS: -Xmx4g
