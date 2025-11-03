@@ -20,7 +20,8 @@ See [ROLES.md](community/ROLES.md) for detailed descriptions of project roles an
 - Community input is always welcome and valued.
 
 ## Code of Conduct
-All participants must follow our [Code of Conduct](CODE_OF_CONDUCT.md) to ensure a welcoming and inclusive environment.
+
+We are the ASF incubation project and adhere to the [Apache Code of Conduct](https://www.apache.org/foundation/policies/conduct). For more details, please refer to our [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Communication Channels
 - **GitHub Issues:** For bug reports and feature requests ([Issue Tracker](https://github.com/apache/geaflow/issues))
