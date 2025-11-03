@@ -39,12 +39,6 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Warmup;
 
-/**
- * Alipay.com Inc
- * Copyright (c) 2004-2022 All Rights Reserved.
- *
- * @author guangjie.zgj on 2022/12/1.
- */
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
 @Warmup(iterations = 5, time = 1, timeUnit = TimeUnit.SECONDS)
