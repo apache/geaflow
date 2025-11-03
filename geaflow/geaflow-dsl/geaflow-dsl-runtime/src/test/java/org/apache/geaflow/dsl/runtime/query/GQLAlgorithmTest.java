@@ -154,6 +154,34 @@ public class GQLAlgorithmTest {
     }
 
     @Test
+    public void testAlgorithmClusterCoefficientWithParams() throws Exception {
+        QueryTester
+            .build()
+            .withGraphDefine("/query/modern_graph.sql")
+            .withQueryPath("/query/gql_algorithm_cluster_coefficient_with_params.sql")
+            .execute()
+            .checkSinkResult();
+    }
+
+    @Test
+    public void testAlgorithmClusterCoefficientMedium() throws Exception {
+        QueryTester
+            .build()
+            .withQueryPath("/query/gql_algorithm_cluster_coefficient_medium.sql")
+            .execute()
+            .checkSinkResult();
+    }
+
+    @Test
+    public void testAlgorithmClusterCoefficientLarge() throws Exception {
+        QueryTester
+            .build()
+            .withQueryPath("/query/gql_algorithm_cluster_coefficient_large.sql")
+            .execute()
+            .checkSinkResult();
+    }
+
+    @Test
     public void testIncGraphAlgorithm_001() throws Exception {
         QueryTester
             .build()

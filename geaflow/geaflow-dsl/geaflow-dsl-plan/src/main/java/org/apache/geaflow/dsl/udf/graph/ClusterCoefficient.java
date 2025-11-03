@@ -85,24 +85,33 @@ public class ClusterCoefficient implements AlgorithmUserFunction<Object, ObjectR
                 "Maximum parameter limit exceeded. Expected: [vertexType], [minDegree]");
         }
         
-        // Parse vertex type parameter (optional)
+        // Parse parameters based on type
+        // If first param is String, it's vertexType; if it's Integer/Long, it's minDegree
         if (params.length >= 1 && params[0] != null) {
-            if (!(params[0] instanceof String)) {
+            if (params[0] instanceof String) {
+                // First param is vertexType
+                vertexType = (String) params[0];
+                
+                // Second param (if exists) is minDegree
+                if (params.length >= 2 && params[1] != null) {
+                    if (!(params[1] instanceof Integer || params[1] instanceof Long)) {
+                        throw new IllegalArgumentException(
+                            "Minimum degree parameter should be integer.");
+                    }
+                    minDegree = params[1] instanceof Integer 
+                        ? (Integer) params[1] 
+                        : ((Long) params[1]).intValue();
+                }
+            } else if (params[0] instanceof Integer || params[0] instanceof Long) {
+                // First param is minDegree (no vertexType filter)
+                vertexType = null;
+                minDegree = params[0] instanceof Integer 
+                    ? (Integer) params[0] 
+                    : ((Long) params[0]).intValue();
+            } else {
                 throw new IllegalArgumentException(
-                    "Vertex type parameter should be string.");
+                    "Parameter should be either string (vertexType) or integer (minDegree).");
             }
-            vertexType = (String) params[0];
-        }
-        
-        // Parse minimum degree parameter (optional)
-        if (params.length >= 2 && params[1] != null) {
-            if (!(params[1] instanceof Integer || params[1] instanceof Long)) {
-                throw new IllegalArgumentException(
-                    "Minimum degree parameter should be integer.");
-            }
-            minDegree = params[1] instanceof Integer 
-                ? (Integer) params[1] 
-                : ((Long) params[1]).intValue();
         }
     }
 
