@@ -21,6 +21,10 @@ package org.apache.geaflow.memory;
 
 import org.apache.geaflow.memory.metric.ChunkMetric;
 
+/* This file is based on source code from the Netty Project (http://netty.io/), licensed by the Apache
+ * Software Foundation (ASF) under the Apache License, Version 2.0. See the NOTICE file distributed with this work for
+ * additional information regarding copyright ownership. */
+
 /**
  * This class is an adaptation of Netty's io.netty.buffer.PoolChunk.
  */

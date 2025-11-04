@@ -37,6 +37,10 @@ import java.util.stream.Collectors;
 import org.apache.geaflow.analytics.service.client.utils.JDBCUtils;
 import org.apache.geaflow.common.exception.GeaflowRuntimeException;
 
+/* This file is based on source code from the Presto Project (https://prestodb.github.io/), licensed by the Apache
+ * Software Foundation (ASF) under the Apache License, Version 2.0. See the NOTICE file distributed with this work for
+ * additional information regarding copyright ownership. */
+
 /**
  * This class is an adaptation of Presto's com.facebook.presto.jdbc.PrestoDriver.
  */

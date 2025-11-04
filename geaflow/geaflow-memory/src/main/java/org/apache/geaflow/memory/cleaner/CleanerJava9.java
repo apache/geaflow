@@ -44,6 +44,10 @@ import org.apache.geaflow.memory.PlatformDependent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/* This file is based on source code from the Netty Project (http://netty.io/), licensed by the Apache
+ * Software Foundation (ASF) under the Apache License, Version 2.0. See the NOTICE file distributed with this work for
+ * additional information regarding copyright ownership. */
+
 /**
  * This class is an adaptation of Netty's io.netty.util.internal.CleanerJava9.
  * Allows to free direct {@link ByteBuffer} by using Cleaner for Java version equal or greater than 9.
