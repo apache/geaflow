@@ -23,6 +23,10 @@ import java.util.Arrays;
 import java.util.Iterator;
 import org.apache.geaflow.common.iterator.CloseableIterator;
 
+/* This file is based on source code from the Guava Project (https://guava.dev/), licensed by the Apache
+ * Software Foundation (ASF) under the Apache License, Version 2.0. See the NOTICE file distributed with this work for
+ * additional information regarding copyright ownership. */
+
 /**
  * This class is an adaptation of Guava's Iterators.concat
  * by fixing the issue https://github.com/google/guava/issues/3178.

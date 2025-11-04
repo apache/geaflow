@@ -29,8 +29,12 @@ import org.apache.geaflow.kubernetes.operator.core.model.customresource.Abstract
 import org.apache.geaflow.kubernetes.operator.core.model.exception.StatusConflictException;
 import org.apache.geaflow.kubernetes.operator.core.util.KubernetesUtil;
 
+/* This file is based on source code from the Flink Kubernetes Operator Project (http://flink.apache.org/), licensed by the Apache
+ * Software Foundation (ASF) under the Apache License, Version 2.0. See the NOTICE file distributed with this work for
+ * additional information regarding copyright ownership. */
+
 /**
- * This class is an adaptation of Flink's org.apache.flink.kubernetes.operator.utils.StatusRecorder.
+ * This class is an adaptation of Flink Kubernetes Operator's org.apache.flink.kubernetes.operator.utils.StatusRecorder.
  */
 @Slf4j
 public class GeaflowStatusRecorder<CR extends AbstractGeaflowResource<?, STAT>,
