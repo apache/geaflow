@@ -357,6 +357,20 @@
                         <exclude>mkdocs.yml</exclude>
                         <exclude>data/**</exclude>
                         <exclude>sync_code.sh</exclude>
+
+                        <!-- Third-party works related -->
+                        <exclude>**/MultiIterator.java</exclude>
+                        <exclude>**/memory/cleaner/**</exclude>
+                        <exclude>**/geaflow/memory/Chunk.java</exclude>
+                        <exclude>**/geaflow/memory/DirectMemory.java</exclude>
+                        <exclude>**/geaflow/memory/Page.java</exclude>
+                        <exclude>**/geaflow/memory/PlatformDependent.java</exclude>
+                        <exclude>**/analytics/service/client/jdbc/property/**</exclude>
+                        <exclude>**/analytics/service/client/jdbc/AnalyticsDriver.java</exclude>
+                        <exclude>**/analytics/service/client/HttpResponse.java</exclude>
+                        <exclude>**/geaflow/analytics/service/query/IQueryStatus.java</exclude>
+                        <exclude>**/geaflow/analytics/service/query/QueryIdGenerator.java</exclude>
+                        <exclude>**/geaflow/analytics/service/query/QueryResults.java</exclude>
                     </excludes>
                 </configuration>
             </plugin>
