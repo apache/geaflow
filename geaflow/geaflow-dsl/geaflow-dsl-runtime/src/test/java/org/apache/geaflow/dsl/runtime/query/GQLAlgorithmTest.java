@@ -259,6 +259,16 @@ public class GQLAlgorithmTest {
     }
 
     @Test
+    public void testAlgorithmJaccardSimilarity() throws Exception {
+        QueryTester
+            .build()
+            .withGraphDefine("/query/modern_graph.sql")
+            .withQueryPath("/query/gql_algorithm_jaccard_similarity.sql")
+            .execute()
+            .checkSinkResult();
+    }
+
+    @Test
     public void testEdgeIterator() throws Exception {
         QueryTester
             .build()
