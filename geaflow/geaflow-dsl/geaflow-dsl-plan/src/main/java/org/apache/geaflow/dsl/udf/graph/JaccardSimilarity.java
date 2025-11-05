@@ -25,6 +25,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import org.apache.geaflow.common.tuple.Tuple;
+import org.apache.geaflow.common.type.primitive.DoubleType;
+import org.apache.geaflow.common.type.primitive.LongType;
 import org.apache.geaflow.dsl.common.algo.AlgorithmRuntimeContext;
 import org.apache.geaflow.dsl.common.algo.AlgorithmUserFunction;
 import org.apache.geaflow.dsl.common.data.Row;
@@ -36,8 +38,6 @@ import org.apache.geaflow.dsl.common.types.GraphSchema;
 import org.apache.geaflow.dsl.common.types.StructType;
 import org.apache.geaflow.dsl.common.types.TableField;
 import org.apache.geaflow.dsl.common.util.TypeCastUtil;
-import org.apache.geaflow.common.type.primitive.DoubleType;
-import org.apache.geaflow.common.type.primitive.LongType;
 import org.apache.geaflow.model.graph.edge.EdgeDirection;
 
 @Description(name = "jaccard_similarity", description = "built-in udga for Jaccard Similarity")
