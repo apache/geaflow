@@ -23,7 +23,6 @@ import org.apache.geaflow.common.config.Configuration;
 import org.apache.geaflow.dsl.connector.api.TableReadableConnector;
 import org.apache.geaflow.dsl.connector.api.TableSink;
 import org.apache.geaflow.dsl.connector.api.TableSource;
-import org.apache.geaflow.dsl.connector.api.TableWritableConnector;
 
 public class ElasticsearchTableConnector implements TableReadableConnector, TableWritableConnector {
 

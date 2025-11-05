@@ -38,7 +38,6 @@ import org.elasticsearch.client.RestClient;
 import org.elasticsearch.client.RestClientBuilder;
 import org.elasticsearch.action.search.SearchRequest;
 import org.elasticsearch.action.search.SearchResponse;
-import org.elasticsearch.action.search.SearchScrollRequest;
 import org.elasticsearch.action.search.ClearScrollRequest;
 import org.elasticsearch.search.Scroll;
 import org.elasticsearch.search.SearchHit;
@@ -46,12 +45,13 @@ import org.elasticsearch.search.builder.SearchSourceBuilder;
 import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.client.RequestOptions;
 import org.elasticsearch.client.core.MainResponse;
+import org.elasticsearch.action.admin.indices.settings.get.GetSettingsRequest;
+import org.elasticsearch.action.admin.indices.settings.get.GetSettingsResponse;
 import org.apache.http.HttpHost;
 import org.apache.http.auth.AuthScope;
 import org.apache.http.auth.UsernamePasswordCredentials;
 import org.apache.http.client.CredentialsProvider;
 import org.apache.http.impl.client.BasicCredentialsProvider;
-import org.apache.http.impl.nio.client.HttpAsyncClientBuilder;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import java.lang.reflect.Type;
@@ -71,6 +71,7 @@ public class ElasticsearchTableSource implements TableSource {
     private String scrollTimeout;
     private int connectionTimeout;
     private int socketTimeout;
+    private boolean enableShardPartitioning;
     
     private RestHighLevelClient client;
 
@@ -87,6 +88,8 @@ public class ElasticsearchTableSource implements TableSource {
             ElasticsearchConstants.DEFAULT_CONNECTION_TIMEOUT);
         this.socketTimeout = tableConf.getInteger(ElasticsearchConfigKeys.GEAFLOW_DSL_ELASTICSEARCH_SOCKET_TIMEOUT,
             ElasticsearchConstants.DEFAULT_SOCKET_TIMEOUT);
+        // Enable shard partitioning by default
+        this.enableShardPartitioning = tableConf.getBoolean("geaflow.dsl.elasticsearch.enable.shard.partitioning", true);
     }
 
     @Override
@@ -102,9 +105,32 @@ public class ElasticsearchTableSource implements TableSource {
 
     @Override
     public List<Partition> listPartitions() {
-        // For Elasticsearch, we can create partitions based on shards
-        // For now, we'll return a single partition
-        return java.util.Collections.singletonList(new ElasticsearchPartition(indexName));
+        if (!enableShardPartitioning) {
+            // Return single partition if shard partitioning is disabled
+            return java.util.Collections.singletonList(new ElasticsearchShardPartition(indexName, -1, "single_partition"));
+        }
+        
+        try {
+            // Get index settings to determine number of shards
+            GetSettingsRequest request = new GetSettingsRequest();
+            request.indices(indexName);
+            GetSettingsResponse response = client.indices().getSettings(request, RequestOptions.DEFAULT);
+            
+            // Get the number of shards for the index
+            String numberOfShards = response.getIndexToSettings().get(indexName).get("index.number_of_shards");
+            int shardCount = Integer.parseInt(numberOfShards);
+            
+            // Create partitions based on shards
+            List<Partition> partitions = new ArrayList<>();
+            for (int i = 0; i < shardCount; i++) {
+                partitions.add(new ElasticsearchShardPartition(indexName, i, "shard_" + i));
+            }
+            
+            return partitions;
+        } catch (Exception e) {
+            // Fallback to single partition if we can't get shard information
+            return java.util.Collections.singletonList(new ElasticsearchShardPartition(indexName, -1, "fallback_partition"));
+        }
     }
 
     @Override
@@ -135,9 +161,18 @@ public class ElasticsearchTableSource implements TableSource {
     @Override
     public <T> FetchData<T> fetch(Partition partition, Optional<org.apache.geaflow.dsl.connector.api.Offset> startOffset, FetchWindow windowInfo) throws IOException {
         try {
+            // Get shard information from partition
+            ElasticsearchShardPartition shardPartition = (ElasticsearchShardPartition) partition;
+            
             SearchRequest searchRequest = new SearchRequest(indexName);
             SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
             searchSourceBuilder.size(1000); // Batch size
+            
+            // Add shard preference to route search to specific shard if shard partitioning is enabled
+            if (shardPartition.getShardId() >= 0) {
+                searchRequest.preference("_shards:" + shardPartition.getShardId());
+            }
+            
             searchRequest.source(searchSourceBuilder);
             
             // Use scroll for large dataset reading
@@ -222,17 +257,25 @@ public class ElasticsearchTableSource implements TableSource {
         }
     }
     
-    // Class for Elasticsearch partition
-    private static class ElasticsearchPartition implements Partition {
+    // Class for Elasticsearch shard partition
+    private static class ElasticsearchShardPartition implements Partition {
         private final String indexName;
+        private final int shardId;
+        private final String partitionName;
         
-        public ElasticsearchPartition(String indexName) {
+        public ElasticsearchShardPartition(String indexName, int shardId, String partitionName) {
             this.indexName = indexName;
+            this.shardId = shardId;
+            this.partitionName = partitionName;
         }
         
         @Override
         public String getPartitionId() {
-            return indexName;
+            return indexName + "_" + partitionName;
+        }
+        
+        public int getShardId() {
+            return shardId;
         }
     }
 }
