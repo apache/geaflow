@@ -28,6 +28,10 @@ on:
 env:
   JAVA_TOOL_OPTIONS: -Xmx4g
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.number || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   build:
 
@@ -49,6 +53,25 @@ jobs:
           java-version: '11'
           distribution: 'temurin'
 
+      - name: Cache Maven packages
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.m2/repository
+            !~/.m2/repository/org/apache/geaflow
+          key: ${{ runner.os }}-maven-jdk11-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-jdk11-
+            ${{ runner.os }}-maven-
+
+      - name: Cache Protoc
+        uses: actions/cache@v3
+        with:
+          path: ~/.protoc
+          key: ${{ runner.os }}-protoc-21.7
+          restore-keys: |
+            ${{ runner.os }}-protoc-
+
       - name: Setup Protoc
         uses: arduino/setup-protoc@v2
         with:
@@ -59,4 +82,4 @@ jobs:
         run: |
           test_modules="!geaflow/geaflow-dsl/geaflow-dsl-connector/geaflow-dsl-connector-hive,"
           test_modules+="!geaflow/geaflow-dsl/geaflow-dsl-connector-tests"
-          mvn -B -e clean test -Pjdk11 -pl "${test_modules}" -Duser.timezone=Asia/Shanghai -Dlog4j.configuration="log4j.rootLogger=WARN, stdout"
+          mvn -B -e clean test -Pjdk11 -pl "${test_modules}" -T 2C -Duser.timezone=Asia/Shanghai -Dlog4j.configuration="log4j.rootLogger=WARN, stdout" -Dmaven.test.failure.ignore=false -DtrimStackTrace=false
