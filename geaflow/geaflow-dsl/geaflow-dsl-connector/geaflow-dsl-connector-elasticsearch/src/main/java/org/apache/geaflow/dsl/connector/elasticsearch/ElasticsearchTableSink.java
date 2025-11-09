@@ -19,241 +19,196 @@
 
 package org.apache.geaflow.dsl.connector.elasticsearch;
 
-import co.elastic.clients.elasticsearch.ElasticsearchClient;
-import co.elastic.clients.elasticsearch.core.BulkRequest;
-import co.elastic.clients.elasticsearch.core.BulkResponse;
-import co.elastic.clients.elasticsearch.core.bulk.BulkOperation;
-import co.elastic.clients.elasticsearch.core.bulk.IndexOperation;
-import co.elastic.clients.json.jackson.JacksonJsonpMapper;
-import co.elastic.clients.transport.rest_client.RestClientTransport;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.google.gson.Gson;
 import java.io.IOException;
-import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import org.apache.geaflow.api.context.RuntimeContext;
 import org.apache.geaflow.common.config.Configuration;
-import org.apache.geaflow.common.type.IType;
 import org.apache.geaflow.dsl.common.data.Row;
 import org.apache.geaflow.dsl.common.exception.GeaFlowDSLException;
 import org.apache.geaflow.dsl.common.types.StructType;
-import org.apache.geaflow.dsl.common.types.TableField;
 import org.apache.geaflow.dsl.connector.api.TableSink;
 import org.apache.http.HttpHost;
 import org.apache.http.auth.AuthScope;
 import org.apache.http.auth.UsernamePasswordCredentials;
+import org.apache.http.client.CredentialsProvider;
 import org.apache.http.impl.client.BasicCredentialsProvider;
+import org.elasticsearch.action.bulk.BulkRequest;
+import org.elasticsearch.action.bulk.BulkResponse;
+import org.elasticsearch.action.index.IndexRequest;
+import org.elasticsearch.client.RequestOptions;
 import org.elasticsearch.client.RestClient;
 import org.elasticsearch.client.RestClientBuilder;
+import org.elasticsearch.client.RestHighLevelClient;
+import org.elasticsearch.xcontent.XContentType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class ElasticsearchTableSink implements TableSink {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ElasticsearchTableSink.class);
+    private static final Gson GSON = new Gson();
 
-    private Configuration config;
     private StructType schema;
-    private ElasticsearchClient client;
-    private RestClient restClient;
-
+    private String hosts;
     private String indexName;
-    private String idFieldName;
+    private String documentIdField;
+    private String username;
+    private String password;
     private int batchSize;
-    private List<Row> buffer;
-    private ObjectMapper objectMapper;
+    private int connectionTimeout;
+    private int socketTimeout;
+
+    private RestHighLevelClient client;
+    private BulkRequest bulkRequest;
+    private int batchCounter = 0;
 
     @Override
     public void init(Configuration conf, StructType schema) {
-        this.config = conf;
+        LOGGER.info("Prepare with config: {}, \n schema: {}", conf, schema);
         this.schema = schema;
 
-        this.indexName = config.getString(ElasticsearchConfigKeys.GEAFLOW_DSL_ELASTICSEARCH_INDEX);
-        if (indexName == null || indexName.isEmpty()) {
-            throw new GeaFlowDSLException("Elasticsearch index name is required");
-        }
-
-        this.idFieldName = config.getString(ElasticsearchConfigKeys.GEAFLOW_DSL_ELASTICSEARCH_ID_FIELD);
-        this.batchSize = Integer.parseInt(
-                config.getString(ElasticsearchConfigKeys.GEAFLOW_DSL_ELASTICSEARCH_BATCH_SIZE));
-
-        this.buffer = new ArrayList<>();
-        this.objectMapper = new ObjectMapper();
+        this.hosts = conf.getString(ElasticsearchConfigKeys.GEAFLOW_DSL_ELASTICSEARCH_HOSTS);
+        this.indexName = conf.getString(ElasticsearchConfigKeys.GEAFLOW_DSL_ELASTICSEARCH_INDEX);
+        this.documentIdField = conf.getString(ElasticsearchConfigKeys.GEAFLOW_DSL_ELASTICSEARCH_DOCUMENT_ID_FIELD, "");
+        this.username = conf.getString(ElasticsearchConfigKeys.GEAFLOW_DSL_ELASTICSEARCH_USERNAME, "");
+        this.password = conf.getString(ElasticsearchConfigKeys.GEAFLOW_DSL_ELASTICSEARCH_PASSWORD, "");
+        this.batchSize = conf.getInteger(ElasticsearchConfigKeys.GEAFLOW_DSL_ELASTICSEARCH_BATCH_SIZE,
+                ElasticsearchConstants.DEFAULT_BATCH_SIZE);
+        this.connectionTimeout = conf.getInteger(ElasticsearchConfigKeys.GEAFLOW_DSL_ELASTICSEARCH_CONNECTION_TIMEOUT,
+                ElasticsearchConstants.DEFAULT_CONNECTION_TIMEOUT);
+        this.socketTimeout = conf.getInteger(ElasticsearchConfigKeys.GEAFLOW_DSL_ELASTICSEARCH_SOCKET_TIMEOUT,
+                ElasticsearchConstants.DEFAULT_SOCKET_TIMEOUT);
     }
 
     @Override
     public void open(RuntimeContext context) {
-        String hosts = config.getString(ElasticsearchConfigKeys.GEAFLOW_DSL_ELASTICSEARCH_HOSTS);
-        if (hosts == null || hosts.isEmpty()) {
-            throw new GeaFlowDSLException("Elasticsearch hosts are required");
+        try {
+            this.client = createElasticsearchClient();
+            this.bulkRequest = new BulkRequest();
+        } catch (Exception e) {
+            throw new GeaFlowDSLException("Failed to create Elasticsearch client", e);
         }
-
-        String[] hostArray = hosts.split(",");
-        HttpHost[] httpHosts = new HttpHost[hostArray.length];
-
-        for (int i = 0; i < hostArray.length; i++) {
-            String[] parts = hostArray[i].trim().split(":");
-            String host = parts[0];
-            int port = parts.length > 1 ? Integer.parseInt(parts[1]) : 9200;
-            httpHosts[i] = new HttpHost(host, port, "http");
-        }
-
-        RestClientBuilder builder = RestClient.builder(httpHosts);
-
-        // Configure authentication if provided
-        String username = config.getString(ElasticsearchConfigKeys.GEAFLOW_DSL_ELASTICSEARCH_USERNAME);
-        String password = config.getString(ElasticsearchConfigKeys.GEAFLOW_DSL_ELASTICSEARCH_PASSWORD);
-
-        if (username != null && !username.isEmpty()) {
-            BasicCredentialsProvider credentialsProvider = new BasicCredentialsProvider();
-            credentialsProvider.setCredentials(
-                    AuthScope.ANY,
-                    new UsernamePasswordCredentials(username, password));
-
-            builder.setHttpClientConfigCallback(httpClientBuilder ->
-                    httpClientBuilder.setDefaultCredentialsProvider(credentialsProvider));
-        }
-
-        // Configure timeouts
-        int connectTimeout = Integer.parseInt(
-                config.getString(ElasticsearchConfigKeys.GEAFLOW_DSL_ELASTICSEARCH_CONNECT_TIMEOUT));
-        int socketTimeout = Integer.parseInt(
-                config.getString(ElasticsearchConfigKeys.GEAFLOW_DSL_ELASTICSEARCH_SOCKET_TIMEOUT));
-
-        builder.setRequestConfigCallback(requestConfigBuilder ->
-                requestConfigBuilder
-                        .setConnectTimeout(connectTimeout)
-                        .setSocketTimeout(socketTimeout));
-
-        this.restClient = builder.build();
-        this.client = new ElasticsearchClient(
-                new RestClientTransport(restClient, new JacksonJsonpMapper()));
-
-        LOGGER.info("Elasticsearch sink opened for index: {}", indexName);
     }
 
     @Override
     public void write(Row row) throws IOException {
-        buffer.add(row);
+        // Convert row to JSON document
+        String jsonDocument = rowToJson(row);
 
-        if (buffer.size() >= batchSize) {
+        // Create index request
+        IndexRequest request = new IndexRequest(indexName);
+        request.source(jsonDocument, XContentType.JSON);
+
+        // Set document ID if specified
+        if (documentIdField != null && !documentIdField.isEmpty()) {
+            int idFieldIndex = schema.indexOf(documentIdField);
+            if (idFieldIndex >= 0) {
+                Object idValue = row.getField(idFieldIndex, schema.getType(idFieldIndex));
+                if (idValue != null) {
+                    request.id(idValue.toString());
+                }
+            }
+        }
+
+        // Add to bulk request
+        bulkRequest.add(request);
+        batchCounter++;
+
+        // Flush if batch size reached
+        if (batchCounter >= batchSize) {
             flush();
         }
     }
 
     @Override
     public void finish() throws IOException {
-        if (!buffer.isEmpty()) {
-            flush();
-        }
+        flush();
     }
 
     @Override
     public void close() {
         try {
-            if (restClient != null) {
-                restClient.close();
-                LOGGER.info("Elasticsearch client closed");
+            if (Objects.nonNull(this.client)) {
+                client.close();
             }
         } catch (IOException e) {
-            LOGGER.error("Error closing Elasticsearch client", e);
+            throw new GeaFlowDSLException("Failed to close Elasticsearch client", e);
         }
     }
 
     private void flush() throws IOException {
-        if (buffer.isEmpty()) {
-            return;
-        }
-
-        List<BulkOperation> operations = new ArrayList<>();
-
-        for (Row row : buffer) {
-            final ObjectNode document = rowToJsonNode(row);
-
-            // Extract ID if id field is specified
-            final String docId;
-            if (!idFieldName.equals(ElasticsearchConstants.DEFAULT_ID_FIELD)) {
-                JsonNode idNode = document.get(idFieldName);
-                if (idNode != null) {
-                    docId = idNode.asText();
-                } else {
-                    docId = null;
-                }
-            } else {
-                docId = null;
+        if (batchCounter > 0 && client != null) {
+            BulkResponse bulkResponse = client.bulk(bulkRequest, RequestOptions.DEFAULT);
+            if (bulkResponse.hasFailures()) {
+                LOGGER.error("Bulk request failed: {}", bulkResponse.buildFailureMessage());
+                throw new IOException("Bulk request failed: " + bulkResponse.buildFailureMessage());
             }
-
-            IndexOperation<JsonNode> indexOp = IndexOperation.of(io -> {
-                io.index(indexName).document(document);
-                if (docId != null) {
-                    io.id(docId);
-                }
-                return io;
-            });
-
-            operations.add(BulkOperation.of(bo -> bo.index(indexOp)));
+            bulkRequest = new BulkRequest();
+            batchCounter = 0;
         }
-
-        BulkRequest bulkRequest = BulkRequest.of(br -> br.operations(operations));
-
-        BulkResponse bulkResponse = client.bulk(bulkRequest);
-
-        if (bulkResponse.errors()) {
-            LOGGER.error("Bulk indexing had errors");
-            bulkResponse.items().forEach(item -> {
-                if (item.error() != null) {
-                    LOGGER.error("Error indexing document {}: {}",
-                            item.id(), item.error().reason());
-                }
-            });
-            throw new GeaFlowDSLException("Bulk indexing failed");
-        }
-
-        LOGGER.info("Successfully indexed {} documents", buffer.size());
-        buffer.clear();
     }
 
-    private ObjectNode rowToJsonNode(Row row) {
-        ObjectNode node = objectMapper.createObjectNode();
+    private String rowToJson(Row row) {
+        // Convert Row to JSON string
+        Map<String, Object> map = new HashMap<>();
+        List<String> fieldNames = schema.getFieldNames();
 
-        List<TableField> fields = schema.getFields();
-
-        for (int i = 0; i < fields.size(); i++) {
-            TableField field = fields.get(i);
-            Object value = row.getField(i, field.getType());
-
-            if (value == null) {
-                node.putNull(field.getName());
-            } else {
-                IType<?> type = field.getType();
-                switch (type.getName()) {
-                    case "INTEGER":
-                        node.put(field.getName(), (Integer) value);
-                        break;
-                    case "LONG":
-                    case "BIGINT":
-                        node.put(field.getName(), (Long) value);
-                        break;
-                    case "DOUBLE":
-                        node.put(field.getName(), (Double) value);
-                        break;
-                    case "FLOAT":
-                        node.put(field.getName(), (Float) value);
-                        break;
-                    case "BOOLEAN":
-                        node.put(field.getName(), (Boolean) value);
-                        break;
-                    case "STRING":
-                    case "VARCHAR":
-                        node.put(field.getName(), (String) value);
-                        break;
-                    default:
-                        node.put(field.getName(), value.toString());
-                }
-            }
+        for (int i = 0; i < fieldNames.size(); i++) {
+            String fieldName = fieldNames.get(i);
+            Object fieldValue = row.getField(i, schema.getType(i));
+            map.put(fieldName, fieldValue);
         }
 
-        return node;
+        return GSON.toJson(map);
+    }
+
+    private RestHighLevelClient createElasticsearchClient() {
+        try {
+            String[] hostArray = hosts.split(",");
+            HttpHost[] httpHosts = new HttpHost[hostArray.length];
+
+            for (int i = 0; i < hostArray.length; i++) {
+                String host = hostArray[i].trim();
+                if (host.startsWith("http://")) {
+                    host = host.substring(7);
+                } else if (host.startsWith("https://")) {
+                    host = host.substring(8);
+                }
+
+                String[] parts = host.split(":");
+                String hostname = parts[0];
+                int port = parts.length > 1 ? Integer.parseInt(parts[1]) : 9200;
+                httpHosts[i] = new HttpHost(hostname, port, "http");
+            }
+
+            RestClientBuilder builder = RestClient.builder(httpHosts);
+
+            // Configure timeouts
+            builder.setRequestConfigCallback(requestConfigBuilder -> {
+                requestConfigBuilder.setConnectTimeout(connectionTimeout);
+                requestConfigBuilder.setSocketTimeout(socketTimeout);
+                return requestConfigBuilder;
+            });
+
+            // Configure authentication if provided
+            if (username != null && !username.isEmpty() && password != null) {
+                final CredentialsProvider credentialsProvider = new BasicCredentialsProvider();
+                credentialsProvider.setCredentials(AuthScope.ANY,
+                        new UsernamePasswordCredentials(username, password));
+
+                builder.setHttpClientConfigCallback(httpClientBuilder -> {
+                    httpClientBuilder.setDefaultCredentialsProvider(credentialsProvider);
+                    return httpClientBuilder;
+                });
+            }
+
+            return new RestHighLevelClient(builder);
+        } catch (Exception e) {
+            throw new GeaFlowDSLException("Failed to create Elasticsearch client", e);
+        }
     }
 }

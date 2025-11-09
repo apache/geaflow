@@ -21,6 +21,7 @@ package org.apache.geaflow.dsl.connector.elasticsearch;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
@@ -83,14 +84,14 @@ public class ElasticsearchIntegrationTest {
         config.put(ElasticsearchConfigKeys.GEAFLOW_DSL_ELASTICSEARCH_HOSTS,
                 container.getHttpHostAddress());
         config.put(ElasticsearchConfigKeys.GEAFLOW_DSL_ELASTICSEARCH_INDEX, "test_users");
-        config.put(ElasticsearchConfigKeys.GEAFLOW_DSL_ELASTICSEARCH_ID_FIELD, "id");
+        config.put(ElasticsearchConfigKeys.GEAFLOW_DSL_ELASTICSEARCH_DOCUMENT_ID_FIELD, "id");
         config.put(ElasticsearchConfigKeys.GEAFLOW_DSL_ELASTICSEARCH_BATCH_SIZE, "10");
 
         // Create schema
         TableField idField = new TableField("id", Types.INTEGER, false);
         TableField nameField = new TableField("name", Types.STRING, false);
         TableField ageField = new TableField("age", Types.INTEGER, false);
-        sinkSchema = new StructType(List.of(idField, nameField, ageField));
+        sinkSchema = new StructType(Arrays.asList(idField, nameField, ageField));
         sourceSchema = new TableSchema(sinkSchema);
     }
 
@@ -125,7 +126,6 @@ public class ElasticsearchIntegrationTest {
         }
 
         // Read data
-        config.put(ElasticsearchConfigKeys.GEAFLOW_DSL_ELASTICSEARCH_QUERY, "*");
         ElasticsearchTableSource source = new ElasticsearchTableSource();
         source.init(config, sourceSchema);
         source.open(context);
@@ -189,7 +189,6 @@ public class ElasticsearchIntegrationTest {
         }
 
         // Read with query
-        config.put(ElasticsearchConfigKeys.GEAFLOW_DSL_ELASTICSEARCH_QUERY, "name:Alice");
         ElasticsearchTableSource source = new ElasticsearchTableSource();
         source.init(config, sourceSchema);
         source.open(context);

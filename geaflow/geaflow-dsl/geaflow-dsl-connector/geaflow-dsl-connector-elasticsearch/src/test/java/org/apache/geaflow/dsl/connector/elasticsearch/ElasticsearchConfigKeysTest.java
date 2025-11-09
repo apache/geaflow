@@ -46,11 +46,9 @@ public class ElasticsearchConfigKeysTest {
         Configuration config = new Configuration();
 
         String batchSize = config.getString(ElasticsearchConfigKeys.GEAFLOW_DSL_ELASTICSEARCH_BATCH_SIZE);
-        String scrollSize = config.getString(ElasticsearchConfigKeys.GEAFLOW_DSL_ELASTICSEARCH_SCROLL_SIZE);
         String scrollTimeout = config.getString(ElasticsearchConfigKeys.GEAFLOW_DSL_ELASTICSEARCH_SCROLL_TIMEOUT);
 
         Assert.assertEquals(batchSize, (Object) String.valueOf(ElasticsearchConstants.DEFAULT_BATCH_SIZE));
-        Assert.assertEquals(scrollSize, (Object) String.valueOf(ElasticsearchConstants.DEFAULT_SCROLL_SIZE));
         Assert.assertEquals(scrollTimeout, (Object) ElasticsearchConstants.DEFAULT_SCROLL_TIMEOUT);
     }
 
@@ -58,12 +56,12 @@ public class ElasticsearchConfigKeysTest {
     public void testTimeoutValues() {
         Configuration config = new Configuration();
 
-        String connectTimeout = config.getString(ElasticsearchConfigKeys.GEAFLOW_DSL_ELASTICSEARCH_CONNECT_TIMEOUT);
+        String connectionTimeout = config.getString(ElasticsearchConfigKeys.GEAFLOW_DSL_ELASTICSEARCH_CONNECTION_TIMEOUT);
         String socketTimeout = config.getString(ElasticsearchConfigKeys.GEAFLOW_DSL_ELASTICSEARCH_SOCKET_TIMEOUT);
 
-        Assert.assertEquals(connectTimeout,
-                (Object) String.valueOf(ElasticsearchConstants.DEFAULT_CONNECT_TIMEOUT_MS));
+        Assert.assertEquals(connectionTimeout,
+                (Object) String.valueOf(ElasticsearchConstants.DEFAULT_CONNECTION_TIMEOUT));
         Assert.assertEquals(socketTimeout,
-                (Object) String.valueOf(ElasticsearchConstants.DEFAULT_SOCKET_TIMEOUT_MS));
+                (Object) String.valueOf(ElasticsearchConstants.DEFAULT_SOCKET_TIMEOUT));
     }
 }

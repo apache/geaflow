@@ -19,33 +19,19 @@
 
 package org.apache.geaflow.dsl.connector.elasticsearch;
 
-import co.elastic.clients.elasticsearch.ElasticsearchClient;
-import co.elastic.clients.elasticsearch._types.Time;
-import co.elastic.clients.elasticsearch.core.ClearScrollRequest;
-import co.elastic.clients.elasticsearch.core.ScrollRequest;
-import co.elastic.clients.elasticsearch.core.ScrollResponse;
-import co.elastic.clients.elasticsearch.core.SearchRequest;
-import co.elastic.clients.elasticsearch.core.SearchResponse;
-import co.elastic.clients.elasticsearch.core.search.Hit;
-import co.elastic.clients.json.jackson.JacksonJsonpMapper;
-import co.elastic.clients.transport.rest_client.RestClientTransport;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
 import java.io.IOException;
+import java.lang.reflect.Type;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.apache.geaflow.api.context.RuntimeContext;
 import org.apache.geaflow.common.config.Configuration;
-import org.apache.geaflow.common.type.IType;
-import org.apache.geaflow.dsl.common.data.Row;
-import org.apache.geaflow.dsl.common.data.impl.ObjectRow;
-import org.apache.geaflow.dsl.common.exception.GeaFlowDSLException;
-import org.apache.geaflow.dsl.common.types.TableField;
+import org.apache.geaflow.dsl.common.types.StructType;
 import org.apache.geaflow.dsl.common.types.TableSchema;
 import org.apache.geaflow.dsl.connector.api.FetchData;
-import org.apache.geaflow.dsl.connector.api.Offset;
 import org.apache.geaflow.dsl.connector.api.Partition;
 import org.apache.geaflow.dsl.connector.api.TableSource;
 import org.apache.geaflow.dsl.connector.api.serde.TableDeserializer;
@@ -53,231 +39,187 @@ import org.apache.geaflow.dsl.connector.api.window.FetchWindow;
 import org.apache.http.HttpHost;
 import org.apache.http.auth.AuthScope;
 import org.apache.http.auth.UsernamePasswordCredentials;
+import org.apache.http.client.CredentialsProvider;
 import org.apache.http.impl.client.BasicCredentialsProvider;
+import org.elasticsearch.action.search.ClearScrollRequest;
+import org.elasticsearch.action.search.SearchRequest;
+import org.elasticsearch.action.search.SearchResponse;
+import org.elasticsearch.client.RequestOptions;
 import org.elasticsearch.client.RestClient;
 import org.elasticsearch.client.RestClientBuilder;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.elasticsearch.client.RestHighLevelClient;
+import org.elasticsearch.core.TimeValue;
+import org.elasticsearch.search.Scroll;
+import org.elasticsearch.search.SearchHit;
+import org.elasticsearch.search.builder.SearchSourceBuilder;
 
 public class ElasticsearchTableSource implements TableSource {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(ElasticsearchTableSource.class);
+    private static final Gson GSON = new Gson();
+    private static final Type MAP_TYPE = new TypeToken<Map<String, Object>>(){}.getType();
 
-    private Configuration config;
-    private TableSchema tableSchema;
-    private ElasticsearchClient client;
-    private RestClient restClient;
-
+    private StructType schema;
+    private String hosts;
     private String indexName;
+    private String username;
+    private String password;
     private String scrollTimeout;
-    private int scrollSize;
-    private String queryDsl;
-    private ObjectMapper objectMapper;
+    private int connectionTimeout;
+    private int socketTimeout;
+
+    private RestHighLevelClient client;
 
     @Override
     public void init(Configuration tableConf, TableSchema tableSchema) {
-        this.config = tableConf;
-        this.tableSchema = tableSchema;
-
-        this.indexName = config.getString(ElasticsearchConfigKeys.GEAFLOW_DSL_ELASTICSEARCH_INDEX);
-        if (indexName == null || indexName.isEmpty()) {
-            throw new GeaFlowDSLException("Elasticsearch index name is required");
-        }
-
-        this.scrollTimeout = config.getString(ElasticsearchConfigKeys.GEAFLOW_DSL_ELASTICSEARCH_SCROLL_TIMEOUT);
-        this.scrollSize = Integer.parseInt(
-                config.getString(ElasticsearchConfigKeys.GEAFLOW_DSL_ELASTICSEARCH_SCROLL_SIZE));
-        this.queryDsl = config.getString(ElasticsearchConfigKeys.GEAFLOW_DSL_ELASTICSEARCH_QUERY);
-
-        this.objectMapper = new ObjectMapper();
+        this.schema = tableSchema;
+        this.hosts = tableConf.getString(ElasticsearchConfigKeys.GEAFLOW_DSL_ELASTICSEARCH_HOSTS);
+        this.indexName = tableConf.getString(ElasticsearchConfigKeys.GEAFLOW_DSL_ELASTICSEARCH_INDEX);
+        this.username = tableConf.getString(ElasticsearchConfigKeys.GEAFLOW_DSL_ELASTICSEARCH_USERNAME, "");
+        this.password = tableConf.getString(ElasticsearchConfigKeys.GEAFLOW_DSL_ELASTICSEARCH_PASSWORD, "");
+        this.scrollTimeout = tableConf.getString(ElasticsearchConfigKeys.GEAFLOW_DSL_ELASTICSEARCH_SCROLL_TIMEOUT,
+                ElasticsearchConstants.DEFAULT_SCROLL_TIMEOUT);
+        this.connectionTimeout = tableConf.getInteger(ElasticsearchConfigKeys.GEAFLOW_DSL_ELASTICSEARCH_CONNECTION_TIMEOUT,
+                ElasticsearchConstants.DEFAULT_CONNECTION_TIMEOUT);
+        this.socketTimeout = tableConf.getInteger(ElasticsearchConfigKeys.GEAFLOW_DSL_ELASTICSEARCH_SOCKET_TIMEOUT,
+                ElasticsearchConstants.DEFAULT_SOCKET_TIMEOUT);
     }
 
     @Override
     public void open(RuntimeContext context) {
-        String hosts = config.getString(ElasticsearchConfigKeys.GEAFLOW_DSL_ELASTICSEARCH_HOSTS);
-        if (hosts == null || hosts.isEmpty()) {
-            throw new GeaFlowDSLException("Elasticsearch hosts are required");
+        try {
+            this.client = createElasticsearchClient();
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to initialize Elasticsearch client", e);
         }
-
-        String[] hostArray = hosts.split(",");
-        HttpHost[] httpHosts = new HttpHost[hostArray.length];
-
-        for (int i = 0; i < hostArray.length; i++) {
-            String[] parts = hostArray[i].trim().split(":");
-            String host = parts[0];
-            int port = parts.length > 1 ? Integer.parseInt(parts[1]) : 9200;
-            httpHosts[i] = new HttpHost(host, port, "http");
-        }
-
-        RestClientBuilder builder = RestClient.builder(httpHosts);
-
-        // Configure authentication if provided
-        String username = config.getString(ElasticsearchConfigKeys.GEAFLOW_DSL_ELASTICSEARCH_USERNAME);
-        String password = config.getString(ElasticsearchConfigKeys.GEAFLOW_DSL_ELASTICSEARCH_PASSWORD);
-
-        if (username != null && !username.isEmpty()) {
-            BasicCredentialsProvider credentialsProvider = new BasicCredentialsProvider();
-            credentialsProvider.setCredentials(
-                    AuthScope.ANY,
-                    new UsernamePasswordCredentials(username, password));
-
-            builder.setHttpClientConfigCallback(httpClientBuilder ->
-                    httpClientBuilder.setDefaultCredentialsProvider(credentialsProvider));
-        }
-
-        // Configure timeouts
-        int connectTimeout = Integer.parseInt(
-                config.getString(ElasticsearchConfigKeys.GEAFLOW_DSL_ELASTICSEARCH_CONNECT_TIMEOUT));
-        int socketTimeout = Integer.parseInt(
-                config.getString(ElasticsearchConfigKeys.GEAFLOW_DSL_ELASTICSEARCH_SOCKET_TIMEOUT));
-
-        builder.setRequestConfigCallback(requestConfigBuilder ->
-                requestConfigBuilder
-                        .setConnectTimeout(connectTimeout)
-                        .setSocketTimeout(socketTimeout));
-
-        this.restClient = builder.build();
-        this.client = new ElasticsearchClient(
-                new RestClientTransport(restClient, new JacksonJsonpMapper()));
-
-        LOGGER.info("Elasticsearch source opened for index: {}", indexName);
     }
 
     @Override
     public List<Partition> listPartitions() {
-        // Elasticsearch doesn't have explicit partitions like databases,
-        // so we return a single partition representing the entire index
-        return Collections.singletonList(new ElasticsearchPartition(indexName));
+        return java.util.Collections.singletonList(new ElasticsearchPartition(indexName));
     }
 
     @Override
     public <IN> TableDeserializer<IN> getDeserializer(Configuration conf) {
-        throw new UnsupportedOperationException("Elasticsearch uses internal deserialization");
+        return new TableDeserializer<IN>() {
+            @Override
+            public void init(Configuration configuration, StructType structType) {
+                // Initialization if needed
+            }
+
+            @Override
+            public java.util.List<org.apache.geaflow.dsl.common.data.Row> deserialize(IN record) {
+                if (record instanceof SearchHit) {
+                    SearchHit hit = (SearchHit) record;
+                    Map<String, Object> source = hit.getSourceAsMap();
+                    if (source == null) {
+                        source = GSON.fromJson(hit.getSourceAsString(), MAP_TYPE);
+                    }
+
+                    // Convert map to Row based on schema
+                    Object[] values = new Object[schema.size()];
+                    for (int i = 0; i < schema.size(); i++) {
+                        String fieldName = schema.getFields().get(i).getName();
+                        values[i] = source.get(fieldName);
+                    }
+                    org.apache.geaflow.dsl.common.data.Row row = 
+                        org.apache.geaflow.dsl.common.data.impl.ObjectRow.create(values);
+                    return java.util.Collections.singletonList(row);
+                }
+                return java.util.Collections.emptyList();
+            }
+        };
     }
 
     @Override
-    public <T> FetchData<T> fetch(Partition partition, Optional<Offset> startOffset,
+    public <T> FetchData<T> fetch(Partition partition, Optional<org.apache.geaflow.dsl.connector.api.Offset> startOffset,
                                   FetchWindow windowInfo) throws IOException {
-        List<Row> rows = new ArrayList<>();
-        String scrollId = null;
-        boolean isFinished = false;
-
         try {
-            if (startOffset.isPresent()) {
-                // Continue scrolling with existing scroll ID
-                ElasticsearchOffset esOffset = (ElasticsearchOffset) startOffset.get();
-                final String existingScrollId = esOffset.getScrollId();
+            SearchRequest searchRequest = new SearchRequest(indexName);
+            SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+            searchSourceBuilder.size(1000); // Batch size
 
-                ScrollRequest scrollRequest = ScrollRequest.of(sr -> sr
-                        .scrollId(existingScrollId)
-                        .scroll(Time.of(t -> t.time(scrollTimeout)))
-                );
+            searchRequest.source(searchSourceBuilder);
 
-                ScrollResponse<JsonNode> scrollResponse = client.scroll(scrollRequest, JsonNode.class);
+            // Use scroll for large dataset reading
+            Scroll scroll = new Scroll(TimeValue.parseTimeValue(scrollTimeout, "scroll_timeout"));
+            searchRequest.scroll(scroll);
 
-                for (Hit<JsonNode> hit : scrollResponse.hits().hits()) {
-                    rows.add(jsonNodeToRow(hit.source()));
-                }
+            SearchResponse searchResponse = client.search(searchRequest, RequestOptions.DEFAULT);
+            String scrollId = searchResponse.getScrollId();
+            SearchHit[] searchHits = searchResponse.getHits().getHits();
 
-                scrollId = scrollResponse.scrollId();
-                isFinished = scrollResponse.hits().hits().isEmpty();
-
-            } else {
-                // Initial search with scroll
-                final String index = indexName;
-                final int size = scrollSize;
-                final String timeout = scrollTimeout;
-                final String query = queryDsl;
-                
-                SearchRequest searchRequest = SearchRequest.of(sr -> sr
-                        .index(index)
-                        .scroll(Time.of(t -> t.time(timeout)))
-                        .size(size)
-                        .query(q -> q.queryString(qs -> qs.query(query)))
-                );
-
-                SearchResponse<JsonNode> searchResponse = client.search(searchRequest, JsonNode.class);
-
-                for (Hit<JsonNode> hit : searchResponse.hits().hits()) {
-                    rows.add(jsonNodeToRow(hit.source()));
-                }
-
-                scrollId = searchResponse.scrollId();
-                isFinished = searchResponse.hits().hits().isEmpty();
+            List<T> dataList = new ArrayList<>();
+            for (SearchHit hit : searchHits) {
+                dataList.add((T) hit);
             }
+
+            // Clear scroll
+            ClearScrollRequest clearScrollRequest = new ClearScrollRequest();
+            clearScrollRequest.addScrollId(scrollId);
+            client.clearScroll(clearScrollRequest, RequestOptions.DEFAULT);
 
             ElasticsearchOffset nextOffset = new ElasticsearchOffset(scrollId);
-            return (FetchData<T>) FetchData.createStreamFetch(rows, nextOffset, isFinished);
-
-        } catch (IOException e) {
-            // Clear scroll on error
-            if (scrollId != null) {
-                try {
-                    clearScroll(scrollId);
-                } catch (IOException clearEx) {
-                    LOGGER.warn("Failed to clear scroll context", clearEx);
-                }
-            }
-            throw e;
+            return (FetchData<T>) FetchData.createStreamFetch(dataList, nextOffset, false);
+        } catch (Exception e) {
+            throw new IOException("Failed to fetch data from Elasticsearch", e);
         }
     }
 
     @Override
     public void close() {
         try {
-            if (restClient != null) {
-                restClient.close();
-                LOGGER.info("Elasticsearch client closed");
+            if (client != null) {
+                client.close();
             }
         } catch (IOException e) {
-            LOGGER.error("Error closing Elasticsearch client", e);
+            // Log error but don't throw exception in close method
+            e.printStackTrace();
         }
     }
 
-    private void clearScroll(String scrollId) throws IOException {
-        ClearScrollRequest clearScrollRequest = ClearScrollRequest.of(csr -> csr
-                .scrollId(scrollId)
-        );
-        client.clearScroll(clearScrollRequest);
-    }
+    private RestHighLevelClient createElasticsearchClient() {
+        try {
+            String[] hostArray = hosts.split(",");
+            HttpHost[] httpHosts = new HttpHost[hostArray.length];
 
-    private Row jsonNodeToRow(JsonNode jsonNode) {
-        List<TableField> fields = tableSchema.getFields();
-        Object[] values = new Object[fields.size()];
+            for (int i = 0; i < hostArray.length; i++) {
+                String host = hostArray[i].trim();
+                if (host.startsWith("http://")) {
+                    host = host.substring(7);
+                } else if (host.startsWith("https://")) {
+                    host = host.substring(8);
+                }
 
-        for (int i = 0; i < fields.size(); i++) {
-            TableField field = fields.get(i);
-            JsonNode fieldNode = jsonNode.get(field.getName());
-
-            if (fieldNode == null || fieldNode.isNull()) {
-                values[i] = null;
-            } else {
-                IType<?> type = field.getType();
-                values[i] = convertJsonValue(fieldNode, type);
+                String[] parts = host.split(":");
+                String hostname = parts[0];
+                int port = parts.length > 1 ? Integer.parseInt(parts[1]) : 9200;
+                httpHosts[i] = new HttpHost(hostname, port, "http");
             }
-        }
 
-        return ObjectRow.create(values);
-    }
+            RestClientBuilder builder = RestClient.builder(httpHosts);
 
-    private Object convertJsonValue(JsonNode node, IType<?> type) {
-        switch (type.getName()) {
-            case "INTEGER":
-                return node.asInt();
-            case "LONG":
-            case "BIGINT":
-                return node.asLong();
-            case "DOUBLE":
-                return node.asDouble();
-            case "FLOAT":
-                return (float) node.asDouble();
-            case "BOOLEAN":
-                return node.asBoolean();
-            case "STRING":
-            case "VARCHAR":
-                return node.asText();
-            default:
-                return node.asText();
+            // Configure timeouts
+            builder.setRequestConfigCallback(requestConfigBuilder -> {
+                requestConfigBuilder.setConnectTimeout(connectionTimeout);
+                requestConfigBuilder.setSocketTimeout(socketTimeout);
+                return requestConfigBuilder;
+            });
+
+            // Configure authentication if provided
+            if (username != null && !username.isEmpty() && password != null) {
+                final CredentialsProvider credentialsProvider = new BasicCredentialsProvider();
+                credentialsProvider.setCredentials(AuthScope.ANY,
+                        new UsernamePasswordCredentials(username, password));
+
+                builder.setHttpClientConfigCallback(httpClientBuilder -> {
+                    httpClientBuilder.setDefaultCredentialsProvider(credentialsProvider);
+                    return httpClientBuilder;
+                });
+            }
+
+            return new RestHighLevelClient(builder);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to create Elasticsearch client", e);
         }
     }
 
@@ -294,11 +236,17 @@ public class ElasticsearchTableSource implements TableSource {
         }
     }
 
-    public static class ElasticsearchOffset implements Offset {
+    public static class ElasticsearchOffset implements org.apache.geaflow.dsl.connector.api.Offset {
         private final String scrollId;
+        private final long timestamp;
 
         public ElasticsearchOffset(String scrollId) {
+            this(scrollId, System.currentTimeMillis());
+        }
+
+        public ElasticsearchOffset(String scrollId, long timestamp) {
             this.scrollId = scrollId;
+            this.timestamp = timestamp;
         }
 
         public String getScrollId() {
@@ -307,17 +255,17 @@ public class ElasticsearchTableSource implements TableSource {
 
         @Override
         public String humanReadable() {
-            return "ScrollId: " + scrollId;
+            return "ElasticsearchOffset{scrollId='" + scrollId + "', timestamp=" + timestamp + "}";
         }
 
         @Override
         public long getOffset() {
-            return 0;
+            return timestamp;
         }
 
         @Override
         public boolean isTimestamp() {
-            return false;
+            return true;
         }
     }
 }

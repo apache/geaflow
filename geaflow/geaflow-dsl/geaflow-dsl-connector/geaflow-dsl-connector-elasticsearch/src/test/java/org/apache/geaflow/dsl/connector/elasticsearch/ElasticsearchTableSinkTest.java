@@ -19,6 +19,7 @@
 
 package org.apache.geaflow.dsl.connector.elasticsearch;
 
+import java.util.Arrays;
 import java.util.List;
 import org.apache.geaflow.common.config.Configuration;
 import org.apache.geaflow.common.type.Types;
@@ -42,12 +43,12 @@ public class ElasticsearchTableSinkTest {
         config = new Configuration();
         config.put(ElasticsearchConfigKeys.GEAFLOW_DSL_ELASTICSEARCH_HOSTS, "localhost:9200");
         config.put(ElasticsearchConfigKeys.GEAFLOW_DSL_ELASTICSEARCH_INDEX, "test_index");
-        config.put(ElasticsearchConfigKeys.GEAFLOW_DSL_ELASTICSEARCH_ID_FIELD, "id");
+        config.put(ElasticsearchConfigKeys.GEAFLOW_DSL_ELASTICSEARCH_DOCUMENT_ID_FIELD, "id");
 
         TableField idField = new TableField("id", Types.INTEGER, false);
         TableField nameField = new TableField("name", Types.STRING, false);
         TableField ageField = new TableField("age", Types.INTEGER, false);
-        schema = new StructType(List.of(idField, nameField, ageField));
+        schema = new StructType(Arrays.asList(idField, nameField, ageField));
     }
 
     @Test
@@ -63,12 +64,13 @@ public class ElasticsearchTableSinkTest {
         sink.init(invalidConfig, schema);
     }
 
-    @Test(expectedExceptions = RuntimeException.class)
+    @Test
     public void testInitWithoutIdField() {
         Configuration invalidConfig = new Configuration();
         invalidConfig.put(ElasticsearchConfigKeys.GEAFLOW_DSL_ELASTICSEARCH_HOSTS, "localhost:9200");
         invalidConfig.put(ElasticsearchConfigKeys.GEAFLOW_DSL_ELASTICSEARCH_INDEX, "test_index");
         sink.init(invalidConfig, schema);
+        Assert.assertNotNull(sink);
     }
 
     @Test

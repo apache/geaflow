@@ -19,6 +19,7 @@
 
 package org.apache.geaflow.dsl.connector.elasticsearch;
 
+import java.util.Arrays;
 import java.util.List;
 import org.apache.geaflow.common.config.Configuration;
 import org.apache.geaflow.common.type.Types;
@@ -43,16 +44,16 @@ public class ElasticsearchTableConnectorTest {
         config = new Configuration();
         config.put(ElasticsearchConfigKeys.GEAFLOW_DSL_ELASTICSEARCH_HOSTS, "localhost:9200");
         config.put(ElasticsearchConfigKeys.GEAFLOW_DSL_ELASTICSEARCH_INDEX, "test_index");
-        config.put(ElasticsearchConfigKeys.GEAFLOW_DSL_ELASTICSEARCH_ID_FIELD, "id");
+        config.put(ElasticsearchConfigKeys.GEAFLOW_DSL_ELASTICSEARCH_DOCUMENT_ID_FIELD, "id");
 
         TableField idField = new TableField("id", Types.INTEGER, false);
         TableField nameField = new TableField("name", Types.STRING, false);
-        schema = new TableSchema(new StructType(List.of(idField, nameField)));
+        schema = new TableSchema(new StructType(Arrays.asList(idField, nameField)));
     }
 
     @Test
     public void testGetName() {
-        Assert.assertEquals(connector.getType(), "elasticsearch");
+        Assert.assertEquals(connector.getType(), "ELASTICSEARCH");
     }
 
     @Test

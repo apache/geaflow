@@ -23,21 +23,9 @@ public class ElasticsearchConstants {
 
     public static final int DEFAULT_BATCH_SIZE = 1000;
 
-    public static final int DEFAULT_MAX_RETRIES = 3;
+    public static final String DEFAULT_SCROLL_TIMEOUT = "60s";
 
-    public static final long DEFAULT_CONNECT_TIMEOUT_MILLIS = 10000L; // 10 seconds
+    public static final int DEFAULT_CONNECTION_TIMEOUT = 1000;
 
-    public static final long DEFAULT_SOCKET_TIMEOUT_MILLIS = 60000L; // 60 seconds
-
-    public static final int DEFAULT_CONNECT_TIMEOUT_MS = 10000; // 10 seconds (milliseconds as int)
-
-    public static final int DEFAULT_SOCKET_TIMEOUT_MS = 60000; // 60 seconds (milliseconds as int)
-
-    public static final int DEFAULT_MAX_CONNECTIONS = 100;
-
-    public static final String DEFAULT_ID_FIELD = "_id";
-
-    public static final String DEFAULT_SCROLL_TIMEOUT = "5m";
-
-    public static final int DEFAULT_SCROLL_SIZE = 1000;
+    public static final int DEFAULT_SOCKET_TIMEOUT = 30000;
 }

@@ -27,65 +27,45 @@ public class ElasticsearchConfigKeys {
     public static final ConfigKey GEAFLOW_DSL_ELASTICSEARCH_HOSTS = ConfigKeys
             .key("geaflow.dsl.elasticsearch.hosts")
             .noDefaultValue()
-            .description("Elasticsearch cluster hosts (comma-separated), e.g., 'localhost:9200,host2:9200'");
-
-    public static final ConfigKey GEAFLOW_DSL_ELASTICSEARCH_USERNAME = ConfigKeys
-            .key("geaflow.dsl.elasticsearch.username")
-            .defaultValue("")
-            .description("Username for Elasticsearch authentication");
-
-    public static final ConfigKey GEAFLOW_DSL_ELASTICSEARCH_PASSWORD = ConfigKeys
-            .key("geaflow.dsl.elasticsearch.password")
-            .defaultValue("")
-            .description("Password for Elasticsearch authentication");
+            .description("Elasticsearch cluster hosts list.");
 
     public static final ConfigKey GEAFLOW_DSL_ELASTICSEARCH_INDEX = ConfigKeys
             .key("geaflow.dsl.elasticsearch.index")
             .noDefaultValue()
-            .description("Elasticsearch index name");
+            .description("Elasticsearch index name.");
 
-    public static final ConfigKey GEAFLOW_DSL_ELASTICSEARCH_ID_FIELD = ConfigKeys
-            .key("geaflow.dsl.elasticsearch.id.field")
-            .defaultValue(ElasticsearchConstants.DEFAULT_ID_FIELD)
-            .description("Field name to use as document ID");
+    public static final ConfigKey GEAFLOW_DSL_ELASTICSEARCH_DOCUMENT_ID_FIELD = ConfigKeys
+            .key("geaflow.dsl.elasticsearch.document.id.field")
+            .noDefaultValue()
+            .description("Elasticsearch document id field.");
+
+    public static final ConfigKey GEAFLOW_DSL_ELASTICSEARCH_USERNAME = ConfigKeys
+            .key("geaflow.dsl.elasticsearch.username")
+            .noDefaultValue()
+            .description("Elasticsearch username for authentication.");
+
+    public static final ConfigKey GEAFLOW_DSL_ELASTICSEARCH_PASSWORD = ConfigKeys
+            .key("geaflow.dsl.elasticsearch.password")
+            .noDefaultValue()
+            .description("Elasticsearch password for authentication.");
 
     public static final ConfigKey GEAFLOW_DSL_ELASTICSEARCH_BATCH_SIZE = ConfigKeys
             .key("geaflow.dsl.elasticsearch.batch.size")
-            .defaultValue(String.valueOf(ElasticsearchConstants.DEFAULT_BATCH_SIZE))
-            .description("Batch size for bulk operations");
-
-    public static final ConfigKey GEAFLOW_DSL_ELASTICSEARCH_MAX_RETRIES = ConfigKeys
-            .key("geaflow.dsl.elasticsearch.max.retries")
-            .defaultValue(String.valueOf(ElasticsearchConstants.DEFAULT_MAX_RETRIES))
-            .description("Maximum number of retries for failed requests");
-
-    public static final ConfigKey GEAFLOW_DSL_ELASTICSEARCH_CONNECT_TIMEOUT = ConfigKeys
-            .key("geaflow.dsl.elasticsearch.connect.timeout.ms")
-            .defaultValue(String.valueOf(ElasticsearchConstants.DEFAULT_CONNECT_TIMEOUT_MILLIS))
-            .description("Connection timeout in milliseconds");
-
-    public static final ConfigKey GEAFLOW_DSL_ELASTICSEARCH_SOCKET_TIMEOUT = ConfigKeys
-            .key("geaflow.dsl.elasticsearch.socket.timeout.ms")
-            .defaultValue(String.valueOf(ElasticsearchConstants.DEFAULT_SOCKET_TIMEOUT_MILLIS))
-            .description("Socket timeout in milliseconds");
-
-    public static final ConfigKey GEAFLOW_DSL_ELASTICSEARCH_MAX_CONNECTIONS = ConfigKeys
-            .key("geaflow.dsl.elasticsearch.max.connections")
-            .defaultValue(String.valueOf(ElasticsearchConstants.DEFAULT_MAX_CONNECTIONS))
-            .description("Maximum number of connections in the pool");
+            .defaultValue("1000")
+            .description("Elasticsearch batch write size.");
 
     public static final ConfigKey GEAFLOW_DSL_ELASTICSEARCH_SCROLL_TIMEOUT = ConfigKeys
             .key("geaflow.dsl.elasticsearch.scroll.timeout")
-            .defaultValue(ElasticsearchConstants.DEFAULT_SCROLL_TIMEOUT)
-            .description("Scroll context timeout, e.g., '5m', '1h'");
+            .defaultValue("60s")
+            .description("Elasticsearch scroll query timeout.");
 
-    public static final ConfigKey GEAFLOW_DSL_ELASTICSEARCH_SCROLL_SIZE = ConfigKeys
-            .key("geaflow.dsl.elasticsearch.scroll.size")
-            .defaultValue(String.valueOf(ElasticsearchConstants.DEFAULT_SCROLL_SIZE))
-            .description("Number of documents per scroll request");
+    public static final ConfigKey GEAFLOW_DSL_ELASTICSEARCH_CONNECTION_TIMEOUT = ConfigKeys
+            .key("geaflow.dsl.elasticsearch.connection.timeout")
+            .defaultValue("1000")
+            .description("Elasticsearch connection timeout in milliseconds.");
 
-    public static final ConfigKey GEAFLOW_DSL_ELASTICSEARCH_QUERY = ConfigKeys
-            .key("geaflow.dsl.elasticsearch.query")
-            .defaultValue("{\"match_all\":{}}")
-            .description("Elasticsearch query DSL in JSON format");
+    public static final ConfigKey GEAFLOW_DSL_ELASTICSEARCH_SOCKET_TIMEOUT = ConfigKeys
+            .key("geaflow.dsl.elasticsearch.socket.timeout")
+            .defaultValue("30000")
+            .description("Elasticsearch socket timeout in milliseconds.");
 }

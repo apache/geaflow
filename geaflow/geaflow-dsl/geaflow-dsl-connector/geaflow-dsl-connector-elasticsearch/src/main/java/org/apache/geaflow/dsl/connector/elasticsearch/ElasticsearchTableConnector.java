@@ -27,9 +27,11 @@ import org.apache.geaflow.dsl.connector.api.TableWritableConnector;
 
 public class ElasticsearchTableConnector implements TableReadableConnector, TableWritableConnector {
 
+    public static final String TYPE = "ELASTICSEARCH";
+
     @Override
     public String getType() {
-        return "elasticsearch";
+        return TYPE;
     }
 
     @Override

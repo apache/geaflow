@@ -19,6 +19,7 @@
 
 package org.apache.geaflow.dsl.connector.elasticsearch;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import org.apache.geaflow.common.config.Configuration;
@@ -49,7 +50,7 @@ public class ElasticsearchTableSourceTest {
 
         TableField idField = new TableField("id", Types.INTEGER, false);
         TableField nameField = new TableField("name", Types.STRING, false);
-        schema = new TableSchema(new StructType(List.of(idField, nameField)));
+        schema = new TableSchema(new StructType(Arrays.asList(idField, nameField)));
     }
 
     @Test
@@ -75,10 +76,10 @@ public class ElasticsearchTableSourceTest {
         Assert.assertEquals(partitions.get(0).getName(), "test_index");
     }
 
-    @Test(expectedExceptions = UnsupportedOperationException.class)
+    @Test
     public void testGetDeserializer() {
         source.init(config, schema);
-        source.getDeserializer(config);
+        Assert.assertNotNull(source.getDeserializer(config));
     }
 
     @Test
