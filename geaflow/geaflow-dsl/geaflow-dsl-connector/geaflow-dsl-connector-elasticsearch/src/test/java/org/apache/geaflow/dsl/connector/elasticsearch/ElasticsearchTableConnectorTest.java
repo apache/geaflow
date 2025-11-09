@@ -17,46 +17,57 @@
  * under the License.
  */
 
-package org.apache.geaflow.dsl.connector.neo4j;
+package org.apache.geaflow.dsl.connector.elasticsearch;
 
+import java.util.Arrays;
+import java.util.List;
 import org.apache.geaflow.common.config.Configuration;
+import org.apache.geaflow.common.type.Types;
+import org.apache.geaflow.dsl.common.types.StructType;
+import org.apache.geaflow.dsl.common.types.TableField;
+import org.apache.geaflow.dsl.common.types.TableSchema;
 import org.apache.geaflow.dsl.connector.api.TableSink;
 import org.apache.geaflow.dsl.connector.api.TableSource;
 import org.testng.Assert;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
-public class Neo4jTableConnectorTest {
+public class ElasticsearchTableConnectorTest {
 
-    private Neo4jTableConnector connector;
+    private ElasticsearchTableConnector connector;
     private Configuration config;
+    private TableSchema schema;
 
     @BeforeMethod
     public void setUp() {
-        connector = new Neo4jTableConnector();
+        connector = new ElasticsearchTableConnector();
         config = new Configuration();
-        config.put(Neo4jConfigKeys.GEAFLOW_DSL_NEO4J_URI, "bolt://localhost:7687");
-        config.put(Neo4jConfigKeys.GEAFLOW_DSL_NEO4J_USERNAME, "neo4j");
-        config.put(Neo4jConfigKeys.GEAFLOW_DSL_NEO4J_PASSWORD, "password");
+        config.put(ElasticsearchConfigKeys.GEAFLOW_DSL_ELASTICSEARCH_HOSTS, "localhost:9200");
+        config.put(ElasticsearchConfigKeys.GEAFLOW_DSL_ELASTICSEARCH_INDEX, "test_index");
+        config.put(ElasticsearchConfigKeys.GEAFLOW_DSL_ELASTICSEARCH_DOCUMENT_ID_FIELD, "id");
+
+        TableField idField = new TableField("id", Types.INTEGER, false);
+        TableField nameField = new TableField("name", Types.STRING, false);
+        schema = new TableSchema(new StructType(Arrays.asList(idField, nameField)));
     }
 
     @Test
-    public void testGetType() {
-        Assert.assertEquals(connector.getType(), "Neo4j");
+    public void testGetName() {
+        Assert.assertEquals(connector.getType(), "ELASTICSEARCH");
     }
 
     @Test
-    public void testCreateSource() {
+    public void testGetSource() {
         TableSource source = connector.createSource(config);
         Assert.assertNotNull(source);
-        Assert.assertTrue(source instanceof Neo4jTableSource);
+        Assert.assertTrue(source instanceof ElasticsearchTableSource);
     }
 
     @Test
-    public void testCreateSink() {
+    public void testGetSink() {
         TableSink sink = connector.createSink(config);
         Assert.assertNotNull(sink);
-        Assert.assertTrue(sink instanceof Neo4jTableSink);
+        Assert.assertTrue(sink instanceof ElasticsearchTableSink);
     }
 
     @Test
