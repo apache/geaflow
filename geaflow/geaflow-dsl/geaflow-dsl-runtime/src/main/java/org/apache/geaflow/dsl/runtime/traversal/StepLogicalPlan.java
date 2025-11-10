@@ -34,6 +34,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
+import org.apache.calcite.rex.RexFieldAccess;
 import org.apache.geaflow.common.type.IType;
 import org.apache.geaflow.dsl.common.types.EdgeType;
 import org.apache.geaflow.dsl.common.types.GraphSchema;
@@ -56,6 +57,7 @@ import org.apache.geaflow.dsl.runtime.function.graph.StepPathModifyFunction;
 import org.apache.geaflow.dsl.runtime.function.graph.StepSortFunction;
 import org.apache.geaflow.dsl.runtime.function.graph.StepSortFunctionImpl;
 import org.apache.geaflow.dsl.runtime.function.graph.TraversalFromVertexFunction;
+import org.apache.geaflow.dsl.runtime.traversal.operator.FilteredFieldsOperator;
 import org.apache.geaflow.dsl.runtime.traversal.operator.MatchEdgeOperator;
 import org.apache.geaflow.dsl.runtime.traversal.operator.MatchVertexOperator;
 import org.apache.geaflow.dsl.runtime.traversal.operator.MatchVirtualEdgeOperator;
@@ -159,38 +161,38 @@ public class StepLogicalPlan implements Serializable {
     public StepLogicalPlan end() {
         StepEndOperator operator = new StepEndOperator(nextPlanId());
         return new StepLogicalPlan(this, operator)
-            .withGraphSchema(this.getGraphSchema())
-            .withInputPathSchema(this.getOutputPathSchema())
-            .withOutputPathSchema(this.getOutputPathSchema())
-            .withOutputType(VoidType.INSTANCE)
-            ;
+                .withGraphSchema(this.getGraphSchema())
+                .withInputPathSchema(this.getOutputPathSchema())
+                .withOutputPathSchema(this.getOutputPathSchema())
+                .withOutputType(VoidType.INSTANCE)
+                ;
     }
 
     public static StepLogicalPlan subQueryStart(String queryName) {
         StepSubQueryStartOperator operator = new StepSubQueryStartOperator(nextPlanId(),
-            queryName);
+                queryName);
         return new StepLogicalPlan(Collections.emptyList(), operator);
     }
 
     public StepLogicalPlan vertexMatch(MatchVertexFunction function) {
         MatchVertexOperator operator = new MatchVertexOperator(nextPlanId(), function);
         return new StepLogicalPlan(this, operator)
-            .withGraphSchema(this.getGraphSchema())
-            .withInputPathSchema(this.getOutputPathSchema());
+                .withGraphSchema(this.getGraphSchema())
+                .withInputPathSchema(this.getOutputPathSchema());
     }
 
     public StepLogicalPlan edgeMatch(MatchEdgeFunction function) {
         MatchEdgeOperator operator = new MatchEdgeOperator(nextPlanId(), function);
         return new StepLogicalPlan(this, operator)
-            .withGraphSchema(this.getGraphSchema())
-            .withInputPathSchema(this.getOutputPathSchema());
+                .withGraphSchema(this.getGraphSchema())
+                .withInputPathSchema(this.getOutputPathSchema());
     }
 
     public StepLogicalPlan virtualEdgeMatch(MatchVirtualEdgeFunction function) {
         MatchVirtualEdgeOperator operator = new MatchVirtualEdgeOperator(nextPlanId(), function);
         return new StepLogicalPlan(this, operator)
-            .withGraphSchema(this.getGraphSchema())
-            .withInputPathSchema(this.getOutputPathSchema());
+                .withGraphSchema(this.getGraphSchema())
+                .withInputPathSchema(this.getOutputPathSchema());
     }
 
     public StepLogicalPlan startFrom(String label) {
@@ -199,14 +201,14 @@ public class StepLogicalPlan implements Serializable {
             IType<?> fieldType = getOutputPathSchema().getType(fieldIndex);
             if (!(fieldType instanceof VertexType)) {
                 throw new IllegalArgumentException(
-                    "Only can start traversal from vertex, current type is: " + fieldType);
+                        "Only can start traversal from vertex, current type is: " + fieldType);
             }
             return this.virtualEdgeMatch(new TraversalFromVertexFunction(fieldIndex, fieldType))
-                .withGraphSchema(this.getGraphSchema())
-                .withInputPathSchema(this.getOutputPathSchema())
-                .withOutputPathSchema(PathType.EMPTY)
-                .withOutputType(EdgeType.emptyEdge(getGraphSchema().getIdType()))
-                ;
+                    .withGraphSchema(this.getGraphSchema())
+                    .withInputPathSchema(this.getOutputPathSchema())
+                    .withOutputPathSchema(PathType.EMPTY)
+                    .withOutputType(EdgeType.emptyEdge(getGraphSchema().getIdType()))
+                    ;
         } else { // start from a new label.
             return this.getHeadPlan();
         }
@@ -215,39 +217,39 @@ public class StepLogicalPlan implements Serializable {
     public StepLogicalPlan filter(StepBoolFunction function) {
         StepFilterOperator operator = new StepFilterOperator(nextPlanId(), function);
         return new StepLogicalPlan(this, operator)
-            .withGraphSchema(this.getGraphSchema())
-            .withInputPathSchema(this.getOutputPathSchema())
-            .withOutputType(this.getOutputType())
-            ;
+                .withGraphSchema(this.getGraphSchema())
+                .withInputPathSchema(this.getOutputPathSchema())
+                .withOutputType(this.getOutputType())
+                ;
     }
 
     public StepLogicalPlan filterNode(StepNodeFilterFunction function) {
         StepNodeFilterOperator operator = new StepNodeFilterOperator(nextPlanId(), function);
         return new StepLogicalPlan(this, operator)
-            .withGraphSchema(this.getGraphSchema())
-            .withInputPathSchema(this.getOutputPathSchema())
-            .withOutputPathSchema(this.getOutputPathSchema())
-            .withOutputType(this.getOutputType());
+                .withGraphSchema(this.getGraphSchema())
+                .withInputPathSchema(this.getOutputPathSchema())
+                .withOutputPathSchema(this.getOutputPathSchema())
+                .withOutputType(this.getOutputType());
     }
 
     public StepLogicalPlan distinct(StepKeyFunction keyFunction) {
         StepDistinctOperator localOperator = new StepDistinctOperator(nextPlanId(), keyFunction);
         StepLogicalPlan localDistinct = new StepLogicalPlan(this, localOperator)
-            .withName("StepLocalDistinct-" + localOperator.getId())
-            .withGraphSchema(this.getGraphSchema())
-            .withInputPathSchema(this.getOutputPathSchema())
-            .withOutputPathSchema(this.getOutputPathSchema())
-            .withOutputType(this.getOutputType());
+                .withName("StepLocalDistinct-" + localOperator.getId())
+                .withGraphSchema(this.getGraphSchema())
+                .withInputPathSchema(this.getOutputPathSchema())
+                .withOutputPathSchema(this.getOutputPathSchema())
+                .withOutputType(this.getOutputType());
 
         StepLogicalPlan exchange = localDistinct.exchange(keyFunction);
 
         StepDistinctOperator globalOperator = new StepDistinctOperator(nextPlanId(), keyFunction);
         return new StepLogicalPlan(exchange, globalOperator)
-            .withName("StepGlobalDistinct-" + globalOperator.getId())
-            .withGraphSchema(this.getGraphSchema())
-            .withInputPathSchema(this.getOutputPathSchema())
-            .withOutputPathSchema(this.getOutputPathSchema())
-            .withOutputType(this.getOutputType());
+                .withName("StepGlobalDistinct-" + globalOperator.getId())
+                .withGraphSchema(this.getGraphSchema())
+                .withInputPathSchema(this.getOutputPathSchema())
+                .withOutputPathSchema(this.getOutputPathSchema())
+                .withOutputType(this.getOutputType());
     }
 
     public StepLogicalPlan loopUtil(StepLogicalPlan loopBody, StepBoolFunction utilCondition,
@@ -263,38 +265,38 @@ public class StepLogicalPlan implements Serializable {
         // append loop body the current plan.
         bodyStart.setInputs(Collections.singletonList(this));
         StepLoopUntilOperator operator = new StepLoopUntilOperator(
-            nextPlanId(),
-            bodyStart.getId(),
-            loopBody.getId(),
-            utilCondition,
-            minLoopCount,
-            maxLoopCount,
-            loopStartPathFieldCount,
-            loopBodyPathFieldCount);
+                nextPlanId(),
+                bodyStart.getId(),
+                loopBody.getId(),
+                utilCondition,
+                minLoopCount,
+                maxLoopCount,
+                loopStartPathFieldCount,
+                loopBodyPathFieldCount);
         List<StepLogicalPlan> inputs = new ArrayList<>();
         inputs.add(loopBody);
         if (minLoopCount == 0) {
             inputs.add(this);
         }
         return new StepLogicalPlan(inputs, operator)
-            .withGraphSchema(this.getGraphSchema())
-            .withInputPathSchema(loopBody.getOutputPathSchema());
+                .withGraphSchema(this.getGraphSchema())
+                .withInputPathSchema(loopBody.getOutputPathSchema());
     }
 
     public StepLogicalPlan map(StepPathModifyFunction function, boolean isGlobal) {
         StepMapOperator operator = new StepMapOperator(nextPlanId(), function, isGlobal);
         return new StepLogicalPlan(this, operator)
-            .withGraphSchema(this.getGraphSchema())
-            .withInputPathSchema(this.getOutputPathSchema())
-            ;
+                .withGraphSchema(this.getGraphSchema())
+                .withInputPathSchema(this.getOutputPathSchema())
+                ;
     }
 
     public StepLogicalPlan mapRow(StepMapRowFunction function) {
         StepMapRowOperator operator = new StepMapRowOperator(nextPlanId(), function);
         return new StepLogicalPlan(this, operator)
-            .withGraphSchema(this.getGraphSchema())
-            .withInputPathSchema(this.getOutputPathSchema())
-            ;
+                .withGraphSchema(this.getGraphSchema())
+                .withInputPathSchema(this.getOutputPathSchema())
+                ;
     }
 
     public StepLogicalPlan union(List<StepLogicalPlan> inputs) {
@@ -304,128 +306,135 @@ public class StepLogicalPlan implements Serializable {
         totalInputs.add(this);
         totalInputs.addAll(inputs);
         List<PathType> inputPathTypes = totalInputs.stream()
-            .map(StepLogicalPlan::getOutputPathSchema)
-            .collect(Collectors.toList());
+                .map(StepLogicalPlan::getOutputPathSchema)
+                .collect(Collectors.toList());
         return new StepLogicalPlan(totalInputs, operator)
-            .withGraphSchema(getGraphSchema())
-            .withInputPathSchema(inputPathTypes)
-            ;
+                .withGraphSchema(getGraphSchema())
+                .withInputPathSchema(inputPathTypes)
+                ;
     }
 
     public StepLogicalPlan exchange(StepKeyFunction keyFunction) {
         StepExchangeOperator exchange = new StepExchangeOperator(nextPlanId(), keyFunction);
         return new StepLogicalPlan(this, exchange)
-            .withGraphSchema(getGraphSchema())
-            .withInputPathSchema(getOutputPathSchema())
-            .withOutputPathSchema(getOutputPathSchema())
-            .withOutputType(getOutputType())
-            ;
+                .withGraphSchema(getGraphSchema())
+                .withInputPathSchema(getOutputPathSchema())
+                .withOutputPathSchema(getOutputPathSchema())
+                .withOutputType(getOutputType())
+                ;
     }
 
     public StepLogicalPlan localExchange(StepKeyFunction keyFunction) {
         StepLocalExchangeOperator exchange = new StepLocalExchangeOperator(nextPlanId(), keyFunction);
         return new StepLogicalPlan(this, exchange)
-            .withGraphSchema(getGraphSchema())
-            .withInputPathSchema(getOutputPathSchema())
-            .withOutputPathSchema(getOutputPathSchema())
-            .withOutputType(getOutputType())
-            ;
+                .withGraphSchema(getGraphSchema())
+                .withInputPathSchema(getOutputPathSchema())
+                .withOutputPathSchema(getOutputPathSchema())
+                .withOutputType(getOutputType())
+                ;
     }
 
     public StepLogicalPlan join(StepLogicalPlan right, StepKeyFunction leftKey,
                                 StepKeyFunction rightKey, StepJoinFunction joinFunction,
                                 PathType inputJoinPathSchema, boolean isLocalJoin) {
         StepLogicalPlan leftExchange = isLocalJoin
-            ? this.localExchange(leftKey) : this.exchange(leftKey);
+                ? this.localExchange(leftKey) : this.exchange(leftKey);
         StepLogicalPlan rightExchange = isLocalJoin
-            ? right.localExchange(rightKey) : right.exchange(rightKey);
+                ? right.localExchange(rightKey) : right.exchange(rightKey);
 
         List<PathType> joinInputPaths = Lists.newArrayList(leftExchange.getOutputPathSchema(),
-            rightExchange.getOutputPathSchema());
+                rightExchange.getOutputPathSchema());
 
         StepJoinOperator joinOperator = new StepJoinOperator(nextPlanId(), joinFunction,
-            inputJoinPathSchema, joinInputPaths, isLocalJoin);
+                inputJoinPathSchema, joinInputPaths, isLocalJoin);
         return new StepLogicalPlan(Lists.newArrayList(leftExchange, rightExchange), joinOperator)
-            .withGraphSchema(getGraphSchema())
-            .withInputPathSchema(joinInputPaths)
-            .withOutputType(VertexType.emptyVertex(getGraphSchema().getIdType()))
-            ;
+                .withGraphSchema(getGraphSchema())
+                .withInputPathSchema(joinInputPaths)
+                .withOutputType(VertexType.emptyVertex(getGraphSchema().getIdType()))
+                ;
     }
 
     public StepLogicalPlan sort(StepSortFunction sortFunction) {
         StepSortOperator localSortOperator = new StepSortOperator(nextPlanId(), sortFunction);
         StepLogicalPlan localSortPlan = new StepLogicalPlan(this, localSortOperator)
-            .withGraphSchema(this.getGraphSchema())
-            .withInputPathSchema(this.getOutputPathSchema())
-            .withOutputPathSchema(this.getOutputPathSchema())
-            .withOutputType(this.getOutputType());
+                .withGraphSchema(this.getGraphSchema())
+                .withInputPathSchema(this.getOutputPathSchema())
+                .withOutputPathSchema(this.getOutputPathSchema())
+                .withOutputType(this.getOutputType());
         StepLogicalPlan exchangePlan = localSortPlan.exchange(new StepKeyFunctionImpl(new int[0], new IType[0]));
         StepSortFunction globalSortFunction = ((StepSortFunctionImpl) sortFunction).copy(true);
         StepGlobalSortOperator globalSortOperator = new StepGlobalSortOperator(nextPlanId(),
-            globalSortFunction, this.getOutputType(), this.getOutputPathSchema());
+                globalSortFunction, this.getOutputType(), this.getOutputPathSchema());
 
         return new StepLogicalPlan(exchangePlan, globalSortOperator)
-            .withGraphSchema(this.getGraphSchema())
-            .withInputPathSchema(this.getOutputPathSchema())
-            .withOutputPathSchema(this.getOutputPathSchema())
-            .withOutputType(this.getOutputType());
+                .withGraphSchema(this.getGraphSchema())
+                .withInputPathSchema(this.getOutputPathSchema())
+                .withOutputPathSchema(this.getOutputPathSchema())
+                .withOutputType(this.getOutputType());
     }
 
     public StepLogicalPlan aggregate(StepAggregateFunction aggFunction) {
         StepLocalSingleValueAggregateOperator localAggOp = new StepLocalSingleValueAggregateOperator(nextPlanId(), aggFunction);
         IType<?> localAggOutputType = ObjectType.INSTANCE;
         StepLogicalPlan localAggPlan = new StepLogicalPlan(this, localAggOp)
-            .withGraphSchema(this.getGraphSchema())
-            .withInputPathSchema(this.getOutputPathSchema())
-            .withOutputPathSchema(PathType.EMPTY)
-            .withOutputType(StructType.singleValue(localAggOutputType, false));
+                .withGraphSchema(this.getGraphSchema())
+                .withInputPathSchema(this.getOutputPathSchema())
+                .withOutputPathSchema(PathType.EMPTY)
+                .withOutputType(StructType.singleValue(localAggOutputType, false));
 
         StepLogicalPlan exchangePlan = localAggPlan.exchange(new StepKeyFunctionImpl(new int[0], new IType[0]));
         StepGlobalSingleValueAggregateOperator globalAggOp = new StepGlobalSingleValueAggregateOperator(nextPlanId(), localAggOutputType,
-            aggFunction);
+                aggFunction);
 
         return new StepLogicalPlan(exchangePlan, globalAggOp)
-            .withGraphSchema(this.getGraphSchema())
-            .withInputPathSchema(exchangePlan.getOutputPathSchema())
-            .withOutputPathSchema(PathType.EMPTY)
-            ;
+                .withGraphSchema(this.getGraphSchema())
+                .withInputPathSchema(exchangePlan.getOutputPathSchema())
+                .withOutputPathSchema(PathType.EMPTY)
+                ;
     }
 
     public StepLogicalPlan aggregate(PathType inputPath, PathType outputPath,
                                      StepKeyFunction keyFunction,
                                      StepAggregateFunction aggFn) {
         StepLocalAggregateOperator localAggOp = new StepLocalAggregateOperator(nextPlanId(),
-            keyFunction, aggFn);
+                keyFunction, aggFn);
         StepLogicalPlan localAggPlan = new StepLogicalPlan(this, localAggOp)
-            .withGraphSchema(this.getGraphSchema())
-            .withInputPathSchema(inputPath)
-            .withOutputPathSchema(inputPath)
-            .withOutputType(getOutputType());
+                .withGraphSchema(this.getGraphSchema())
+                .withInputPathSchema(inputPath)
+                .withOutputPathSchema(inputPath)
+                .withOutputType(getOutputType());
         StepLogicalPlan exchangePlan = localAggPlan.exchange(keyFunction);
         StepGlobalAggregateOperator globalAggOp = new StepGlobalAggregateOperator(nextPlanId(),
-            keyFunction, aggFn);
+                keyFunction, aggFn);
 
         return new StepLogicalPlan(exchangePlan, globalAggOp)
-            .withGraphSchema(this.getGraphSchema())
-            .withInputPathSchema(outputPath)
-            .withOutputPathSchema(outputPath)
-            .withOutputType(this.getOutputType())
-            ;
+                .withGraphSchema(this.getGraphSchema())
+                .withInputPathSchema(outputPath)
+                .withOutputPathSchema(outputPath)
+                .withOutputType(this.getOutputType())
+                ;
     }
 
     public StepLogicalPlan ret() {
         StepReturnOperator returnOperator = new StepReturnOperator(nextPlanId());
         return new StepLogicalPlan(this, returnOperator)
-            .withGraphSchema(this.getGraphSchema())
-            .withInputPathSchema(this.getOutputPathSchema())
-            .withOutputPathSchema(this.getOutputPathSchema())
-            .withOutputType(this.getOutputType())
-            ;
+                .withGraphSchema(this.getGraphSchema())
+                .withInputPathSchema(this.getOutputPathSchema())
+                .withOutputPathSchema(this.getOutputPathSchema())
+                .withOutputType(this.getOutputType())
+                ;
     }
 
     private void addOutput(StepLogicalPlan output) {
         assert !outputs.contains(output) : "Output has already added";
         outputs.add(output);
+    }
+
+    public StepLogicalPlan withFilteredFields(Set<RexFieldAccess> fields) {
+        if (operator instanceof FilteredFieldsOperator) {
+            ((FilteredFieldsOperator) operator).withFilteredFields(fields);
+        }
+        return this;
     }
 
     public StepLogicalPlan withName(String name) {
@@ -597,8 +606,8 @@ public class StepLogicalPlan implements Serializable {
 
     private StepLogicalPlan copy(Map<Long, StepLogicalPlan> copyPlanCache) {
         List<StepLogicalPlan> inputsCopy = inputs.stream()
-            .map(input -> input.copy(copyPlanCache))
-            .collect(Collectors.toList());
+                .map(input -> input.copy(copyPlanCache))
+                .collect(Collectors.toList());
 
         if (copyPlanCache.containsKey(getId())) {
             return copyPlanCache.get(getId());

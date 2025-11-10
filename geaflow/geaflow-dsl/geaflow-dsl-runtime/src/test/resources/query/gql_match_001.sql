@@ -34,6 +34,6 @@ SELECT
   weight,
   b_id
 FROM (
-  MATCH (a) -[e:knows]->(b:person where b.id != 1)
+  MATCH (a) -[e:knows]->(b:person where b.id <> 1)
   RETURN a.id as a_id, e.weight as weight, b.id as b_id
 )

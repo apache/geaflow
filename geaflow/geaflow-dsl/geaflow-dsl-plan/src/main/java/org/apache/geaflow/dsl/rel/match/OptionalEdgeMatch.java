@@ -19,7 +19,9 @@
 
 package org.apache.geaflow.dsl.rel.match;
 
+
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import org.apache.calcite.plan.RelOptCluster;
 import org.apache.calcite.plan.RelTraitSet;
@@ -31,13 +33,14 @@ import org.apache.geaflow.dsl.calcite.PathRecordType;
 import org.apache.geaflow.dsl.rel.MatchNodeVisitor;
 import org.apache.geaflow.dsl.sqlnode.SqlMatchEdge.EdgeDirection;
 
+
 public class OptionalEdgeMatch extends EdgeMatch {
 
     private OptionalEdgeMatch(RelOptCluster cluster, RelTraitSet traitSet,
                               RelNode input, String label,
                               Collection<String> edgeTypes, EdgeDirection direction,
                               RelDataType nodeType, PathRecordType pathType) {
-        super(cluster, traitSet, input, label, edgeTypes, direction, nodeType, pathType);
+        super(cluster, traitSet, input, label, edgeTypes, direction, nodeType, pathType, new HashSet<>());
     }
 
     @Override

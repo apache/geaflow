@@ -29,6 +29,7 @@ import org.apache.calcite.sql.SqlDataTypeSpec;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.geaflow.common.type.IType;
 import org.apache.geaflow.common.type.Types;
+import org.apache.geaflow.common.type.primitive.BinaryStringType;
 import org.apache.geaflow.dsl.calcite.EdgeRecordType;
 import org.apache.geaflow.dsl.calcite.GraphRecordType;
 import org.apache.geaflow.dsl.calcite.PathRecordType;
@@ -47,7 +48,7 @@ public final class SqlTypeUtil {
     public static IType<?> convertType(SqlDataTypeSpec typeSpec) {
         String typeName = typeSpec.getTypeName().getSimple().toUpperCase();
         typeName = convertTypeName(typeName);
-        return Types.of(typeName);
+        return Types.of(typeName, typeSpec.getPrecision());
     }
 
     public static IType<?> convertType(RelDataType type) {
@@ -90,7 +91,7 @@ public final class SqlTypeUtil {
 
     public static IType<?> ofTypeName(SqlTypeName sqlTypeName) {
         String typeName = convertTypeName(sqlTypeName.getName());
-        return Types.of(typeName);
+        return Types.of(typeName, sqlTypeName.getPrecision());
     }
 
     public static RelDataType convertToRelType(IType<?> type, boolean isNullable,
@@ -129,7 +130,9 @@ public final class SqlTypeUtil {
             default:
                 if (type.isPrimitive()) {
                     String sqlTypeName = convertToSqlTypeName(type);
-                    SqlTypeName typeName = SqlTypeName.valueOf(sqlTypeName);
+                    SqlTypeName typeName = Types.getType(type.getTypeClass()) == Types.BINARY_STRING
+                        ? SqlTypeName.get(sqlTypeName, ((BinaryStringType) type).getPrecision())
+                        : SqlTypeName.get(sqlTypeName);
                     return typeFactory.createTypeWithNullability(typeFactory.createSqlType(typeName), isNullable);
                 } else {
                     throw new GeaFlowDSLException("Not support type: " + type);

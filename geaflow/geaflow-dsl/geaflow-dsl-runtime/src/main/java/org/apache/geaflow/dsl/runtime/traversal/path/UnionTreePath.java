@@ -45,7 +45,7 @@ public class UnionTreePath extends AbstractTreePath {
 
     public static ITreePath create(List<ITreePath> nodes) {
         List<ITreePath> notEmptyTreePath =
-            Objects.requireNonNull(nodes).stream().filter(n -> n.getNodeType() != NodeType.EMPTY_TREE).collect(Collectors.toList());
+                Objects.requireNonNull(nodes).stream().filter(n -> n.getNodeType() != NodeType.EMPTY_TREE).collect(Collectors.toList());
         if (notEmptyTreePath.isEmpty()) {
             return EmptyTreePath.of();
         } else if (notEmptyTreePath.size() == 1) {
@@ -126,8 +126,8 @@ public class UnionTreePath extends AbstractTreePath {
                 if (node.getNodeType() == NodeType.EDGE_TREE) {
                     for (ITreePath thisNode : nodes) {
                         if (thisNode.getNodeType() == NodeType.EDGE_TREE
-                            && thisNode.getEdgeSet().like(node.getEdgeSet())
-                            && Objects.equals(thisNode.getParents(), node.getParents())) {
+                                && thisNode.getEdgeSet().like(node.getEdgeSet())
+                                && Objects.equals(thisNode.getParents(), node.getParents())) {
                             thisNode.getEdgeSet().addEdges(node.getEdgeSet());
                             hasMerged = true;
                             break;
@@ -274,7 +274,7 @@ public class UnionTreePath extends AbstractTreePath {
         List<ITreePath> filterNodes = new ArrayList<>();
         for (ITreePath node : nodes) {
             ITreePath filterNode = ((AbstractTreePath) node).filter(filterFunction,
-                refPathIndices, fieldMapping, currentPath, maxDepth, pathId);
+                    refPathIndices, fieldMapping, currentPath, maxDepth, pathId);
             if (filterNode != null) {
                 filterNodes.add(filterNode);
             }

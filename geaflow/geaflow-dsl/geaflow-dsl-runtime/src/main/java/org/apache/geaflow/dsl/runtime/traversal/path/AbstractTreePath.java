@@ -63,10 +63,10 @@ public abstract class AbstractTreePath implements ITreePath {
             return this;
         }
         if (other.getNodeType() != getNodeType()
-            && !(getNodeType() == NodeType.VERTEX_TREE && getVertex() == null)
-            && !(other.getNodeType() == NodeType.VERTEX_TREE && other.getVertex() == null)) {
+                && !(getNodeType() == NodeType.VERTEX_TREE && getVertex() == null)
+                && !(other.getNodeType() == NodeType.VERTEX_TREE && other.getVertex() == null)) {
             throw new GeaFlowDSLException("Merge with different tree kinds: " + getNodeType()
-                + " and " + other.getNodeType());
+                    + " and " + other.getNodeType());
         }
 
         if (this.equalNode(other) && getDepth() == other.getDepth()) {
@@ -105,8 +105,8 @@ public abstract class AbstractTreePath implements ITreePath {
         if (parent.getNodeType() == NodeType.EDGE_TREE) {
             for (ITreePath mergedParent : mergedParents) {
                 if (mergedParent.getNodeType() == NodeType.EDGE_TREE
-                    && mergedParent.getEdgeSet().like(parent.getEdgeSet())
-                    && Objects.equals(mergedParent.getParents(), parent.getParents())) {
+                        && mergedParent.getEdgeSet().like(parent.getEdgeSet())
+                        && Objects.equals(mergedParent.getParents(), parent.getParents())) {
                     mergedParent.getEdgeSet().addEdges(parent.getEdgeSet());
                     hasMerged = true;
                     break;
@@ -205,7 +205,7 @@ public abstract class AbstractTreePath implements ITreePath {
                         } else if (parentSize >= 1) {
                             for (ITreePath parent : getParents()) {
                                 ITreePath filterTree = ((AbstractTreePath) parent).filter(filterFunction,
-                                    refPathIndices, fieldMapping, currentPath, maxDepth, pathId);
+                                        refPathIndices, fieldMapping, currentPath, maxDepth, pathId);
                                 if (!filterTree.isEmpty()) {
                                     filterTrees.add(filterTree.extendTo(edge));
                                 }
@@ -239,7 +239,7 @@ public abstract class AbstractTreePath implements ITreePath {
         List<ITreePath> filterParents = new ArrayList<>(parentSize);
         for (ITreePath parent : getParents()) {
             ITreePath filterTree = ((AbstractTreePath) parent).filter(filterFunction, refPathIndices,
-                fieldMapping, currentPath, maxDepth, pathId);
+                    fieldMapping, currentPath, maxDepth, pathId);
             if (!filterTree.isEmpty()) {
                 filterParents.add(filterTree);
             }

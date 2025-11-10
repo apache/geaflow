@@ -19,12 +19,10 @@
 
 package org.apache.geaflow.dsl.runtime.traversal.operator;
 
-import java.util.Set;
-import org.apache.geaflow.dsl.common.data.RowEdge;
-import org.apache.geaflow.dsl.common.data.RowVertex;
-import org.apache.geaflow.dsl.common.data.StepRecord;
+import java.util.*;
+import org.apache.calcite.rex.RexFieldAccess;
+import org.apache.geaflow.dsl.common.data.*;
 import org.apache.geaflow.dsl.common.data.StepRecord.StepRecordType;
-import org.apache.geaflow.dsl.common.data.VirtualId;
 import org.apache.geaflow.dsl.common.data.impl.VertexEdgeFactory;
 import org.apache.geaflow.dsl.common.types.VertexType;
 import org.apache.geaflow.dsl.runtime.function.graph.MatchVertexFunction;
@@ -35,17 +33,28 @@ import org.apache.geaflow.dsl.runtime.traversal.data.EdgeGroupRecord;
 import org.apache.geaflow.dsl.runtime.traversal.data.IdOnlyVertex;
 import org.apache.geaflow.dsl.runtime.traversal.data.VertexRecord;
 import org.apache.geaflow.dsl.runtime.traversal.path.ITreePath;
+import org.apache.geaflow.dsl.runtime.util.VertexProjectorUtil;
 import org.apache.geaflow.metrics.common.MetricNameFormatter;
 import org.apache.geaflow.metrics.common.api.Histogram;
 
 public class MatchVertexOperator extends AbstractStepOperator<MatchVertexFunction, StepRecord,
-    VertexRecord> implements LabeledStepOperator {
+    VertexRecord> implements FilteredFieldsOperator, LabeledStepOperator {
 
     private Histogram loadVertexRt;
 
     private final boolean isOptionMatch;
 
     private Set<Object> idSet;
+
+    private Set<RexFieldAccess> fields;
+
+    private VertexProjectorUtil vertexProjector = null;
+
+    @Override
+    public StepOperator<StepRecord, VertexRecord> withFilteredFields(Set<RexFieldAccess> fields) {
+        this.fields = fields;
+        return this;
+    }
 
     public MatchVertexOperator(long id, MatchVertexFunction function) {
         super(id, function);
@@ -74,6 +83,7 @@ public class MatchVertexOperator extends AbstractStepOperator<MatchVertexFunctio
         }
     }
 
+
     private void processVertex(VertexRecord vertexRecord) {
         RowVertex vertex = vertexRecord.getVertex();
         if (vertex instanceof IdOnlyVertex && needLoadVertex(vertex.getId())) {
@@ -83,6 +93,19 @@ public class MatchVertexOperator extends AbstractStepOperator<MatchVertexFunctio
                 graphSchema,
                 addingVertexFieldTypes);
             loadVertexRt.update(System.currentTimeMillis() - startTs);
+
+            if (vertexProjector == null) {
+                vertexProjector = new VertexProjectorUtil(
+                    graphSchema,
+                    fields,
+                    addingVertexFieldNames,
+                    addingVertexFieldTypes
+                );
+            }
+            if (fields != null && !fields.isEmpty()) {
+                vertex = vertexProjector.projectVertex(vertex);
+            }
+
             if (vertex == null && !isOptionMatch) {
                 // load a non-exists vertex, just skip.
                 return;

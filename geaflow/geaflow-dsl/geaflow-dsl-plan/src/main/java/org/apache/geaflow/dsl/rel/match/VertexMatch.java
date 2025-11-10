@@ -23,18 +23,14 @@ import static org.apache.geaflow.dsl.util.GQLRelUtil.match;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 import org.apache.calcite.plan.RelOptCluster;
 import org.apache.calcite.plan.RelTraitSet;
 import org.apache.calcite.rel.AbstractRelNode;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.RelWriter;
 import org.apache.calcite.rel.type.RelDataType;
+import org.apache.calcite.rex.RexFieldAccess;
 import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.rex.RexShuttle;
 import org.apache.calcite.sql.type.SqlTypeName;
@@ -48,6 +44,8 @@ public class VertexMatch extends AbstractRelNode implements SingleMatchNode, IMa
     private RelNode input;
 
     private final String label;
+
+    private Set<RexFieldAccess> pushDownFields;
 
     private final ImmutableSet<String> vertexTypes;
 
@@ -72,12 +70,13 @@ public class VertexMatch extends AbstractRelNode implements SingleMatchNode, IMa
                        String label, Collection<String> vertexTypes, RelDataType nodeType,
                        PathRecordType pathType, RexNode pushDownFilter) {
         this(cluster, traitSet, input, label, vertexTypes, nodeType, pathType, pushDownFilter,
-            new HashSet<>());
+            new HashSet<>(), null);
     }
 
     public VertexMatch(RelOptCluster cluster, RelTraitSet traitSet, RelNode input,
                        String label, Collection<String> vertexTypes, RelDataType nodeType,
-                       PathRecordType pathType, RexNode pushDownFilter, Set<Object> idSet) {
+                       PathRecordType pathType, RexNode pushDownFilter, Set<Object> idSet,
+                       Set<RexFieldAccess> pushDownFields) {
         super(cluster, traitSet);
         this.input = input;
         this.label = label;
@@ -93,6 +92,14 @@ public class VertexMatch extends AbstractRelNode implements SingleMatchNode, IMa
         this.nodeType = Objects.requireNonNull(nodeType);
         this.pushDownFilter = pushDownFilter;
         this.idSet = idSet;
+        this.pushDownFields = pushDownFields;
+    }
+
+    public void addField(RexFieldAccess field) {
+        if (pushDownFields == null) {
+            pushDownFields = new HashSet<>();
+        }
+        pushDownFields.add(field);
     }
 
     @Override
@@ -126,29 +133,33 @@ public class VertexMatch extends AbstractRelNode implements SingleMatchNode, IMa
         return idSet;
     }
 
+    public Set<RexFieldAccess> getFields() {
+        return pushDownFields;
+    }
+
     @Override
     public SingleMatchNode copy(List<RelNode> inputs, PathRecordType pathSchema) {
         assert inputs.size() <= 1;
         RelNode input = inputs.isEmpty() ? null : inputs.get(0);
         return new VertexMatch(getCluster(), traitSet, input, label,
-            vertexTypes, nodeType, pathSchema, pushDownFilter, idSet);
+            vertexTypes, nodeType, pathSchema, pushDownFilter, idSet, pushDownFields);
     }
 
     @Override
     public VertexMatch copy(RelTraitSet traitSet, List<RelNode> inputs) {
         RelNode input = GQLRelUtil.oneInput(inputs);
         return new VertexMatch(getCluster(), getTraitSet(), input,
-            label, vertexTypes, nodeType, pathType, pushDownFilter, idSet);
+            label, vertexTypes, nodeType, pathType, pushDownFilter, idSet, pushDownFields);
     }
 
     public VertexMatch copy(RexNode pushDownFilter) {
         return new VertexMatch(getCluster(), getTraitSet(), input,
-            label, vertexTypes, nodeType, pathType, pushDownFilter, idSet);
+            label, vertexTypes, nodeType, pathType, pushDownFilter, idSet, pushDownFields);
     }
 
     public VertexMatch copy(Set<Object> idSet) {
         return new VertexMatch(getCluster(), getTraitSet(), input,
-            label, vertexTypes, nodeType, pathType, pushDownFilter, idSet);
+            label, vertexTypes, nodeType, pathType, pushDownFilter, idSet, pushDownFields);
     }
 
     @Override

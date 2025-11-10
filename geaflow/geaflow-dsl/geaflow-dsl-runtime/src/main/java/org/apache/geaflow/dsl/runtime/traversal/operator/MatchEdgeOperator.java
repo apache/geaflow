@@ -19,8 +19,8 @@
 
 package org.apache.geaflow.dsl.runtime.traversal.operator;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
+import org.apache.calcite.rex.RexFieldAccess;
 import org.apache.geaflow.dsl.common.data.RowEdge;
 import org.apache.geaflow.dsl.runtime.function.graph.MatchEdgeFunction;
 import org.apache.geaflow.dsl.runtime.function.graph.MatchEdgeFunctionImpl;
@@ -29,17 +29,28 @@ import org.apache.geaflow.dsl.runtime.traversal.data.EdgeGroup;
 import org.apache.geaflow.dsl.runtime.traversal.data.EdgeGroupRecord;
 import org.apache.geaflow.dsl.runtime.traversal.data.VertexRecord;
 import org.apache.geaflow.dsl.runtime.traversal.path.ITreePath;
+import org.apache.geaflow.dsl.runtime.util.EdgeProjectorUtil;
 import org.apache.geaflow.dsl.sqlnode.SqlMatchEdge.EdgeDirection;
 import org.apache.geaflow.metrics.common.MetricNameFormatter;
 import org.apache.geaflow.metrics.common.api.Histogram;
 
 public class MatchEdgeOperator extends AbstractStepOperator<MatchEdgeFunction, VertexRecord, EdgeGroupRecord>
-    implements LabeledStepOperator {
+    implements FilteredFieldsOperator, LabeledStepOperator {
 
     private Histogram loadEdgeHg;
     private Histogram loadEdgeRt;
 
     private final boolean isOptionMatch;
+
+    private Set<RexFieldAccess> fields;
+
+    private EdgeProjectorUtil edgeProjector = null;
+
+    @Override
+    public StepOperator<VertexRecord, EdgeGroupRecord> withFilteredFields(Set<RexFieldAccess> fields) {
+        this.fields = fields;
+        return this;
+    }
 
     public MatchEdgeOperator(long id, MatchEdgeFunction function) {
         super(id, function);
@@ -64,13 +75,26 @@ public class MatchEdgeOperator extends AbstractStepOperator<MatchEdgeFunction, V
         EdgeGroup edgeGroup = loadEdges;
         if (!function.getEdgeTypes().isEmpty()) {
             edgeGroup = loadEdges.filter(edge ->
+
                 function.getEdgeTypes().contains(edge.getBinaryLabel()));
         }
         Map<Object, ITreePath> targetTreePaths = new HashMap<>();
+
         // generate new paths.
         if (needAddToPath) {
             int numEdge = 0;
             for (RowEdge edge : edgeGroup) {
+                if (edgeProjector == null) {
+                    edgeProjector = new EdgeProjectorUtil(
+                        graphSchema,
+                        fields,
+                        getOutputType()
+                    );
+                }
+                if (fields != null && !fields.isEmpty()) {
+                    edge = edgeProjector.projectEdge(edge);
+                }
+
                 // add edge to path.
                 if (!targetTreePaths.containsKey(edge.getTargetId())) {
                     ITreePath newPath = vertex.getTreePath().extendTo(edge);
