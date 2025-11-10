@@ -34,6 +34,7 @@ import org.apache.geaflow.dsl.optimize.GQLOptimizer;
 import org.apache.geaflow.dsl.optimize.RuleGroup;
 import org.apache.geaflow.dsl.parser.GeaFlowDSLParser;
 import org.apache.geaflow.dsl.planner.GQLContext;
+import org.apache.geaflow.dsl.rel.logical.LogicalGraphMatch;
 import org.apache.geaflow.dsl.schema.GeaFlowGraph;
 import org.apache.geaflow.dsl.schema.GeaFlowTable;
 import org.apache.geaflow.dsl.sqlnode.SqlCreateGraph;
@@ -179,5 +180,23 @@ public class PlanTester {
 
     public String getDefaultGraphDDL() {
         return defaultGraphDDL;
+    }
+
+    public PlanTester checkFilteredFields(String expectFields) {
+        // Transverse until relNode is a LogicalGraphMatch node
+        // Only apply for simple case with unique LogicalGraphMatch node and linear hierarchy
+        RelNode currentNode = relNode;
+
+        while (currentNode != null && !(currentNode instanceof LogicalGraphMatch)) {
+            currentNode = currentNode.getInputs().get(0);
+        }
+        if (currentNode == null) {
+            throw new GeaFlowDSLException("No matching fields found.");
+        }
+
+        LogicalGraphMatch matchNode = (LogicalGraphMatch) currentNode;
+        String actualFields = matchNode.getFilteredFields();
+        Assert.assertEquals(actualFields, expectFields);
+        return this;
     }
 }

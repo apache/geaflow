@@ -19,29 +19,27 @@
 
 package org.apache.geaflow.dsl.optimize;
 
+
 import com.google.common.collect.ImmutableList;
 import java.util.List;
 import org.apache.calcite.plan.RelOptRule;
-import org.apache.calcite.rel.rules.*;
-import org.apache.geaflow.dsl.optimize.rule.AddVertexResetRule;
-import org.apache.geaflow.dsl.optimize.rule.FilterMatchNodeTransposeRule;
-import org.apache.geaflow.dsl.optimize.rule.FilterToMatchRule;
-import org.apache.geaflow.dsl.optimize.rule.GQLAggregateProjectMergeRule;
-import org.apache.geaflow.dsl.optimize.rule.GQLMatchUnionMergeRule;
-import org.apache.geaflow.dsl.optimize.rule.GQLProjectRemoveRule;
-import org.apache.geaflow.dsl.optimize.rule.MatchEdgeLabelFilterRemoveRule;
-import org.apache.geaflow.dsl.optimize.rule.MatchFilterMergeRule;
-import org.apache.geaflow.dsl.optimize.rule.MatchIdFilterSimplifyRule;
-import org.apache.geaflow.dsl.optimize.rule.MatchJoinMatchMergeRule;
-import org.apache.geaflow.dsl.optimize.rule.MatchJoinTableToGraphMatchRule;
-import org.apache.geaflow.dsl.optimize.rule.MatchSortToLogicalSortRule;
-import org.apache.geaflow.dsl.optimize.rule.PathInputReplaceRule;
-import org.apache.geaflow.dsl.optimize.rule.PathModifyMergeRule;
-import org.apache.geaflow.dsl.optimize.rule.PushConsecutiveJoinConditionRule;
-import org.apache.geaflow.dsl.optimize.rule.PushJoinFilterConditionRule;
-import org.apache.geaflow.dsl.optimize.rule.TableJoinMatchToGraphMatchRule;
-import org.apache.geaflow.dsl.optimize.rule.TableJoinTableToGraphRule;
-import org.apache.geaflow.dsl.optimize.rule.TableScanToGraphRule;
+import org.apache.calcite.rel.rules.AggregateProjectPullUpConstantsRule;
+import org.apache.calcite.rel.rules.AggregateRemoveRule;
+import org.apache.calcite.rel.rules.FilterAggregateTransposeRule;
+import org.apache.calcite.rel.rules.FilterCorrelateRule;
+import org.apache.calcite.rel.rules.FilterMergeRule;
+import org.apache.calcite.rel.rules.FilterProjectTransposeRule;
+import org.apache.calcite.rel.rules.JoinPushExpressionsRule;
+import org.apache.calcite.rel.rules.ProjectFilterTransposeRule;
+import org.apache.calcite.rel.rules.ProjectMergeRule;
+import org.apache.calcite.rel.rules.ProjectSortTransposeRule;
+import org.apache.calcite.rel.rules.ProjectToWindowRule;
+import org.apache.calcite.rel.rules.PruneEmptyRules;
+import org.apache.calcite.rel.rules.ReduceExpressionsRule;
+import org.apache.calcite.rel.rules.SortRemoveRule;
+import org.apache.calcite.rel.rules.UnionEliminatorRule;
+import org.apache.calcite.rel.rules.UnionToDistinctRule;
+import org.apache.geaflow.dsl.optimize.rule.*;
 
 public class OptimizeRules {
 
@@ -91,7 +89,9 @@ public class OptimizeRules {
         MatchFilterMergeRule.INSTANCE,
         TableScanToGraphRule.INSTANCE,
         MatchIdFilterSimplifyRule.INSTANCE,
-        MatchEdgeLabelFilterRemoveRule.INSTANCE
+        MatchEdgeLabelFilterRemoveRule.INSTANCE,
+        GraphMatchFieldPruneRule.INSTANCE,
+        ProjectFieldPruneRule.INSTANCE
     );
 
     private static final List<RelOptRule> POST_OPTIMIZE_RULES = ImmutableList.of(

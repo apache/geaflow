@@ -19,8 +19,7 @@
 
 package org.apache.geaflow.dsl.rel;
 
-import java.util.List;
-import java.util.Objects;
+import java.util.*;
 import java.util.stream.Collectors;
 import org.apache.calcite.plan.RelOptCluster;
 import org.apache.calcite.plan.RelTraitSet;
@@ -30,6 +29,7 @@ import org.apache.calcite.rel.RelWriter;
 import org.apache.calcite.rel.SingleRel;
 import org.apache.calcite.rel.core.JoinRelType;
 import org.apache.calcite.rel.type.RelDataType;
+import org.apache.calcite.rex.RexFieldAccess;
 import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.rex.RexShuttle;
 import org.apache.calcite.sql.type.SqlTypeName;
@@ -238,4 +238,55 @@ public abstract class GraphMatch extends SingleRel {
     public RelNode accept(RelShuttle shuttle) {
         return copy(traitSet, input, (IMatchNode) pathPattern.accept(shuttle), rowType);
     }
+
+    /**
+     * Returns a string representation of filtered fields in dictionary order
+     * for both graph nodes and fields within each node.
+     */
+    public String getFilteredFields() {
+        Map<String, Set<String>> nodeFieldsMap = new TreeMap<>();
+
+        Queue<IMatchNode> nodeQueue = new LinkedList<>();
+        Set<IMatchNode> visitedNodes = new HashSet<>();
+
+        nodeQueue.offer(this.pathPattern);
+        visitedNodes.add(this.pathPattern);
+
+        while (!nodeQueue.isEmpty()) {
+            IMatchNode currentNode = nodeQueue.poll();
+            String nodeLabel = null;
+            Set<RexFieldAccess> nodeFields = null;
+
+            if (currentNode instanceof VertexMatch) {
+                VertexMatch vertexMatch = (VertexMatch) currentNode;
+                nodeLabel = vertexMatch.getLabel();
+                nodeFields = vertexMatch.getFields();
+            } else if (currentNode instanceof EdgeMatch) {
+                EdgeMatch edgeMatch = (EdgeMatch) currentNode;
+                nodeLabel = edgeMatch.getLabel();
+                nodeFields = edgeMatch.getFields();
+            }
+
+            if (nodeLabel != null) {
+                Set<String> fields = nodeFieldsMap.computeIfAbsent(nodeLabel, k -> new TreeSet<>());
+
+                if (nodeFields != null && !nodeFields.isEmpty()) {
+                    for (RexFieldAccess field : nodeFields) {
+                        fields.add(nodeLabel + "." + field.getField().getName());
+                    }
+                } else {
+                    fields.add("null");
+                }
+            }
+
+            for (RelNode inputNode : currentNode.getInputs()) {
+                if (inputNode != null && !visitedNodes.contains((IMatchNode) inputNode)) {
+                    nodeQueue.offer((IMatchNode) inputNode);
+                    visitedNodes.add((IMatchNode) inputNode);
+                }
+            }
+        }
+        return nodeFieldsMap.toString();
+    }
+
 }

@@ -20,9 +20,7 @@
 package org.apache.geaflow.dsl.runtime.traversal.operator;
 
 import java.io.Serializable;
-import java.util.Collections;
-import java.util.List;
-import java.util.Objects;
+import java.util.*;
 import org.apache.geaflow.common.type.IType;
 import org.apache.geaflow.dsl.common.data.StepRecord;
 import org.apache.geaflow.dsl.common.types.GraphSchema;
@@ -43,14 +41,12 @@ public interface StepOperator<IN extends StepRecord, OUT extends StepRecord> ext
 
     /**
      * The init method for step operator.
-     *
      * @param context The context for traversal.
      */
     void open(TraversalRuntimeContext context);
 
     /**
      * Process input record.
-     *
      * @param record The input record.
      */
     void process(IN record);
@@ -67,14 +63,12 @@ public interface StepOperator<IN extends StepRecord, OUT extends StepRecord> ext
 
     /**
      * Set the output path schema for the operator.
-     *
      * @param outputPath The output path schema.
      */
     StepOperator<IN, OUT> withOutputPathSchema(PathType outputPath);
 
     /**
      * Set the input path schema for the operator.
-     *
      * @param inputPaths The input path schemas for each input.
      */
     StepOperator<IN, OUT> withInputPathSchema(List<PathType> inputPaths);
@@ -87,14 +81,12 @@ public interface StepOperator<IN extends StepRecord, OUT extends StepRecord> ext
 
     /**
      * Set the origin graph schema.
-     *
      * @param graphSchema The origin graph schema defined in the DDL.
      */
     StepOperator<IN, OUT> withGraphSchema(GraphSchema graphSchema);
 
     /**
      * Set the modified graph schema after the let-global-statement.
-     *
      * @param modifyGraphSchema The modified graph schema.
      */
     StepOperator<IN, OUT> withModifyGraphSchema(GraphSchema modifyGraphSchema);

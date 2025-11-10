@@ -86,7 +86,6 @@ public abstract class AbstractStepOperator<FUNC extends StepFunction, IN extends
     protected final long id;
 
     protected String name;
-
     protected final FUNC function;
     private final Map<Long, List<EndOfData>> caller2ReceiveEods = new HashMap<>();
     protected List<PathType> inputPathSchemas;

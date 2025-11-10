@@ -17,23 +17,11 @@
  * under the License.
  */
 
-CREATE TABLE tbl_result (
-  a_id bigint,
-  weight double,
-  b_id bigint
-) WITH (
-	type='file',
-	geaflow.dsl.file.path='${target}'
-);
+package org.apache.geaflow.dsl.runtime.traversal.operator;
 
-USE GRAPH modern;
+import java.util.Set;
+import org.apache.calcite.rex.RexFieldAccess;
 
-INSERT INTO tbl_result
-SELECT
-	a_id,
-  weight,
-  b_id
-FROM (
-  MATCH (a) -[e:knows]->(b:person where b.id <> 1)
-  RETURN a.id as a_id, e.weight as weight, b.id as b_id
-)
+public interface FilteredFieldsOperator {
+    StepOperator<?, ?> withFilteredFields(Set<RexFieldAccess> fields);
+}
