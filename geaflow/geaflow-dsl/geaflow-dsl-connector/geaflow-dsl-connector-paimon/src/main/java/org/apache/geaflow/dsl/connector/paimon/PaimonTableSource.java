@@ -21,6 +21,7 @@ package org.apache.geaflow.dsl.connector.paimon;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -50,8 +51,10 @@ import org.apache.paimon.data.InternalRow;
 import org.apache.paimon.fs.Path;
 import org.apache.paimon.options.Options;
 import org.apache.paimon.reader.RecordReader;
+import org.apache.paimon.table.source.DataSplit;
 import org.apache.paimon.table.source.ReadBuilder;
 import org.apache.paimon.table.source.Split;
+import org.apache.paimon.table.source.StreamTableScan;
 import org.apache.paimon.utils.CloseableIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -70,12 +73,14 @@ public class PaimonTableSource implements TableSource {
     private Map<String, String> configs;
     private String database;
     private String table;
+    private SourceMode sourceMode;
+    private final PaimonRecordDeserializer deserializer = new PaimonRecordDeserializer();
 
-    private transient CatalogContext catalogContext;
-    private transient Catalog catalog;
+    private transient long fromSnapshot;
     private transient ReadBuilder readBuilder;
-    private transient Map<PaimonPartition, RecordReader<InternalRow>> partition2Reader;
-    private transient Map<PaimonPartition, PaimonOffset> partition2InnerOffset;
+    private transient Map<Split, CloseableIterator<InternalRow>> iterators;
+    private transient Map<Split, RecordReader<InternalRow>> readers;
+    private transient Map<PaimonPartition, PaimonOffset> offsets;
 
     @Override
     public void init(Configuration tableConf, TableSchema tableSchema) {
@@ -89,71 +94,81 @@ public class PaimonTableSource implements TableSource {
             String optionJson = tableConf.getString(PaimonConfigKeys.GEAFLOW_DSL_PAIMON_OPTIONS_JSON);
             Map<String, String> userOptions = GsonUtil.parse(optionJson);
             if (userOptions != null) {
-                for (Map.Entry<String, String> entry : userOptions.entrySet()) {
-                    options.put(entry.getKey(), entry.getValue());
-                }
+                options.putAll(userOptions);
             }
             this.configJson =
                 tableConf.getString(PaimonConfigKeys.GEAFLOW_DSL_PAIMON_CONFIGURATION_JSON, "");
             if (!StringUtils.isBlank(configJson)) {
                 Map<String, String> userConfig = GsonUtil.parse(configJson);
                 if (userConfig != null) {
-                    for (Map.Entry<String, String> entry : userConfig.entrySet()) {
-                        configs.put(entry.getKey(), entry.getValue());
-                    }
+                    configs.putAll(userConfig);
                 }
             }
         }
         this.database = tableConf.getString(PaimonConfigKeys.GEAFLOW_DSL_PAIMON_DATABASE_NAME);
         this.table = tableConf.getString(PaimonConfigKeys.GEAFLOW_DSL_PAIMON_TABLE_NAME);
+        this.sourceMode = SourceMode.valueOf(tableConf.getString(PaimonConfigKeys.GEAFLOW_DSL_PAIMON_SOURCE_MODE).toUpperCase());
     }
 
     @Override
     public List<Partition> listPartitions(int parallelism) {
-        return listPartitions();
+        List<Split> splits = isAllWindow ? readBuilder.newScan().plan().splits() :
+                readBuilder.newStreamScan().plan().splits();
+        return splits.stream().map(split -> new PaimonPartition(database, table)).collect(Collectors.toList());
     }
 
     @Override
     public void open(RuntimeContext context) {
+        CatalogContext catalogContext;
         if (StringUtils.isBlank(this.path)) {
             if (StringUtils.isBlank(this.configJson)) {
-                this.catalogContext =
+                catalogContext =
                     Objects.requireNonNull(CatalogContext.create(new Options(options)));
             } else {
                 org.apache.hadoop.conf.Configuration hadoopConf = new org.apache.hadoop.conf.Configuration();
                 for (Map.Entry<String, String> entry : configs.entrySet()) {
                     hadoopConf.set(entry.getKey(), entry.getValue());
                 }
-                this.catalogContext =
+                catalogContext =
                     Objects.requireNonNull(CatalogContext.create(new Options(options), hadoopConf));
             }
         } else {
-            this.catalogContext = Objects.requireNonNull(CatalogContext.create(new Path(path)));
+            catalogContext = Objects.requireNonNull(CatalogContext.create(new Path(path)));
         }
-        this.catalog = Objects.requireNonNull(CatalogFactory.createCatalog(this.catalogContext));
+        Catalog catalog = Objects.requireNonNull(CatalogFactory.createCatalog(catalogContext));
         Identifier identifier = Identifier.create(database, table);
         try {
             this.readBuilder = Objects.requireNonNull(catalog.getTable(identifier).newReadBuilder());
+            if (tableConf.getString(PaimonConfigKeys.GEAFLOW_DSL_PAIMON_SCAN_MODE)
+                    .equalsIgnoreCase(StartupMode.FROM_SNAPSHOT.getValue())
+                && tableConf.contains(PaimonConfigKeys.GEAFLOW_DSL_PAIMON_SCAN_SNAPSHOT_ID)) {
+                this.fromSnapshot = tableConf.getLong(PaimonConfigKeys.GEAFLOW_DSL_PAIMON_SCAN_SNAPSHOT_ID);
+            } else {
+                this.fromSnapshot = catalog.getTable(identifier).latestSnapshotId().orElse(1L);
+            }
+            LOGGER.info("New partition will start from snapshot: {}", this.fromSnapshot);
         } catch (TableNotExistException e) {
             throw new GeaFlowDSLException("Table: {} in db: {} not exists.", table, database);
         }
-        this.partition2Reader = new HashMap<>();
-        this.partition2InnerOffset = new HashMap<>();
+        this.iterators = new HashMap<>();
+        this.readers = new HashMap<>();
+        this.offsets = new HashMap<>();
         LOGGER.info("Open paimon source, tableConf: {}, tableSchema: {}, path: {}, options: "
             + "{}, configs: {}, database: {}, tableName: {}", tableConf, tableSchema, path,
             options, configs, database, table);
+        this.deserializer.init(tableConf, tableSchema);
     }
 
     @Override
     public List<Partition> listPartitions() {
-        List<Split> splits = isAllWindow ? readBuilder.newScan().plan().splits() :
-                             readBuilder.newStreamScan().plan().splits();
-        return splits.stream().map(split -> new PaimonPartition(database, table, split)).collect(Collectors.toList());
+        ArrayList<Partition> partitions = new ArrayList<>();
+        partitions.add(new PaimonPartition(database, table));
+        return partitions;
     }
 
     @Override
     public <IN> TableDeserializer<IN> getDeserializer(Configuration conf) {
-        return (TableDeserializer<IN>) new PaimonRecordDeserializer();
+        return null;
     }
 
     @Override
@@ -162,64 +177,196 @@ public class PaimonTableSource implements TableSource {
         PaimonPartition paimonPartition = (PaimonPartition) partition;
         assert paimonPartition.getDatabase().equals(this.database)
             && paimonPartition.getTable().equals(this.table);
-        RecordReader reader = partition2Reader.getOrDefault(partition,
-            readBuilder.newRead().createReader(paimonPartition.getSplit()));
-        partition2Reader.put(paimonPartition, reader);
 
-        PaimonOffset innerOffset = partition2InnerOffset.getOrDefault(partition,
-            new PaimonOffset());
-        partition2InnerOffset.put(paimonPartition, innerOffset);
-
-        if (startOffset.isPresent() && !startOffset.get().equals(innerOffset)) {
-            throw new GeaFlowDSLException("Paimon connector not support reset offset.");
+        long skip = 0;
+        PaimonOffset innerOffset = offsets.get(partition);
+        if (innerOffset == null) {
+            // first fetch, use custom specified snapshot id
+            innerOffset = new PaimonOffset(fromSnapshot);
         }
-        CloseableIterator iterator = reader.toCloseableIterator();
+
+        // if startOffset is specified, use it and try reset innerOffset
+        if ((startOffset.isPresent() && !startOffset.get().equals(innerOffset))) {
+            skip = Math.abs(startOffset.get().getOffset() - innerOffset.getOffset());
+            innerOffset = PaimonOffset.from((PaimonOffset) startOffset.get());
+        }
+        if (paimonPartition.getCurrentSnapshot() != innerOffset.getSnapshotId()) {
+            paimonPartition.reset(loadSplitsFrom(innerOffset.getSnapshotId()));
+        }
+
+        Split split = paimonPartition.seek(innerOffset.getSplitIndex());
+        if (split == null) {
+            if (sourceMode == SourceMode.BATCH) {
+                LOGGER.info("No more split to fetch");
+                return FetchData.createBatchFetch(Collections.emptyIterator(), innerOffset);
+            } else {
+                LOGGER.debug("Snapshot {} not ready now", innerOffset.getSnapshotId());
+                return FetchData.createStreamFetch(Collections.emptyList(), innerOffset, false);
+            }
+        }
+        offsets.put(paimonPartition, innerOffset);
+
+        CloseableIterator<InternalRow> iterator = createRecordIterator(split);
+        if (skip > 0) {
+            while (iterator.hasNext() && skip > 0) {
+                iterator.next();
+                skip--;
+            }
+        }
         switch (windowInfo.getType()) {
             case ALL_WINDOW:
-                return FetchData.createBatchFetch(iterator, new PaimonOffset());
+                return FetchData.createBatchFetch(new IteratorWrapper(iterator, deserializer), new PaimonOffset());
             case SIZE_TUMBLING_WINDOW:
                 List<Object> readContents = new ArrayList<>();
-                long i = 0;
-                for (; i < windowInfo.windowSize(); i++) {
+                long advance = 0;
+                for (long i = 0; i < windowInfo.windowSize(); i++) {
                     if (iterator.hasNext()) {
-                        readContents.add(iterator.next());
+                        advance++;
+                        readContents.add(deserializer.deserialize(iterator.next()));
                     } else {
-                        break;
+                        if (sourceMode == SourceMode.BATCH) {
+                            break;
+                        }
+                        try {
+                            removeRecordIterator(split);
+                        } catch (Exception e) {
+                            throw new RuntimeException(e);
+                        }
+                        innerOffset = innerOffset.nextSplit();
+                        Split seek = paimonPartition.seek(innerOffset.getSplitIndex());
+                        if (seek == null) {
+                            // all split finished, try read next snapshot
+                            innerOffset = innerOffset.nextSnapshot();
+                            paimonPartition.reset(loadSplitsFrom(innerOffset.getSnapshotId()));
+                        }
+                        offsets.put(paimonPartition, innerOffset);
+                        advance = 0L;
+                        seek = paimonPartition.seek(innerOffset.getSplitIndex());
+                        if (seek == null) {
+                            // no new snapshot discovered, retry next turn
+                            break;
+                        }
+                        iterator = createRecordIterator(seek);
+                        i--;
                     }
                 }
-                long nextOffset = innerOffset.getOffset() + i;
-                boolean isFinished = !iterator.hasNext();
-                return FetchData.createStreamFetch(readContents, new PaimonOffset(nextOffset), isFinished);
+                PaimonOffset next = innerOffset.advance(advance);
+                offsets.put(paimonPartition, next);
+                boolean isFinished = sourceMode != SourceMode.STREAM && !iterator.hasNext();
+                return FetchData.createStreamFetch(readContents, next, isFinished);
             default:
                 throw new GeaFlowDSLException("Paimon not support window:{}", windowInfo.getType());
         }
     }
 
+    /**
+     * Create a paimon record iterator
+     * @param split the paimon data split
+     * @return a paimon record iterator
+     * @throws IOException if error occurs
+     */
+    private CloseableIterator<InternalRow> createRecordIterator(Split split) throws IOException {
+        CloseableIterator<InternalRow> iterator = iterators.get(split);
+        if (iterator != null) {
+            return iterator;
+        }
+        RecordReader<InternalRow> reader = readBuilder.newRead().createReader(split);
+        CloseableIterator<InternalRow> closeableIterator = reader.toCloseableIterator();
+        readers.put(split, reader);
+        iterators.put(split, closeableIterator);
+        return closeableIterator;
+    }
+
+    /**
+     * Remove the paimon record iterator and reader
+     * @param split the paimon data split
+     * @throws Exception if error occurs
+     */
+    private void removeRecordIterator(Split split) throws Exception {
+        CloseableIterator<InternalRow> removed = iterators.remove(split);
+        if (removed != null) {
+            removed.close();
+        }
+        RecordReader<InternalRow> reader = readers.remove(split);
+        if (reader != null) {
+            reader.close();
+        }
+    }
+
+    /**
+     * Load splits from snapshot
+     * @param snapshotId the snapshot id
+     * @return all splits
+     */
+    private List<Split> loadSplitsFrom(long snapshotId) {
+        StreamTableScan streamTableScan = readBuilder.newStreamScan();
+        streamTableScan.restore(snapshotId);
+        long start = System.currentTimeMillis();
+        List<Split> splits = streamTableScan.plan().splits();
+        LOGGER.debug("Load splits from snapshot: {}, cost: {}ms", snapshotId, System.currentTimeMillis() - start);
+        return splits;
+    }
+
     @Override
     public void close() {
-        for (RecordReader reader : partition2Reader.values()) {
+        for (CloseableIterator<InternalRow> reader : iterators.values()) {
             if (reader != null) {
                 try {
                     reader.close();
-                } catch (IOException e) {
+                } catch (Exception e) {
+                    throw new GeaFlowDSLException("Error occurs when close paimon iterator.", e);
+                }
+            }
+        }
+        for ( RecordReader<InternalRow> reader : readers.values()) {
+            if (reader != null) {
+                try {
+                    reader.close();
+                } catch (Exception e) {
                     throw new GeaFlowDSLException("Error occurs when close paimon reader.", e);
                 }
             }
         }
-        partition2Reader.clear();
-        partition2InnerOffset.clear();
+        iterators.clear();
+        offsets.clear();
     }
 
     public static class PaimonPartition implements Partition {
 
         private final String database;
         private final String table;
-        private final Split split;
 
-        public PaimonPartition(String database, String table, Split split) {
+        private int index;
+        private int parallel;
+
+        // current snapshot id
+        private transient long currentSnapshot;
+        // assigned splits for this partition
+        private final transient List<Split> splits;
+
+        public PaimonPartition(String database, String table) {
             this.database = Objects.requireNonNull(database);
             this.table = Objects.requireNonNull(table);
-            this.split = Objects.requireNonNull(split);
+            this.splits = new ArrayList<>();
+            this.currentSnapshot = -1L;
+            this.index = 0;
+            this.parallel = 1;
+        }
+
+        public void reset(List<Split> splits) {
+            this.splits.clear();
+            for (Split split : splits) {
+                DataSplit dataSplit = (DataSplit) split;
+                int hash = Objects.hash(dataSplit.bucket(), dataSplit.partition());
+                if (hash % parallel == index) {
+                    this.splits.add(split);
+                    this.currentSnapshot = dataSplit.snapshotId();
+                }
+            }
+            if (!this.splits.isEmpty()) {
+                LOGGER.info("Assign paimon split(s) for table {}.{}, snapshot: {}, split size: {}",
+                        database, table, this.currentSnapshot, this.splits.size());
+            }
         }
 
         @Override
@@ -229,7 +376,7 @@ public class PaimonTableSource implements TableSource {
 
         @Override
         public int hashCode() {
-            return Objects.hash(database, table, split);
+            return Objects.hash(database, table, index);
         }
 
         @Override
@@ -243,7 +390,7 @@ public class PaimonTableSource implements TableSource {
             PaimonPartition that = (PaimonPartition) o;
             return Objects.equals(database, that.database) && Objects.equals(
                 table, that.table) && Objects.equals(
-                split, that.split);
+                index, that.index);
         }
 
         public String getDatabase() {
@@ -254,37 +401,88 @@ public class PaimonTableSource implements TableSource {
             return table;
         }
 
-        public Split getSplit() {
-            return split;
+        public long getCurrentSnapshot() {
+            return currentSnapshot;
+        }
+
+        /**
+         * Seek the split by index
+         * @param splitIndex the split index
+         * @return the split to read
+         */
+        public Split seek(int splitIndex) {
+            if (splitIndex >= splits.size()) {
+                return null;
+            }
+            return splits.get(splitIndex);
         }
 
         @Override
         public void setIndex(int index, int parallel) {
+            this.parallel = parallel;
+            this.index = index;
         }
     }
 
-
     public static class PaimonOffset implements Offset {
 
+        // if partition snapshot id is not equal to current snapshot id,
+        // need to load splits
+        private final long snapshotId;
+        // the index of current partition assigned splits
+        private final int splitIndex;
+        // the offset of current split
         private final long offset;
 
-
-        public PaimonOffset() {
-            this.offset = 0L;
+        public static PaimonOffset from(PaimonOffset offset) {
+            return new PaimonOffset(offset.snapshotId, offset.splitIndex, offset.offset);
         }
 
-        public PaimonOffset(long offset) {
+        public PaimonOffset() {
+            this(1L);
+        }
+
+        public PaimonOffset(long snapshotId) {
+            this(snapshotId, 0, 0);
+        }
+
+        public PaimonOffset(long snapshotId, int splitIndex, long offset) {
+            this.snapshotId = snapshotId;
+            this.splitIndex = splitIndex;
             this.offset = offset;
         }
 
         @Override
         public String humanReadable() {
-            return String.valueOf(offset);
+            return String.format("snapshot %d, split index %d, offset %d", snapshotId, splitIndex, offset);
+        }
+
+        public long getSnapshotId() {
+            return snapshotId;
+        }
+
+        public int getSplitIndex() {
+            return splitIndex;
         }
 
         @Override
         public long getOffset() {
             return offset;
+        }
+
+        public PaimonOffset advance(long rows) {
+            if (rows == 0) {
+                return this;
+            }
+           return new PaimonOffset(snapshotId, splitIndex, offset + rows);
+        }
+
+        public PaimonOffset nextSplit() {
+            return new PaimonOffset(snapshotId, splitIndex + 1, 0);
+        }
+
+        public PaimonOffset nextSnapshot() {
+            return new PaimonOffset(snapshotId + 1, 0, 0);
         }
 
         @Override
@@ -301,12 +499,12 @@ public class PaimonTableSource implements TableSource {
                 return false;
             }
             PaimonOffset that = (PaimonOffset) o;
-            return offset == that.offset;
+            return snapshotId == that.snapshotId && splitIndex == that.splitIndex && offset == that.offset;
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(offset);
+            return Objects.hash(snapshotId, splitIndex, offset);
         }
     }
 }
