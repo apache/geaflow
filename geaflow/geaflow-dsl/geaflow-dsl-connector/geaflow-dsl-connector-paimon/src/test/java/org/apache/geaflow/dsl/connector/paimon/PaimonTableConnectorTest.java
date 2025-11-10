@@ -46,6 +46,8 @@ import org.apache.geaflow.dsl.connector.api.TableSource;
 import org.apache.geaflow.dsl.connector.api.serde.TableDeserializer;
 import org.apache.geaflow.dsl.connector.api.util.ConnectorFactory;
 import org.apache.geaflow.dsl.connector.api.window.AllFetchWindow;
+import org.apache.geaflow.dsl.connector.api.window.FetchWindow;
+import org.apache.geaflow.dsl.connector.api.window.SizeFetchWindow;
 import org.apache.geaflow.runtime.core.context.DefaultRuntimeContext;
 import org.apache.paimon.catalog.Catalog;
 import org.apache.paimon.catalog.CatalogContext;
@@ -127,6 +129,24 @@ public class PaimonTableConnectorTest {
 
     @Test
     public void testReadPaimon() throws IOException {
+        test(new AllFetchWindow(-1L), "[1, a1, 10.0]\n" +
+                "[2, ab, 12.0]\n" +
+                "[3, a3, 12.0]\n" +
+                "[4, bcd, 15.0]\n" +
+                "[5, a5, 10.0]");
+
+        test(new SizeFetchWindow(0L, 3L), "[1, a1, 10.0]\n" +
+                "[2, ab, 12.0]\n" +
+                "[3, a3, 12.0]");
+
+        test(new SizeFetchWindow(2L, 10L), "[1, a1, 10.0]\n" +
+                "[2, ab, 12.0]\n" +
+                "[3, a3, 12.0]\n" +
+                "[4, bcd, 15.0]\n" +
+                "[5, a5, 10.0]");
+    }
+
+    private void test(FetchWindow fetchWindow, String expect) throws IOException {
         String tmpDir = "/tmp/geaflow/dsl/paimon/test/";
         String db = "paimon_db";
         String table = "paimon_table";
@@ -148,21 +168,14 @@ public class PaimonTableConnectorTest {
 
         List<Partition> partitions = tableSource.listPartitions();
 
-        TableDeserializer deserializer = tableSource.getDeserializer(tableConf);
-        deserializer.init(tableConf, tableSchema);
         List<Row> readRows = new ArrayList<>();
         for (Partition partition : partitions) {
-            FetchData<Object> rows = tableSource.fetch(partition, Optional.empty(), new AllFetchWindow(-1L));
+            FetchData<Row> rows = tableSource.fetch(partition, Optional.empty(), fetchWindow);
             while (rows.getDataIterator().hasNext()) {
-                readRows.addAll(deserializer.deserialize(rows.getDataIterator().next()));
+                readRows.add(rows.getDataIterator().next());
             }
         }
-        Assert.assertEquals(StringUtils.join(readRows, "\n"),
-            "[1, a1, 10.0]\n"
-                + "[2, ab, 12.0]\n"
-                + "[3, a3, 12.0]\n"
-                + "[4, bcd, 15.0]\n"
-                + "[5, a5, 10.0]");
+        Assert.assertEquals(StringUtils.join(readRows, "\n"), expect);
     }
 
 }

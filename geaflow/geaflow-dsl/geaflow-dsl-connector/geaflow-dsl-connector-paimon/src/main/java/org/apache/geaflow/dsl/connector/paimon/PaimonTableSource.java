@@ -70,6 +70,7 @@ public class PaimonTableSource implements TableSource {
     private Map<String, String> configs;
     private String database;
     private String table;
+    private final PaimonRecordDeserializer deserializer = new PaimonRecordDeserializer();
 
     private transient CatalogContext catalogContext;
     private transient Catalog catalog;
@@ -142,6 +143,7 @@ public class PaimonTableSource implements TableSource {
         LOGGER.info("Open paimon source, tableConf: {}, tableSchema: {}, path: {}, options: "
             + "{}, configs: {}, database: {}, tableName: {}", tableConf, tableSchema, path,
             options, configs, database, table);
+        this.deserializer.init(tableConf, tableSchema);
     }
 
     @Override
@@ -153,7 +155,7 @@ public class PaimonTableSource implements TableSource {
 
     @Override
     public <IN> TableDeserializer<IN> getDeserializer(Configuration conf) {
-        return (TableDeserializer<IN>) new PaimonRecordDeserializer();
+        return null;
     }
 
     @Override
@@ -162,7 +164,7 @@ public class PaimonTableSource implements TableSource {
         PaimonPartition paimonPartition = (PaimonPartition) partition;
         assert paimonPartition.getDatabase().equals(this.database)
             && paimonPartition.getTable().equals(this.table);
-        RecordReader reader = partition2Reader.getOrDefault(partition,
+        RecordReader<InternalRow> reader = partition2Reader.getOrDefault(partition,
             readBuilder.newRead().createReader(paimonPartition.getSplit()));
         partition2Reader.put(paimonPartition, reader);
 
@@ -173,17 +175,21 @@ public class PaimonTableSource implements TableSource {
         if (startOffset.isPresent() && !startOffset.get().equals(innerOffset)) {
             throw new GeaFlowDSLException("Paimon connector not support reset offset.");
         }
-        CloseableIterator iterator = reader.toCloseableIterator();
+        CloseableIterator<InternalRow> iterator = reader.toCloseableIterator();
         switch (windowInfo.getType()) {
             case ALL_WINDOW:
-                return FetchData.createBatchFetch(iterator, new PaimonOffset());
+                return FetchData.createBatchFetch(new IteratorWrapper(iterator, deserializer), new PaimonOffset());
             case SIZE_TUMBLING_WINDOW:
                 List<Object> readContents = new ArrayList<>();
                 long i = 0;
                 for (; i < windowInfo.windowSize(); i++) {
                     if (iterator.hasNext()) {
-                        readContents.add(iterator.next());
+                        readContents.add(deserializer.deserialize(iterator.next()));
                     } else {
+                        RecordReader<InternalRow> removed = partition2Reader.remove(partition);
+                        if (removed != null) {
+                            removed.close();
+                        }
                         break;
                     }
                 }
@@ -197,7 +203,7 @@ public class PaimonTableSource implements TableSource {
 
     @Override
     public void close() {
-        for (RecordReader reader : partition2Reader.values()) {
+        for (RecordReader<InternalRow> reader : partition2Reader.values()) {
             if (reader != null) {
                 try {
                     reader.close();
@@ -267,7 +273,6 @@ public class PaimonTableSource implements TableSource {
     public static class PaimonOffset implements Offset {
 
         private final long offset;
-
 
         public PaimonOffset() {
             this.offset = 0L;

@@ -32,19 +32,20 @@ import org.apache.geaflow.dsl.common.types.TableSchema;
 import org.apache.geaflow.dsl.connector.api.serde.TableDeserializer;
 import org.apache.paimon.data.InternalRow;
 
-public class PaimonRecordDeserializer implements TableDeserializer<Object> {
+public class PaimonRecordDeserializer {
 
     private StructType schema;
     private TableSchema tableSchema;
 
-    @Override
     public void init(Configuration conf, StructType schema) {
         this.tableSchema = (TableSchema) schema;
         this.schema = this.tableSchema.getDataSchema();
     }
 
-    @Override
-    public List<Row> deserialize(Object record) {
+    public Row deserialize(Object record) {
+        if (record == null) {
+            return null;
+        }
         InternalRow internalRow = (InternalRow) record;
         assert internalRow.getFieldCount() == schema.size();
         Object[] values = new Object[schema.size()];
@@ -70,8 +71,6 @@ public class PaimonRecordDeserializer implements TableDeserializer<Object> {
                     values[i] = internalRow.getLong(i);
                     break;
                 case Types.TYPE_NAME_STRING:
-                    values[i] = internalRow.getString(i);
-                    break;
                 case Types.TYPE_NAME_BINARY_STRING:
                     values[i] = internalRow.getString(i);
                     break;
@@ -80,6 +79,6 @@ public class PaimonRecordDeserializer implements TableDeserializer<Object> {
                         field.getType().getName());
             }
         }
-        return Collections.singletonList(ObjectRow.create(values));
+        return ObjectRow.create(values);
     }
 }
