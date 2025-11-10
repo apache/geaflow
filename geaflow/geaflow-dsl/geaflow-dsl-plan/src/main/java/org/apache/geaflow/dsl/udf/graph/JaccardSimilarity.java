@@ -26,7 +26,6 @@ import java.util.Optional;
 import java.util.Set;
 import org.apache.geaflow.common.tuple.Tuple;
 import org.apache.geaflow.common.type.primitive.DoubleType;
-import org.apache.geaflow.common.type.primitive.LongType;
 import org.apache.geaflow.dsl.common.algo.AlgorithmRuntimeContext;
 import org.apache.geaflow.dsl.common.algo.AlgorithmUserFunction;
 import org.apache.geaflow.dsl.common.data.Row;
@@ -83,69 +82,68 @@ public class JaccardSimilarity implements AlgorithmUserFunction<Object, ObjectRo
                     neighborsB = edges.size();
                 }
                 
-                // Send message to all neighbors with source ID and neighbor count
-                ObjectRow message = ObjectRow.create(sourceId, (long) edges.size());
+                // Send message to all neighbors with source ID
                 for (RowEdge edge : edges) {
-                    context.sendMessage(edge.getTargetId(), message);
+                    context.sendMessage(edge.getTargetId(), ObjectRow.create(sourceId));
                 }
                 
                 // Also send message to the other vertex to ensure both know about each other
                 if (vertices.f0.equals(sourceId) && !vertices.f0.equals(vertices.f1)) {
-                    context.sendMessage(vertices.f1, message);
+                    context.sendMessage(vertices.f1, ObjectRow.create(sourceId));
                 } else if (vertices.f1.equals(sourceId) && !vertices.f0.equals(vertices.f1)) {
-                    context.sendMessage(vertices.f0, message);
+                    context.sendMessage(vertices.f0, ObjectRow.create(sourceId));
                 }
             }
         } else if (context.getCurrentIterationId() == 2L) {
             // Second iteration: calculate Jaccard similarity
             // Check if this vertex is one of the target vertices (A or B)
             if (vertices.f0.equals(vertex.getId()) || vertices.f1.equals(vertex.getId())) {
-                // Collect messages to determine common neighbors
-                Set<Object> sendersA = new HashSet<>();
-                Set<Object> sendersB = new HashSet<>();
-                
+                // Collect messages from common neighbors (acknowledgments)
+                // Each message contains a common neighbor ID
                 while (messages.hasNext()) {
                     ObjectRow message = messages.next();
-                    Object senderId = message.getField(0, context.getGraphSchema().getIdType());
-                    long neighborCount = (Long) message.getField(1, LongType.INSTANCE);
-                    
-                    // Track which vertex sent the message
-                    if (vertices.f0.equals(senderId)) {
-                        sendersA.add(senderId);
-                    }
-                    if (vertices.f1.equals(senderId)) {
-                        sendersB.add(senderId);
-                    }
+                    Object commonNeighborId = message.getField(0, context.getGraphSchema().getIdType());
+                    commonNeighbors.add(commonNeighborId);
                 }
                 
-                // If this vertex received messages from both A and B, it's a common neighbor
-                if (sendersA.contains(vertex.getId()) && sendersB.contains(vertex.getId())) {
-                    commonNeighbors.add(vertex.getId());
-                }
-                
-                // When we reach vertex A or B, calculate and output the Jaccard coefficient
-                if (vertices.f0.equals(vertex.getId()) || vertices.f1.equals(vertex.getId())) {
+                // Calculate and output the Jaccard coefficient only from vertex A
+                if (vertices.f0.equals(vertex.getId())) {
                     // Calculate Jaccard coefficient: |A ∩ B| / |A ∪ B|
+                    // Intersection = number of common neighbors
                     long intersection = commonNeighbors.size();
+                    // Union = |A| + |B| - |A ∩ B|
                     long union = neighborsA + neighborsB - intersection;
                     
                     // Avoid division by zero
                     double jaccardCoefficient = union == 0 ? 0.0 : (double) intersection / union;
                     
-                    // Output the result only once (from one of the vertices)
-                    if (vertices.f0.equals(vertex.getId())) {
-                        context.take(ObjectRow.create(vertices.f0, vertices.f1, jaccardCoefficient));
-                    }
+                    // Output the result
+                    context.take(ObjectRow.create(vertices.f0, vertices.f1, jaccardCoefficient));
                 }
             } else {
-                // For common neighbors, collect messages and send back information
+                // For non-A, non-B vertices: check if they received messages from both A and B
+                // If yes, they are common neighbors and should send acknowledgment to A
+                boolean receivedFromA = false;
+                boolean receivedFromB = false;
+                
                 while (messages.hasNext()) {
                     ObjectRow message = messages.next();
                     Object senderId = message.getField(0, context.getGraphSchema().getIdType());
                     
-                    // Send back acknowledgment to the sender
+                    // Check if message is from vertex A or B
+                    if (vertices.f0.equals(senderId)) {
+                        receivedFromA = true;
+                    }
+                    if (vertices.f1.equals(senderId)) {
+                        receivedFromB = true;
+                    }
+                }
+                
+                // If this vertex received messages from both A and B, it's a common neighbor
+                // Send acknowledgment to vertex A
+                if (receivedFromA && receivedFromB) {
                     ObjectRow ackMessage = ObjectRow.create(vertex.getId());
-                    context.sendMessage(senderId, ackMessage);
+                    context.sendMessage(vertices.f0, ackMessage);
                 }
             }
         }
