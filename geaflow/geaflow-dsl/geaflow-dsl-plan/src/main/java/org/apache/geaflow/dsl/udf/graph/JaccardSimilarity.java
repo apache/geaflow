@@ -111,10 +111,10 @@ public class JaccardSimilarity implements AlgorithmUserFunction<Object, ObjectRo
                     
                     // Track which vertex sent the message
                     if (vertices.f0.equals(senderId)) {
-                        sendersA.add(vertex.getId());
+                        sendersA.add(senderId);
                     }
                     if (vertices.f1.equals(senderId)) {
-                        sendersB.add(vertex.getId());
+                        sendersB.add(senderId);
                     }
                 }
                 
