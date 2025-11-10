@@ -26,6 +26,9 @@ import org.apache.geaflow.common.serialize.SerializerFactory;
 public class RpcMessageEncoder implements Serializable {
 
     public static <T> T decode(ByteString payload) {
+        if (payload == null || payload.isEmpty()) {
+            throw new IllegalArgumentException("Cannot decode null or empty ByteString payload");
+        }
         return SerializerFactory.getKryoSerializer().deserialize(payload.newInput());
     }
 

@@ -1,5 +1,0 @@
-1,jim,15
-2,kate,16
-3,same,20
-4,lucy,21
-5,brown,22

@@ -35,7 +35,6 @@ import org.apache.geaflow.store.api.graph.IStaticGraphStore;
 import org.apache.geaflow.store.context.StoreContext;
 import org.apache.geaflow.store.paimon.proxy.IGraphPaimonProxy;
 import org.apache.geaflow.store.paimon.proxy.PaimonProxyBuilder;
-import org.apache.paimon.catalog.Identifier;
 
 public class StaticGraphPaimonStoreBase<K, VV, EV> extends BasePaimonGraphStore implements
     IStaticGraphStore<K, VV, EV> {
@@ -49,14 +48,8 @@ public class StaticGraphPaimonStoreBase<K, VV, EV> extends BasePaimonGraphStore 
         super.init(storeContext);
         int[] projection = new int[]{KEY_COLUMN_INDEX, VALUE_COLUMN_INDEX};
 
-        // TODO: Use graph schema to create table instead of KV table.
-        String vertexTableName = String.format("%s#%s", "vertex", shardId);
-        Identifier vertexIdentifier = new Identifier(paimonStoreName, vertexTableName);
-        PaimonTableRWHandle vertexHandle = createKVTableHandle(vertexIdentifier);
-
-        String edgeTableName = String.format("%s#%s", "edge", shardId);
-        Identifier edgeIdentifier = new Identifier(paimonStoreName, edgeTableName);
-        PaimonTableRWHandle edgeHandle = createKVTableHandle(edgeIdentifier);
+        PaimonTableRWHandle vertexHandle = createVertexTable(shardId);
+        PaimonTableRWHandle edgeHandle = createEdgeTable(shardId);
 
         this.sortAtom = storeContext.getGraphSchema().getEdgeAtoms().get(1);
         IGraphKVEncoder<K, VV, EV> encoder = GraphKVEncoderFactory.build(storeContext.getConfig(),

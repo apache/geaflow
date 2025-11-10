@@ -19,13 +19,16 @@
 
 package org.apache.geaflow.state;
 
+import static org.apache.geaflow.common.config.keys.StateConfigKeys.STATE_WRITE_ASYNC_ENABLE;
+import static org.apache.geaflow.store.paimon.config.PaimonConfigKeys.PAIMON_STORE_DATABASE;
+import static org.apache.geaflow.store.paimon.config.PaimonConfigKeys.PAIMON_STORE_WAREHOUSE;
+
 import java.io.File;
 import java.util.HashMap;
 import java.util.Map;
 import org.apache.commons.io.FileUtils;
 import org.apache.geaflow.common.config.Configuration;
 import org.apache.geaflow.common.config.keys.ExecutionConfigKeys;
-import org.apache.geaflow.common.config.keys.StateConfigKeys;
 import org.apache.geaflow.common.type.IType;
 import org.apache.geaflow.common.type.primitive.StringType;
 import org.apache.geaflow.common.utils.GsonUtil;
@@ -36,7 +39,7 @@ import org.apache.geaflow.model.graph.meta.GraphMeta;
 import org.apache.geaflow.model.graph.meta.GraphMetaType;
 import org.apache.geaflow.model.graph.vertex.impl.ValueVertex;
 import org.apache.geaflow.state.descriptor.GraphStateDescriptor;
-import org.apache.geaflow.store.paimon.PaimonConfigKeys;
+import org.apache.geaflow.store.paimon.config.PaimonConfigKeys;
 import org.apache.geaflow.utils.keygroup.DefaultKeyGroupAssigner;
 import org.apache.geaflow.utils.keygroup.KeyGroup;
 import org.testng.Assert;
@@ -58,8 +61,11 @@ public class PaimonGraphStateTest {
         config.put(FileConfigKeys.PERSISTENT_TYPE.getKey(), "LOCAL");
         config.put(FileConfigKeys.ROOT.getKey(), "/tmp/geaflow/chk/");
         config.put(FileConfigKeys.JSON_CONFIG.getKey(), GsonUtil.toJson(persistConfig));
-        config.put(PaimonConfigKeys.PAIMON_OPTIONS_WAREHOUSE.getKey(),
+        config.put(PaimonConfigKeys.PAIMON_STORE_WAREHOUSE.getKey(),
             "file:///tmp/PaimonGraphStateTest/");
+        config.put(PaimonConfigKeys.PAIMON_STORE_TABLE_AUTO_CREATE_ENABLE.getKey(), "true");
+        config.put(PaimonConfigKeys.PAIMON_STORE_DISTRIBUTED_MODE_ENABLE.getKey(), "false");
+
     }
 
     @AfterClass
@@ -87,9 +93,7 @@ public class PaimonGraphStateTest {
         return graphState;
     }
 
-    public void testWriteRead(boolean async) {
-        Map<String, String> conf = new HashMap<>(config);
-        conf.put(StateConfigKeys.STATE_WRITE_ASYNC_ENABLE.getKey(), Boolean.toString(async));
+    public void testWriteRead(Map<String, String> conf) {
         GraphState<String, String, String> graphState = getGraphState(StringType.INSTANCE,
             "write_read", conf);
 
@@ -102,6 +106,7 @@ public class PaimonGraphStateTest {
             graphState.staticGraph().E().add(new ValueEdge<>("1", id, "edge_hello"));
         }
         // read nothing since not committed
+        boolean async = Boolean.parseBoolean(conf.get(STATE_WRITE_ASYNC_ENABLE.getKey()));
         if (!async) {
             Assert.assertNull(graphState.staticGraph().V().query("1").get());
             Assert.assertEquals(graphState.staticGraph().E().query("1").asList().size(), 0);
@@ -150,8 +155,24 @@ public class PaimonGraphStateTest {
 
     @Test
     public void testBothWriteMode() {
-        testWriteRead(true);
-        testWriteRead(false);
+        Map<String, String> conf = new HashMap<>(config);
+        conf.put(STATE_WRITE_ASYNC_ENABLE.getKey(), Boolean.TRUE.toString());
+        testWriteRead(conf);
+
+        conf.put(STATE_WRITE_ASYNC_ENABLE.getKey(), Boolean.TRUE.toString());
+        testWriteRead(conf);
+    }
+
+    @Test
+    public void testBothWriteMode2() {
+        Map<String, String> conf = new HashMap<>(config);
+        conf.put(STATE_WRITE_ASYNC_ENABLE.getKey(), Boolean.TRUE.toString());
+        conf.put(PAIMON_STORE_WAREHOUSE.getKey(), "/tmp/testBothWriteMode2");
+        conf.put(PAIMON_STORE_DATABASE.getKey(), "graph");
+        testWriteRead(conf);
+
+        conf.put(STATE_WRITE_ASYNC_ENABLE.getKey(), Boolean.TRUE.toString());
+        testWriteRead(conf);
     }
 
 }

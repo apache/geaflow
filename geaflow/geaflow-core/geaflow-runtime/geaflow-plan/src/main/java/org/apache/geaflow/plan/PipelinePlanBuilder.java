@@ -102,7 +102,8 @@ public class PipelinePlanBuilder implements Serializable {
         });
 
         boolean isSingleWindow = this.pipelineGraph.getSourceVertices().stream().allMatch(v ->
-            ((AbstractOperator) v.getOperator()).getOpArgs().getOpType() == OpArgs.OpType.SINGLE_WINDOW_SOURCE);
+            ((AbstractOperator) v.getOperator()).getOpArgs().getOpType()
+                == OpArgs.OpType.SINGLE_WINDOW_SOURCE);
         if (isSingleWindow) {
             pipelineContext.getConfig().put(BATCH_NUMBER_PER_CHECKPOINT.getKey(),
                 String.valueOf(SINGLE_WINDOW_CHECKPOINT_DURATION));
@@ -143,7 +144,8 @@ public class PipelinePlanBuilder implements Serializable {
             if (action instanceof PGraphMaterialize) {
                 visitMaterializeAction((PGraphMaterialize) action);
             } else {
-                PipelineVertex pipelineVertex = new PipelineVertex(vId, stream.getOperator(), stream.getParallelism());
+                PipelineVertex pipelineVertex = new PipelineVertex(vId, stream.getOperator(),
+                    stream.getParallelism());
                 if (action instanceof PStreamSink) {
                     pipelineVertex.setType(VertexType.sink);
                     pipelineVertex.setVertexMode(VertexMode.append);
@@ -178,11 +180,13 @@ public class PipelinePlanBuilder implements Serializable {
         Preconditions.checkArgument(vertexStreamInput != null && edgeStreamInput != null,
             "input vertex and edge stream must be not null");
 
-        PipelineEdge vertexInputEdge = new PipelineEdge(this.edgeIdGenerator++, vertexStreamInput.getId(),
+        PipelineEdge vertexInputEdge = new PipelineEdge(this.edgeIdGenerator++,
+            vertexStreamInput.getId(),
             stream.getId(), vertexStreamInput.getPartition(), vertexStreamInput.getEncoder());
         vertexInputEdge.setEdgeName(GraphRecordNames.Vertex.name());
         this.pipelineGraph.addEdge(vertexInputEdge);
-        PipelineEdge edgeInputEdge = new PipelineEdge(this.edgeIdGenerator++, edgeStreamInput.getId(),
+        PipelineEdge edgeInputEdge = new PipelineEdge(this.edgeIdGenerator++,
+            edgeStreamInput.getId(),
             stream.getId(), edgeStreamInput.getPartition(), edgeStreamInput.getEncoder());
         edgeInputEdge.setEdgeName(GraphRecordNames.Edge.name());
         this.pipelineGraph.addEdge(edgeInputEdge);
@@ -207,6 +211,30 @@ public class PipelinePlanBuilder implements Serializable {
                     pipelineVertex.setAffinity(AffinityLevel.worker);
                     break;
                 }
+                case ContinueGraphMaterialize:
+                    pipelineVertex.setType(VertexType.inc_process);
+                    pipelineVertex.setAffinity(AffinityLevel.worker);
+                    MaterializedIncGraph pGraphMaterialize = (MaterializedIncGraph) stream;
+
+                    Stream vertexInput = pGraphMaterialize.getInput();
+                    Stream edgeInput = (Stream) pGraphMaterialize.getEdges();
+                    Preconditions.checkArgument(vertexInput != null && edgeInput != null,
+                        "input vertex and edge stream must be not null");
+
+                    PipelineEdge vertexEdge = new PipelineEdge(this.edgeIdGenerator++,
+                        vertexInput.getId(),
+                        stream.getId(), vertexInput.getPartition(), vertexInput.getEncoder());
+                    vertexEdge.setEdgeName(GraphRecordNames.Vertex.name());
+                    this.pipelineGraph.addEdge(vertexEdge);
+                    PipelineEdge edgeEdge = new PipelineEdge(this.edgeIdGenerator++,
+                        edgeInput.getId(),
+                        stream.getId(), edgeInput.getPartition(), edgeInput.getEncoder());
+                    edgeEdge.setEdgeName(GraphRecordNames.Edge.name());
+                    this.pipelineGraph.addEdge(edgeEdge);
+
+                    visitNode(vertexInput);
+                    visitNode(edgeInput);
+                    break;
                 case ContinueGraphCompute: {
                     pipelineVertex.setType(VertexType.inc_iterator);
                     pipelineVertex.setAffinity(AffinityLevel.worker);
@@ -217,26 +245,33 @@ public class PipelinePlanBuilder implements Serializable {
                             pipelineVertex.setType(VertexType.inc_vertex_centric);
                             break;
                         default:
-                            throw new GeaflowRuntimeException("not support graph compute type, " + computeType);
+                            throw new GeaflowRuntimeException(
+                                "not support graph compute type, " + computeType);
                     }
 
                     pipelineVertex.setIterations(pGraphCompute.getMaxIterations());
                     Stream vertexStreamInput = pGraphCompute.getInput();
                     Stream edgeStreamInput = (Stream) pGraphCompute.getEdges();
-                    Preconditions.checkArgument(vertexStreamInput != null && edgeStreamInput != null,
+                    Preconditions.checkArgument(
+                        vertexStreamInput != null && edgeStreamInput != null,
                         "input vertex and edge stream must be not null");
 
-                    PipelineEdge vertexInputEdge = new PipelineEdge(this.edgeIdGenerator++, vertexStreamInput.getId(),
-                        stream.getId(), vertexStreamInput.getPartition(), vertexStreamInput.getEncoder());
+                    PipelineEdge vertexInputEdge = new PipelineEdge(this.edgeIdGenerator++,
+                        vertexStreamInput.getId(),
+                        stream.getId(), vertexStreamInput.getPartition(),
+                        vertexStreamInput.getEncoder());
                     vertexInputEdge.setEdgeName(GraphRecordNames.Vertex.name());
                     this.pipelineGraph.addEdge(vertexInputEdge);
-                    PipelineEdge edgeInputEdge = new PipelineEdge(this.edgeIdGenerator++, edgeStreamInput.getId(),
-                        stream.getId(), edgeStreamInput.getPartition(), edgeStreamInput.getEncoder());
+                    PipelineEdge edgeInputEdge = new PipelineEdge(this.edgeIdGenerator++,
+                        edgeStreamInput.getId(),
+                        stream.getId(), edgeStreamInput.getPartition(),
+                        edgeStreamInput.getEncoder());
                     edgeInputEdge.setEdgeName(GraphRecordNames.Edge.name());
                     this.pipelineGraph.addEdge(edgeInputEdge);
 
                     // iteration loop edge
-                    PipelineEdge iterationEdge = buildIterationEdge(vId, pGraphCompute.getMsgEncoder());
+                    PipelineEdge iterationEdge = buildIterationEdge(vId,
+                        pGraphCompute.getMsgEncoder());
                     this.pipelineGraph.addEdge(iterationEdge);
 
                     buildIterationAggVertexAndEdge(pipelineVertex);
@@ -255,26 +290,33 @@ public class PipelinePlanBuilder implements Serializable {
                             pipelineVertex.setType(VertexType.vertex_centric);
                             break;
                         default:
-                            throw new GeaflowRuntimeException("not support graph compute type, " + computeType);
+                            throw new GeaflowRuntimeException(
+                                "not support graph compute type, " + computeType);
                     }
 
                     pipelineVertex.setIterations(pGraphCompute.getMaxIterations());
                     Stream vertexStreamInput = pGraphCompute.getInput();
                     Stream edgeStreamInput = (Stream) pGraphCompute.getEdges();
-                    Preconditions.checkArgument(vertexStreamInput != null && edgeStreamInput != null,
+                    Preconditions.checkArgument(
+                        vertexStreamInput != null && edgeStreamInput != null,
                         "input vertex and edge stream must be not null");
 
-                    PipelineEdge vertexInputEdge = new PipelineEdge(this.edgeIdGenerator++, vertexStreamInput.getId(),
-                        stream.getId(), vertexStreamInput.getPartition(), vertexStreamInput.getEncoder());
+                    PipelineEdge vertexInputEdge = new PipelineEdge(this.edgeIdGenerator++,
+                        vertexStreamInput.getId(),
+                        stream.getId(), vertexStreamInput.getPartition(),
+                        vertexStreamInput.getEncoder());
                     vertexInputEdge.setEdgeName(GraphRecordNames.Vertex.name());
                     this.pipelineGraph.addEdge(vertexInputEdge);
-                    PipelineEdge edgeInputEdge = new PipelineEdge(this.edgeIdGenerator++, edgeStreamInput.getId(),
-                        stream.getId(), edgeStreamInput.getPartition(), edgeStreamInput.getEncoder());
+                    PipelineEdge edgeInputEdge = new PipelineEdge(this.edgeIdGenerator++,
+                        edgeStreamInput.getId(),
+                        stream.getId(), edgeStreamInput.getPartition(),
+                        edgeStreamInput.getEncoder());
                     edgeInputEdge.setEdgeName(GraphRecordNames.Edge.name());
                     this.pipelineGraph.addEdge(edgeInputEdge);
 
                     // iteration loop edge
-                    PipelineEdge iterationEdge = buildIterationEdge(vId, pGraphCompute.getMsgEncoder());
+                    PipelineEdge iterationEdge = buildIterationEdge(vId,
+                        pGraphCompute.getMsgEncoder());
                     this.pipelineGraph.addEdge(iterationEdge);
 
                     buildIterationAggVertexAndEdge(pipelineVertex);
@@ -293,28 +335,35 @@ public class PipelinePlanBuilder implements Serializable {
                             pipelineVertex.setType(VertexType.vertex_centric);
                             break;
                         default:
-                            throw new GeaflowRuntimeException("not support graph traversal type, " + traversalType);
+                            throw new GeaflowRuntimeException(
+                                "not support graph traversal type, " + traversalType);
                     }
 
                     pipelineVertex.setIterations(windowGraph.getMaxIterations());
                     Stream vertexStreamInput = windowGraph.getInput();
                     Stream edgeStreamInput = (Stream) windowGraph.getEdges();
-                    Preconditions.checkArgument(vertexStreamInput != null && edgeStreamInput != null,
+                    Preconditions.checkArgument(
+                        vertexStreamInput != null && edgeStreamInput != null,
                         "input vertex and edge stream must be not null");
 
-                    PipelineEdge vertexInputEdge = new PipelineEdge(this.edgeIdGenerator++, vertexStreamInput.getId(),
-                        stream.getId(), vertexStreamInput.getPartition(), vertexStreamInput.getEncoder());
+                    PipelineEdge vertexInputEdge = new PipelineEdge(this.edgeIdGenerator++,
+                        vertexStreamInput.getId(),
+                        stream.getId(), vertexStreamInput.getPartition(),
+                        vertexStreamInput.getEncoder());
                     vertexInputEdge.setEdgeName(GraphRecordNames.Vertex.name());
                     this.pipelineGraph.addEdge(vertexInputEdge);
-                    PipelineEdge edgeInputEdge = new PipelineEdge(this.edgeIdGenerator++, edgeStreamInput.getId(),
-                        stream.getId(), edgeStreamInput.getPartition(), edgeStreamInput.getEncoder());
+                    PipelineEdge edgeInputEdge = new PipelineEdge(this.edgeIdGenerator++,
+                        edgeStreamInput.getId(),
+                        stream.getId(), edgeStreamInput.getPartition(),
+                        edgeStreamInput.getEncoder());
                     edgeInputEdge.setEdgeName(GraphRecordNames.Edge.name());
                     this.pipelineGraph.addEdge(edgeInputEdge);
 
                     // Add request input.
                     if (windowGraph.getRequestStream() != null) {
                         Stream requestStreamInput = (Stream) windowGraph.getRequestStream();
-                        PipelineEdge requestInputEdge = new PipelineEdge(this.edgeIdGenerator++, requestStreamInput.getId(),
+                        PipelineEdge requestInputEdge = new PipelineEdge(this.edgeIdGenerator++,
+                            requestStreamInput.getId(),
                             stream.getId(), requestStreamInput.getPartition(),
                             requestStreamInput.getEncoder());
                         requestInputEdge.setEdgeName(GraphRecordNames.Request.name());
@@ -323,7 +372,8 @@ public class PipelinePlanBuilder implements Serializable {
                     }
 
                     // iteration loop edge
-                    PipelineEdge iterationEdge = buildIterationEdge(vId, windowGraph.getMsgEncoder());
+                    PipelineEdge iterationEdge = buildIterationEdge(vId,
+                        windowGraph.getMsgEncoder());
                     this.pipelineGraph.addEdge(iterationEdge);
 
                     buildIterationAggVertexAndEdge(pipelineVertex);
@@ -342,31 +392,38 @@ public class PipelinePlanBuilder implements Serializable {
                             pipelineVertex.setType(VertexType.inc_vertex_centric);
                             break;
                         default:
-                            throw new GeaflowRuntimeException("not support graph traversal type, " + traversalType);
+                            throw new GeaflowRuntimeException(
+                                "not support graph traversal type, " + traversalType);
                     }
 
                     pipelineVertex.setIterations(windowGraph.getMaxIterations());
                     Stream vertexStreamInput = windowGraph.getInput();
                     Stream edgeStreamInput = (Stream) windowGraph.getEdges();
-                    Preconditions.checkArgument(vertexStreamInput != null && edgeStreamInput != null,
+                    Preconditions.checkArgument(
+                        vertexStreamInput != null && edgeStreamInput != null,
                         "input vertex and edge stream must be not null");
 
                     // Add vertex input.
-                    PipelineEdge vertexInputEdge = new PipelineEdge(this.edgeIdGenerator++, vertexStreamInput.getId(),
-                        stream.getId(), vertexStreamInput.getPartition(), vertexStreamInput.getEncoder());
+                    PipelineEdge vertexInputEdge = new PipelineEdge(this.edgeIdGenerator++,
+                        vertexStreamInput.getId(),
+                        stream.getId(), vertexStreamInput.getPartition(),
+                        vertexStreamInput.getEncoder());
                     vertexInputEdge.setEdgeName(GraphRecordNames.Vertex.name());
                     this.pipelineGraph.addEdge(vertexInputEdge);
 
                     // Add edge input.
-                    PipelineEdge edgeInputEdge = new PipelineEdge(this.edgeIdGenerator++, edgeStreamInput.getId(),
-                        stream.getId(), edgeStreamInput.getPartition(), edgeStreamInput.getEncoder());
+                    PipelineEdge edgeInputEdge = new PipelineEdge(this.edgeIdGenerator++,
+                        edgeStreamInput.getId(),
+                        stream.getId(), edgeStreamInput.getPartition(),
+                        edgeStreamInput.getEncoder());
                     edgeInputEdge.setEdgeName(GraphRecordNames.Edge.name());
                     this.pipelineGraph.addEdge(edgeInputEdge);
 
                     // Add request input.
                     if (windowGraph.getRequestStream() != null) {
                         Stream requestStreamInput = (Stream) windowGraph.getRequestStream();
-                        PipelineEdge requestInputEdge = new PipelineEdge(this.edgeIdGenerator++, requestStreamInput.getId(),
+                        PipelineEdge requestInputEdge = new PipelineEdge(this.edgeIdGenerator++,
+                            requestStreamInput.getId(),
                             stream.getId(), requestStreamInput.getPartition(),
                             requestStreamInput.getEncoder());
                         requestInputEdge.setEdgeName(GraphRecordNames.Request.name());
@@ -375,7 +432,8 @@ public class PipelinePlanBuilder implements Serializable {
                     }
 
                     // Add iteration loop edge
-                    PipelineEdge iterationEdge = buildIterationEdge(vId, windowGraph.getMsgEncoder());
+                    PipelineEdge iterationEdge = buildIterationEdge(vId,
+                        windowGraph.getMsgEncoder());
                     this.pipelineGraph.addEdge(iterationEdge);
 
                     buildIterationAggVertexAndEdge(pipelineVertex);
@@ -387,9 +445,11 @@ public class PipelinePlanBuilder implements Serializable {
                 case StreamTransform: {
                     pipelineVertex.setType(VertexType.process);
                     Stream inputStream = stream.getInput();
-                    Preconditions.checkArgument(inputStream != null, "input stream must be not null");
+                    Preconditions.checkArgument(inputStream != null,
+                        "input stream must be not null");
 
-                    PipelineEdge pipelineEdge = new PipelineEdge(this.edgeIdGenerator++, inputStream.getId(), stream.getId(),
+                    PipelineEdge pipelineEdge = new PipelineEdge(this.edgeIdGenerator++,
+                        inputStream.getId(), stream.getId(),
                         inputStream.getPartition(), inputStream.getEncoder());
                     this.pipelineGraph.addEdge(pipelineEdge);
 
@@ -400,9 +460,11 @@ public class PipelinePlanBuilder implements Serializable {
                     pipelineVertex.setType(VertexType.inc_process);
                     pipelineVertex.setAffinity(AffinityLevel.worker);
                     Stream inputStream = stream.getInput();
-                    Preconditions.checkArgument(inputStream != null, "input stream must be not null");
+                    Preconditions.checkArgument(inputStream != null,
+                        "input stream must be not null");
 
-                    PipelineEdge pipelineEdge = new PipelineEdge(this.edgeIdGenerator++, inputStream.getId(), stream.getId(),
+                    PipelineEdge pipelineEdge = new PipelineEdge(this.edgeIdGenerator++,
+                        inputStream.getId(), stream.getId(),
                         inputStream.getPartition(), inputStream.getEncoder());
                     this.pipelineGraph.addEdge(pipelineEdge);
 
@@ -414,7 +476,8 @@ public class PipelinePlanBuilder implements Serializable {
                     WindowUnionStream unionStream = (WindowUnionStream) stream;
 
                     Stream mainInput = stream.getInput();
-                    PipelineEdge mainEdge = new PipelineEdge(this.edgeIdGenerator++, mainInput.getId(), unionStream.getId(),
+                    PipelineEdge mainEdge = new PipelineEdge(this.edgeIdGenerator++,
+                        mainInput.getId(), unionStream.getId(),
                         mainInput.getPartition(), unionStream.getEncoder());
                     mainEdge.setStreamOrdinal(0);
                     this.pipelineGraph.addEdge(mainEdge);
@@ -423,8 +486,10 @@ public class PipelinePlanBuilder implements Serializable {
                     List<Stream> otherInputs = unionStream.getUnionWindowDataStreamList();
                     for (int index = 0; index < otherInputs.size(); index++) {
                         Stream otherInput = otherInputs.get(index);
-                        PipelineEdge rightEdge = new PipelineEdge(this.edgeIdGenerator++, otherInput.getId(),
-                            unionStream.getId(), otherInput.getPartition(), otherInput.getEncoder());
+                        PipelineEdge rightEdge = new PipelineEdge(this.edgeIdGenerator++,
+                            otherInput.getId(),
+                            unionStream.getId(), otherInput.getPartition(),
+                            otherInput.getEncoder());
                         rightEdge.setStreamOrdinal(index + 1);
                         this.pipelineGraph.addEdge(rightEdge);
                         visitNode(otherInput);
@@ -432,7 +497,8 @@ public class PipelinePlanBuilder implements Serializable {
                     break;
                 }
                 default:
-                    throw new GeaflowRuntimeException("Not supported transform type: " + stream.getTransformType());
+                    throw new GeaflowRuntimeException(
+                        "Not supported transform type: " + stream.getTransformType());
             }
             this.pipelineGraph.addVertex(pipelineVertex);
         }
@@ -474,7 +540,8 @@ public class PipelinePlanBuilder implements Serializable {
             // Union Optimization.
             boolean isExtraOptimizeSink = pipelineConfig.getBoolean(ENABLE_EXTRA_OPTIMIZE_SINK);
             new UnionOptimizer(isExtraOptimizeSink).optimizePlan(pipelineGraph);
-            LOGGER.info("union optimize: {}", new PlanGraphVisualization(pipelineGraph).getGraphviz());
+            LOGGER.info("union optimize: {}",
+                new PlanGraphVisualization(pipelineGraph).getGraphviz());
         }
         new PipelineGraphOptimizer().optimizePipelineGraph(pipelineGraph);
     }

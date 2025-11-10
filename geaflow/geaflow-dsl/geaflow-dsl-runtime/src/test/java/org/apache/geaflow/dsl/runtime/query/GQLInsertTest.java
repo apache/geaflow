@@ -20,6 +20,8 @@
 package org.apache.geaflow.dsl.runtime.query;
 
 import org.apache.geaflow.common.config.keys.FrameworkConfigKeys;
+import org.apache.geaflow.common.exception.GeaflowRuntimeException;
+import org.apache.geaflow.store.paimon.config.PaimonConfigKeys;
 import org.testng.annotations.Test;
 
 public class GQLInsertTest {
@@ -111,6 +113,26 @@ public class GQLInsertTest {
         QueryTester
             .build()
             .withQueryPath("/query/gql_insert_and_graph_005.sql")
+            .execute()
+            .checkSinkResult();
+    }
+
+    @Test
+    public void testInsertAndQuery_006() throws Exception {
+        QueryTester
+            .build()
+            .withConfig(PaimonConfigKeys.PAIMON_STORE_TABLE_AUTO_CREATE_ENABLE.getKey(), "true")
+            .withQueryPath("/query/gql_insert_and_graph_006.sql")
+            .execute()
+            .checkSinkResult();
+    }
+
+    @Test(expectedExceptions = GeaflowRuntimeException.class)
+    public void testInsertAndQuery_007() throws Exception {
+        QueryTester
+            .build()
+            .withConfig(PaimonConfigKeys.PAIMON_STORE_TABLE_AUTO_CREATE_ENABLE.getKey(), "true")
+            .withQueryPath("/query/gql_insert_and_graph_007.sql")
             .execute()
             .checkSinkResult();
     }
