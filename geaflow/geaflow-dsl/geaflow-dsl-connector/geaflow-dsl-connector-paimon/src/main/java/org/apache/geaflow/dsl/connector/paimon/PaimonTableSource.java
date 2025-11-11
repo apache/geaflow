@@ -375,25 +375,6 @@ public class PaimonTableSource implements TableSource {
             return database + "-" + table;
         }
 
-        @Override
-        public int hashCode() {
-            return Objects.hash(database, table, index);
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) {
-                return true;
-            }
-            if (!(o instanceof PaimonPartition)) {
-                return false;
-            }
-            PaimonPartition that = (PaimonPartition) o;
-            return Objects.equals(database, that.database) && Objects.equals(
-                table, that.table) && Objects.equals(
-                index, that.index);
-        }
-
         public String getDatabase() {
             return database;
         }
@@ -422,6 +403,25 @@ public class PaimonTableSource implements TableSource {
         public void setIndex(int index, int parallel) {
             this.parallel = parallel;
             this.index = index;
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(database, table, index);
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) {
+                return true;
+            }
+            if (!(o instanceof PaimonPartition)) {
+                return false;
+            }
+            PaimonPartition that = (PaimonPartition) o;
+            return Objects.equals(database, that.database) && Objects.equals(
+                    table, that.table) && Objects.equals(
+                    index, that.index);
         }
     }
 
