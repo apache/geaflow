@@ -261,7 +261,7 @@ public class PaimonTableSource implements TableSource {
     }
 
     /**
-     * Create a paimon record iterator
+     * Create a paimon record iterator.
      * @param split the paimon data split
      * @return a paimon record iterator
      * @throws IOException if error occurs
@@ -279,7 +279,7 @@ public class PaimonTableSource implements TableSource {
     }
 
     /**
-     * Remove the paimon record iterator and reader
+     * Remove the paimon record iterator and reader.
      * @param split the paimon data split
      * @throws Exception if error occurs
      */
@@ -295,7 +295,7 @@ public class PaimonTableSource implements TableSource {
     }
 
     /**
-     * Load splits from snapshot
+     * Load splits from snapshot.
      * @param snapshotId the snapshot id
      * @return all splits
      */
@@ -407,7 +407,7 @@ public class PaimonTableSource implements TableSource {
         }
 
         /**
-         * Seek the split by index
+         * Seek the split by index.
          * @param splitIndex the split index
          * @return the split to read
          */
