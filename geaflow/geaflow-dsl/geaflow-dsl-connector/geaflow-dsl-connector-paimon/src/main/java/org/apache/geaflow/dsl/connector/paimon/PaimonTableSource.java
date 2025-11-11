@@ -27,15 +27,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.stream.Collectors;
 import org.apache.commons.lang.StringUtils;
 import org.apache.geaflow.api.context.RuntimeContext;
 import org.apache.geaflow.common.config.Configuration;
-import org.apache.geaflow.common.config.keys.DSLConfigKeys;
 import org.apache.geaflow.common.utils.GsonUtil;
 import org.apache.geaflow.dsl.common.exception.GeaFlowDSLException;
 import org.apache.geaflow.dsl.common.types.TableSchema;
-import org.apache.geaflow.dsl.common.util.Windows;
 import org.apache.geaflow.dsl.connector.api.FetchData;
 import org.apache.geaflow.dsl.connector.api.Offset;
 import org.apache.geaflow.dsl.connector.api.Partition;
@@ -66,7 +63,6 @@ public class PaimonTableSource implements TableSource {
 
     private Configuration tableConf;
     private TableSchema tableSchema;
-    private boolean isAllWindow;
 
     private String path;
     private Map<String, String> options;
@@ -86,7 +82,6 @@ public class PaimonTableSource implements TableSource {
     @Override
     public void init(Configuration tableConf, TableSchema tableSchema) {
         this.tableConf = tableConf;
-        this.isAllWindow = tableConf.getLong(DSLConfigKeys.GEAFLOW_DSL_WINDOW_SIZE) == Windows.SIZE_OF_ALL_WINDOW;
         this.tableSchema = tableSchema;
         this.path = tableConf.getString(PaimonConfigKeys.GEAFLOW_DSL_PAIMON_WAREHOUSE, "");
         this.options = new HashMap<>();
@@ -113,30 +108,21 @@ public class PaimonTableSource implements TableSource {
 
     @Override
     public List<Partition> listPartitions(int parallelism) {
-        List<Split> splits = isAllWindow ? readBuilder.newScan().plan().splits() :
-                readBuilder.newStreamScan().plan().splits();
-        return splits.stream().map(split -> new PaimonPartition(database, table)).collect(Collectors.toList());
+        List<Partition> partitions = new ArrayList<>(parallelism);
+        for (int i = 0; i < parallelism; i++) {
+            partitions.add(new PaimonPartition(database, table));
+        }
+        return partitions;
+    }
+
+    @Override
+    public List<Partition> listPartitions() {
+        return listPartitions(1);
     }
 
     @Override
     public void open(RuntimeContext context) {
-        CatalogContext catalogContext;
-        if (StringUtils.isBlank(this.path)) {
-            if (StringUtils.isBlank(this.configJson)) {
-                catalogContext =
-                    Objects.requireNonNull(CatalogContext.create(new Options(options)));
-            } else {
-                org.apache.hadoop.conf.Configuration hadoopConf = new org.apache.hadoop.conf.Configuration();
-                for (Map.Entry<String, String> entry : configs.entrySet()) {
-                    hadoopConf.set(entry.getKey(), entry.getValue());
-                }
-                catalogContext =
-                    Objects.requireNonNull(CatalogContext.create(new Options(options), hadoopConf));
-            }
-        } else {
-            catalogContext = Objects.requireNonNull(CatalogContext.create(new Path(path)));
-        }
-        Catalog catalog = Objects.requireNonNull(CatalogFactory.createCatalog(catalogContext));
+        Catalog catalog = getPaimonCatalog();
         Identifier identifier = Identifier.create(database, table);
         try {
             this.readBuilder = Objects.requireNonNull(catalog.getTable(identifier).newReadBuilder());
@@ -158,13 +144,6 @@ public class PaimonTableSource implements TableSource {
             + "{}, configs: {}, database: {}, tableName: {}", tableConf, tableSchema, path,
             options, configs, database, table);
         this.deserializer.init(tableSchema);
-    }
-
-    @Override
-    public List<Partition> listPartitions() {
-        ArrayList<Partition> partitions = new ArrayList<>();
-        partitions.add(new PaimonPartition(database, table));
-        return partitions;
     }
 
     @Override
@@ -306,6 +285,30 @@ public class PaimonTableSource implements TableSource {
         List<Split> splits = streamTableScan.plan().splits();
         LOGGER.debug("Load splits from snapshot: {}, cost: {}ms", snapshotId, System.currentTimeMillis() - start);
         return splits;
+    }
+
+    /**
+     * Get paimon catalog.
+     * @return the paimon catalog.
+     */
+    private Catalog getPaimonCatalog() {
+        CatalogContext catalogContext;
+        if (StringUtils.isBlank(this.path)) {
+            if (StringUtils.isBlank(this.configJson)) {
+                catalogContext =
+                        Objects.requireNonNull(CatalogContext.create(new Options(options)));
+            } else {
+                org.apache.hadoop.conf.Configuration hadoopConf = new org.apache.hadoop.conf.Configuration();
+                for (Map.Entry<String, String> entry : configs.entrySet()) {
+                    hadoopConf.set(entry.getKey(), entry.getValue());
+                }
+                catalogContext =
+                        Objects.requireNonNull(CatalogContext.create(new Options(options), hadoopConf));
+            }
+        } else {
+            catalogContext = Objects.requireNonNull(CatalogContext.create(new Path(path)));
+        }
+        return Objects.requireNonNull(CatalogFactory.createCatalog(catalogContext));
     }
 
     @Override
