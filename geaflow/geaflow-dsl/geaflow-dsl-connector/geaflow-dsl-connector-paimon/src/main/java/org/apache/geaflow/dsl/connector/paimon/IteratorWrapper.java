@@ -20,7 +20,6 @@
 package org.apache.geaflow.dsl.connector.paimon;
 
 import org.apache.geaflow.dsl.common.data.Row;
-import org.apache.geaflow.dsl.connector.api.serde.TableDeserializer;
 import org.apache.paimon.data.InternalRow;
 import org.apache.paimon.utils.CloseableIterator;
 
@@ -29,7 +28,8 @@ public class IteratorWrapper implements CloseableIterator<Row> {
     private final CloseableIterator<InternalRow> iterator;
     private final PaimonRecordDeserializer deserializer;
 
-    public IteratorWrapper(CloseableIterator<InternalRow> iterator, PaimonRecordDeserializer deserializer) {
+    public IteratorWrapper(CloseableIterator<InternalRow> iterator,
+                           PaimonRecordDeserializer deserializer) {
         this.iterator = iterator;
         this.deserializer = deserializer;
     }

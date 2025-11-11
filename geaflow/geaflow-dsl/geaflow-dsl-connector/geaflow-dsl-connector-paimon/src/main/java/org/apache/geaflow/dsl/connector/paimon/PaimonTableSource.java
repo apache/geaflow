@@ -59,6 +59,7 @@ import org.apache.paimon.utils.CloseableIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/** Paimon table source. */
 public class PaimonTableSource implements TableSource {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(PaimonTableSource.class);
@@ -156,7 +157,7 @@ public class PaimonTableSource implements TableSource {
         LOGGER.info("Open paimon source, tableConf: {}, tableSchema: {}, path: {}, options: "
             + "{}, configs: {}, database: {}, tableName: {}", tableConf, tableSchema, path,
             options, configs, database, table);
-        this.deserializer.init(tableConf, tableSchema);
+        this.deserializer.init(tableSchema);
     }
 
     @Override
@@ -474,7 +475,7 @@ public class PaimonTableSource implements TableSource {
             if (rows == 0) {
                 return this;
             }
-           return new PaimonOffset(snapshotId, splitIndex, offset + rows);
+            return new PaimonOffset(snapshotId, splitIndex, offset + rows);
         }
 
         public PaimonOffset nextSplit() {

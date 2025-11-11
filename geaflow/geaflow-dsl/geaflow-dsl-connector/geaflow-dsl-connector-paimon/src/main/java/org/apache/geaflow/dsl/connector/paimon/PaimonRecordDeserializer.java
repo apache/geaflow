@@ -19,7 +19,6 @@
 
 package org.apache.geaflow.dsl.connector.paimon;
 
-import org.apache.geaflow.common.config.Configuration;
 import org.apache.geaflow.common.type.Types;
 import org.apache.geaflow.dsl.common.data.Row;
 import org.apache.geaflow.dsl.common.data.impl.ObjectRow;
@@ -29,17 +28,19 @@ import org.apache.geaflow.dsl.common.types.TableField;
 import org.apache.geaflow.dsl.common.types.TableSchema;
 import org.apache.paimon.data.InternalRow;
 
-public class PaimonRecordDeserializer{
+public class PaimonRecordDeserializer {
 
     private StructType schema;
-    private TableSchema tableSchema;
 
-    public void init(Configuration conf, StructType schema) {
-        this.tableSchema = (TableSchema) schema;
-        this.schema = this.tableSchema.getDataSchema();
+    public void init(StructType schema) {
+        TableSchema tableSchema = (TableSchema) schema;
+        this.schema = tableSchema.getDataSchema();
     }
 
     public Row deserialize(Object record) {
+        if (record == null) {
+            return null;
+        }
         InternalRow internalRow = (InternalRow) record;
         assert internalRow.getFieldCount() == schema.size();
         Object[] values = new Object[schema.size()];
