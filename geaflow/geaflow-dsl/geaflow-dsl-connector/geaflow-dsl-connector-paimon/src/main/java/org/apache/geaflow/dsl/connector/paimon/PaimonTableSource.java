@@ -117,7 +117,7 @@ public class PaimonTableSource implements TableSource {
 
     @Override
     public List<Partition> listPartitions() {
-        return listPartitions(1);
+        throw new UnsupportedOperationException("Please use listPartitions(int parallelism) instead");
     }
 
     @Override
