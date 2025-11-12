@@ -63,6 +63,7 @@ public class OdpsTableSink implements TableSink {
     private String accessKey;
     private String accessId;
     private StructType schema;
+    private String partitionSpec;
 
     private transient TableTunnel tunnel;
     private transient Column[] recordColumns;
@@ -86,6 +87,7 @@ public class OdpsTableSink implements TableSink {
         this.tableName = tableConf.getString(OdpsConfigKeys.GEAFLOW_DSL_ODPS_TABLE);
         this.accessKey = tableConf.getString(OdpsConfigKeys.GEAFLOW_DSL_ODPS_ACCESS_KEY);
         this.accessId = tableConf.getString(OdpsConfigKeys.GEAFLOW_DSL_ODPS_ACCESS_ID);
+        this.partitionSpec = tableConf.getString(OdpsConfigKeys.GEAFLOW_DSL_ODPS_PARTITION_SPEC);
         int bufferSize = tableConf.getInteger(OdpsConfigKeys.GEAFLOW_DSL_ODPS_SINK_BUFFER_SIZE);
         if (bufferSize > 0) {
             this.bufferSize = bufferSize;
@@ -113,13 +115,17 @@ public class OdpsTableSink implements TableSink {
         this.tunnel = new TableTunnel(odps);
         TableSchema tableSchema = createUploadSession().getSchema();
         this.recordColumns = tableSchema.getColumns().toArray(new Column[0]);
-        List<Column> partitionColumns = tableSchema.getPartitionColumns();
         this.columnIndex = new int[recordColumns.length];
         for (int i = 0; i < this.recordColumns.length; i++) {
             String columnName = this.recordColumns[i].getName();
             columnIndex[i] = this.schema.indexOf(columnName);
         }
-        this.partitionExtractor = DefaultPartitionExtractor.create(partitionColumns, schema);
+        if (this.partitionSpec != null && !this.partitionSpec.isEmpty()) {
+            this.partitionExtractor = DefaultPartitionExtractor.create(this.partitionSpec, schema);
+        } else {
+            List<Column> partitionColumns = tableSchema.getPartitionColumns();
+            this.partitionExtractor = DefaultPartitionExtractor.create(partitionColumns, schema);
+        }
         this.partitionWriters = new HashMap<>();
     }
 

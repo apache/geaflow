@@ -20,6 +20,7 @@
 package org.apache.geaflow.dsl.connector.odps;
 
 import com.aliyun.odps.Column;
+import java.util.ArrayList;
 import java.util.List;
 import org.apache.geaflow.common.type.IType;
 import org.apache.geaflow.dsl.common.data.Row;
@@ -27,11 +28,17 @@ import org.apache.geaflow.dsl.common.types.StructType;
 
 public class DefaultPartitionExtractor implements PartitionExtractor {
 
-    private final String[] keys;
+    // partition spec separator
     private final String separator;
+    // all partition keys
+    private final String[] keys;
+    // dynamic fields index
     private final int[] columns;
-    private final String[] values;
+    // dynamic field types
     private final IType<?>[] types;
+    // constant fields, values.length should be equal to keys.length
+    // if values[i] is null, it means the i-th key is a dynamic field
+    private final String[] values;
 
     /**
      * Create a partition extractor.
@@ -59,6 +66,40 @@ public class DefaultPartitionExtractor implements PartitionExtractor {
         return new DefaultPartitionExtractor(sb.substring(0, sb.length() - 1), columns, types);
     }
 
+    /**
+     * Create a partition extractor.
+     * @param spec partition spec, like "dt=$dt,hh=$hh"
+     * @param schema the input schema
+     * @return the partition extractor
+     */
+    public static PartitionExtractor create(String spec, StructType schema) {
+        if (spec == null || spec.isEmpty()) {
+            return row -> "";
+        }
+        String[] groups = spec.split("[,/]");
+        List<Integer> index = new ArrayList<>();
+        List<IType<?>> types = new ArrayList<>();
+        for (String group : groups) {
+            String[] kv = group.split("=");
+            if (kv.length != 2) {
+                throw new IllegalArgumentException("Invalid partition spec.");
+            }
+            String k = kv[0].trim();
+            String v = kv[1].trim().replaceAll("'", "").replaceAll("\"", "").replaceAll("`", "");
+            if (k.isEmpty() || v.isEmpty()) {
+                throw new IllegalArgumentException("Invalid partition spec.");
+            }
+            if (v.startsWith("$")) {
+                int val = schema.indexOf(v.substring(1));
+                if (val != -1) {
+                    index.add(val);
+                    types.add(schema.getType(val));
+                }
+            }
+        }
+        return new DefaultPartitionExtractor(spec, index.stream().mapToInt(i -> i).toArray(), types.toArray(new IType[0]));
+    }
+
     public DefaultPartitionExtractor(String spec, int[] columns, IType<?>[] types) {
         this.columns = columns;
         this.types = types;
@@ -75,7 +116,7 @@ public class DefaultPartitionExtractor implements PartitionExtractor {
                 throw new IllegalArgumentException("Invalid partition spec.");
             }
             String k = kv[0].trim();
-            String v = kv[1].trim().replaceAll("'", "").replaceAll("\"", "");
+            String v = kv[1].trim().replaceAll("'", "").replaceAll("\"", "").replaceAll("`", "");
             if (k.isEmpty() || v.isEmpty()) {
                 throw new IllegalArgumentException("Invalid partition spec.");
             }
@@ -87,14 +128,17 @@ public class DefaultPartitionExtractor implements PartitionExtractor {
     @Override
     public String extractPartition(Row row) {
         StringBuilder sb = new StringBuilder();
+        // dynamic field
+        int col = 0;
         for (int i = 0; i < keys.length; i++) {
             sb.append(keys[i]).append("=");
             if (values[i] == null) {
-                sb.append(row.getField(columns[i], types[i]));
+                sb.append(row.getField(columns[col], types[col]));
+                col++;
             } else {
                 sb.append(values[i]);
             }
-            if (i < columns.length - 1) {
+            if (i < keys.length - 1) {
                 sb.append(separator);
             }
         }
