@@ -24,6 +24,7 @@ import org.apache.geaflow.common.type.primitive.IntegerType;
 import org.apache.geaflow.common.type.primitive.StringType;
 import org.apache.geaflow.dsl.common.data.Row;
 import org.apache.geaflow.dsl.common.data.impl.ObjectRow;
+import org.apache.geaflow.dsl.common.types.StructType;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -83,5 +84,25 @@ public class DefaultPartitionExtractorTest {
         Assert.assertEquals("dt=20251120", extractor4.extractPartition(row4));
         Assert.assertEquals("dt=20251120", extractor4.extractPartition(row5));
         Assert.assertEquals("dt=20251120", extractor4.extractPartition(row6));
+
+        String spec5 = "dt=20251120,hh=$hh";
+        DefaultPartitionExtractor extractor5 = new DefaultPartitionExtractor(
+                spec5, new int[]{2},
+                new IType[]{IntegerType.INSTANCE});
+        Assert.assertEquals("dt=20251120,hh=10", extractor5.extractPartition(row1));
+        Assert.assertEquals("dt=20251120,hh=11", extractor5.extractPartition(row2));
+        Assert.assertEquals("dt=20251120,hh=12", extractor5.extractPartition(row3));
+        Assert.assertEquals("dt=20251120,hh=13", extractor5.extractPartition(row4));
+        Assert.assertEquals("dt=20251120,hh=14", extractor5.extractPartition(row5));
+        Assert.assertEquals("dt=20251120,hh=11", extractor5.extractPartition(row6));
+
+        PartitionExtractor extractor6 = DefaultPartitionExtractor.create("", null);
+        Assert.assertEquals("", extractor6.extractPartition(row1));
+        Assert.assertEquals("", extractor6.extractPartition(row2));
+        Assert.assertEquals("", extractor6.extractPartition(row3));
+        Assert.assertEquals("", extractor6.extractPartition(row4));
+        Assert.assertEquals("", extractor6.extractPartition(row5));
+        Assert.assertEquals("", extractor6.extractPartition(row6));
+
     }
 }
