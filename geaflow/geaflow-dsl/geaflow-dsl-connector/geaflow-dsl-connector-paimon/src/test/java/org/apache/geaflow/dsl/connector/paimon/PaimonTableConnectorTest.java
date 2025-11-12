@@ -156,7 +156,7 @@ public class PaimonTableConnectorTest {
 
         tableSource.open(new DefaultRuntimeContext(tableConf));
 
-        List<Partition> partitions = tableSource.listPartitions();
+        List<Partition> partitions = tableSource.listPartitions(1);
 
         Offset nextOffset = null;
 
@@ -259,7 +259,7 @@ public class PaimonTableConnectorTest {
 
         tableSource.open(new DefaultRuntimeContext(tableConf));
 
-        List<Partition> partitions = tableSource.listPartitions();
+        List<Partition> partitions = tableSource.listPartitions(1);
 
         List<Object> readRows = new ArrayList<>();
         for (Partition partition : partitions) {
@@ -310,7 +310,7 @@ public class PaimonTableConnectorTest {
 
         tableSource.open(new DefaultRuntimeContext(tableConf));
 
-        List<Partition> partitions = tableSource.listPartitions();
+        List<Partition> partitions = tableSource.listPartitions(1);
 
         List<Object> readRows = new ArrayList<>();
         for (Partition partition : partitions) {
@@ -345,7 +345,7 @@ public class PaimonTableConnectorTest {
 
         tableSource.open(new DefaultRuntimeContext(tableConf));
 
-        List<Partition> partitions = tableSource.listPartitions();
+        List<Partition> partitions = tableSource.listPartitions(1);
 
         List<Object> readRows = new ArrayList<>();
         for (Partition partition : partitions) {
