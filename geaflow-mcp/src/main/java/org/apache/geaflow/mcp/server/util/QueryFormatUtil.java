@@ -74,25 +74,4 @@ public class QueryFormatUtil {
         return "USE GRAPH " + graphName + ";\n";
     }
 
-    private static String tableTypeMapper(String iType) {
-        String upper = iType.toUpperCase(Locale.ROOT);
-        switch (upper) {
-            case "STRING":
-            case "BINARY_STRING":
-            case "VARCHAR":
-                return "VARCHAR";
-            case "LONG":
-            case "INTEGER":
-            case "SHORT":
-                return "BIGINT";
-            case "FLOAT":
-            case "DOUBLE":
-                return "DOUBLE";
-            case "BOOL":
-            case "BOOLEAN":
-                return "BOOL";
-            default:
-                throw new RuntimeException("Cannt convert type name: " + iType);
-        }
-    }
 }

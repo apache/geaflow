@@ -72,7 +72,7 @@ public class ChatService extends IdService<GeaflowChat, ChatEntity, ChatSearch> 
     @Autowired
     private JobService jobService;
 
-    private static final String HINT_STATEMENT = "使用如下图schema: ";
+    private static final String HINT_STATEMENT = "Use the schema shown below: ";
 
     private final Cache<String, String> schemaCache = CacheBuilder.newBuilder()
         .maximumSize(50)
