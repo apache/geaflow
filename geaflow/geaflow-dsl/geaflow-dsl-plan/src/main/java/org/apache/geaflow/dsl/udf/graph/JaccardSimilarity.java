@@ -75,26 +75,23 @@ public class JaccardSimilarity implements AlgorithmUserFunction<Object, ObjectRo
                 List<RowEdge> edges = context.loadEdges(EdgeDirection.BOTH);
                 Object sourceId = vertex.getId();
                 
-                // Store neighbor count for Jaccard calculation
-                // De-duplicate neighbors and exclude self-loops
-                Set<Object> uniqueNeighbors = new HashSet<>();
+                // Store unique neighbors (de-duplicate and exclude self-loops)
+                // Retrieve neighbor IDs directly from edges, send messages in single pass
+                Set<Object> sentNeighbors = new HashSet<>();
                 for (RowEdge edge : edges) {
                     Object targetId = edge.getTargetId();
-                    // Exclude self-loops (edges pointing to itself)
-                    if (!sourceId.equals(targetId)) {
-                        uniqueNeighbors.add(targetId);
+                    // Exclude self-loops and de-duplicate by checking if neighbor ID was already sent
+                    // sentNeighbors.add() returns true if this is the first time seeing this neighbor
+                    if (!sourceId.equals(targetId) && sentNeighbors.add(targetId)) {
+                        context.sendMessage(targetId, ObjectRow.create(sourceId));
                     }
                 }
                 
+                // Store neighbor count for Jaccard calculation
                 if (vertices.f0.equals(sourceId)) {
-                    neighborsA = uniqueNeighbors.size();
+                    neighborsA = sentNeighbors.size();
                 } else if (vertices.f1.equals(sourceId)) {
-                    neighborsB = uniqueNeighbors.size();
-                }
-                
-                // Send message to all unique neighbors with source ID only
-                for (Object neighborId : uniqueNeighbors) {
-                    context.sendMessage(neighborId, ObjectRow.create(sourceId));
+                    neighborsB = sentNeighbors.size();
                 }
                 
                 // Also send message to the other vertex to ensure both know about each other
