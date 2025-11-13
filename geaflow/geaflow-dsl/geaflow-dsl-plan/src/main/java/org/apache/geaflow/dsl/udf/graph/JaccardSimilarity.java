@@ -76,15 +76,25 @@ public class JaccardSimilarity implements AlgorithmUserFunction<Object, ObjectRo
                 Object sourceId = vertex.getId();
                 
                 // Store neighbor count for Jaccard calculation
-                if (vertices.f0.equals(sourceId)) {
-                    neighborsA = edges.size();
-                } else if (vertices.f1.equals(sourceId)) {
-                    neighborsB = edges.size();
+                // De-duplicate neighbors and exclude self-loops
+                Set<Object> uniqueNeighbors = new HashSet<>();
+                for (RowEdge edge : edges) {
+                    Object targetId = edge.getTargetId();
+                    // Exclude self-loops (edges pointing to itself)
+                    if (!sourceId.equals(targetId)) {
+                        uniqueNeighbors.add(targetId);
+                    }
                 }
                 
-                // Send message to all neighbors with source ID
-                for (RowEdge edge : edges) {
-                    context.sendMessage(edge.getTargetId(), ObjectRow.create(sourceId));
+                if (vertices.f0.equals(sourceId)) {
+                    neighborsA = uniqueNeighbors.size();
+                } else if (vertices.f1.equals(sourceId)) {
+                    neighborsB = uniqueNeighbors.size();
+                }
+                
+                // Send message to all unique neighbors with source ID only
+                for (Object neighborId : uniqueNeighbors) {
+                    context.sendMessage(neighborId, ObjectRow.create(sourceId));
                 }
                 
                 // Also send message to the other vertex to ensure both know about each other
