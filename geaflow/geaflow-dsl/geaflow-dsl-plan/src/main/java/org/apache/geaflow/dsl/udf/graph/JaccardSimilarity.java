@@ -61,13 +61,12 @@ public class JaccardSimilarity implements AlgorithmUserFunction<Object, ObjectRo
     @Override
     public void process(RowVertex vertex, Optional<Row> updatedValues, Iterator<ObjectRow> messages) {
         if (context.getCurrentIterationId() == 1L) {
-            // First iteration: send messages to neighbors if they are vertices in params
+            // First iteration: vertices A and B compute their neighbor counts
             if (vertices.f0.equals(vertex.getId()) || vertices.f1.equals(vertex.getId())) {
                 List<RowEdge> edges = context.loadEdges(EdgeDirection.BOTH);
                 Object sourceId = vertex.getId();
                 
                 // Calculate unique neighbors count (de-duplicate and exclude self-loops)
-                // Use a temporary set only for computing neighbor count, memory-efficient approach
                 java.util.Set<Object> uniqueNeighbors = new java.util.HashSet<>();
                 for (RowEdge edge : edges) {
                     Object targetId = edge.getTargetId();
@@ -81,56 +80,60 @@ public class JaccardSimilarity implements AlgorithmUserFunction<Object, ObjectRo
                 long neighborCount = uniqueNeighbors.size();
                 
                 // Send messages to all unique neighbors
-                // Message format: [sourceId, neighborCount]
+                // Message format: [sourceId, neighborCount, messageType]
+                // messageType = 0: neighbor inquiry, messageType = 1: count from target vertex
                 for (Object neighbor : uniqueNeighbors) {
-                    context.sendMessage(neighbor, ObjectRow.create(sourceId, neighborCount));
+                    context.sendMessage(neighbor, ObjectRow.create(sourceId, neighborCount, 0L));
                 }
                 
-                // Send neighbor count information to the other vertex (A ↔ B exchange)
-                // Message format: [vertexId, neighborCount]
+                // Send neighbor count to the other target vertex (A ↔ B exchange)
+                // Message format: [vertexId, neighborCount, messageType]
+                // messageType = 1: this is a count message from target vertex B
                 if (vertices.f0.equals(sourceId) && !vertices.f0.equals(vertices.f1)) {
-                    context.sendMessage(vertices.f1, ObjectRow.create(sourceId, neighborCount));
+                    context.sendMessage(vertices.f1, ObjectRow.create(sourceId, neighborCount, 1L));
                 } else if (vertices.f1.equals(sourceId) && !vertices.f0.equals(vertices.f1)) {
-                    context.sendMessage(vertices.f0, ObjectRow.create(sourceId, neighborCount));
+                    context.sendMessage(vertices.f0, ObjectRow.create(sourceId, neighborCount, 1L));
                 }
             }
         } else if (context.getCurrentIterationId() == 2L) {
             // Second iteration: calculate Jaccard similarity
-            // Check if this vertex is one of the target vertices (A or B)
             if (vertices.f0.equals(vertex.getId()) || vertices.f1.equals(vertex.getId())) {
                 // Extract neighbor counts and count common neighbors
-                // Memory-efficient: only track counts, not ID sets
                 long neighborCountA = 0;
                 long neighborCountB = 0;
-                long localCommonNeighborCount = 0;  // Counter for common neighbors
+                long localCommonNeighborCount = 0;
                 
                 while (messages.hasNext()) {
                     ObjectRow message = messages.next();
                     Object senderId = message.getField(0, context.getGraphSchema().getIdType());
                     long count = (Long) message.getField(1, org.apache.geaflow.common.type.primitive.LongType.INSTANCE);
+                    long messageType = (Long) message.getField(2, org.apache.geaflow.common.type.primitive.LongType.INSTANCE);
                     
-                    // Check if this is a neighbor count message from A or B
-                    if (vertices.f0.equals(senderId)) {
-                        neighborCountA = count;
-                    } else if (vertices.f1.equals(senderId)) {
-                        neighborCountB = count;
+                    // messageType = 1: neighbor count from the other target vertex (A or B)
+                    // messageType = 0: confirmation from common neighbor
+                    if (messageType == 1L) {
+                        // This is a count message from target vertex
+                        if (vertices.f0.equals(senderId)) {
+                            neighborCountA = count;
+                        } else if (vertices.f1.equals(senderId)) {
+                            neighborCountB = count;
+                        }
                     } else {
-                        // This is a common neighbor message (count > 0 means common)
-                        // Only increment counter, don't store the ID (memory saving)
+                        // This is a confirmation from a common neighbor
                         localCommonNeighborCount++;
                     }
                 }
                 
                 // Calculate and output the Jaccard coefficient only from vertex A
                 if (vertices.f0.equals(vertex.getId())) {
-                    // Use local neighbor count for A, and received count for B
+                    // If neighborCountA is 0, calculate it from edges
                     if (neighborCountA == 0) {
-                        // If neighborCountA is still 0, calculate it from edges
+                        Object sourceId = vertex.getId();
                         List<RowEdge> edges = context.loadEdges(EdgeDirection.BOTH);
                         java.util.Set<Object> neighbors = new java.util.HashSet<>();
                         for (RowEdge edge : edges) {
                             Object targetId = edge.getTargetId();
-                            if (!vertices.f0.equals(targetId)) {
+                            if (!sourceId.equals(targetId)) {
                                 neighbors.add(targetId);
                             }
                         }
@@ -138,12 +141,8 @@ public class JaccardSimilarity implements AlgorithmUserFunction<Object, ObjectRo
                     }
                     
                     // Calculate Jaccard coefficient: |A ∩ B| / |A ∪ B|
-                    // Intersection = common neighbor count (no ID storage needed)
                     long intersection = localCommonNeighborCount;
-                    // Union = |A| + |B| - |A ∩ B|
                     long union = neighborCountA + neighborCountB - intersection;
-                    
-                    // Avoid division by zero
                     double jaccardCoefficient = union == 0 ? 0.0 : (double) intersection / union;
                     
                     // Output the result
@@ -151,28 +150,29 @@ public class JaccardSimilarity implements AlgorithmUserFunction<Object, ObjectRo
                 }
             } else {
                 // For non-A, non-B vertices: check if they received messages from both A and B
-                // If yes, they are common neighbors and should send count confirmation to A
                 boolean receivedFromA = false;
                 boolean receivedFromB = false;
                 
                 while (messages.hasNext()) {
                     ObjectRow message = messages.next();
                     Object senderId = message.getField(0, context.getGraphSchema().getIdType());
+                    long messageType = (Long) message.getField(2, org.apache.geaflow.common.type.primitive.LongType.INSTANCE);
                     
-                    // Check if message is from vertex A or B
-                    if (vertices.f0.equals(senderId)) {
-                        receivedFromA = true;
-                    }
-                    if (vertices.f1.equals(senderId)) {
-                        receivedFromB = true;
+                    // Only count messages with type 0 (neighbor inquiry)
+                    if (messageType == 0L) {
+                        if (vertices.f0.equals(senderId)) {
+                            receivedFromA = true;
+                        }
+                        if (vertices.f1.equals(senderId)) {
+                            receivedFromB = true;
+                        }
                     }
                 }
                 
                 // If this vertex received messages from both A and B, it's a common neighbor
-                // Send count confirmation to vertex A with format [vertexId, count]
-                // count=1 means "I am one common neighbor"
+                // Send confirmation to vertex A with format [vertexId, 1, 0]
                 if (receivedFromA && receivedFromB) {
-                    context.sendMessage(vertices.f0, ObjectRow.create(vertex.getId(), 1L));
+                    context.sendMessage(vertices.f0, ObjectRow.create(vertex.getId(), 1L, 0L));
                 }
             }
         }
