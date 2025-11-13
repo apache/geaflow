@@ -19,11 +19,9 @@
 
 package org.apache.geaflow.dsl.udf.graph;
 
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import org.apache.geaflow.common.tuple.Tuple;
 import org.apache.geaflow.common.type.primitive.DoubleType;
 import org.apache.geaflow.dsl.common.algo.AlgorithmRuntimeContext;
@@ -47,9 +45,6 @@ public class JaccardSimilarity implements AlgorithmUserFunction<Object, ObjectRo
     // tuple to store params
     private Tuple<Object, Object> vertices;
 
-    // Store common neighbors (collected from messages in iteration 2)
-    private final Set<Object> commonNeighbors = new HashSet<>();
-
     @Override
     public void init(AlgorithmRuntimeContext<Object, ObjectRow> context, Object[] params) {
         this.context = context;
@@ -71,22 +66,25 @@ public class JaccardSimilarity implements AlgorithmUserFunction<Object, ObjectRo
                 List<RowEdge> edges = context.loadEdges(EdgeDirection.BOTH);
                 Object sourceId = vertex.getId();
                 
-                // Calculate unique neighbors (de-duplicate and exclude self-loops)
-                // Retrieve neighbor IDs directly from edges, send messages in single pass
-                Set<Object> sentNeighbors = new HashSet<>();
+                // Calculate unique neighbors count (de-duplicate and exclude self-loops)
+                // Use a temporary set only for computing neighbor count, memory-efficient approach
+                java.util.Set<Object> uniqueNeighbors = new java.util.HashSet<>();
                 for (RowEdge edge : edges) {
                     Object targetId = edge.getTargetId();
-                    // Exclude self-loops and de-duplicate by checking if neighbor ID was already sent
-                    // sentNeighbors.add() returns true if this is the first time seeing this neighbor
-                    if (!sourceId.equals(targetId) && sentNeighbors.add(targetId)) {
-                        // Message format: [sourceId, neighborCount]
-                        // This allows vertices to know neighbor count of A and B
-                        context.sendMessage(targetId, ObjectRow.create(sourceId, (long) sentNeighbors.size()));
+                    // Exclude self-loops: only add if targetId != sourceId
+                    if (!sourceId.equals(targetId)) {
+                        uniqueNeighbors.add(targetId);
                     }
                 }
                 
                 // Calculate neighbor count for this vertex
-                long neighborCount = sentNeighbors.size();
+                long neighborCount = uniqueNeighbors.size();
+                
+                // Send messages to all unique neighbors
+                // Message format: [sourceId, neighborCount]
+                for (Object neighbor : uniqueNeighbors) {
+                    context.sendMessage(neighbor, ObjectRow.create(sourceId, neighborCount));
+                }
                 
                 // Send neighbor count information to the other vertex (A ↔ B exchange)
                 // Message format: [vertexId, neighborCount]
@@ -100,9 +98,11 @@ public class JaccardSimilarity implements AlgorithmUserFunction<Object, ObjectRo
             // Second iteration: calculate Jaccard similarity
             // Check if this vertex is one of the target vertices (A or B)
             if (vertices.f0.equals(vertex.getId()) || vertices.f1.equals(vertex.getId())) {
-                // Extract neighbor counts from messages and identify common neighbors
+                // Extract neighbor counts and count common neighbors
+                // Memory-efficient: only track counts, not ID sets
                 long neighborCountA = 0;
                 long neighborCountB = 0;
+                long localCommonNeighborCount = 0;  // Counter for common neighbors
                 
                 while (messages.hasNext()) {
                     ObjectRow message = messages.next();
@@ -115,8 +115,9 @@ public class JaccardSimilarity implements AlgorithmUserFunction<Object, ObjectRo
                     } else if (vertices.f1.equals(senderId)) {
                         neighborCountB = count;
                     } else {
-                        // This is a common neighbor ID message (from a vertex that received from both A and B)
-                        commonNeighbors.add(senderId);
+                        // This is a common neighbor message (count > 0 means common)
+                        // Only increment counter, don't store the ID (memory saving)
+                        localCommonNeighborCount++;
                     }
                 }
                 
@@ -126,7 +127,7 @@ public class JaccardSimilarity implements AlgorithmUserFunction<Object, ObjectRo
                     if (neighborCountA == 0) {
                         // If neighborCountA is still 0, calculate it from edges
                         List<RowEdge> edges = context.loadEdges(EdgeDirection.BOTH);
-                        Set<Object> neighbors = new HashSet<>();
+                        java.util.Set<Object> neighbors = new java.util.HashSet<>();
                         for (RowEdge edge : edges) {
                             Object targetId = edge.getTargetId();
                             if (!vertices.f0.equals(targetId)) {
@@ -137,7 +138,8 @@ public class JaccardSimilarity implements AlgorithmUserFunction<Object, ObjectRo
                     }
                     
                     // Calculate Jaccard coefficient: |A ∩ B| / |A ∪ B|
-                    long intersection = commonNeighbors.size();
+                    // Intersection = common neighbor count (no ID storage needed)
+                    long intersection = localCommonNeighborCount;
                     // Union = |A| + |B| - |A ∩ B|
                     long union = neighborCountA + neighborCountB - intersection;
                     
@@ -149,7 +151,7 @@ public class JaccardSimilarity implements AlgorithmUserFunction<Object, ObjectRo
                 }
             } else {
                 // For non-A, non-B vertices: check if they received messages from both A and B
-                // If yes, they are common neighbors and should send their ID to A
+                // If yes, they are common neighbors and should send count confirmation to A
                 boolean receivedFromA = false;
                 boolean receivedFromB = false;
                 
@@ -167,7 +169,8 @@ public class JaccardSimilarity implements AlgorithmUserFunction<Object, ObjectRo
                 }
                 
                 // If this vertex received messages from both A and B, it's a common neighbor
-                // Send acknowledgment to vertex A with format [vertexId, 1]
+                // Send count confirmation to vertex A with format [vertexId, count]
+                // count=1 means "I am one common neighbor"
                 if (receivedFromA && receivedFromB) {
                     context.sendMessage(vertices.f0, ObjectRow.create(vertex.getId(), 1L));
                 }
