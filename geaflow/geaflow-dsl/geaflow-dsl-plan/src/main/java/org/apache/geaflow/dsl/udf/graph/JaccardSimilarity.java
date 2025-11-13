@@ -47,11 +47,7 @@ public class JaccardSimilarity implements AlgorithmUserFunction<Object, ObjectRo
     // tuple to store params
     private Tuple<Object, Object> vertices;
 
-    // Store neighbor counts for vertex A and B
-    private long neighborsA = 0;
-    private long neighborsB = 0;
-
-    // Store common neighbors
+    // Store common neighbors (collected from messages in iteration 2)
     private final Set<Object> commonNeighbors = new HashSet<>();
 
     @Override
@@ -75,7 +71,7 @@ public class JaccardSimilarity implements AlgorithmUserFunction<Object, ObjectRo
                 List<RowEdge> edges = context.loadEdges(EdgeDirection.BOTH);
                 Object sourceId = vertex.getId();
                 
-                // Store unique neighbors (de-duplicate and exclude self-loops)
+                // Calculate unique neighbors (de-duplicate and exclude self-loops)
                 // Retrieve neighbor IDs directly from edges, send messages in single pass
                 Set<Object> sentNeighbors = new HashSet<>();
                 for (RowEdge edge : edges) {
@@ -83,43 +79,67 @@ public class JaccardSimilarity implements AlgorithmUserFunction<Object, ObjectRo
                     // Exclude self-loops and de-duplicate by checking if neighbor ID was already sent
                     // sentNeighbors.add() returns true if this is the first time seeing this neighbor
                     if (!sourceId.equals(targetId) && sentNeighbors.add(targetId)) {
-                        context.sendMessage(targetId, ObjectRow.create(sourceId));
+                        // Message format: [sourceId, neighborCount]
+                        // This allows vertices to know neighbor count of A and B
+                        context.sendMessage(targetId, ObjectRow.create(sourceId, (long) sentNeighbors.size()));
                     }
                 }
                 
-                // Store neighbor count for Jaccard calculation
-                if (vertices.f0.equals(sourceId)) {
-                    neighborsA = sentNeighbors.size();
-                } else if (vertices.f1.equals(sourceId)) {
-                    neighborsB = sentNeighbors.size();
-                }
+                // Calculate neighbor count for this vertex
+                long neighborCount = sentNeighbors.size();
                 
-                // Also send message to the other vertex to ensure both know about each other
+                // Send neighbor count information to the other vertex (A ↔ B exchange)
+                // Message format: [vertexId, neighborCount]
                 if (vertices.f0.equals(sourceId) && !vertices.f0.equals(vertices.f1)) {
-                    context.sendMessage(vertices.f1, ObjectRow.create(sourceId));
+                    context.sendMessage(vertices.f1, ObjectRow.create(sourceId, neighborCount));
                 } else if (vertices.f1.equals(sourceId) && !vertices.f0.equals(vertices.f1)) {
-                    context.sendMessage(vertices.f0, ObjectRow.create(sourceId));
+                    context.sendMessage(vertices.f0, ObjectRow.create(sourceId, neighborCount));
                 }
             }
         } else if (context.getCurrentIterationId() == 2L) {
             // Second iteration: calculate Jaccard similarity
             // Check if this vertex is one of the target vertices (A or B)
             if (vertices.f0.equals(vertex.getId()) || vertices.f1.equals(vertex.getId())) {
-                // Collect messages from common neighbors (acknowledgments)
-                // Each message contains a common neighbor ID
+                // Extract neighbor counts from messages and identify common neighbors
+                long neighborCountA = 0;
+                long neighborCountB = 0;
+                
                 while (messages.hasNext()) {
                     ObjectRow message = messages.next();
-                    Object commonNeighborId = message.getField(0, context.getGraphSchema().getIdType());
-                    commonNeighbors.add(commonNeighborId);
+                    Object senderId = message.getField(0, context.getGraphSchema().getIdType());
+                    long count = (Long) message.getField(1, org.apache.geaflow.common.type.primitive.LongType.INSTANCE);
+                    
+                    // Check if this is a neighbor count message from A or B
+                    if (vertices.f0.equals(senderId)) {
+                        neighborCountA = count;
+                    } else if (vertices.f1.equals(senderId)) {
+                        neighborCountB = count;
+                    } else {
+                        // This is a common neighbor ID message (from a vertex that received from both A and B)
+                        commonNeighbors.add(senderId);
+                    }
                 }
                 
                 // Calculate and output the Jaccard coefficient only from vertex A
                 if (vertices.f0.equals(vertex.getId())) {
+                    // Use local neighbor count for A, and received count for B
+                    if (neighborCountA == 0) {
+                        // If neighborCountA is still 0, calculate it from edges
+                        List<RowEdge> edges = context.loadEdges(EdgeDirection.BOTH);
+                        Set<Object> neighbors = new HashSet<>();
+                        for (RowEdge edge : edges) {
+                            Object targetId = edge.getTargetId();
+                            if (!vertices.f0.equals(targetId)) {
+                                neighbors.add(targetId);
+                            }
+                        }
+                        neighborCountA = neighbors.size();
+                    }
+                    
                     // Calculate Jaccard coefficient: |A ∩ B| / |A ∪ B|
-                    // Intersection = number of common neighbors
                     long intersection = commonNeighbors.size();
                     // Union = |A| + |B| - |A ∩ B|
-                    long union = neighborsA + neighborsB - intersection;
+                    long union = neighborCountA + neighborCountB - intersection;
                     
                     // Avoid division by zero
                     double jaccardCoefficient = union == 0 ? 0.0 : (double) intersection / union;
@@ -129,7 +149,7 @@ public class JaccardSimilarity implements AlgorithmUserFunction<Object, ObjectRo
                 }
             } else {
                 // For non-A, non-B vertices: check if they received messages from both A and B
-                // If yes, they are common neighbors and should send acknowledgment to A
+                // If yes, they are common neighbors and should send their ID to A
                 boolean receivedFromA = false;
                 boolean receivedFromB = false;
                 
@@ -147,10 +167,9 @@ public class JaccardSimilarity implements AlgorithmUserFunction<Object, ObjectRo
                 }
                 
                 // If this vertex received messages from both A and B, it's a common neighbor
-                // Send acknowledgment to vertex A
+                // Send acknowledgment to vertex A with format [vertexId, 1]
                 if (receivedFromA && receivedFromB) {
-                    ObjectRow ackMessage = ObjectRow.create(vertex.getId());
-                    context.sendMessage(vertices.f0, ackMessage);
+                    context.sendMessage(vertices.f0, ObjectRow.create(vertex.getId(), 1L));
                 }
             }
         }
