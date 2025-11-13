@@ -29,7 +29,6 @@ import java.util.List;
 import java.util.Random;
 import java.util.Set;
 import org.apache.commons.io.FileUtils;
-import org.apache.commons.lang3.RandomUtils;
 import org.apache.geaflow.common.config.keys.DSLConfigKeys;
 import org.apache.geaflow.common.config.keys.FrameworkConfigKeys;
 import org.testng.Assert;
@@ -66,45 +65,25 @@ public class IncrMatchTest {
         String allPath = getTargetPath(queryPath);
         List<Set<String>> allRes = readRes(allPath, false);
         
-        // Find the last non-empty window index for both results
-        int lastNonEmptyIncr = -1;
-        int lastNonEmptyAll = -1;
-        for (int i = incrRes.size() - 1; i >= 0; i--) {
-            if (!incrRes.get(i).isEmpty()) {
-                lastNonEmptyIncr = i;
-                break;
-            }
-        }
-        for (int i = allRes.size() - 1; i >= 0; i--) {
-            if (!allRes.get(i).isEmpty()) {
-                lastNonEmptyAll = i;
-                break;
-            }
-        }
+        // Ensure both results have the same number of windows
+        Assert.assertEquals(incrRes.size(), allRes.size(), 
+            "Incremental and full traversal should have same number of windows");
         
-        // Compare up to the maximum of last non-empty windows
-        int maxCompareIndex = Math.max(lastNonEmptyIncr, lastNonEmptyAll);
-        if (maxCompareIndex < 0) {
-            // Both are completely empty, that's fine
-            return;
-        }
-        
-        // Ensure we have enough windows
-        int requiredSize = maxCompareIndex + 1;
-        Assert.assertTrue(incrRes.size() >= requiredSize, 
-            String.format("Incremental result should have at least %d windows, but has %d", 
-                requiredSize, incrRes.size()));
-        Assert.assertTrue(allRes.size() >= requiredSize, 
-            String.format("Full result should have at least %d windows, but has %d", 
-                requiredSize, allRes.size()));
-        
-        // Compare results window by window
-        for (int i = 0; i <= maxCompareIndex; i++) {
+        // For incremental traversal, each window contains cumulative results (all results from window 0 to current)
+        // For full traversal, each window contains only results from that specific window
+        // So we need to compare: incremental[i] should equal union of full[0] to full[i]
+        Set<String> cumulativeFull = new HashSet<>();
+        for (int i = 0; i < incrRes.size(); i++) {
             Set<String> incrSet = incrRes.get(i);
-            Set<String> allSet = allRes.get(i);
+            Set<String> fullSet = allRes.get(i);
             
-            Assert.assertEquals(incrSet, allSet, 
-                String.format("Window %d mismatch: incremental=%s, full=%s", i, incrSet, allSet));
+            // Add current window's results to cumulative set
+            cumulativeFull.addAll(fullSet);
+            
+            // Compare incremental result (cumulative) with cumulative full result
+            Assert.assertEquals(incrSet, cumulativeFull, 
+                String.format("Window %d mismatch: incremental (cumulative)=%s, full (cumulative)=%s", 
+                    i, incrSet, cumulativeFull));
         }
     }
 
