@@ -18,6 +18,11 @@
  */
 package org.apache.geaflow.dsl.udf.graph;
 
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 import org.apache.geaflow.common.tuple.Tuple;
 import org.apache.geaflow.common.type.primitive.DoubleType;
 import org.apache.geaflow.dsl.common.algo.AlgorithmRuntimeContext;
@@ -32,12 +37,6 @@ import org.apache.geaflow.dsl.common.types.StructType;
 import org.apache.geaflow.dsl.common.types.TableField;
 import org.apache.geaflow.dsl.common.util.TypeCastUtil;
 import org.apache.geaflow.model.graph.edge.EdgeDirection;
-
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Optional;
-import java.util.Set;
 
 @Description(name = "jaccard_similarity", description = "built-in udga for Jaccard Similarity")
 public class JaccardSimilarityAlgorithm implements AlgorithmUserFunction<Object, Object> {
@@ -83,6 +82,11 @@ public class JaccardSimilarityAlgorithm implements AlgorithmUserFunction<Object,
         }
     }
 
+    /**
+     * Process the first iteration: send vertex ID to neighbors.
+     *
+     * @param vertexId the vertex ID to process
+     */
     private void processFirstIteration(Object vertexId) {
         // send message to neighbors if they are vertices in params
         if (isTargetVertex(vertexId)) {
@@ -91,6 +95,12 @@ public class JaccardSimilarityAlgorithm implements AlgorithmUserFunction<Object,
         }
     }
 
+    /**
+     * Process the second iteration: collect common neighbors and send neighbor count.
+     *
+     * @param vertexId the vertex ID to process
+     * @param messages the received messages
+     */
     private void processSecondIteration(Object vertexId, Iterator<Object> messages) {
         if (vertices.f0.equals(vertexId)) {
             List<RowEdge> edges = context.loadEdges(EdgeDirection.BOTH);
@@ -120,6 +130,12 @@ public class JaccardSimilarityAlgorithm implements AlgorithmUserFunction<Object,
         }
     }
 
+    /**
+     * Process the third iteration: calculate and output Jaccard similarity.
+     *
+     * @param vertexId the vertex ID to process
+     * @param messages the received messages
+     */
     private void processThirdIteration(Object vertexId, Iterator<Object> messages) {
         if (!vertices.f1.equals(vertexId)) {
             return;
@@ -149,10 +165,23 @@ public class JaccardSimilarityAlgorithm implements AlgorithmUserFunction<Object,
         context.take(ObjectRow.create(vertices.f0, vertices.f1, similarity));
     }
 
+    /**
+     * Check if the vertex is one of the target vertices.
+     *
+     * @param vertexId the vertex ID to check
+     * @return true if the vertex is a target vertex
+     */
     private boolean isTargetVertex(Object vertexId) {
         return vertices.f0.equals(vertexId) || vertices.f1.equals(vertexId);
     }
 
+    /**
+     * Calculate Jaccard similarity coefficient.
+     *
+     * @param commonCount the count of common neighbors
+     * @param unionCount the count of union neighbors
+     * @return the Jaccard similarity coefficient
+     */
     private double calculateJaccardSimilarity(long commonCount, long unionCount) {
         if (unionCount == 0) {
             return commonCount == 0 ? 1.0 : 0.0;
@@ -171,12 +200,25 @@ public class JaccardSimilarityAlgorithm implements AlgorithmUserFunction<Object,
                 new TableField("jaccard_coefficient", DoubleType.INSTANCE, false));
     }
 
+    /**
+     * Send message to neighbors.
+     *
+     * @param edges the edges to send messages through
+     * @param message the message to send
+     */
     private void sendMessageToNeighbors(List<RowEdge> edges, Object message) {
         for (RowEdge rowEdge : edges) {
             context.sendMessage(rowEdge.getTargetId(), message);
         }
     }
 
+    /**
+     * Calculate deduplicated neighbor count.
+     *
+     * @param edges the edges to process
+     * @param vertexId the vertex ID to calculate for
+     * @return the deduplicated neighbor count
+     */
     private long calculateDeduplicatedSize(List<RowEdge> edges, Object vertexId) {
         Set<Object> set = new HashSet<>();
         for (RowEdge edge : edges) {
