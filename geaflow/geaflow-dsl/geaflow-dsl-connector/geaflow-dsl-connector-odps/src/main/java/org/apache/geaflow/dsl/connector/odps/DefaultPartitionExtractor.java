@@ -28,6 +28,8 @@ import org.apache.geaflow.dsl.common.types.StructType;
 
 public class DefaultPartitionExtractor implements PartitionExtractor {
 
+    private static final String DEFAULT_SEPARATOR_PATTERN = "[,/]";
+
     // partition spec separator
     private final String separator;
     // all partition keys
@@ -76,7 +78,7 @@ public class DefaultPartitionExtractor implements PartitionExtractor {
         if (spec == null || spec.isEmpty()) {
             return row -> "";
         }
-        String[] groups = spec.split("[,/]");
+        String[] groups = spec.split(DEFAULT_SEPARATOR_PATTERN);
         List<Integer> index = new ArrayList<>();
         List<IType<?>> types = new ArrayList<>();
         for (String group : groups) {
@@ -85,7 +87,7 @@ public class DefaultPartitionExtractor implements PartitionExtractor {
                 throw new IllegalArgumentException("Invalid partition spec.");
             }
             String k = kv[0].trim();
-            String v = kv[1].trim().replaceAll("'", "").replaceAll("\"", "").replaceAll("`", "");
+            String v = unquoted(kv[1].trim());
             if (k.isEmpty() || v.isEmpty()) {
                 throw new IllegalArgumentException("Invalid partition spec.");
             }
@@ -106,7 +108,7 @@ public class DefaultPartitionExtractor implements PartitionExtractor {
         if (spec == null) {
             throw new IllegalArgumentException("Argument 'spec' cannot be null");
         }
-        String[] groups = spec.split("[,/]");
+        String[] groups = spec.split(DEFAULT_SEPARATOR_PATTERN);
         this.separator = spec.contains(",") ? "," : "/";
         this.keys = new String[groups.length];
         this.values = new String[groups.length];
@@ -116,13 +118,22 @@ public class DefaultPartitionExtractor implements PartitionExtractor {
                 throw new IllegalArgumentException("Invalid partition spec.");
             }
             String k = kv[0].trim();
-            String v = kv[1].trim().replaceAll("'", "").replaceAll("\"", "").replaceAll("`", "");
+            String v = unquoted(kv[1].trim());
             if (k.isEmpty() || v.isEmpty()) {
                 throw new IllegalArgumentException("Invalid partition spec.");
             }
             this.keys[i] = k;
             this.values[i] = v.startsWith("$") ? null : v;
         }
+    }
+
+    /**
+     * Unquote the string.
+     * @param s the string
+     * @return the unquoted string
+     */
+    private static String unquoted(String s) {
+        return s.replaceAll("'", "").replaceAll("\"", "").replaceAll("`", "");
     }
 
     @Override
