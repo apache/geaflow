@@ -33,9 +33,11 @@ import org.apache.geaflow.dsl.common.types.TableField;
 import org.apache.geaflow.dsl.common.util.TypeCastUtil;
 import org.apache.geaflow.model.graph.edge.EdgeDirection;
 
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * @author hongzhihao.hzh@antgroup.com
@@ -82,7 +84,7 @@ public class JaccardSimilarityAlgorithm implements AlgorithmUserFunction<Object,
                 List<RowEdge> edges = context.loadEdges(EdgeDirection.BOTH);
                 long edgeCount = edges.size();
                 // send neighbour count of A to B
-                context.sendMessage(vertices.f1, PREFIX + edgeCount);
+                context.sendMessage(vertices.f1, PREFIX + calculateDeduplicatedSize(edges, vertexId));
             }
 
             // add to result if received messages from both vertices in params
@@ -107,19 +109,21 @@ public class JaccardSimilarityAlgorithm implements AlgorithmUserFunction<Object,
             if (vertices.f1.equals(vertexId)) {
                 List<RowEdge> edges = context.loadEdges(EdgeDirection.BOTH);
                 // |A|
-                long neighborSum = edges.size();
-                // |A ∩ B|
-                long commonNeighborCount = 0;
+                long neighborSum = calculateDeduplicatedSize(edges, vertexId);
+                Set<Object> set = new HashSet<>();
 
                 while (messages.hasNext()) {
                     Object message = messages.next();
                     if (message instanceof String && ((String) message).startsWith(PREFIX)) {
-                        // |B|
+                        // |A| + |B|
                         neighborSum += Long.parseLong(((String) message).substring(PREFIX.length()));
                     } else {
-                        commonNeighborCount++;
+                        set.add(vertexId);
                     }
                 }
+
+                // |A ∩ B|
+                long commonNeighborCount = set.size();
 
                 double similarity = (double) commonNeighborCount / (neighborSum - commonNeighborCount);
 
@@ -149,5 +153,26 @@ public class JaccardSimilarityAlgorithm implements AlgorithmUserFunction<Object,
         for (RowEdge rowEdge : edges) {
             context.sendMessage(rowEdge.getTargetId(), message);
         }
+    }
+
+    /**
+     * calculate deduplicated size
+     *
+     * @param edges
+     * @param vertexId
+     * @return
+     */
+    private long calculateDeduplicatedSize(List<RowEdge> edges, Object vertexId) {
+        Set<Object> set = new HashSet<>();
+        for (RowEdge edge : edges) {
+            Object srcId = edge.getSrcId();
+            Object targetId = edge.getTargetId();
+            if (vertexId.equals(srcId)) {
+                set.add(targetId);
+            } else {
+                set.add(srcId);
+            }
+        }
+        return set.size();
     }
 }
