@@ -39,10 +39,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
-/**
- * @author hongzhihao.hzh@antgroup.com
- * @version JaccardSimilarity.java, v 0.1 2025年11月13 怀玙
- */
 @Description(name = "jaccard_similarity", description = "built-in udga for Jaccard Similarity")
 public class JaccardSimilarityAlgorithm implements AlgorithmUserFunction<Object, Object> {
 
@@ -69,67 +65,99 @@ public class JaccardSimilarityAlgorithm implements AlgorithmUserFunction<Object,
         // so we can calculate |A ∩ B| , |A| and |B| to calculate similarity
 
         Object vertexId = vertex.getId();
+        long currentIteration = context.getCurrentIterationId();
 
-        // Iteration 1 & 2 : calculate |A ∩ B|
-        if (context.getCurrentIterationId() == 1L) {
-            // send message to neighbors if they are vertices in params
-            if (vertices.f0.equals(vertexId) || vertices.f1.equals(vertexId)) {
-                List<RowEdge> edges = context.loadEdges(EdgeDirection.BOTH);
-                sendMessageToNeighbors(edges, vertexId);
+        switch ((int) currentIteration) {
+            case 1:
+                processFirstIteration(vertexId);
+                break;
+            case 2:
+                processSecondIteration(vertexId, messages);
+                break;
+            case 3:
+                processThirdIteration(vertexId, messages);
+                break;
+            default:
+                // Do nothing for other iterations
+                break;
+        }
+    }
+
+    private void processFirstIteration(Object vertexId) {
+        // send message to neighbors if they are vertices in params
+        if (isTargetVertex(vertexId)) {
+            List<RowEdge> edges = context.loadEdges(EdgeDirection.BOTH);
+            sendMessageToNeighbors(edges, vertexId);
+        }
+    }
+
+    private void processSecondIteration(Object vertexId, Iterator<Object> messages) {
+        if (vertices.f0.equals(vertexId)) {
+            List<RowEdge> edges = context.loadEdges(EdgeDirection.BOTH);
+            long neighborCount = calculateDeduplicatedSize(edges, vertexId);
+            // send neighbor count of A to B
+            context.sendMessage(vertices.f1, PREFIX + neighborCount);
+        }
+
+        // collect messages from both vertices to find common neighbors
+        boolean receivedFromA = false;
+        boolean receivedFromB = false;
+
+        while (messages.hasNext()) {
+            Object message = messages.next();
+
+            if (vertices.f0.equals(message)) {
+                receivedFromA = true;
+            } else if (vertices.f1.equals(message)) {
+                receivedFromB = true;
             }
+
+            // Forward common neighbors to vertex B for final calculation
+            if (receivedFromA && receivedFromB) {
+                context.sendMessage(vertices.f1, message);
+                break;
+            }
+        }
+    }
+
+    private void processThirdIteration(Object vertexId, Iterator<Object> messages) {
+        if (!vertices.f1.equals(vertexId)) {
             return;
         }
-        if (context.getCurrentIterationId() == 2L) {
-            if (vertices.f0.equals(vertexId)) {
-                List<RowEdge> edges = context.loadEdges(EdgeDirection.BOTH);
-                long edgeCount = edges.size();
-                // send neighbour count of A to B
-                context.sendMessage(vertices.f1, PREFIX + calculateDeduplicatedSize(edges, vertexId));
-            }
 
-            // add to result if received messages from both vertices in params
-            Tuple<Boolean, Boolean> received = new Tuple<>(false, false);
-            while (messages.hasNext()) {
-                Object message = messages.next();
+        List<RowEdge> edges = context.loadEdges(EdgeDirection.BOTH);
+        long vertexBNeighborCount = calculateDeduplicatedSize(edges, vertexId);
 
-                if (vertices.f0.equals(message)) {
-                    received.setF0(true);
-                } else if (vertices.f1.equals(message)) {
-                    received.setF1(true);
-                }
+        long vertexANeighborCount = 0;
+        Set<Object> commonNeighbors = new HashSet<>();
 
-                if (received.getF0() && received.getF1()) {
-                    context.sendMessage(vertices.f1, message);
-                }
+        while (messages.hasNext()) {
+            Object message = messages.next();
+            if (message instanceof String && ((String) message).startsWith(PREFIX)) {
+                // Received neighbor count from vertex A
+                vertexANeighborCount = Long.parseLong(((String) message).substring(PREFIX.length()));
+            } else {
+                // Received common neighbor
+                commonNeighbors.add(message);
             }
         }
 
-        // Iteration 3 : calculate |A| + |B|, and use them to calculate similarity
-        if (context.getCurrentIterationId() == 3L) {
-            if (vertices.f1.equals(vertexId)) {
-                List<RowEdge> edges = context.loadEdges(EdgeDirection.BOTH);
-                // |A|
-                long neighborSum = calculateDeduplicatedSize(edges, vertexId);
-                Set<Object> set = new HashSet<>();
+        long commonNeighborCount = commonNeighbors.size();
+        long unionNeighborCount = vertexANeighborCount + vertexBNeighborCount - commonNeighborCount;
 
-                while (messages.hasNext()) {
-                    Object message = messages.next();
-                    if (message instanceof String && ((String) message).startsWith(PREFIX)) {
-                        // |A| + |B|
-                        neighborSum += Long.parseLong(((String) message).substring(PREFIX.length()));
-                    } else {
-                        set.add(vertexId);
-                    }
-                }
+        double similarity = calculateJaccardSimilarity(commonNeighborCount, unionNeighborCount);
+        context.take(ObjectRow.create(vertices.f0, vertices.f1, similarity));
+    }
 
-                // |A ∩ B|
-                long commonNeighborCount = set.size();
+    private boolean isTargetVertex(Object vertexId) {
+        return vertices.f0.equals(vertexId) || vertices.f1.equals(vertexId);
+    }
 
-                double similarity = (double) commonNeighborCount / (neighborSum - commonNeighborCount);
-
-                context.take(ObjectRow.create(vertices.f0, vertices.f1, similarity));
-            }
+    private double calculateJaccardSimilarity(long commonCount, long unionCount) {
+        if (unionCount == 0) {
+            return commonCount == 0 ? 1.0 : 0.0;
         }
+        return (double) commonCount / unionCount;
     }
 
     @Override
@@ -143,25 +171,12 @@ public class JaccardSimilarityAlgorithm implements AlgorithmUserFunction<Object,
                 new TableField("jaccard_coefficient", DoubleType.INSTANCE, false));
     }
 
-    /**
-     * send message to neighbors
-     *
-     * @param edges
-     * @param message
-     */
     private void sendMessageToNeighbors(List<RowEdge> edges, Object message) {
         for (RowEdge rowEdge : edges) {
             context.sendMessage(rowEdge.getTargetId(), message);
         }
     }
 
-    /**
-     * calculate deduplicated size
-     *
-     * @param edges
-     * @param vertexId
-     * @return
-     */
     private long calculateDeduplicatedSize(List<RowEdge> edges, Object vertexId) {
         Set<Object> set = new HashSet<>();
         for (RowEdge edge : edges) {
