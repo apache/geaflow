@@ -19,9 +19,12 @@
 
 package org.apache.geaflow.dsl.udf.graph;
 
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+
 import org.apache.geaflow.common.tuple.Tuple;
 import org.apache.geaflow.common.type.primitive.DoubleType;
 import org.apache.geaflow.dsl.common.algo.AlgorithmRuntimeContext;
@@ -67,7 +70,7 @@ public class JaccardSimilarity implements AlgorithmUserFunction<Object, ObjectRo
                 Object sourceId = vertex.getId();
                 
                 // Calculate unique neighbors count (de-duplicate and exclude self-loops)
-                java.util.Set<Object> uniqueNeighbors = new java.util.HashSet<>();
+                Set<Object> uniqueNeighbors = new HashSet<>();
                 for (RowEdge edge : edges) {
                     Object targetId = edge.getTargetId();
                     // Exclude self-loops: only add if targetId != sourceId
@@ -130,7 +133,7 @@ public class JaccardSimilarity implements AlgorithmUserFunction<Object, ObjectRo
                     if (neighborCountA == 0) {
                         Object sourceId = vertex.getId();
                         List<RowEdge> edges = context.loadEdges(EdgeDirection.BOTH);
-                        java.util.Set<Object> neighbors = new java.util.HashSet<>();
+                        Set<Object> neighbors = new HashSet<>();
                         for (RowEdge edge : edges) {
                             Object targetId = edge.getTargetId();
                             if (!sourceId.equals(targetId)) {
