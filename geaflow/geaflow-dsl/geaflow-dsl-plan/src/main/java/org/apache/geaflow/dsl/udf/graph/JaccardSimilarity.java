@@ -24,7 +24,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-
 import org.apache.geaflow.common.tuple.Tuple;
 import org.apache.geaflow.common.type.primitive.DoubleType;
 import org.apache.geaflow.dsl.common.algo.AlgorithmRuntimeContext;
