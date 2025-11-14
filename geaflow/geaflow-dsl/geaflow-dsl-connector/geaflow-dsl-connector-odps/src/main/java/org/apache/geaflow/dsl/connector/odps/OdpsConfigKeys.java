@@ -62,7 +62,7 @@ public class OdpsConfigKeys {
     public static final ConfigKey GEAFLOW_DSL_ODPS_SINK_FLUSH_INTERVAL_MS = ConfigKeys
             .key("geaflow.dsl.odps.sink.flush.interval.ms")
             .defaultValue(10000)
-            .description("The buffer size of odps sink buffer.");
+            .description("The flush interval of odps sink buffer.");
 
     public static final ConfigKey GEAFLOW_DSL_ODPS_TIMEOUT_SECONDS = ConfigKeys
         .key("geaflow.dsl.odps.timeout.seconds")
