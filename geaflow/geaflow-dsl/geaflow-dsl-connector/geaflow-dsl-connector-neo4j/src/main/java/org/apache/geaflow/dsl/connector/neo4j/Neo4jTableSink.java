@@ -42,6 +42,9 @@ import org.neo4j.driver.Transaction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import static org.apache.geaflow.dsl.connector.neo4j.Neo4jConstants.DEFAULT_NODE_LABEL;
+import static org.apache.geaflow.dsl.connector.neo4j.Neo4jConstants.DEFAULT_RELATIONSHIP_LABEL;
+
 public class Neo4jTableSink implements TableSink {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(Neo4jTableSink.class);
@@ -101,11 +104,11 @@ public class Neo4jTableSink implements TableSink {
         if (password == null || password.isEmpty()) {
             throw new GeaFlowDSLException("Neo4j password must be specified");
         }
-        if ("node".equals(writeMode)) {
+        if (DEFAULT_NODE_LABEL.toLowerCase().equals(writeMode)) {
             if (nodeIdField == null || nodeIdField.isEmpty()) {
                 throw new GeaFlowDSLException("Node ID field must be specified for node write mode");
             }
-        } else if ("relationship".equals(writeMode)) {
+        } else if (DEFAULT_RELATIONSHIP_LABEL.equals(writeMode)) {
             if (relationshipSourceField == null || relationshipSourceField.isEmpty() 
                 || relationshipTargetField == null || relationshipTargetField.isEmpty()) {
                 throw new GeaFlowDSLException("Relationship source and target fields must be specified for relationship write mode");
@@ -198,7 +201,7 @@ public class Neo4jTableSink implements TableSink {
         }
 
         try {
-            if ("node".equals(writeMode)) {
+            if (DEFAULT_NODE_LABEL.toLowerCase().equals(writeMode)) {
                 writeNodes();
             } else {
                 writeRelationships();

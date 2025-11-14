@@ -24,23 +24,24 @@ import com.google.gson.reflect.TypeToken;
 import java.io.IOException;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.apache.geaflow.api.context.RuntimeContext;
 import org.apache.geaflow.common.config.Configuration;
+import org.apache.geaflow.dsl.common.data.Row;
+import org.apache.geaflow.dsl.common.data.impl.ObjectRow;
+import org.apache.geaflow.dsl.common.exception.GeaFlowDSLException;
 import org.apache.geaflow.dsl.common.types.StructType;
 import org.apache.geaflow.dsl.common.types.TableSchema;
 import org.apache.geaflow.dsl.connector.api.FetchData;
+import org.apache.geaflow.dsl.connector.api.Offset;
 import org.apache.geaflow.dsl.connector.api.Partition;
 import org.apache.geaflow.dsl.connector.api.TableSource;
 import org.apache.geaflow.dsl.connector.api.serde.TableDeserializer;
 import org.apache.geaflow.dsl.connector.api.window.FetchWindow;
 import org.apache.http.HttpHost;
-import org.apache.http.auth.AuthScope;
-import org.apache.http.auth.UsernamePasswordCredentials;
-import org.apache.http.client.CredentialsProvider;
-import org.apache.http.impl.client.BasicCredentialsProvider;
 import org.elasticsearch.action.search.ClearScrollRequest;
 import org.elasticsearch.action.search.SearchRequest;
 import org.elasticsearch.action.search.SearchResponse;
@@ -52,11 +53,22 @@ import org.elasticsearch.core.TimeValue;
 import org.elasticsearch.search.Scroll;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.builder.SearchSourceBuilder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import static org.apache.geaflow.dsl.connector.elasticsearch.ElasticsearchConstants.DEFAULT_SEARCH_SIZE;
+import static org.apache.geaflow.dsl.connector.elasticsearch.ElasticsearchConstants.ES_HTTPS_SCHEME;
+import static org.apache.geaflow.dsl.connector.elasticsearch.ElasticsearchConstants.ES_HTTP_SCHEME;
+import static org.apache.geaflow.dsl.connector.elasticsearch.ElasticsearchConstants.ES_SCHEMA_SUFFIX;
+import static org.apache.geaflow.dsl.connector.elasticsearch.ElasticsearchConstants.ES_SPLIT_COLON;
+import static org.apache.geaflow.dsl.connector.elasticsearch.ElasticsearchConstants.ES_SPLIT_COMMA;
 
 public class ElasticsearchTableSource implements TableSource {
 
     private static final Gson GSON = new Gson();
     private static final Type MAP_TYPE = new TypeToken<Map<String, Object>>(){}.getType();
+
+    private Logger logger = LoggerFactory.getLogger(ElasticsearchTableSource.class);
 
     private StructType schema;
     private String hosts;
@@ -89,13 +101,13 @@ public class ElasticsearchTableSource implements TableSource {
         try {
             this.client = createElasticsearchClient();
         } catch (Exception e) {
-            throw new RuntimeException("Failed to initialize Elasticsearch client", e);
+            throw new GeaFlowDSLException("Failed to initialize Elasticsearch client", e);
         }
     }
 
     @Override
     public List<Partition> listPartitions() {
-        return java.util.Collections.singletonList(new ElasticsearchPartition(indexName));
+        return Collections.singletonList(new ElasticsearchPartition(indexName));
     }
 
     @Override
@@ -107,7 +119,7 @@ public class ElasticsearchTableSource implements TableSource {
             }
 
             @Override
-            public java.util.List<org.apache.geaflow.dsl.common.data.Row> deserialize(IN record) {
+            public List<Row> deserialize(IN record) {
                 if (record instanceof SearchHit) {
                     SearchHit hit = (SearchHit) record;
                     Map<String, Object> source = hit.getSourceAsMap();
@@ -121,22 +133,21 @@ public class ElasticsearchTableSource implements TableSource {
                         String fieldName = schema.getFields().get(i).getName();
                         values[i] = source.get(fieldName);
                     }
-                    org.apache.geaflow.dsl.common.data.Row row = 
-                        org.apache.geaflow.dsl.common.data.impl.ObjectRow.create(values);
-                    return java.util.Collections.singletonList(row);
+                    Row row = ObjectRow.create(values);
+                    return Collections.singletonList(row);
                 }
-                return java.util.Collections.emptyList();
+                return Collections.emptyList();
             }
         };
     }
 
     @Override
-    public <T> FetchData<T> fetch(Partition partition, Optional<org.apache.geaflow.dsl.connector.api.Offset> startOffset,
+    public <T> FetchData<T> fetch(Partition partition, Optional<Offset> startOffset,
                                   FetchWindow windowInfo) throws IOException {
         try {
             SearchRequest searchRequest = new SearchRequest(indexName);
             SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
-            searchSourceBuilder.size(1000); // Batch size
+            searchSourceBuilder.size(DEFAULT_SEARCH_SIZE); // Batch size
 
             searchRequest.source(searchSourceBuilder);
 
@@ -173,27 +184,27 @@ public class ElasticsearchTableSource implements TableSource {
             }
         } catch (IOException e) {
             // Log error but don't throw exception in close method
-            e.printStackTrace();
+            logger.warn("Failed to close Elasticsearch client", e);
         }
     }
 
     private RestHighLevelClient createElasticsearchClient() {
         try {
-            String[] hostArray = hosts.split(",");
+            String[] hostArray = hosts.split(ES_SPLIT_COMMA);
             HttpHost[] httpHosts = new HttpHost[hostArray.length];
 
             for (int i = 0; i < hostArray.length; i++) {
                 String host = hostArray[i].trim();
-                if (host.startsWith("http://")) {
+                if (host.startsWith(ES_HTTP_SCHEME + ES_SCHEMA_SUFFIX)) {
                     host = host.substring(7);
-                } else if (host.startsWith("https://")) {
+                } else if (host.startsWith(ES_HTTPS_SCHEME + ES_SCHEMA_SUFFIX)) {
                     host = host.substring(8);
                 }
 
-                String[] parts = host.split(":");
+                String[] parts = host.split(ES_SPLIT_COLON);
                 String hostname = parts[0];
                 int port = parts.length > 1 ? Integer.parseInt(parts[1]) : 9200;
-                httpHosts[i] = new HttpHost(hostname, port, "http");
+                httpHosts[i] = new HttpHost(hostname, port, ES_HTTP_SCHEME);
             }
 
             RestClientBuilder builder = RestClient.builder(httpHosts);
@@ -205,21 +216,9 @@ public class ElasticsearchTableSource implements TableSource {
                 return requestConfigBuilder;
             });
 
-            // Configure authentication if provided
-            if (username != null && !username.isEmpty() && password != null) {
-                final CredentialsProvider credentialsProvider = new BasicCredentialsProvider();
-                credentialsProvider.setCredentials(AuthScope.ANY,
-                        new UsernamePasswordCredentials(username, password));
-
-                builder.setHttpClientConfigCallback(httpClientBuilder -> {
-                    httpClientBuilder.setDefaultCredentialsProvider(credentialsProvider);
-                    return httpClientBuilder;
-                });
-            }
-
             return new RestHighLevelClient(builder);
         } catch (Exception e) {
-            throw new RuntimeException("Failed to create Elasticsearch client", e);
+            throw new GeaFlowDSLException("Failed to create Elasticsearch client", e);
         }
     }
 
@@ -236,7 +235,7 @@ public class ElasticsearchTableSource implements TableSource {
         }
     }
 
-    public static class ElasticsearchOffset implements org.apache.geaflow.dsl.connector.api.Offset {
+    public static class ElasticsearchOffset implements Offset {
         private final String scrollId;
         private final long timestamp;
 

@@ -17,23 +17,28 @@
  * under the License.
  */
 
-package org.apache.geaflow.dsl.connector.neo4j;
+package org.apache.geaflow.dsl.connector.elasticsearch;
 
-public class Neo4jConstants {
-
-    public static final String DEFAULT_DATABASE = "neo4j";
+public class ElasticsearchConstants {
 
     public static final int DEFAULT_BATCH_SIZE = 1000;
 
-    public static final long DEFAULT_MAX_CONNECTION_LIFETIME_MILLIS = 3600000L; // 1 hour
+    public static final String DEFAULT_SCROLL_TIMEOUT = "60s";
 
-    public static final int DEFAULT_MAX_CONNECTION_POOL_SIZE = 100;
+    public static final int DEFAULT_CONNECTION_TIMEOUT = 1000;
 
-    public static final long DEFAULT_CONNECTION_ACQUISITION_TIMEOUT_MILLIS = 60000L; // 1 minute
+    public static final int DEFAULT_SOCKET_TIMEOUT = 30000;
 
-    public static final String DEFAULT_NODE_LABEL = "Node";
+    public static final int DEFAULT_SEARCH_SIZE = 1000;
 
-    public static final String DEFAULT_RELATIONSHIP_LABEL = "relationship";
+    public static final String ES_SCHEMA_SUFFIX = "://";
 
-    public static final String DEFAULT_RELATIONSHIP_TYPE = "RELATES_TO";
+    public static final String ES_HTTP_SCHEME = "http";
+
+    public static final String ES_HTTPS_SCHEME = "https";
+
+    public static final String ES_SPLIT_COMMA = ",";
+
+    public static final String ES_SPLIT_COLON = ";";
+
 }
