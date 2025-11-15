@@ -33,14 +33,29 @@ public class SqlMatchEdge extends SqlMatchNode {
 
     private final int maxHop;
 
+    private SqlNode sourceCondition;
+
+    private SqlNode destCondition;
+
+    public SqlMatchEdge(SqlParserPos pos, SqlIdentifier name,
+                        SqlNodeList labels, SqlNodeList propertySpecification, SqlNode where,
+                        SqlNode sourceCondition, SqlNode destCondition,
+                        EdgeDirection direction,
+                        int minHop, int maxHop) {
+        super(pos, name, labels, propertySpecification, where);
+        this.sourceCondition = sourceCondition;
+        this.destCondition = destCondition;
+        this.direction = direction;
+        this.minHop = minHop;
+        this.maxHop = maxHop;
+    }
+
+    // Constructor for backward compatibility
     public SqlMatchEdge(SqlParserPos pos, SqlIdentifier name,
                         SqlNodeList labels, SqlNodeList propertySpecification, SqlNode where,
                         EdgeDirection direction,
                         int minHop, int maxHop) {
-        super(pos, name, labels, propertySpecification, where);
-        this.direction = direction;
-        this.minHop = minHop;
-        this.maxHop = maxHop;
+        this(pos, name, labels, propertySpecification, where, null, null, direction, minHop, maxHop);
     }
 
     @Override
@@ -55,7 +70,8 @@ public class SqlMatchEdge extends SqlMatchNode {
 
     @Override
     public void unparse(SqlWriter writer, int leftPrec, int rightPrec) {
-        if (getName() == null && getLabels() == null && getWhere() == null) {
+        if (getName() == null && getLabels() == null && getWhere() == null
+            && sourceCondition == null && destCondition == null) {
             switch (direction) {
                 case IN:
                     writer.print("<-");
@@ -75,6 +91,19 @@ public class SqlMatchEdge extends SqlMatchNode {
             }
             writer.print("-[");
             unparseNode(writer);
+            
+            // Add source/destination conditions
+            if (sourceCondition != null || destCondition != null) {
+                if (sourceCondition != null) {
+                    writer.keyword(", SOURCE");
+                    sourceCondition.unparse(writer, 0, 0);
+                }
+                if (destCondition != null) {
+                    writer.keyword(", DESTINATION");
+                    destCondition.unparse(writer, 0, 0);
+                }
+            }
+            
             writer.print("]-");
             if (direction == EdgeDirection.OUT) {
                 writer.print(">");
@@ -132,5 +161,21 @@ public class SqlMatchEdge extends SqlMatchNode {
 
     public boolean isRegexMatch() {
         return minHop != 1 || maxHop != 1;
+    }
+
+    public SqlNode getSourceCondition() {
+        return sourceCondition;
+    }
+
+    public SqlNode getDestCondition() {
+        return destCondition;
+    }
+
+    public void setSourceCondition(SqlNode sourceCondition) {
+        this.sourceCondition = sourceCondition;
+    }
+
+    public void setDestCondition(SqlNode destCondition) {
+        this.destCondition = destCondition;
     }
 }

@@ -235,6 +235,8 @@ SqlCall SqlMatchEdge() :
     SqlIdentifier label = null;
     SqlNodeList propertySpecification = null;
     SqlNode condition = null;
+    SqlNode sourceCondition = null;
+    SqlNode destCondition = null;
     Span s = Span.of();
     EdgeDirection direction = null;
     int minHop = 1;
@@ -272,6 +274,16 @@ SqlCall SqlMatchEdge() :
                 (
                   <WHERE>
                   condition = Expression(ExprContext.ACCEPT_NON_QUERY)
+                  [
+                    <COMMA>
+                    <SOURCE>
+                    sourceCondition = Expression(ExprContext.ACCEPT_NON_QUERY)
+                  ]
+                  [
+                    <COMMA>
+                    <DESTINATION>
+                    destCondition = Expression(ExprContext.ACCEPT_NON_QUERY)
+                  ]
                 )
             ]
         <RBRACKET>
@@ -292,7 +304,7 @@ SqlCall SqlMatchEdge() :
     ]
     {
         return new SqlMatchEdge(s.end(this), variable, labels, propertySpecification, condition,
-        direction, minHop, maxHop);
+        sourceCondition, destCondition, direction, minHop, maxHop);
     }
 }
 
