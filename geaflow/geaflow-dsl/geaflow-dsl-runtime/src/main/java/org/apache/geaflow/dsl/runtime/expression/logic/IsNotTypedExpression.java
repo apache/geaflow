@@ -98,8 +98,10 @@ public class IsNotTypedExpression extends AbstractNonLeafExpression {
             case "INTEGER":
                 return value instanceof Integer || value instanceof Short || value instanceof Byte;
             case "LONG":
-                return value instanceof Long || value instanceof Integer || 
-                       value instanceof Short || value instanceof Byte;
+                return value instanceof Long
+                    || value instanceof Integer
+                    || value instanceof Short
+                    || value instanceof Byte;
             case "FLOAT":
                 return value instanceof Float || value instanceof Number;
             case "DOUBLE":
@@ -113,9 +115,12 @@ public class IsNotTypedExpression extends AbstractNonLeafExpression {
      * Check if the target type is a numeric type.
      */
     private boolean isNumericType(String typeName) {
-        return typeName.equals("BYTE") || typeName.equals("SHORT") || 
-               typeName.equals("INTEGER") || typeName.equals("LONG") ||
-               typeName.equals("FLOAT") || typeName.equals("DOUBLE");
+        return typeName.equals("BYTE")
+            || typeName.equals("SHORT")
+            || typeName.equals("INTEGER")
+            || typeName.equals("LONG")
+            || typeName.equals("FLOAT")
+            || typeName.equals("DOUBLE");
     }
 
     @Override
