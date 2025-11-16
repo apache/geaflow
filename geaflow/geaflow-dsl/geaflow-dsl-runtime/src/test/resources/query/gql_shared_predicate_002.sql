@@ -44,6 +44,6 @@ SELECT
   b_id,
   c_id
 FROM (
-  MATCH (a:person) -> (b) | (a:person) -> (c) WHERE SHARED(a.age > 25) DISTINCT
-  RETURN a.id as a_id, a.age as a_age, b.id as b_id, c.id as c_id
+  MATCH (a:person) -> (b) | (a:person) -> (c) WHERE SHARED(a.age > 25)
+  RETURN DISTINCT a.id as a_id, a.age as a_age, b.id as b_id, c.id as c_id
 )
