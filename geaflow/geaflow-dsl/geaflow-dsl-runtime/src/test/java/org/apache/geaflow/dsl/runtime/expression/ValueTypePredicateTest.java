@@ -422,7 +422,7 @@ public class ValueTypePredicateTest {
     /**
      * Simple literal expression for testing.
      */
-    private static class LiteralExpression extends AbstractLeafExpression {
+    private static class LiteralExpression extends AbstractExpression {
         private final Object value;
         private final org.apache.geaflow.common.type.IType<?> outputType;
 
@@ -449,6 +449,11 @@ public class ValueTypePredicateTest {
         @Override
         public Expression copy(java.util.List<Expression> inputs) {
             return this;
+        }
+
+        @Override
+        public java.util.List<Expression> getInputs() {
+            return java.util.Collections.emptyList();
         }
     }
 }

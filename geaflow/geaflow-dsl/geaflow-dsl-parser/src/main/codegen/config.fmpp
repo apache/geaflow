@@ -435,6 +435,7 @@ data: {
                 "USING"
                 "YIELD"
                 "NEXT"
+                "TYPED"
     ]
 
     # List of additional join types. Each is a method with no arguments.
