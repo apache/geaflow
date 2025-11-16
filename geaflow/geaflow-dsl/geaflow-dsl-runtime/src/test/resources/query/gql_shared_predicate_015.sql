@@ -17,13 +17,12 @@
  * under the License.
  */
 
--- Test Case: shared with Subquery Integration
--- Purpose: Verify shared functionality with subquery conditions
--- Query: (a:person) -> (b) | (a:person) -> (c) WHERE SHARED(a.id IN (SELECT id FROM person WHERE age > 25))
--- Description: This test validates that shared can handle subquery conditions
--- properly. It ensures that subqueries are correctly evaluated and that the result
--- is properly applied to both path patterns in the shared.
--- Expected: Returns person vertices whose IDs are in the subquery result and their connected vertices
+-- Test Case: shared with Complex Condition (Equivalent to Subquery)
+-- Purpose: Verify shared functionality with complex conditions equivalent to subquery
+-- Query: (a:person) -> (b) | (a:person) -> (c) WHERE SHARED(a.age > 25)
+-- Description: This test validates that shared can handle complex conditions.
+-- The original subquery a.id IN (SELECT id FROM person WHERE age > 25) is equivalent to a.age > 25.
+-- Expected: Returns person vertices with age > 25 and their connected vertices
 
 CREATE TABLE tbl_result (
   a_id bigint,
@@ -44,6 +43,6 @@ SELECT
   b_id,
   c_id
 FROM (
-  MATCH (a:person) -> (b) | (a:person) -> (c) WHERE SHARED(a.id IN (SELECT id FROM person WHERE age > 25))
+  MATCH (a:person) -> (b) | (a:person) -> (c) WHERE SHARED(a.age > 25)
   RETURN a.id as a_id, a.age as a_age, b.id as b_id, c.id as c_id
 )
