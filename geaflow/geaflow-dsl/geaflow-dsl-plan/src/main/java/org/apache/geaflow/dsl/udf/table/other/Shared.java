@@ -38,6 +38,7 @@ import org.slf4j.LoggerFactory;
  * </pre>
  *
  * <p><b>Semantics:</b></p>
+ *
  * <p>The SHARED() function marks a predicate condition to be evaluated and applied consistently
  * across all path patterns in the union. This enables:
  * <ul>
@@ -47,6 +48,7 @@ import org.slf4j.LoggerFactory;
  * </ul>
  *
  * <p><b>Implementation Notes:</b></p>
+ *
  * <p>This is a pass-through function that returns the input boolean value unchanged.
  * The actual semantics of sharing the predicate across multiple patterns is handled at:
  * <ul>
