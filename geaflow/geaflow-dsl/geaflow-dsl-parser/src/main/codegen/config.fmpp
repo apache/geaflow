@@ -73,7 +73,6 @@ data: {
         "PARTITIONED",
         "YIELD",
         "IF",
-        "TYPED"
     ]
 
     # let noReservedKeywords can be a identifier

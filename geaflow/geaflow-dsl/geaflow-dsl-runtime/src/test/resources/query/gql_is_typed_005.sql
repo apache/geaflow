@@ -40,9 +40,9 @@ SELECT
 	CAST(e.weight AS DOUBLE) AS weight_sum
 FROM (
   MATCH (src:person)-[e:knows]->(tgt:person)
-  WHERE src.id IS TYPED INTEGER
-    AND tgt.id IS TYPED INTEGER
-    AND e.weight IS TYPED DOUBLE
   RETURN src, tgt, e
 )
+WHERE TYPED(src.id, 'INTEGER')
+  AND TYPED(tgt.id, 'INTEGER')
+  AND TYPED(e.weight, 'DOUBLE')
 

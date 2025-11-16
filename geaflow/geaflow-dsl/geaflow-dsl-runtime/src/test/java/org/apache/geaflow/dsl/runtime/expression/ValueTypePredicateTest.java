@@ -23,6 +23,7 @@ import java.math.BigDecimal;
 import java.util.Date;
 import org.apache.geaflow.common.type.Types;
 import org.apache.geaflow.common.type.primitive.BinaryStringType;
+import org.apache.geaflow.dsl.common.data.Row;
 import org.apache.geaflow.dsl.common.data.impl.ObjectRow;
 import org.apache.geaflow.dsl.runtime.expression.logic.IsNotTypedExpression;
 import org.apache.geaflow.dsl.runtime.expression.logic.IsTypedExpression;
@@ -432,7 +433,7 @@ public class ValueTypePredicateTest {
         }
 
         @Override
-        public Object evaluate(org.apache.geaflow.dsl.common.data.Row row) {
+        public Object evaluate(Row row) {
             return value;
         }
 

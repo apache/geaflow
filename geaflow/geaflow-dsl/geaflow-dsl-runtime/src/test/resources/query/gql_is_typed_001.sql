@@ -40,8 +40,8 @@ SELECT
 	0.0 AS weight
 FROM (
   MATCH (p:person)
-  WHERE p.age IS TYPED INTEGER
   RETURN p
 )
-WHERE person_id > 0
+WHERE TYPED(p.age, 'INTEGER')
+  AND person_id > 0
 

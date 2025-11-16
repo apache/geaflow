@@ -43,11 +43,11 @@ SELECT
 	'' AS target_name
 FROM (
   MATCH (a:person)-[e:knows]->(b:person)-[e2:knows]->(c:person)
-  WHERE a.id IS TYPED INTEGER
-    AND e.weight IS TYPED DOUBLE
-    AND b.id IS TYPED INTEGER
-    AND e2.weight IS TYPED DOUBLE
-    AND c.name IS NOT TYPED INTEGER
   RETURN a, e, b, e2, c
 )
+WHERE TYPED(a.id, 'INTEGER')
+  AND TYPED(e.weight, 'DOUBLE')
+  AND TYPED(b.id, 'INTEGER')
+  AND TYPED(e2.weight, 'DOUBLE')
+  AND NOT_TYPED(c.name, 'INTEGER')
 

@@ -38,9 +38,9 @@ SELECT
 	b.name AS person_name
 FROM (
   MATCH (a:person)-[e:knows]->(b:person)
-  WHERE a.id IS TYPED INTEGER 
-    AND e.weight IS TYPED DOUBLE
-    AND b.name IS NOT TYPED INTEGER
   RETURN a.id AS a_id, e, b
 )
+WHERE TYPED(a_id, 'INTEGER') 
+  AND TYPED(weight, 'DOUBLE')
+  AND NOT_TYPED(name, 'INTEGER')
 

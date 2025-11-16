@@ -38,7 +38,7 @@ SELECT
 	CAST(p.age AS INTEGER) AS age
 FROM (
   MATCH (p:person)
-  WHERE p.name IS NOT TYPED INTEGER
   RETURN p
 )
+WHERE NOT_TYPED(p.name, 'INTEGER')
 
