@@ -72,7 +72,8 @@ data: {
         "DIFFERENT",
         "PARTITIONED",
         "YIELD",
-        "IF"
+        "IF",
+        "TYPED"
     ]
 
     # let noReservedKeywords can be a identifier
@@ -435,7 +436,6 @@ data: {
                 "USING"
                 "YIELD"
                 "NEXT"
-                "TYPED"
     ]
 
     # List of additional join types. Each is a method with no arguments.
