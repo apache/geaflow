@@ -113,6 +113,7 @@ import org.apache.geaflow.dsl.udf.table.string.SplitEx;
 import org.apache.geaflow.dsl.udf.table.string.Substr;
 import org.apache.geaflow.dsl.udf.table.string.UrlDecode;
 import org.apache.geaflow.dsl.udf.table.string.UrlEncode;
+import org.apache.geaflow.dsl.udf.table.other.Shared;
 import org.apache.geaflow.dsl.util.FunctionUtil;
 
 /**
@@ -199,6 +200,8 @@ public class BuildInSqlFunctionTable extends ListSqlOperatorTable {
             .add(GeaFlowFunction.of(EdgeTargetId.class))
             .add(GeaFlowFunction.of(EdgeTimestamp.class))
             .add(GeaFlowFunction.of(IsDecimal.class))
+            // Graph pattern matching predicates
+            .add(GeaFlowFunction.of(Shared.class))
             // UDAF
             .add(GeaFlowFunction.of(PercentileLong.class))
             .add(GeaFlowFunction.of(PercentileInteger.class))
