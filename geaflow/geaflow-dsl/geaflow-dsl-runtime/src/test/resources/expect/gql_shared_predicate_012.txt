@@ -1,0 +1,10 @@
+1,marko,2,2
+1,marko,2,3
+1,marko,2,4
+1,marko,3,2
+1,marko,3,3
+1,marko,3,4
+1,marko,4,2
+1,marko,4,3
+1,marko,4,4
+
