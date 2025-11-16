@@ -279,6 +279,16 @@ public class ExpressionTranslator implements RexVisitor<Expression> {
                     default:
                         break;
                 }
+                if (callKind == SqlKind.OTHER) {
+                    String operatorName = call.getOperator().getName().toUpperCase();
+                    if ("IS TYPED".equals(operatorName)) {
+                        assert inputs.size() == 1;
+                        return builder.isTyped(inputs.get(0), outputType);
+                    } else if ("IS NOT TYPED".equals(operatorName)) {
+                        assert inputs.size() == 1;
+                        return builder.isNotTyped(inputs.get(0), outputType);
+                    }
+                }
                 break;
             case PREFIX:
                 switch (callKind) {
@@ -504,7 +514,7 @@ public class ExpressionTranslator implements RexVisitor<Expression> {
     public Expression visitFieldAccess(RexFieldAccess fieldAccess) {
         Expression input = fieldAccess.getReferenceExpr().accept(this);
         int index = fieldAccess.getField().getIndex();
-        IType type = SqlTypeUtil.convertType(fieldAccess.getField().getType());
+        IType<?> type = SqlTypeUtil.convertType(fieldAccess.getField().getType());
 
         return builder.field(input, index, type);
     }
