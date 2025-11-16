@@ -57,22 +57,18 @@ public class SqlIsTypedOperator extends SqlOperator {
         }
 
         // First operand: the expression to check (can be any type)
+        // We accept any expression type - validation happens at runtime
         final RelDataType type0 = callBinding.getOperandType(0);
         if (type0 == null) {
-            if (throwOnFailure) {
-                throw callBinding.newError(
-                    new RuntimeException("Unknown field: " + callBinding.operand(0).toString()));
-            }
-            return false;
+            // Null type is acceptable - will be checked at runtime
+            return true;
         }
 
         // Second operand: must be a type identifier (SqlIdentifier)
         final SqlNode operand1 = callBinding.operand(1);
         if (!(operand1 instanceof SqlIdentifier)) {
             if (throwOnFailure) {
-                throw callBinding.newError(
-                    new RuntimeException("Illegal type identifier: " + operand1.toString() + 
-                        ". Expected a type name like INTEGER, STRING, etc."));
+                throw callBinding.newValidationSignatureError();
             }
             return false;
         }
@@ -84,18 +80,17 @@ public class SqlIsTypedOperator extends SqlOperator {
         // Check if it's a standard SQL type or a valid custom type
         try {
             SqlTypeName.valueOf(typeName);
+            return true;
         } catch (IllegalArgumentException e) {
             // Also allow GeaFlow custom types: VERTEX, EDGE, PATH, BINARY_STRING
-            if (!isValidCustomType(typeName)) {
-                if (throwOnFailure) {
-                    throw callBinding.newError(
-                        new RuntimeException("Unknown datatype name: " + typeName));
-                }
-                return false;
+            if (isValidCustomType(typeName)) {
+                return true;
             }
+            if (throwOnFailure) {
+                throw callBinding.newValidationSignatureError();
+            }
+            return false;
         }
-
-        return true;
     }
 
     /**
