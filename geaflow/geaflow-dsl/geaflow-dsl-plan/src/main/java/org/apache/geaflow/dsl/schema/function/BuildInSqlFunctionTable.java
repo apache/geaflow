@@ -85,6 +85,7 @@ import org.apache.geaflow.dsl.udf.table.other.EdgeTimestamp;
 import org.apache.geaflow.dsl.udf.table.other.If;
 import org.apache.geaflow.dsl.udf.table.other.IsDecimal;
 import org.apache.geaflow.dsl.udf.table.other.Label;
+import org.apache.geaflow.dsl.udf.table.other.Shared;
 import org.apache.geaflow.dsl.udf.table.other.VertexId;
 import org.apache.geaflow.dsl.udf.table.string.Ascii2String;
 import org.apache.geaflow.dsl.udf.table.string.Base64Decode;
@@ -113,7 +114,6 @@ import org.apache.geaflow.dsl.udf.table.string.SplitEx;
 import org.apache.geaflow.dsl.udf.table.string.Substr;
 import org.apache.geaflow.dsl.udf.table.string.UrlDecode;
 import org.apache.geaflow.dsl.udf.table.string.UrlEncode;
-import org.apache.geaflow.dsl.udf.table.other.Shared;
 import org.apache.geaflow.dsl.util.FunctionUtil;
 
 /**
