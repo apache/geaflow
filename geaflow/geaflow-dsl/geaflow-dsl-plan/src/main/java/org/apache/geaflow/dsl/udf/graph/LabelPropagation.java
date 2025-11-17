@@ -80,19 +80,21 @@ public class LabelPropagation implements AlgorithmUserFunction<Object, String> {
             }
 
             String mostFrequentLabel = currentLabel;
-            int maxCount = labelCounts.getOrDefault(currentLabel, 0);
+            int maxCount = 0;
 
             for (Map.Entry<String, Integer> entry : labelCounts.entrySet()) {
                 String label = entry.getKey();
                 int count = entry.getValue();
-                if (count > maxCount || (count == maxCount && label.compareTo(mostFrequentLabel) < 0)) {
+                if (count >= maxCount && label.compareTo(mostFrequentLabel) < 0) {
                     mostFrequentLabel = label;
                     maxCount = count;
                 }
             }
 
-            context.updateVertexValue(ObjectRow.create(mostFrequentLabel));
-            sendMessageToNeighbors(edges, mostFrequentLabel);
+            if (!mostFrequentLabel.equals(currentLabel)) {
+                context.updateVertexValue(ObjectRow.create(mostFrequentLabel));
+                sendMessageToNeighbors(edges, mostFrequentLabel);
+            }
         }
     }
 
