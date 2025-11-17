@@ -24,7 +24,7 @@ import org.apache.calcite.sql.SqlNode;
 
 public class StringLiteralUtil {
 
-    private static final int[] multiplier = new int[]{1000, 100, 10, 1};
+    private static final int[] UNICODE_HEX_MULTIPLIER = new int[]{1000, 100, 10, 1};
 
     public static String unescapeSQLString(String b) {
 
@@ -56,7 +56,7 @@ public class StringLiteralUtil {
                 int base = i + 2;
                 for (int j = 0; j < 4; j++) {
                     int digit = Character.digit(b.charAt(j + base), 16);
-                    code += digit * multiplier[j];
+                    code += digit * UNICODE_HEX_MULTIPLIER[j];
                 }
                 sb.append((char) code);
                 i += 5;

@@ -638,4 +638,43 @@ public class ExecutionConfigKeys implements Serializable {
         .defaultValue(false)
         .description("if enable detail job metric");
 
+    // ------------------------------------------------------------------------
+    // cluster constants
+    // ------------------------------------------------------------------------
+
+    public static final ConfigKey CLUSTER_MASTER_PREFIX = ConfigKeys
+        .key("geaflow.cluster.master.prefix")
+        .defaultValue("master-")
+        .description("master name prefix");
+
+    public static final ConfigKey CLUSTER_DRIVER_PREFIX = ConfigKeys
+        .key("geaflow.cluster.driver.prefix")
+        .defaultValue("driver-")
+        .description("driver name prefix");
+
+    public static final ConfigKey CLUSTER_CONTAINER_PREFIX = ConfigKeys
+        .key("geaflow.cluster.container.prefix")
+        .defaultValue("container-")
+        .description("container name prefix");
+
+    public static final ConfigKey CLUSTER_MASTER_LOG_SUFFIX = ConfigKeys
+        .key("geaflow.cluster.master.log.suffix")
+        .defaultValue("master.log")
+        .description("master log file suffix");
+
+    public static final ConfigKey CLUSTER_DRIVER_LOG_SUFFIX = ConfigKeys
+        .key("geaflow.cluster.driver.log.suffix")
+        .defaultValue("driver.log")
+        .description("driver log file suffix");
+
+    public static final ConfigKey CLUSTER_CONTAINER_LOG_SUFFIX = ConfigKeys
+        .key("geaflow.cluster.container.log.suffix")
+        .defaultValue("container.log")
+        .description("container log file suffix");
+
+    public static final ConfigKey CLUSTER_DEFAULT_MASTER_ID = ConfigKeys
+        .key("geaflow.cluster.default.master.id")
+        .defaultValue(0)
+        .description("default master id");
+
 }

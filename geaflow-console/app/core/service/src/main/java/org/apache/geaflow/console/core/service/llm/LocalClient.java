@@ -35,14 +35,14 @@ public class LocalClient extends LLMClient {
 
     private static final String DEFAULT_N_PREDICT = "128";
 
-    private static final String TEMPLATE = "{"
+    private static final String JSON_REQUEST_TEMPLATE = "{"
         + "\"prompt\": \"%s\","
         + "\"n_predict\": %s}";
 
     private String getJsonString(LocalConfigArgsClass llm, String prompt) {
         Integer predict = llm.getPredict();
         // trim() to replace the last \n 
-        return String.format(TEMPLATE, prompt.trim(), predict);
+        return String.format(JSON_REQUEST_TEMPLATE, prompt.trim(), predict);
     }
 
     private LocalClient() {
