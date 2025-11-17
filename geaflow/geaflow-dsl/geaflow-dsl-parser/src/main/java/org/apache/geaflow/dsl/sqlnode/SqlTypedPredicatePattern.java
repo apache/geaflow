@@ -30,16 +30,16 @@ import org.apache.calcite.sql.parser.SqlParserPos;
 
 /**
  * SQL node for ISO-GQL Value Type Predicate function calls.
- * 
- * Supports two forms:
+ *
+ * <p>Supports two forms:
  * - TYPED(expression, typename): Check if expression is of specified type
  * - NOT_TYPED(expression, typename): Check if expression is NOT of specified type
- * 
- * Examples:
+ *
+ * <p>Examples:
  *   TYPED(n.age, INTEGER)       -> true if n.age is an integer
  *   NOT_TYPED(n.data, STRING)   -> true if n.data is not a string
- * 
- * This is a simplified function-call approach that works seamlessly with
+ *
+ * <p>This is a simplified function-call approach that works seamlessly with
  * Calcite's function call mechanism without modifying the parser grammar.
  */
 public class SqlTypedPredicatePattern extends SqlCall {
