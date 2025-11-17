@@ -45,28 +45,6 @@ public class ClusterConstantsTest {
     }
 
     @Test
-    public void testGetMasterPrefix_WithConfig() {
-        Configuration config = new Configuration();
-        config.put(ExecutionConfigKeys.CLUSTER_MASTER_PREFIX.getKey(), "custom-master-");
-        
-        String prefix = ClusterConstants.getMasterPrefix(config);
-        Assert.assertEquals(prefix, "custom-master-");
-    }
-
-    @Test
-    public void testGetMasterPrefix_WithoutConfig() {
-        Configuration config = new Configuration();
-        String prefix = ClusterConstants.getMasterPrefix(config);
-        Assert.assertEquals(prefix, ClusterConstants.MASTER_PREFIX);
-    }
-
-    @Test
-    public void testGetMasterPrefix_NullConfig() {
-        String prefix = ClusterConstants.getMasterPrefix(null);
-        Assert.assertEquals(prefix, ClusterConstants.MASTER_PREFIX);
-    }
-
-    @Test
     public void testGetDriverPrefix_WithConfig() {
         Configuration config = new Configuration();
         config.put(ExecutionConfigKeys.CLUSTER_DRIVER_PREFIX.getKey(), "custom-driver-");
@@ -151,11 +129,11 @@ public class ClusterConstantsTest {
     @Test
     public void testGetMasterName_WithConfig() {
         Configuration config = new Configuration();
-        config.put(ExecutionConfigKeys.CLUSTER_MASTER_PREFIX.getKey(), "custom-master-");
+        // Master prefix is not configurable, only master id can be configured
         config.put(ExecutionConfigKeys.CLUSTER_DEFAULT_MASTER_ID.getKey(), "5");
         
         String masterName = ClusterConstants.getMasterName(config);
-        Assert.assertEquals(masterName, "custom-master-5");
+        Assert.assertEquals(masterName, "master-5");
     }
 
     @Test

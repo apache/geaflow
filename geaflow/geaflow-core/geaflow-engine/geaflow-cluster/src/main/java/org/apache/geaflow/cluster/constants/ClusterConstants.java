@@ -53,16 +53,6 @@ public class ClusterConstants {
     public static final String CONFIG_FILE_LOG4J_NAME = "log4j.properties";
 
     /**
-     * Get master name prefix from configuration or use default value.
-     */
-    public static String getMasterPrefix(Configuration config) {
-        if (config != null) {
-            return config.getString(ExecutionConfigKeys.CLUSTER_MASTER_PREFIX);
-        }
-        return MASTER_PREFIX;
-    }
-
-    /**
      * Get driver name prefix from configuration or use default value.
      */
     public static String getDriverPrefix(Configuration config) {
@@ -131,9 +121,10 @@ public class ClusterConstants {
 
     /**
      * Get master name from configuration or use default value.
+     * Note: Master prefix is not configurable, always uses the default value.
      */
     public static String getMasterName(Configuration config) {
-        return String.format("%s%s", getMasterPrefix(config), getDefaultMasterId(config));
+        return String.format("%s%s", MASTER_PREFIX, getDefaultMasterId(config));
     }
 
     /**

@@ -642,11 +642,6 @@ public class ExecutionConfigKeys implements Serializable {
     // cluster constants
     // ------------------------------------------------------------------------
 
-    public static final ConfigKey CLUSTER_MASTER_PREFIX = ConfigKeys
-        .key("geaflow.cluster.master.prefix")
-        .defaultValue("master-")
-        .description("master name prefix");
-
     public static final ConfigKey CLUSTER_DRIVER_PREFIX = ConfigKeys
         .key("geaflow.cluster.driver.prefix")
         .defaultValue("driver-")
