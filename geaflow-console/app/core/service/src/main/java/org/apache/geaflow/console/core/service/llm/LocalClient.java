@@ -33,16 +33,15 @@ public class LocalClient extends LLMClient {
 
     private static final LLMClient INSTANCE = new LocalClient();
 
-    private static final String DEFAULT_N_PREDICT = "128";
-
-    private static final String JSON_REQUEST_TEMPLATE = "{"
-        + "\"prompt\": \"%s\","
-        + "\"n_predict\": %s}";
+    private static final int DEFAULT_N_PREDICT = 128;
 
     private String getJsonString(LocalConfigArgsClass llm, String prompt) {
         Integer predict = llm.getPredict();
-        // trim() to replace the last \n 
-        return String.format(JSON_REQUEST_TEMPLATE, prompt.trim(), predict);
+        int nPredict = (predict != null) ? predict : DEFAULT_N_PREDICT;
+        JSONObject root = new JSONObject();
+        root.put("prompt", prompt.trim());
+        root.put("n_predict", nPredict);
+        return root.toJSONString();
     }
 
     private LocalClient() {
