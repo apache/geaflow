@@ -17,14 +17,12 @@
  * under the License.
  */
 
--- GraphSAGE test query
--- Note: GraphSAGE is implemented as IncVertexCentricCompute, not as a CALL algorithm
--- This query demonstrates how to use GraphSAGE through graph computation
--- The actual execution is handled by the test class
+-- GraphSAGE test query using CALL syntax
+-- This query demonstrates how to use GraphSAGE via GQL CALL syntax
 
 CREATE TABLE tbl_result (
   vid bigint,
-  embedding varchar  -- JSON string representing List<Double> embedding
+  embedding varchar  -- String representation of List<Double> embedding
 ) WITH (
 	type='file',
 	geaflow.dsl.file.path='${target}'
@@ -32,12 +30,8 @@ CREATE TABLE tbl_result (
 
 USE GRAPH graphsage_test;
 
--- This is a placeholder query structure
--- The actual GraphSAGE computation is performed by the test class
--- which directly uses GraphSAGECompute with IncGraphView.incrementalCompute()
-
-SELECT id as vid, name
-FROM node
-LIMIT 10
+INSERT INTO tbl_result
+CALL GRAPHSAGE(10, 2) YIELD (vid, embedding)
+RETURN vid, embedding
 ;
 
