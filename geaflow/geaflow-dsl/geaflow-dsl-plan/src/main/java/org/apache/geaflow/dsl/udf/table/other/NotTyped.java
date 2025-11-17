@@ -24,17 +24,17 @@ import org.apache.geaflow.dsl.common.function.UDF;
 
 /**
  * ISO-GQL NOT_TYPED function - checks if a value is NOT of a specified type.
- * 
- * Syntax: NOT_TYPED(value, typename)
- * 
- * Returns true if the value's runtime type does NOT match the specified typename.
+ *
+ * <p>Syntax: NOT_TYPED(value, typename)
+ *
+ * <p>Returns true if the value's runtime type does NOT match the specified typename.
  * Returns true for NULL values (NULL is not of any specific type).
- * 
- * Examples:
+ *
+ * <p>Examples:
  *   NOT_TYPED(n.age, STRING)    -> true if n.age is not a string
  *   NOT_TYPED(null, INTEGER)    -> true (NULL is not an integer)
- * 
- * Note: The actual type checking logic is implemented in IsNotTypedExpression
+ *
+ * <p>Note: The actual type checking logic is implemented in IsNotTypedExpression
  * during runtime evaluation. This UDF definition allows Calcite to recognize
  * NOT_TYPED as a valid SQL function during parsing and planning phases.
  * The real implementation happens in the expression evaluation layer.
@@ -44,8 +44,8 @@ public class NotTyped extends UDF {
 
     /**
      * Check if the value is NOT of the specified type.
-     * 
-     * This method is called during query planning and validation.
+     *
+     * <p>This method is called during query planning and validation.
      * The actual runtime implementation is in IsNotTypedExpression.evaluate().
      *
      * @param value The value to check (can be any SQL expression result)

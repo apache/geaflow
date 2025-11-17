@@ -24,17 +24,17 @@ import org.apache.geaflow.dsl.common.function.UDF;
 
 /**
  * ISO-GQL TYPED function - checks if a value is of a specified type.
- * 
- * Syntax: TYPED(value, typename)
- * 
- * Returns true if the value's runtime type matches the specified typename,
+ *
+ * <p>Syntax: TYPED(value, typename)
+ *
+ * <p>Returns true if the value's runtime type matches the specified typename,
  * false otherwise (including when value is NULL).
- * 
- * Examples:
+ *
+ * <p>Examples:
  *   TYPED(n.age, INTEGER) -> true if n.age is an integer
  *   TYPED(null, STRING)   -> false
- * 
- * Note: The actual type checking logic is implemented in IsTypedExpression
+ *
+ * <p>Note: The actual type checking logic is implemented in IsTypedExpression
  * during runtime evaluation. This UDF definition allows Calcite to recognize
  * TYPED as a valid SQL function during parsing and planning phases.
  * The real implementation happens in the expression evaluation layer.
@@ -44,8 +44,8 @@ public class Typed extends UDF {
 
     /**
      * Check if the value is of the specified type.
-     * 
-     * This method is called during query planning and validation.
+     *
+     * <p>This method is called during query planning and validation.
      * The actual runtime implementation is in IsTypedExpression.evaluate().
      *
      * @param value The value to check (can be any SQL expression result)
