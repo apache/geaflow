@@ -21,6 +21,7 @@ package org.apache.geaflow.console.core.service.llm;
 
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
+import com.google.common.annotations.VisibleForTesting;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -35,7 +36,8 @@ public class LocalClient extends LLMClient {
 
     private static final int DEFAULT_N_PREDICT = 128;
 
-    private String getJsonString(LocalConfigArgsClass llm, String prompt) {
+    @VisibleForTesting
+    public String getJsonString(LocalConfigArgsClass llm, String prompt) {
         Integer predict = llm.getPredict();
         int nPredict = (predict != null) ? predict : DEFAULT_N_PREDICT;
         JSONObject root = new JSONObject();

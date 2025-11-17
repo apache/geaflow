@@ -21,7 +21,6 @@ package org.apache.geaflow.console.test;
 
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
-import java.lang.reflect.Method;
 import org.apache.geaflow.console.core.model.llm.LocalConfigArgsClass;
 import org.apache.geaflow.console.core.service.llm.LocalClient;
 import org.testng.Assert;
@@ -30,18 +29,13 @@ import org.testng.annotations.Test;
 public class LocalClientTest {
 
     @Test
-    public void testGetJsonString_WithPredictValue() throws Exception {
+    public void testGetJsonString_WithPredictValue() {
         LocalClient client = (LocalClient) LocalClient.getInstance();
         LocalConfigArgsClass config = new LocalConfigArgsClass();
         config.setPredict(256);
         
-        // Use reflection to test private method
-        Method method = LocalClient.class.getDeclaredMethod("getJsonString", 
-            LocalConfigArgsClass.class, String.class);
-        method.setAccessible(true);
-        
         String prompt = "Test prompt";
-        String jsonString = (String) method.invoke(client, config, prompt);
+        String jsonString = client.getJsonString(config, prompt);
         
         JSONObject json = JSON.parseObject(jsonString);
         Assert.assertEquals(json.getString("prompt"), "Test prompt");
@@ -49,18 +43,13 @@ public class LocalClientTest {
     }
 
     @Test
-    public void testGetJsonString_WithNullPredict() throws Exception {
+    public void testGetJsonString_WithNullPredict() {
         LocalClient client = (LocalClient) LocalClient.getInstance();
         LocalConfigArgsClass config = new LocalConfigArgsClass();
         config.setPredict(null);
         
-        // Use reflection to test private method
-        Method method = LocalClient.class.getDeclaredMethod("getJsonString", 
-            LocalConfigArgsClass.class, String.class);
-        method.setAccessible(true);
-        
         String prompt = "Test prompt";
-        String jsonString = (String) method.invoke(client, config, prompt);
+        String jsonString = client.getJsonString(config, prompt);
         
         JSONObject json = JSON.parseObject(jsonString);
         Assert.assertEquals(json.getString("prompt"), "Test prompt");
@@ -69,19 +58,14 @@ public class LocalClientTest {
     }
 
     @Test
-    public void testGetJsonString_WithPromptContainingSpecialCharacters() throws Exception {
+    public void testGetJsonString_WithPromptContainingSpecialCharacters() {
         LocalClient client = (LocalClient) LocalClient.getInstance();
         LocalConfigArgsClass config = new LocalConfigArgsClass();
         config.setPredict(100);
         
-        // Use reflection to test private method
-        Method method = LocalClient.class.getDeclaredMethod("getJsonString", 
-            LocalConfigArgsClass.class, String.class);
-        method.setAccessible(true);
-        
         // Test with special characters that need JSON escaping
         String prompt = "Test \"quoted\" prompt\nwith newline\tand tab";
-        String jsonString = (String) method.invoke(client, config, prompt);
+        String jsonString = client.getJsonString(config, prompt);
         
         // Should be valid JSON and properly escaped
         JSONObject json = JSON.parseObject(jsonString);
@@ -101,19 +85,14 @@ public class LocalClientTest {
     }
 
     @Test
-    public void testGetJsonString_WithPromptTrim() throws Exception {
+    public void testGetJsonString_WithPromptTrim() {
         LocalClient client = (LocalClient) LocalClient.getInstance();
         LocalConfigArgsClass config = new LocalConfigArgsClass();
         config.setPredict(200);
         
-        // Use reflection to test private method
-        Method method = LocalClient.class.getDeclaredMethod("getJsonString", 
-            LocalConfigArgsClass.class, String.class);
-        method.setAccessible(true);
-        
         // Test with trailing newline that should be trimmed
         String prompt = "Test prompt\n";
-        String jsonString = (String) method.invoke(client, config, prompt);
+        String jsonString = client.getJsonString(config, prompt);
         
         JSONObject json = JSON.parseObject(jsonString);
         Assert.assertEquals(json.getString("prompt"), "Test prompt");
@@ -121,18 +100,13 @@ public class LocalClientTest {
     }
 
     @Test
-    public void testGetJsonString_WithZeroPredict() throws Exception {
+    public void testGetJsonString_WithZeroPredict() {
         LocalClient client = (LocalClient) LocalClient.getInstance();
         LocalConfigArgsClass config = new LocalConfigArgsClass();
         config.setPredict(0);
         
-        // Use reflection to test private method
-        Method method = LocalClient.class.getDeclaredMethod("getJsonString", 
-            LocalConfigArgsClass.class, String.class);
-        method.setAccessible(true);
-        
         String prompt = "Test prompt";
-        String jsonString = (String) method.invoke(client, config, prompt);
+        String jsonString = client.getJsonString(config, prompt);
         
         JSONObject json = JSON.parseObject(jsonString);
         Assert.assertEquals(json.getString("prompt"), "Test prompt");
@@ -140,18 +114,13 @@ public class LocalClientTest {
     }
 
     @Test
-    public void testGetJsonString_JsonStructure() throws Exception {
+    public void testGetJsonString_JsonStructure() {
         LocalClient client = (LocalClient) LocalClient.getInstance();
         LocalConfigArgsClass config = new LocalConfigArgsClass();
         config.setPredict(128);
         
-        // Use reflection to test private method
-        Method method = LocalClient.class.getDeclaredMethod("getJsonString", 
-            LocalConfigArgsClass.class, String.class);
-        method.setAccessible(true);
-        
         String prompt = "Test";
-        String jsonString = (String) method.invoke(client, config, prompt);
+        String jsonString = client.getJsonString(config, prompt);
         
         // Verify JSON structure
         JSONObject json = JSON.parseObject(jsonString);
