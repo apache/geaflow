@@ -100,7 +100,9 @@ class GraphSAGETransFormFunction(TransFormFunction):
         print(f"Using device: {self.device}")
         
         # Default model parameters (can be configured)
-        self.input_dim = 128  # Input feature dimension
+        # Note: input_dim should match the reduced feature dimension from Java side
+        # Default is 64 (matching DEFAULT_REDUCED_DIMENSION in GraphSAGECompute)
+        self.input_dim = 64  # Input feature dimension (reduced from full features)
         self.hidden_dim = 256  # Hidden layer dimension
         self.output_dim = 64  # Output embedding dimension
         self.num_layers = 2  # Number of GraphSAGE layers
@@ -173,17 +175,19 @@ class GraphSAGETransFormFunction(TransFormFunction):
             neighbor_features_map = args[2]
             
             # Convert vertex features to tensor
+            # Note: Features are already reduced by FeatureReducer in Java side
             if vertex_features is None or len(vertex_features) == 0:
                 # Use zero features as default
                 vertex_feature_tensor = torch.zeros(self.input_dim, dtype=torch.float32).to(self.device)
             else:
-                # Pad or truncate to input_dim
+                # Features should already match input_dim (reduced by FeatureReducer)
+                # But we still handle padding/truncation for safety
                 feature_array = np.array(vertex_features, dtype=np.float32)
                 if len(feature_array) < self.input_dim:
-                    # Pad with zeros
+                    # Pad with zeros (shouldn't happen if reduction works correctly)
                     padded = np.pad(feature_array, (0, self.input_dim - len(feature_array)), 'constant')
                 elif len(feature_array) > self.input_dim:
-                    # Truncate
+                    # Truncate (shouldn't happen if reduction works correctly)
                     padded = feature_array[:self.input_dim]
                 else:
                     padded = feature_array
@@ -245,10 +249,13 @@ class GraphSAGETransFormFunction(TransFormFunction):
                         neighbor_tensor = torch.zeros(self.input_dim, dtype=torch.float32).to(self.device)
                     else:
                         # Convert to tensor
+                        # Note: Neighbor features are already reduced by FeatureReducer in Java side
                         feature_array = np.array(neighbor_features, dtype=np.float32)
                         if len(feature_array) < self.input_dim:
+                            # Pad with zeros (shouldn't happen if reduction works correctly)
                             padded = np.pad(feature_array, (0, self.input_dim - len(feature_array)), 'constant')
                         elif len(feature_array) > self.input_dim:
+                            # Truncate (shouldn't happen if reduction works correctly)
                             padded = feature_array[:self.input_dim]
                         else:
                             padded = feature_array

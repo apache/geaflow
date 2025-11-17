@@ -112,6 +112,8 @@ public class GraphSAGECompute extends IncVertexCentricCompute<Object, List<Doubl
         private IncGraphComputeContext<Object, List<Double>, Object, Object> graphContext;
         private NeighborSampler neighborSampler;
         private FeatureCollector featureCollector;
+        private FeatureReducer featureReducer;
+        private static final int DEFAULT_REDUCED_DIMENSION = 64;
 
         @Override
         @SuppressWarnings("unchecked")
@@ -125,8 +127,17 @@ public class GraphSAGECompute extends IncVertexCentricCompute<Object, List<Doubl
             }
             this.neighborSampler = new NeighborSampler(numSamples, numLayers);
             this.featureCollector = new FeatureCollector();
-            LOGGER.info("GraphSAGEComputeFunction initialized with numSamples={}, numLayers={}",
-                numSamples, numLayers);
+            
+            // Initialize feature reducer to select first N important dimensions
+            // This reduces transmission overhead between Java and Python
+            int[] importantDims = new int[DEFAULT_REDUCED_DIMENSION];
+            for (int i = 0; i < DEFAULT_REDUCED_DIMENSION; i++) {
+                importantDims[i] = i;
+            }
+            this.featureReducer = new FeatureReducer(importantDims);
+            
+            LOGGER.info("GraphSAGEComputeFunction initialized with numSamples={}, numLayers={}, reducedDim={}",
+                numSamples, numLayers, DEFAULT_REDUCED_DIMENSION);
         }
 
         @Override
@@ -158,13 +169,29 @@ public class GraphSAGECompute extends IncVertexCentricCompute<Object, List<Doubl
                     vertexFeatures = new ArrayList<>();
                 }
 
+                // Reduce vertex features to selected dimensions
+                double[] reducedVertexFeatures;
+                try {
+                    reducedVertexFeatures = featureReducer.reduceFeatures(vertexFeatures);
+                } catch (IllegalArgumentException e) {
+                    // If feature vector is too short, pad with zeros
+                    LOGGER.warn("Vertex {} features too short for reduction, padding with zeros", vertexId);
+                    int requiredSize = featureReducer.getReducedDimension();
+                    double[] paddedFeatures = new double[requiredSize];
+                    for (int i = 0; i < vertexFeatures.size() && i < requiredSize; i++) {
+                        paddedFeatures[i] = vertexFeatures.get(i);
+                    }
+                    // Remaining dimensions are already 0.0
+                    reducedVertexFeatures = paddedFeatures;
+                }
+
                 // Sample neighbors for each layer
                 Map<Integer, List<Object>> sampledNeighbors =
                     neighborSampler.sampleNeighbors(vertexId, temporaryGraph, graphContext);
 
-                // Collect features: vertex features and neighbor features per layer
-                Object[] features = featureCollector.prepareFeatures(
-                    vertexId, vertexFeatures, sampledNeighbors, graphContext);
+                // Collect features: vertex features and neighbor features per layer (with reduction)
+                Object[] features = featureCollector.prepareReducedFeatures(
+                    vertexId, reducedVertexFeatures, sampledNeighbors, graphContext, featureReducer);
 
                 // Call Python model for inference
                 List<Double> embedding;
@@ -301,11 +328,80 @@ public class GraphSAGECompute extends IncVertexCentricCompute<Object, List<Doubl
      * - Vertex features
      * - Neighbor features for each layer
      * - Organizes them in the format expected by Python model
+     * - Supports feature reduction to reduce transmission overhead
      */
     private static class FeatureCollector {
 
         /**
-         * Prepare features for GraphSAGE model inference.
+         * Prepare features for GraphSAGE model inference with feature reduction.
+         *
+         * @param vertexId The vertex ID
+         * @param reducedVertexFeatures The vertex's reduced features (already reduced)
+         * @param sampledNeighbors Map of layer to sampled neighbor IDs
+         * @param context The graph compute context
+         * @param featureReducer The feature reducer for reducing neighbor features
+         * @return Array of features: [vertexId, reducedVertexFeatures, reducedNeighborFeaturesMap]
+         */
+        Object[] prepareReducedFeatures(Object vertexId,
+                                        double[] reducedVertexFeatures,
+                                        Map<Integer, List<Object>> sampledNeighbors,
+                                        IncGraphComputeContext<Object, List<Double>, Object, Object> context,
+                                        FeatureReducer featureReducer) {
+            // Build neighbor features map with reduction
+            Map<Integer, List<List<Double>>> reducedNeighborFeaturesMap = new HashMap<>();
+
+            for (Map.Entry<Integer, List<Object>> entry : sampledNeighbors.entrySet()) {
+                int layer = entry.getKey();
+                List<Object> neighborIds = entry.getValue();
+                List<List<Double>> neighborFeatures = new ArrayList<>();
+
+                for (Object neighborId : neighborIds) {
+                    // Get neighbor features from graph
+                    List<Double> fullFeatures = getVertexFeatures(neighborId, context);
+                    
+                    // Reduce neighbor features
+                    double[] reducedFeatures;
+                    try {
+                        reducedFeatures = featureReducer.reduceFeatures(fullFeatures);
+                    } catch (IllegalArgumentException e) {
+                        // If feature vector is too short, pad with zeros
+                        int requiredSize = featureReducer.getReducedDimension();
+                        reducedFeatures = new double[requiredSize];
+                        for (int i = 0; i < fullFeatures.size() && i < requiredSize; i++) {
+                            reducedFeatures[i] = fullFeatures.get(i);
+                        }
+                        // Remaining dimensions are already 0.0
+                    }
+                    
+                    // Convert to List<Double>
+                    List<Double> reducedFeatureList = new ArrayList<>();
+                    for (double value : reducedFeatures) {
+                        reducedFeatureList.add(value);
+                    }
+                    neighborFeatures.add(reducedFeatureList);
+                }
+
+                reducedNeighborFeaturesMap.put(layer, neighborFeatures);
+            }
+
+            // Convert reduced vertex features to List<Double>
+            List<Double> reducedVertexFeatureList = new ArrayList<>();
+            for (double value : reducedVertexFeatures) {
+                reducedVertexFeatureList.add(value);
+            }
+
+            // Return: [vertexId, reducedVertexFeatures, reducedNeighborFeaturesMap]
+            return new Object[]{vertexId, reducedVertexFeatureList, reducedNeighborFeaturesMap};
+        }
+
+        /**
+         * Prepare features for GraphSAGE model inference (without reduction).
+         *
+         * <p>This method is kept for backward compatibility but is not recommended
+         * for production use due to higher transmission overhead.
+         *
+         * <p><b>Note:</b> This method is not currently used but kept for backward compatibility.
+         * Use {@link #prepareReducedFeatures} instead for better performance.
          *
          * @param vertexId The vertex ID
          * @param vertexFeatures The vertex's current features
@@ -313,6 +409,7 @@ public class GraphSAGECompute extends IncVertexCentricCompute<Object, List<Doubl
          * @param context The graph compute context
          * @return Array of features: [vertexId, vertexFeatures, neighborFeaturesMap]
          */
+        @SuppressWarnings("unused") // Kept for backward compatibility
         Object[] prepareFeatures(Object vertexId,
                                  List<Double> vertexFeatures,
                                  Map<Integer, List<Object>> sampledNeighbors,
