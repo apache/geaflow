@@ -42,7 +42,7 @@ import org.apache.geaflow.model.graph.edge.EdgeDirection;
 public class LabelPropagation implements AlgorithmUserFunction<Object, String> {
 
     private AlgorithmRuntimeContext<Object, String> context;
-    private String keyFieldName = "label";
+    private String outputKeyName = "label";
     private int iteration = 1000;
 
     @Override
@@ -51,13 +51,13 @@ public class LabelPropagation implements AlgorithmUserFunction<Object, String> {
         if (parameters.length > 2) {
             throw new IllegalArgumentException(
                 "Only support zero or more arguments, false arguments "
-                    + "usage: func([iteration, [keyFieldName]])");
+                    + "usage: func([iteration, [outputKeyName]])");
         }
         if (parameters.length > 0) {
             iteration = Integer.parseInt(String.valueOf(parameters[0]));
         }
         if (parameters.length > 1) {
-            keyFieldName = String.valueOf(parameters[1]);
+            outputKeyName = String.valueOf(parameters[1]);
         }
     }
 
@@ -109,7 +109,7 @@ public class LabelPropagation implements AlgorithmUserFunction<Object, String> {
     public StructType getOutputType(GraphSchema graphSchema) {
         return new StructType(
             new TableField("id", graphSchema.getIdType(), false),
-            new TableField(keyFieldName, StringType.INSTANCE, false)
+            new TableField(outputKeyName, StringType.INSTANCE, false)
         );
     }
 
