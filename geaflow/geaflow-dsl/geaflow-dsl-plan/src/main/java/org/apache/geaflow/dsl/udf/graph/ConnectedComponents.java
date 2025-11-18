@@ -41,7 +41,7 @@ public class ConnectedComponents implements AlgorithmUserFunction<Object, String
 
     private AlgorithmRuntimeContext<Object, String> context;
     private String keyFieldName = "component";
-    private int iteration = 1000;
+    private int iteration = 20;
 
     @Override
     public void init(AlgorithmRuntimeContext<Object, String> context, Object[] parameters) {
@@ -63,15 +63,12 @@ public class ConnectedComponents implements AlgorithmUserFunction<Object, String
     public void process(RowVertex vertex, Optional<Row> updatedValues, Iterator<String> messages) {
         updatedValues.ifPresent(vertex::setValue);
         List<RowEdge> edges = new ArrayList<>(context.loadEdges(EdgeDirection.IN));
-
         if (context.getCurrentIterationId() == 1L) {
-            // Initialize: each vertex starts with its own id as the component id
             String initValue = String.valueOf(vertex.getId());
             sendMessageToNeighbors(edges, initValue);
             context.sendMessage(vertex.getId(), initValue);
             context.updateVertexValue(ObjectRow.create(initValue));
         } else if (context.getCurrentIterationId() < iteration) {
-            // Find the minimum component id from messages
             String minComponent = messages.next();
             while (messages.hasNext()) {
                 String next = messages.next();
@@ -86,8 +83,6 @@ public class ConnectedComponents implements AlgorithmUserFunction<Object, String
                 sendMessageToNeighbors(edges, minComponent);
                 context.sendMessage(vertex.getId(), minComponent);
                 context.updateVertexValue(ObjectRow.create(minComponent));
-            } else {
-                context.sendMessage(vertex.getId(), currentValue);
             }
         }
     }
@@ -102,8 +97,8 @@ public class ConnectedComponents implements AlgorithmUserFunction<Object, String
     @Override
     public StructType getOutputType(GraphSchema graphSchema) {
         return new StructType(
-            new TableField("id", graphSchema.getIdType(), false),
-            new TableField(keyFieldName, StringType.INSTANCE, false)
+                new TableField("id", graphSchema.getIdType(), false),
+                new TableField(keyFieldName, StringType.INSTANCE, false)
         );
     }
 
