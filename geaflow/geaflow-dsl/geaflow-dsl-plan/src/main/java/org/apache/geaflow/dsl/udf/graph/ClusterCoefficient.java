@@ -26,7 +26,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
 import org.apache.geaflow.common.type.primitive.DoubleType;
 import org.apache.geaflow.common.type.primitive.IntegerType;
 import org.apache.geaflow.common.type.primitive.LongType;
@@ -50,7 +49,7 @@ public class ClusterCoefficient implements AlgorithmUserFunction<Object, ObjectR
     private AlgorithmRuntimeContext<Object, ObjectRow> context;
 
     /**
-     * vertex type filtering parameter
+     * only calculate vertices with this label
      */
     private String vertexType;
 
@@ -120,9 +119,8 @@ public class ClusterCoefficient implements AlgorithmUserFunction<Object, ObjectR
             Set<Long> currentNodeNeighbor = rowToSet(vertex.getValue());
             while (messages.hasNext()) {
                 Set<Long> neighborNodeNeighbor = rowToSet(messages.next());
-                if (!Collections.disjoint(currentNodeNeighbor, neighborNodeNeighbor)) {
-                    count++;
-                }
+                neighborNodeNeighbor.retainAll(currentNodeNeighbor);
+                count += neighborNodeNeighbor.size();
             }
             this.context.sendMessage(vertex.getId(), ObjectRow.create(0));
             this.context.updateVertexValue(ObjectRow.create(count, currentNodeNeighbor.size()));
