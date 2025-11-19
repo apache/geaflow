@@ -24,8 +24,6 @@ import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.sql.SqlOperator;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.apache.calcite.sql.util.ReflectiveSqlOperatorTable;
-import org.apache.geaflow.dsl.operator.SqlIsNotTypedOperator;
-import org.apache.geaflow.dsl.operator.SqlIsTypedOperator;
 
 public class BuildInSqlOperatorTable extends ReflectiveSqlOperatorTable {
 
@@ -73,8 +71,6 @@ public class BuildInSqlOperatorTable extends ReflectiveSqlOperatorTable {
         SqlStdOperatorTable.IS_FALSE,
         SqlStdOperatorTable.IS_NOT_UNKNOWN,
         SqlStdOperatorTable.IS_UNKNOWN,
-        SqlIsTypedOperator.INSTANCE,
-        SqlIsNotTypedOperator.INSTANCE,
         // PREFIX OPERATORS
         SqlStdOperatorTable.NOT,
         SqlStdOperatorTable.UNARY_MINUS,
