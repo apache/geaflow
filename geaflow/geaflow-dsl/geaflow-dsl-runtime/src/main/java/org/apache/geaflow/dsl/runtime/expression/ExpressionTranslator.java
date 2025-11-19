@@ -435,8 +435,10 @@ public class ExpressionTranslator implements RexVisitor<Expression> {
                         Object typeNameObj = ((LiteralExpression) typeNameExpr).getValue();
                         if (typeNameObj instanceof String) {
                             String typeName = ((String) typeNameObj).toUpperCase();
-                            IType<?> targetType = org.apache.geaflow.common.type.Types.of(typeName, 0);
-                            return builder.isTyped(inputs.get(0), targetType);
+                            IType<?> targetType = getTypeFromName(typeName);
+                            if (targetType != null) {
+                                return builder.isTyped(inputs.get(0), targetType);
+                            }
                         }
                     }
                 } else if ("NotTyped".equals(className) && inputs.size() == 2) {
@@ -446,8 +448,10 @@ public class ExpressionTranslator implements RexVisitor<Expression> {
                         Object typeNameObj = ((LiteralExpression) typeNameExpr).getValue();
                         if (typeNameObj instanceof String) {
                             String typeName = ((String) typeNameObj).toUpperCase();
-                            IType<?> targetType = org.apache.geaflow.common.type.Types.of(typeName, 0);
-                            return builder.isNotTyped(inputs.get(0), targetType);
+                            IType<?> targetType = getTypeFromName(typeName);
+                            if (targetType != null) {
+                                return builder.isNotTyped(inputs.get(0), targetType);
+                            }
                         }
                     }
                 }
@@ -459,6 +463,51 @@ public class ExpressionTranslator implements RexVisitor<Expression> {
             return builder.udf(inputs, outputType, udfClass);
         }
         throw new GeaFlowDSLException("Not support expression: " + call);
+    }
+
+    /**
+     * Helper method to convert type name string to IType object.
+     * Uses Types constants for common types to avoid method signature issues.
+     */
+    private IType<?> getTypeFromName(String typeName) {
+        if (typeName == null) {
+            return null;
+        }
+        String upperName = typeName.toUpperCase();
+        switch (upperName) {
+            case "INTEGER":
+            case "INT":
+                return org.apache.geaflow.common.type.Types.INTEGER;
+            case "LONG":
+            case "BIGINT":
+                return org.apache.geaflow.common.type.Types.LONG;
+            case "DOUBLE":
+                return org.apache.geaflow.common.type.Types.DOUBLE;
+            case "FLOAT":
+                return org.apache.geaflow.common.type.Types.FLOAT;
+            case "STRING":
+            case "VARCHAR":
+                return org.apache.geaflow.common.type.Types.STRING;
+            case "BOOLEAN":
+            case "BOOL":
+                return org.apache.geaflow.common.type.Types.BOOLEAN;
+            case "BINARY_STRING":
+            case "BYTES":
+                return org.apache.geaflow.common.type.Types.BINARY_STRING;
+            case "DECIMAL":
+                return org.apache.geaflow.common.type.Types.DECIMAL;
+            case "TIMESTAMP":
+                return org.apache.geaflow.common.type.Types.TIMESTAMP;
+            case "DATE":
+                return org.apache.geaflow.common.type.Types.DATE;
+            case "BYTE":
+                return org.apache.geaflow.common.type.Types.BYTE;
+            case "SHORT":
+                return org.apache.geaflow.common.type.Types.SHORT;
+            default:
+                // For unsupported types, return null to fall back to UDF implementation
+                return null;
+        }
     }
 
     @SuppressWarnings("unchecked")
