@@ -36,11 +36,11 @@ USE GRAPH modern;
 
 INSERT INTO tbl_result
 SELECT
-	COUNT(*) AS match_count,
-	0L AS source_id,
-	0.0 AS edge_weight,
-	0L AS target_id,
-	'' AS target_name
+	a.id AS source_id,
+	e.weight AS edge_weight,
+	b.id AS target_id,
+	c.name AS target_name,
+	1 AS match_count
 FROM (
   MATCH (a:person)-[e:knows]->(b:person)-[e2:knows]->(c:person)
   RETURN a, e, b, e2, c

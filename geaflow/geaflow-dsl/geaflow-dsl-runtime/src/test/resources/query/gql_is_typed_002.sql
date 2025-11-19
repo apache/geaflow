@@ -29,7 +29,7 @@ CREATE TABLE tbl_result (
 	geaflow.dsl.file.path='${target}'
 );
 
-USE GRAPH;
+USE GRAPH modern;
 
 INSERT INTO tbl_result
 SELECT

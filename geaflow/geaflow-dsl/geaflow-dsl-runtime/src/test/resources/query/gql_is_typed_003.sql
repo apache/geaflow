@@ -38,9 +38,9 @@ SELECT
 	b.name AS person_name
 FROM (
   MATCH (a:person)-[e:knows]->(b:person)
-  RETURN a.id AS a_id, e, b
+  RETURN a, e, b
 )
-WHERE TYPED(a_id, 'INTEGER') 
-  AND TYPED(weight, 'DOUBLE')
-  AND NOT_TYPED(name, 'INTEGER')
+WHERE TYPED(a.id, 'INTEGER') 
+  AND TYPED(e.weight, 'DOUBLE')
+  AND NOT_TYPED(b.name, 'INTEGER')
 
