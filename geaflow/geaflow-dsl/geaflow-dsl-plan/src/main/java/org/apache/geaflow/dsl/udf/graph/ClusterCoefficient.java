@@ -49,7 +49,7 @@ public class ClusterCoefficient implements AlgorithmUserFunction<Object, ObjectR
     private AlgorithmRuntimeContext<Object, ObjectRow> context;
 
     /**
-     * only calculate vertices with this label
+     * only calculate vertices(include neighbors) with this label
      */
     private String vertexType;
 
