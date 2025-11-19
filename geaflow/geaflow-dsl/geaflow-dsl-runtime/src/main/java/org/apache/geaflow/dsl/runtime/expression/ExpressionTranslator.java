@@ -453,7 +453,10 @@ public class ExpressionTranslator implements RexVisitor<Expression> {
                 }
             }
             
-            return builder.udf(inputs, outputType, (Class<? extends org.apache.geaflow.dsl.common.function.UDF>) implementClass);
+            @SuppressWarnings("unchecked")
+            Class<? extends org.apache.geaflow.dsl.common.function.UDF> udfClass = 
+                (Class<? extends org.apache.geaflow.dsl.common.function.UDF>) implementClass;
+            return builder.udf(inputs, outputType, udfClass);
         }
         throw new GeaFlowDSLException("Not support expression: " + call);
     }
