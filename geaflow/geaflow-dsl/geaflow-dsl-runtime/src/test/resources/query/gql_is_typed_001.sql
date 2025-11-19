@@ -43,5 +43,5 @@ FROM (
   RETURN p
 )
 WHERE TYPED(p.age, 'INTEGER')
-  AND person_id > 0
+  AND p.id > 0
 
