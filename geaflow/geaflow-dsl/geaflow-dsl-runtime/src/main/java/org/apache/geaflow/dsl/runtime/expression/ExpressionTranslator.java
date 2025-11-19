@@ -55,6 +55,7 @@ import org.apache.geaflow.dsl.rex.RexParameterRef;
 import org.apache.geaflow.dsl.rex.RexSystemVariable;
 import org.apache.geaflow.dsl.rex.RexSystemVariable.SystemVariable;
 import org.apache.geaflow.dsl.runtime.expression.field.SystemVariableExpression;
+import org.apache.geaflow.dsl.runtime.expression.literal.LiteralExpression;
 import org.apache.geaflow.dsl.runtime.expression.subquery.CallQueryExpression;
 import org.apache.geaflow.dsl.runtime.function.graph.StepAggFunctionImpl;
 import org.apache.geaflow.dsl.runtime.function.graph.StepAggregateFunction;
@@ -420,7 +421,39 @@ public class ExpressionTranslator implements RexVisitor<Expression> {
             return builder.udtf(inputs, outputType, operator.getImplementClass());
         } else if (call.getOperator() instanceof GeaFlowUserDefinedScalarFunction) {
             GeaFlowUserDefinedScalarFunction operator = (GeaFlowUserDefinedScalarFunction) call.getOperator();
-            return builder.udf(inputs, outputType, operator.getImplementClass());
+            Class<?> implementClass = operator.getImplementClass();
+            
+            // Special handling for TYPED and NOT_TYPED functions
+            // Convert them to IsTypedExpression/IsNotTypedExpression for proper type checking
+            if (implementClass != null) {
+                String className = implementClass.getSimpleName();
+                if ("Typed".equals(className) && inputs.size() == 2) {
+                    // TYPED(value, typename_string)
+                    // Extract type name from the second argument (should be a string literal)
+                    Expression typeNameExpr = inputs.get(1);
+                    if (typeNameExpr instanceof LiteralExpression) {
+                        Object typeNameObj = ((LiteralExpression) typeNameExpr).getValue();
+                        if (typeNameObj instanceof String) {
+                            String typeName = ((String) typeNameObj).toUpperCase();
+                            IType<?> targetType = org.apache.geaflow.common.type.Types.of(typeName, 0);
+                            return builder.isTyped(inputs.get(0), targetType);
+                        }
+                    }
+                } else if ("NotTyped".equals(className) && inputs.size() == 2) {
+                    // NOT_TYPED(value, typename_string)
+                    Expression typeNameExpr = inputs.get(1);
+                    if (typeNameExpr instanceof LiteralExpression) {
+                        Object typeNameObj = ((LiteralExpression) typeNameExpr).getValue();
+                        if (typeNameObj instanceof String) {
+                            String typeName = ((String) typeNameObj).toUpperCase();
+                            IType<?> targetType = org.apache.geaflow.common.type.Types.of(typeName, 0);
+                            return builder.isNotTyped(inputs.get(0), targetType);
+                        }
+                    }
+                }
+            }
+            
+            return builder.udf(inputs, outputType, (Class<? extends org.apache.geaflow.dsl.common.function.UDF>) implementClass);
         }
         throw new GeaFlowDSLException("Not support expression: " + call);
     }
