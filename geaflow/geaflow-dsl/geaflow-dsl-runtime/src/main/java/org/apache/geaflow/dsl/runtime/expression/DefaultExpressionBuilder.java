@@ -50,8 +50,10 @@ import org.apache.geaflow.dsl.runtime.expression.logic.IsFalseExpression;
 import org.apache.geaflow.dsl.runtime.expression.logic.IsNotFalseExpression;
 import org.apache.geaflow.dsl.runtime.expression.logic.IsNotNullExpression;
 import org.apache.geaflow.dsl.runtime.expression.logic.IsNotTrueExpression;
+import org.apache.geaflow.dsl.runtime.expression.logic.IsNotTypedExpression;
 import org.apache.geaflow.dsl.runtime.expression.logic.IsNullExpression;
 import org.apache.geaflow.dsl.runtime.expression.logic.IsTrueExpression;
+import org.apache.geaflow.dsl.runtime.expression.logic.IsTypedExpression;
 import org.apache.geaflow.dsl.runtime.expression.logic.LTEExpression;
 import org.apache.geaflow.dsl.runtime.expression.logic.LTExpression;
 import org.apache.geaflow.dsl.runtime.expression.logic.NotExpression;
@@ -234,5 +236,15 @@ public class DefaultExpressionBuilder implements ExpressionBuilder {
     @Override
     public Expression buildIn(List<Expression> inputs, IType<?> outputType, String methodName) {
         return new BuildInExpression(inputs, outputType, GeaFlowBuiltinFunctions.class, methodName);
+    }
+
+    @Override
+    public Expression isTyped(Expression input, IType<?> targetType) {
+        return new IsTypedExpression(input, targetType);
+    }
+
+    @Override
+    public Expression isNotTyped(Expression input, IType<?> targetType) {
+        return new IsNotTypedExpression(input, targetType);
     }
 }

@@ -97,4 +97,8 @@ public interface ExpressionBuilder {
     Expression udtf(List<Expression> inputs, IType<?> outputType, Class<? extends UDTF> implementClass);
 
     Expression buildIn(List<Expression> inputs, IType<?> outputType, String methodName);
+
+    Expression isTyped(Expression input, IType<?> targetType);
+
+    Expression isNotTyped(Expression input, IType<?> targetType);
 }
