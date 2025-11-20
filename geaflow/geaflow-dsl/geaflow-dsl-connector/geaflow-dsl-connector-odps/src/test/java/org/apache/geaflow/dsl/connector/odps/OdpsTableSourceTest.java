@@ -133,15 +133,15 @@ public class OdpsTableSourceTest {
 
     @Test
     public void testOdpsConnectorUtils() {
-        Assert.assertEquals(OdpsConnectorUtils.typeEquals(OdpsType.SMALLINT, LongType.INSTANCE), true);
-        Assert.assertEquals(OdpsConnectorUtils.typeEquals(OdpsType.INT, LongType.INSTANCE), true);
-        Assert.assertEquals(OdpsConnectorUtils.typeEquals(OdpsType.FLOAT, FloatType.INSTANCE), true);
-        Assert.assertEquals(OdpsConnectorUtils.typeEquals(OdpsType.DOUBLE, DoubleType.INSTANCE), true);
-        Assert.assertEquals(OdpsConnectorUtils.typeEquals(OdpsType.BOOLEAN, BooleanType.INSTANCE), true);
-        Assert.assertEquals(OdpsConnectorUtils.typeEquals(OdpsType.STRING, BinaryStringType.INSTANCE), true);
-        Assert.assertEquals(OdpsConnectorUtils.typeEquals(OdpsType.BINARY, ByteType.INSTANCE), true);
-        Assert.assertEquals(OdpsConnectorUtils.typeEquals(OdpsType.DECIMAL, DecimalType.INSTANCE), true);
-        Assert.assertEquals(OdpsConnectorUtils.typeEquals(OdpsType.VOID, VoidType.INSTANCE), true);
-        Assert.assertEquals(OdpsConnectorUtils.typeEquals(OdpsType.DATE, TimestampType.INSTANCE), true);
+        Assert.assertTrue(OdpsConnectorUtils.typeEquals(OdpsType.SMALLINT, LongType.INSTANCE));
+        Assert.assertTrue(OdpsConnectorUtils.typeEquals(OdpsType.INT, LongType.INSTANCE));
+        Assert.assertTrue(OdpsConnectorUtils.typeEquals(OdpsType.FLOAT, FloatType.INSTANCE));
+        Assert.assertTrue(OdpsConnectorUtils.typeEquals(OdpsType.DOUBLE, DoubleType.INSTANCE));
+        Assert.assertTrue(OdpsConnectorUtils.typeEquals(OdpsType.BOOLEAN, BooleanType.INSTANCE));
+        Assert.assertTrue(OdpsConnectorUtils.typeEquals(OdpsType.STRING, BinaryStringType.INSTANCE));
+        Assert.assertTrue(OdpsConnectorUtils.typeEquals(OdpsType.BINARY, ByteType.INSTANCE));
+        Assert.assertTrue(OdpsConnectorUtils.typeEquals(OdpsType.DECIMAL, DecimalType.INSTANCE));
+        Assert.assertTrue(OdpsConnectorUtils.typeEquals(OdpsType.VOID, VoidType.INSTANCE));
+        Assert.assertTrue(OdpsConnectorUtils.typeEquals(OdpsType.DATE, TimestampType.INSTANCE));
     }
 }
