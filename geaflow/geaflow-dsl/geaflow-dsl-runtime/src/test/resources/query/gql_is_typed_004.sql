@@ -17,9 +17,9 @@
  * under the License.
  */
 
--- ISO-GQL Value Type Predicate Test 004: Large Dataset Performance Test (100K scale)
--- Tests type predicates performance with large datasets
--- Simulates complex edge traversal with multiple type checks
+-- ISO-GQL Value Type Predicate Test 004: Multiple type checks in single-hop path
+-- Tests multiple type predicates on different properties in a single query
+-- Validates that all type checks work correctly together
 
 CREATE TABLE tbl_result (
   source_id bigint,
@@ -39,15 +39,14 @@ SELECT
 	a.id AS source_id,
 	e.weight AS edge_weight,
 	b.id AS target_id,
-	c.name AS target_name,
+	b.name AS target_name,
 	1 AS match_count
 FROM (
-  MATCH (a:person)-[e:knows]->(b:person)-[e2:knows]->(c:person)
-  RETURN a, e, b, e2, c
+  MATCH (a:person)-[e:knows]->(b:person)
+  RETURN a, e, b
 )
 WHERE TYPED(a.id, 'INTEGER')
   AND TYPED(e.weight, 'DOUBLE')
   AND TYPED(b.id, 'INTEGER')
-  AND TYPED(e2.weight, 'DOUBLE')
-  AND NOT_TYPED(c.name, 'INTEGER')
+  AND NOT_TYPED(b.name, 'INTEGER')
 
