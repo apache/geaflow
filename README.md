@@ -90,6 +90,11 @@ Contact us through the following mailing list.
 |:--------------------------------------------------------|:--------------------------------|:-----------------------------------------------------|:---------------------------------------------------------|:------------------------------------------------------------------|
 | [dev@geaflow.apache.org](mailto:dev@geaflow.apache.org) | Development-related discussions | [Subscribe](mailto:dev-subscribe@geaflow.apache.org) | [Unsubscribe](mailto:dev-unsubscribe@geaflow.apache.org) | [Archives](http://mail-archives.apache.org/mod_mbox/geaflow-dev/) |
 
+### DingTake Group
+
+If you have any questions during use, you can join the GeaFlow Dingtalk group for communication and discussion. The Dingtalk group code is ``156800008790``.
+
+### Star Us
 **If you are interested in GeaFlow, please give our project
 a [ ⭐️ ](https://github.com/apache/geaflow).**
 
