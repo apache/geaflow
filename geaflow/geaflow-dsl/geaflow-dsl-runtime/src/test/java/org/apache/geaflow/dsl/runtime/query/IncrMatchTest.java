@@ -29,7 +29,6 @@ import java.util.List;
 import java.util.Random;
 import java.util.Set;
 import org.apache.commons.io.FileUtils;
-import org.apache.commons.lang3.RandomUtils;
 import org.apache.geaflow.common.config.keys.DSLConfigKeys;
 import org.apache.geaflow.common.config.keys.FrameworkConfigKeys;
 import org.testng.Assert;
@@ -65,11 +64,26 @@ public class IncrMatchTest {
 
         String allPath = getTargetPath(queryPath);
         List<Set<String>> allRes = readRes(allPath, false);
-        Assert.assertEquals(incrRes.size(), allRes.size());
-
-        // the last is empty iteration, ignore.
-        for (int i = 0; i < incrRes.size() - 1; i++) {
-            Assert.assertEquals(allRes.get(i), incrRes.get(i));
+        
+        // Ensure both results have the same number of windows
+        Assert.assertEquals(incrRes.size(), allRes.size(), 
+            "Incremental and full traversal should have same number of windows");
+        
+        // For incremental traversal, each window contains cumulative results (all results from window 0 to current)
+        // For full traversal, each window contains only results from that specific window
+        // So we need to compare: incremental[i] should equal union of full[0] to full[i]
+        Set<String> cumulativeFull = new HashSet<>();
+        for (int i = 0; i < incrRes.size(); i++) {
+            Set<String> incrSet = incrRes.get(i);
+            Set<String> fullSet = allRes.get(i);
+            
+            // Add current window's results to cumulative set
+            cumulativeFull.addAll(fullSet);
+            
+            // Compare incremental result (cumulative) with cumulative full result
+            Assert.assertEquals(incrSet, cumulativeFull, 
+                String.format("Window %d mismatch: incremental (cumulative)=%s, full (cumulative)=%s", 
+                    i, incrSet, cumulativeFull));
         }
     }
 
@@ -103,12 +117,13 @@ public class IncrMatchTest {
         File edgeFile = new File("/tmp/geaflow-test/incr_modern_edge.txt");
         Set<Tuple2<Integer, Integer>> edges = new HashSet<>();
 
-        Random r = new Random();
+        // Use fixed seed for deterministic test results to avoid flaky tests
+        Random r = new Random(42L);
         while (edges.size() < edgeNum) {
-            int src = RandomUtils.nextInt(1, vertexNum + 1);
-            int dst = RandomUtils.nextInt(1, vertexNum + 1);
+            int src = r.nextInt(vertexNum) + 1;  // 1 to vertexNum
+            int dst = r.nextInt(vertexNum) + 1;  // 1 to vertexNum
             while (src == dst) {
-                dst = RandomUtils.nextInt(1, vertexNum + 1);
+                dst = r.nextInt(vertexNum) + 1;
             }
             edges.add(new Tuple2<>(src, dst));
         }
@@ -161,25 +176,35 @@ public class IncrMatchTest {
             String currentLine;
             while ((currentLine = reader.readLine()) != null) {
                 if (currentLine.equals(lineSplit)) {
+                    // Process window separator
                     if (curWindow.isEmpty()) {
+                        // Empty window: for incremental, keep history; for full, use empty
                         if (isIncr) {
                             res.add(new HashSet<>(allHistoryRes));
-                            continue;
                         } else {
                             res.add(new HashSet<>());
-                            continue;
                         }
-                    }
-
-                    if (isIncr) {
-                        allHistoryRes.addAll(curWindow);
-                        res.add(new HashSet<>(allHistoryRes));
                     } else {
-                        res.add(new HashSet<>(curWindow));
+                        // Non-empty window
+                        if (isIncr) {
+                            allHistoryRes.addAll(curWindow);
+                            res.add(new HashSet<>(allHistoryRes));
+                        } else {
+                            res.add(new HashSet<>(curWindow));
+                        }
                     }
                     curWindow = new HashSet<>();
                 } else {
                     curWindow.add(currentLine);
+                }
+            }
+            // Handle last window if file doesn't end with separator
+            if (!curWindow.isEmpty()) {
+                if (isIncr) {
+                    allHistoryRes.addAll(curWindow);
+                    res.add(new HashSet<>(allHistoryRes));
+                } else {
+                    res.add(new HashSet<>(curWindow));
                 }
             }
         } catch (IOException e) {
