@@ -19,10 +19,9 @@
 
 package org.apache.geaflow.dsl.udf.graph;
 
-import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Optional;
+import java.util.stream.Stream;
 import org.apache.geaflow.common.type.primitive.StringType;
 import org.apache.geaflow.dsl.common.algo.AlgorithmRuntimeContext;
 import org.apache.geaflow.dsl.common.algo.AlgorithmUserFunction;
@@ -62,25 +61,25 @@ public class ConnectedComponents implements AlgorithmUserFunction<Object, String
     @Override
     public void process(RowVertex vertex, Optional<Row> updatedValues, Iterator<String> messages) {
         updatedValues.ifPresent(vertex::setValue);
-        List<RowEdge> edges = new ArrayList<>(context.loadEdges(EdgeDirection.IN));
+        Stream<RowEdge> stream = context.loadEdges(EdgeDirection.IN).stream();
         if (context.getCurrentIterationId() == 1L) {
             String initValue = String.valueOf(vertex.getId());
-            sendMessageToNeighbors(edges, initValue);
+            sendMessageToNeighbors(stream, initValue);
             context.sendMessage(vertex.getId(), initValue);
             context.updateVertexValue(ObjectRow.create(initValue));
         } else if (context.getCurrentIterationId() < iteration) {
-            String minComponent = messages.next();
+            String minComponent = null;
             while (messages.hasNext()) {
                 String next = messages.next();
-                if (next.compareTo(minComponent) < 0) {
+                if (minComponent == null || next.compareTo(minComponent) < 0) {
                     minComponent = next;
                 }
             }
 
             String currentValue = (String) vertex.getValue().getField(0, StringType.INSTANCE);
             // If found smaller component id, update and propagate
-            if (minComponent.compareTo(currentValue) < 0) {
-                sendMessageToNeighbors(edges, minComponent);
+            if (minComponent != null && minComponent.compareTo(currentValue) < 0) {
+                sendMessageToNeighbors(stream, minComponent);
                 context.sendMessage(vertex.getId(), minComponent);
                 context.updateVertexValue(ObjectRow.create(minComponent));
             }
@@ -102,9 +101,7 @@ public class ConnectedComponents implements AlgorithmUserFunction<Object, String
         );
     }
 
-    private void sendMessageToNeighbors(List<RowEdge> edges, String message) {
-        for (RowEdge rowEdge : edges) {
-            context.sendMessage(rowEdge.getTargetId(), message);
-        }
+    private void sendMessageToNeighbors(Stream<RowEdge> edges, String message) {
+        edges.forEach(rowEdge -> context.sendMessage(rowEdge.getTargetId(), message));
     }
 }
