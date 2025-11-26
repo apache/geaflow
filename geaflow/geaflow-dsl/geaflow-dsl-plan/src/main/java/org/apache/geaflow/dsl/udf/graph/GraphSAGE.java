@@ -41,6 +41,7 @@ import org.apache.geaflow.dsl.common.types.StructType;
 import org.apache.geaflow.dsl.common.types.TableField;
 import org.apache.geaflow.dsl.udf.graph.FeatureReducer;
 import org.apache.geaflow.infer.InferContext;
+import org.apache.geaflow.infer.InferContextPool;
 import org.apache.geaflow.model.graph.edge.EdgeDirection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -115,16 +116,20 @@ public class GraphSAGE implements AlgorithmUserFunction<Object, Object> {
                 false);
             
             if (inferEnabled) {
-                this.inferContext = new InferContext<>(context.getConfig());
-                LOGGER.info("GraphSAGE initialized with numSamples={}, numLayers={}, Python inference enabled",
-                    numSamples, numLayers);
+                // Use InferContextPool instead of direct instantiation
+                // This allows efficient reuse of InferContext across multiple instances
+                this.inferContext = InferContextPool.getOrCreate(context.getConfig());
+                LOGGER.info(
+                    "GraphSAGE initialized with numSamples={}, numLayers={}, Python inference enabled. {}",
+                    numSamples, numLayers, InferContextPool.getStatus());
             } else {
                 LOGGER.warn("GraphSAGE requires Python inference environment. "
                     + "Please set geaflow.infer.env.enable=true");
             }
         } catch (Exception e) {
             LOGGER.error("Failed to initialize Python inference context", e);
-            throw new RuntimeException("GraphSAGE requires Python inference environment", e);
+            throw new RuntimeException("GraphSAGE requires Python inference environment: " 
+                + e.getMessage(), e);
         }
     }
 
