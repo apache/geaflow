@@ -64,7 +64,7 @@ public class InferEnvironmentContext {
 
     public InferEnvironmentContext(String virtualEnvDirectory, String pythonFilesDirectory,
                                    Configuration configuration) {
-        this.virtualEnvDirectory = virtualEnvDirectory;
+        this.virtualEnvDirectory = virtualEnvDirectory != null ? virtualEnvDirectory : "";
         this.inferFilesDirectory = pythonFilesDirectory;
         this.roleNameIndex = queryRoleNameIndex();
         this.configuration = configuration;
@@ -78,7 +78,7 @@ public class InferEnvironmentContext {
                 // Use system Python path directly
                 this.pythonExec = systemPythonPath;
                 // For lib path, try to detect it from the Python installation
-                this.inferLibPath = detectLibPath(systemPythonPath, virtualEnvDirectory);
+                this.inferLibPath = detectLibPath(systemPythonPath);
             } else {
                 // Fallback to default
                 this.inferLibPath = virtualEnvDirectory + LIB_PATH;
@@ -92,7 +92,7 @@ public class InferEnvironmentContext {
         this.inferScript = pythonFilesDirectory + INFER_SCRIPT_FILE;
     }
     
-    private String detectLibPath(String pythonPath, String fallbackEnvDir) {
+    private String detectLibPath(String pythonPath) {
         // Try to detect lib path from Python installation
         // For /opt/homebrew/bin/python3 -> /opt/homebrew/lib
         // For /usr/bin/python3 -> /usr/lib
@@ -107,9 +107,10 @@ public class InferEnvironmentContext {
                 }
             }
         } catch (Exception e) {
-            // Ignore and use fallback
+            // Ignore and use default fallback
         }
-        return fallbackEnvDir + LIB_PATH;
+        // Fallback: use common lib paths
+        return "/usr/lib";
     }
 
     private String queryRoleNameIndex() {

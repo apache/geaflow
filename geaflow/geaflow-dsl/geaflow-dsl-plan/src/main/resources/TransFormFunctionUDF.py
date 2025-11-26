@@ -330,32 +330,14 @@ class GraphSAGEModel(nn.Module):
         h = node_features
         
         for i, layer in enumerate(self.layers):
-            if i < len(neighbor_features_list):
+            # Only use neighbor features from the neighbor_features_list for the first layer.
+            # For subsequent layers, we don't use neighbor aggregation since the intermediate
+            # features don't have corresponding neighbor representations.
+            # This is a limitation of the single-node inference approach.
+            if i == 0 and i < len(neighbor_features_list):
                 neighbor_features = neighbor_features_list[i]
             else:
                 neighbor_features = []
-            
-            # For layers after the first, we need to handle the fact that neighbor features
-            # are still in the original input dimension while current node features are in
-            # hidden/output dimension. Project neighbors to match the current feature space.
-            if i > 0 and len(neighbor_features) > 0:
-                # The layer's in_dim matches h's dimension, but neighbor features are still
-                # in the original input_dim. We need to pad/project them.
-                # For simplicity, pad neighbor features to match current dimension
-                current_dim = h.shape[0] if h.dim() > 0 else 1
-                adjusted_neighbors = []
-                for neighbor in neighbor_features:
-                    neighbor_dim = neighbor.shape[0] if neighbor.dim() > 0 else 1
-                    if neighbor_dim < current_dim:
-                        # Pad with zeros
-                        padded = torch.cat([neighbor, torch.zeros(current_dim - neighbor_dim, device=neighbor.device, dtype=neighbor.dtype)])
-                        adjusted_neighbors.append(padded)
-                    elif neighbor_dim > current_dim:
-                        # Truncate
-                        adjusted_neighbors.append(neighbor[:current_dim])
-                    else:
-                        adjusted_neighbors.append(neighbor)
-                neighbor_features = adjusted_neighbors
             
             # Pass 1D tensor to layer and get 1D output
             h = layer(h, neighbor_features)  # [in_dim] -> [out_dim]
@@ -416,7 +398,12 @@ class MeanAggregator(nn.Module):
     
     def __init__(self, in_dim: int, out_dim: int):
         super(MeanAggregator, self).__init__()
-        self.linear = nn.Linear(in_dim * 2, out_dim)
+        # When no neighbors, just use a linear layer on node features alone
+        # When neighbors exist, concatenate and use larger linear layer
+        self.in_dim = in_dim
+        self.out_dim = out_dim
+        self.linear_with_neighbors = nn.Linear(in_dim * 2, out_dim)
+        self.linear_without_neighbors = nn.Linear(in_dim, out_dim)
     
     def forward(self, node_feature: torch.Tensor,
                 neighbor_features: List[torch.Tensor]) -> torch.Tensor:
@@ -431,20 +418,20 @@ class MeanAggregator(nn.Module):
             Aggregated feature tensor of shape [out_dim]
         """
         if len(neighbor_features) == 0:
-            # No neighbors, use zero vector
-            neighbor_mean = torch.zeros_like(node_feature)
+            # No neighbors, just apply linear transformation to node features
+            output = self.linear_without_neighbors(node_feature)
         else:
             # Stack neighbors and take mean
             neighbor_stack = torch.stack(neighbor_features, dim=0)  # [num_neighbors, in_dim]
             neighbor_mean = torch.mean(neighbor_stack, dim=0)  # [in_dim]
+            
+            # Concatenate node and aggregated neighbor features
+            combined = torch.cat([node_feature, neighbor_mean], dim=0)  # [in_dim * 2]
+            
+            # Apply linear transformation
+            output = self.linear_with_neighbors(combined)  # [out_dim]
         
-        # Concatenate node and aggregated neighbor features
-        combined = torch.cat([node_feature, neighbor_mean], dim=0)  # [in_dim * 2]
-        
-        # Apply linear transformation and activation
-        output = self.linear(combined)  # [out_dim]
         output = F.relu(output)
-        
         return output
 
 
@@ -505,8 +492,11 @@ class PoolAggregator(nn.Module):
     
     def __init__(self, in_dim: int, out_dim: int):
         super(PoolAggregator, self).__init__()
+        self.in_dim = in_dim
+        self.out_dim = out_dim
         self.pool_linear = nn.Linear(in_dim, in_dim)
-        self.linear = nn.Linear(in_dim * 2, out_dim)
+        self.linear_with_neighbors = nn.Linear(in_dim * 2, out_dim)
+        self.linear_without_neighbors = nn.Linear(in_dim, out_dim)
     
     def forward(self, node_feature: torch.Tensor,
                 neighbor_features: List[torch.Tensor]) -> torch.Tensor:
@@ -521,8 +511,8 @@ class PoolAggregator(nn.Module):
             Aggregated feature tensor of shape [out_dim]
         """
         if len(neighbor_features) == 0:
-            # No neighbors, use zero vector
-            neighbor_pool = torch.zeros_like(node_feature)
+            # No neighbors, just apply linear transformation to node features
+            output = self.linear_without_neighbors(node_feature)
         else:
             # Stack neighbors: [num_neighbors, in_dim]
             neighbor_stack = torch.stack(neighbor_features, dim=0)
@@ -533,12 +523,12 @@ class PoolAggregator(nn.Module):
             
             # Max pooling
             neighbor_pool, _ = torch.max(neighbor_transformed, dim=0)  # [in_dim]
+            
+            # Concatenate node and aggregated neighbor features
+            combined = torch.cat([node_feature, neighbor_pool], dim=0)  # [in_dim * 2]
+            
+            # Apply linear transformation
+            output = self.linear_with_neighbors(combined)  # [out_dim]
         
-        # Concatenate node and aggregated neighbor features
-        combined = torch.cat([node_feature, neighbor_pool], dim=0)  # [in_dim * 2]
-        
-        # Apply linear transformation and activation
-        output = self.linear(combined)  # [out_dim]
         output = F.relu(output)
-        
         return output
