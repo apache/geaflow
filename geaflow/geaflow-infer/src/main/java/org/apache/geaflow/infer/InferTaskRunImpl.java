@@ -69,6 +69,9 @@ public class InferTaskRunImpl implements InferTaskRun {
 
     @Override
     public void run(List<String> script) {
+        // ✅ 首先编译 Cython 模块（如果存在 setup.py）
+        compileCythonModules();
+        
         inferScript = Joiner.on(SCRIPT_SEPARATOR).join(script);
         LOGGER.info("infer task run command is {}", inferScript);
         ProcessBuilder inferTaskBuilder = new ProcessBuilder(script);
@@ -99,6 +102,163 @@ public class InferTaskRunImpl implements InferTaskRun {
         }
     }
 
+    /**
+     * Compile Cython modules if setup.py exists.
+     * This is required for modules like mmap_ipc that need compilation.
+     */
+    private void compileCythonModules() {
+        File setupPy = new File(inferFilePath, "setup.py");
+        if (!setupPy.exists()) {
+            LOGGER.debug("setup.py not found, skipping Cython compilation");
+            return;
+        }
+        
+        try {
+            String pythonExec = inferEnvironmentContext.getPythonExec();
+            
+            // 1. 首先尝试安装 Cython（如果还没安装）
+            ensureCythonInstalled(pythonExec);
+            
+            // 2. 清理旧的编译产物（.cpp, .so 等）以避免冲突
+            cleanOldCompiledFiles();
+            
+            // 3. 然后编译 Cython 模块
+            List<String> compileCythonCmd = new ArrayList<>();
+            compileCythonCmd.add(pythonExec);
+            compileCythonCmd.add("setup.py");
+            compileCythonCmd.add("build_ext");
+            compileCythonCmd.add("--inplace");
+            
+            LOGGER.info("Compiling Cython modules: {}", String.join(" ", compileCythonCmd));
+            
+            ProcessBuilder cythonBuilder = new ProcessBuilder(compileCythonCmd);
+            cythonBuilder.directory(new File(inferFilePath));
+            cythonBuilder.redirectError(ProcessBuilder.Redirect.PIPE);
+            cythonBuilder.redirectOutput(ProcessBuilder.Redirect.PIPE);
+            
+            Process cythonProcess = cythonBuilder.start();
+            ProcessLoggerManager processLogger = new ProcessLoggerManager(cythonProcess, 
+                new Slf4JProcessOutputConsumer("CythonCompiler"));
+            processLogger.startLogging();
+            
+            boolean finished = cythonProcess.waitFor(60, TimeUnit.SECONDS);
+            
+            if (finished) {
+                int exitCode = cythonProcess.exitValue();
+                if (exitCode == 0) {
+                    LOGGER.info("✓ Cython modules compiled successfully");
+                } else {
+                    String errorMsg = processLogger.getErrorOutputLogger().get();
+                    LOGGER.error("✗ Cython compilation failed with exit code: {}. Error: {}", 
+                        exitCode, errorMsg);
+                    throw new GeaflowRuntimeException(
+                        String.format("Cython compilation failed (exit code %d): %s", exitCode, errorMsg));
+                }
+            } else {
+                LOGGER.error("✗ Cython compilation timed out after 60 seconds");
+                cythonProcess.destroyForcibly();
+                throw new GeaflowRuntimeException("Cython compilation timed out");
+            }
+        } catch (GeaflowRuntimeException e) {
+            throw e;
+        } catch (Exception e) {
+            String errorMsg = String.format("Cython compilation failed: %s", e.getMessage());
+            LOGGER.error(errorMsg, e);
+            throw new GeaflowRuntimeException(errorMsg, e);
+        }
+    }
+
+    /**
+     * Clean up old compiled files (.cpp, .c, .so, .pyd) to avoid Cython compilation conflicts.
+     */
+    private void cleanOldCompiledFiles() {
+        try {
+            File inferDir = new File(inferFilePath);
+            if (!inferDir.exists() || !inferDir.isDirectory()) {
+                return;
+            }
+            
+            String[] extensions = {".cpp", ".c", ".so", ".pyd", ".o"};
+            File[] files = inferDir.listFiles((dir, name) -> {
+                for (String ext : extensions) {
+                    if (name.endsWith(ext)) {
+                        return true;
+                    }
+                }
+                return false;
+            });
+            
+            if (files != null) {
+                for (File file : files) {
+                    boolean deleted = file.delete();
+                    if (deleted) {
+                        LOGGER.debug("Cleaned old compiled file: {}", file.getName());
+                    } else {
+                        LOGGER.warn("Failed to delete old compiled file: {}", file.getName());
+                    }
+                }
+            }
+        } catch (Exception e) {
+            LOGGER.warn("Failed to clean old compiled files: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Ensure Cython is installed in the Python environment.
+     * Attempts to import it, and if not found, installs it via pip.
+     */
+    private void ensureCythonInstalled(String pythonExec) {
+        try {
+            // ✅ 1. 检查 Cython 是否已安装
+            List<String> checkCmd = new ArrayList<>();
+            checkCmd.add(pythonExec);
+            checkCmd.add("-c");
+            checkCmd.add("from Cython.Build import cythonize; print('Cython is already installed')");
+            
+            ProcessBuilder checkBuilder = new ProcessBuilder(checkCmd);
+            Process checkProcess = checkBuilder.start();
+            boolean checkFinished = checkProcess.waitFor(10, TimeUnit.SECONDS);
+            
+            if (checkFinished && checkProcess.exitValue() == 0) {
+                LOGGER.info("✓ Cython is already installed");
+                return;  // Cython 已安装，无需再安装
+            }
+            
+            // ✅ 2. Cython 未安装，尝试通过 pip 安装
+            LOGGER.info("Cython not found, attempting to install via pip...");
+            List<String> installCmd = new ArrayList<>();
+            installCmd.add(pythonExec);
+            installCmd.add("-m");
+            installCmd.add("pip");
+            installCmd.add("install");
+            installCmd.add("--user");
+            installCmd.add("Cython>=0.29.0");
+            
+            ProcessBuilder installBuilder = new ProcessBuilder(installCmd);
+            Process installProcess = installBuilder.start();
+            ProcessLoggerManager processLogger = new ProcessLoggerManager(installProcess, 
+                new Slf4JProcessOutputConsumer("CythonInstaller"));
+            processLogger.startLogging();
+            
+            boolean finished = installProcess.waitFor(120, TimeUnit.SECONDS);
+            
+            if (finished && installProcess.exitValue() == 0) {
+                LOGGER.info("✓ Cython installed successfully");
+            } else {
+                String errorMsg = processLogger.getErrorOutputLogger().get();
+                LOGGER.warn("Failed to install Cython via pip: {}", errorMsg);
+                throw new GeaflowRuntimeException(
+                    String.format("Failed to install Cython: %s", errorMsg));
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new GeaflowRuntimeException("Cython installation interrupted", e);
+        } catch (Exception e) {
+            throw new GeaflowRuntimeException(
+                String.format("Failed to ensure Cython installation: %s", e.getMessage()), e);
+        }
+    }
+
     @Override
     public void stop() {
         if (inferTask != null) {
@@ -110,10 +270,11 @@ public class InferTaskRunImpl implements InferTaskRun {
         Map<String, String> environment = processBuilder.environment();
         environment.put(PATH, executePath);
         processBuilder.directory(new File(this.inferFilePath));
-        processBuilder.redirectErrorStream(true);
+        //  保留 stderr 用于调试，但忽略 stdout
+        processBuilder.redirectError(ProcessBuilder.Redirect.PIPE);
+        processBuilder.redirectOutput(NULL_FILE);
         setLibraryPath(processBuilder);
         environment.computeIfAbsent(PYTHON_PATH, k -> virtualEnvPath);
-        processBuilder.redirectOutput(NULL_FILE);
     }
 
 

@@ -22,6 +22,7 @@ package org.apache.geaflow.infer;
 import static org.apache.geaflow.infer.util.InferFileUtils.REQUIREMENTS_TXT;
 
 import java.io.File;
+import java.io.InputStream;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -61,6 +62,10 @@ public class InferDependencyManager {
         }
         String pythonFilesDirectory = environmentContext.getInferFilesDirectory();
         InferFileUtils.prepareInferFilesFromJars(pythonFilesDirectory);
+        
+        // 复制用户定义的 UDF 文件（如 TransFormFunctionUDF.py）
+        copyUserDefinedUDFFiles(pythonFilesDirectory);
+        
         this.inferEnvRequirementsPath = pythonFilesDirectory + File.separator + REQUIREMENTS_TXT;
         this.buildInferEnvShellPath = InferFileUtils.copyInferFileByURL(environmentContext.getVirtualEnvDirectory(), ENV_RUNNER_SH);
     }
@@ -90,5 +95,36 @@ public class InferDependencyManager {
             throw new GeaflowRuntimeException("get infer runtime files failed", e);
         }
         return runtimeFiles;
+    }
+
+    /**
+     * Copy user-defined UDF files (like TransFormFunctionUDF.py) from resources to infer directory.
+     * This allows the Python inference server to load custom user transformation functions.
+     */
+    private void copyUserDefinedUDFFiles(String pythonFilesDirectory) {
+        try {
+            // Try to copy TransFormFunctionUDF.py from resources
+            // First try from geaflow-dsl-plan resources
+            String udfFileName = "TransFormFunctionUDF.py";
+            String resourcePath = "/" + udfFileName;
+            
+            try (InputStream is = InferDependencyManager.class.getResourceAsStream(resourcePath)) {
+                if (is != null) {
+                    File targetFile = new File(pythonFilesDirectory, udfFileName);
+                    java.nio.file.Files.copy(is, targetFile.toPath(), 
+                        java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                    LOGGER.info("Copied {} to infer directory", udfFileName);
+                    return;
+                }
+            } catch (Exception e) {
+                LOGGER.debug("Failed to find {} in resources, trying alternative locations", resourcePath);
+            }
+            
+            // If not found, it's okay - UDF files might be provided separately
+            LOGGER.debug("TransFormFunctionUDF.py not found in resources, will need to be provided separately");
+        } catch (Exception e) {
+            LOGGER.warn("Failed to copy user-defined UDF files: {}", e.getMessage());
+            // Don't fail the entire initialization if UDF files are missing
+        }
     }
 }

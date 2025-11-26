@@ -410,7 +410,7 @@ public class GraphSAGE implements AlgorithmUserFunction<Object, Object> {
     /**
      * Extract vertex data from vertex value.
      *
-     * <p>Helper method to safely extract Map<String, Object> from vertex value,
+     * <p>Helper method to safely extract Map from vertex value,
      * handling both Row and Map types.
      *
      * @param vertex The vertex to extract data from
@@ -438,8 +438,8 @@ public class GraphSAGE implements AlgorithmUserFunction<Object, Object> {
      * Get vertex features from vertex value.
      *
      * <p>This method extracts features from the vertex value, handling multiple formats:
-     * - Direct List<Double> value
-     * - Map with "features" key containing List<Double>
+     * - Direct List value
+     * - Map with "features" key containing List
      * - Row with features in first field
      *
      * @param vertex The vertex to extract features from
