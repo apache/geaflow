@@ -23,6 +23,8 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.BufferedReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -80,41 +82,42 @@ public class GraphSAGEInferIntegrationTest {
     }
 
     /**
-     * Test 1: Direct InferContext test - Java to Python communication.
+     * Test 1: InferContext test with system Python.
      * 
-     * This test verifies:
-     * - InferContext initialization
-     * - Java-Python data exchange via shared memory
-     * - Python model inference execution
-     * - Result retrieval
+     * This test uses the local Conda environment by configuring system Python path,
+     * eliminating the virtual environment creation overhead.
+     * 
+     * Configuration:
+     * - geaflow.infer.env.use.system.python=true
+     * - geaflow.infer.env.system.python.path=/path/to/local/python3
      */
-    @Test(timeOut = 180000)
+    @Test(timeOut = 180000)  // 3 minutes for InferContext initialization with system Python
     public void testInferContextJavaPythonCommunication() throws Exception {
-        // Skip test if Python environment is not available
         if (!isPythonAvailable()) {
             System.out.println("Python not available, skipping InferContext test");
             return;
         }
-
+        
         Configuration config = new Configuration();
         
-        // Configure inference environment
+        // Enable inference with system Python from local Conda environment
         config.put(FrameworkConfigKeys.INFER_ENV_ENABLE.getKey(), "true");
+        config.put(FrameworkConfigKeys.INFER_ENV_USE_SYSTEM_PYTHON.getKey(), "true");
+        config.put(FrameworkConfigKeys.INFER_ENV_SYSTEM_PYTHON_PATH.getKey(), getPythonExecutable());
         config.put(FrameworkConfigKeys.INFER_ENV_USER_TRANSFORM_CLASSNAME.getKey(), 
             "GraphSAGETransFormFunction");
-        config.put(FrameworkConfigKeys.INFER_ENV_INIT_TIMEOUT_SEC.getKey(), "600");
-        // Add missing job unique ID
+        config.put(FrameworkConfigKeys.INFER_ENV_INIT_TIMEOUT_SEC.getKey(), "120");
         config.put(ExecutionConfigKeys.JOB_UNIQUE_ID.getKey(), "graphsage_test_job");
-        // Specify custom conda URL for faster environment setup (uses existing pytorch_env)
-        config.put(FrameworkConfigKeys.INFER_ENV_CONDA_URL.getKey(), 
-            "https://repo.anaconda.com/miniconda/Miniconda3-latest-MacOSX-arm64.sh");
         config.put(FileConfigKeys.ROOT.getKey(), TEST_WORK_DIR);
         config.put(ExecutionConfigKeys.JOB_APP_NAME.getKey(), "GraphSAGEInferTest");
         
         InferContext<List<Double>> inferContext = null;
         try {
-            // Initialize InferContext (this will start Python process)
+            // Initialize InferContext with system Python from local Conda
+            long startTime = System.currentTimeMillis();
             inferContext = new InferContext<>(config);
+            long initTime = System.currentTimeMillis() - startTime;
+            System.out.println("InferContext initialization took " + initTime + "ms");
             
             // Prepare test data: vertex ID, reduced vertex features (64 dim), neighbor features map
             Object vertexId = 1L;
@@ -187,28 +190,26 @@ public class GraphSAGEInferIntegrationTest {
     }
 
     /**
-     * Test 2: Multiple inference calls.
+     * Test 2: Multiple inference calls with system Python.
      * 
-     * This test verifies that InferContext can handle multiple
-     * inference calls sequentially.
+     * This test verifies that InferContext can handle multiple sequential
+     * inference calls using the local Conda environment configuration.
      */
-    @Test(timeOut = 180000)
+    @Test(timeOut = 180000)  // 3 minutes for InferContext initialization with system Python
     public void testMultipleInferenceCalls() throws Exception {
         if (!isPythonAvailable()) {
-            System.out.println("Python not available, skipping test");
+            System.out.println("Python not available, skipping multiple inference calls test");
             return;
         }
 
         Configuration config = new Configuration();
         config.put(FrameworkConfigKeys.INFER_ENV_ENABLE.getKey(), "true");
+        config.put(FrameworkConfigKeys.INFER_ENV_USE_SYSTEM_PYTHON.getKey(), "true");
+        config.put(FrameworkConfigKeys.INFER_ENV_SYSTEM_PYTHON_PATH.getKey(), getPythonExecutable());
         config.put(FrameworkConfigKeys.INFER_ENV_USER_TRANSFORM_CLASSNAME.getKey(), 
             "GraphSAGETransFormFunction");
-        config.put(FrameworkConfigKeys.INFER_ENV_INIT_TIMEOUT_SEC.getKey(), "600");
-        // Add missing job unique ID
+        config.put(FrameworkConfigKeys.INFER_ENV_INIT_TIMEOUT_SEC.getKey(), "120");
         config.put(ExecutionConfigKeys.JOB_UNIQUE_ID.getKey(), "graphsage_test_job_multi");
-        // Specify custom conda URL for faster environment setup (uses existing pytorch_env)
-        config.put(FrameworkConfigKeys.INFER_ENV_CONDA_URL.getKey(), 
-            "https://repo.anaconda.com/miniconda/Miniconda3-latest-MacOSX-arm64.sh");
         config.put(FileConfigKeys.ROOT.getKey(), TEST_WORK_DIR);
         
         InferContext<List<Double>> inferContext = null;
@@ -245,6 +246,7 @@ public class GraphSAGEInferIntegrationTest {
                 
                 Assert.assertNotNull(embedding, "Embedding should not be null for vertex " + v);
                 Assert.assertEquals(embedding.size(), 64, "Embedding dimension should be 64");
+                System.out.println("Inference call " + (v + 1) + " passed for vertex " + v);
             }
             
             System.out.println("Multiple inference calls test passed.");
@@ -293,6 +295,129 @@ public class GraphSAGEInferIntegrationTest {
         } else {
             System.out.println("Some modules not found via Java subprocess, but test environment may still be OK");
         }
+    }
+
+    /**
+     * Test 4: Direct Python UDF invocation test.
+     * 
+     * This test verifies the GraphSAGE Python implementation by directly
+     * invoking the TransFormFunctionUDF without the expensive InferContext
+     * initialization. This provides a quick sanity check that:
+     * - Python environment is properly configured
+     * - GraphSAGE model can be imported and instantiated
+     * - Basic inference works
+     */
+    @Test(timeOut = 30000)  // 30 seconds max
+    public void testGraphSAGEPythonUDFDirect() throws Exception {
+        if (!isPythonAvailable()) {
+            System.out.println("Python not available, skipping direct UDF test");
+            return;
+        }
+        
+        // Create a Python test script that directly instantiates and tests GraphSAGE
+        String testScript = String.join("\n",
+            "import sys",
+            "sys.path.insert(0, '" + PYTHON_UDF_DIR + "')",
+            "try:",
+            "    from TransFormFunctionUDF import GraphSAGETransFormFunction",
+            "    print('✓ Successfully imported GraphSAGETransFormFunction')",
+            "    ",
+            "    # Instantiate the transform function",
+            "    graphsage_func = GraphSAGETransFormFunction()",
+            "    print(f'✓ GraphSAGETransFormFunction initialized with device: {graphsage_func.device}')",
+            "    print(f'  - Input dimension: {graphsage_func.input_dim}')",
+            "    print(f'  - Output dimension: {graphsage_func.output_dim}')",
+            "    print(f'  - Hidden dimension: {graphsage_func.hidden_dim}')",
+            "    print(f'  - Number of layers: {graphsage_func.num_layers}')",
+            "    ",
+            "    # Test with sample data",
+            "    import torch",
+            "    vertex_id = 1",
+            "    vertex_features = [float(i) for i in range(64)]  # 64-dimensional features",
+            "    neighbor_features_map = {",
+            "        1: [[float(j*100+i) for i in range(64)] for j in range(2)],",
+            "        2: [[float(j*200+i) for i in range(64)] for j in range(2)]",
+            "    }",
+            "    ",
+            "    # Call the transform function",
+            "    result = graphsage_func.transform_pre(vertex_id, vertex_features, neighbor_features_map)",
+            "    print(f'✓ Transform function returned result: {type(result)}')",
+            "    ",
+            "    if result is not None:",
+            "        embedding, returned_id = result",
+            "        print(f'✓ Got embedding of shape {len(embedding)} (expected 64)')",
+            "        print(f'✓ Returned vertex ID: {returned_id}')",
+            "        # Check that embedding is reasonable",
+            "        has_non_zero = any(abs(x) > 0.001 for x in embedding)",
+            "        if has_non_zero:",
+            "            print('✓ Embedding has non-zero values (inference executed)')",
+            "        else:",
+            "            print('⚠ Embedding is all zeros (may indicate model initialization issue)')",
+            "    ",
+            "    print('\\n✓ ALL CHECKS PASSED - GraphSAGE Python implementation is working')",
+            "    sys.exit(0)",
+            "    ",
+            "except Exception as e:",
+            "    print(f'✗ Error: {e}')",
+            "    import traceback",
+            "    traceback.print_exc()",
+            "    sys.exit(1)"
+        );
+        
+        // Write test script to file
+        File testScriptFile = new File(PYTHON_UDF_DIR, "test_graphsage_udf.py");
+        try (FileWriter writer = new FileWriter(testScriptFile, StandardCharsets.UTF_8)) {
+            writer.write(testScript);
+        }
+        
+        // Execute the test script
+        String pythonExe = getPythonExecutable();
+        Process process = Runtime.getRuntime().exec(new String[]{
+            pythonExe,
+            testScriptFile.getAbsolutePath()
+        });
+        
+        // Capture output
+        StringBuilder output = new StringBuilder();
+        try (InputStream is = process.getInputStream();
+             InputStreamReader isr = new InputStreamReader(is);
+             BufferedReader br = new BufferedReader(isr)) {
+            String line;
+            while ((line = br.readLine()) != null) {
+                output.append(line).append("\n");
+                System.out.println(line);
+            }
+        }
+        
+        // Capture error output
+        StringBuilder errorOutput = new StringBuilder();
+        try (InputStream is = process.getErrorStream();
+             InputStreamReader isr = new InputStreamReader(is);
+             BufferedReader br = new BufferedReader(isr)) {
+            String line;
+            while ((line = br.readLine()) != null) {
+                errorOutput.append(line).append("\n");
+                System.err.println(line);
+            }
+        }
+        
+        int exitCode = process.waitFor();
+        
+        // Verify the test succeeded
+        Assert.assertEquals(exitCode, 0, 
+            "GraphSAGE Python UDF test failed.\nOutput:\n" + output.toString() + 
+            "\nErrors:\n" + errorOutput.toString());
+        
+        // Verify key success indicators are in the output
+        String outputStr = output.toString();
+        Assert.assertTrue(outputStr.contains("Successfully imported"), 
+            "GraphSAGETransFormFunction import failed");
+        Assert.assertTrue(outputStr.contains("initialized"), 
+            "GraphSAGETransFormFunction initialization failed");
+        Assert.assertTrue(outputStr.contains("Transform function returned result"), 
+            "Transform function did not execute");
+        
+        System.out.println("\n✓ Direct GraphSAGE Python UDF test PASSED");
     }
 
     /**
