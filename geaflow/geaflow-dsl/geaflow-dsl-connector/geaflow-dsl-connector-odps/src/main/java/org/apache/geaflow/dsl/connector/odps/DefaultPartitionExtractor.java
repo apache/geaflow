@@ -29,6 +29,11 @@ import org.apache.geaflow.dsl.common.types.StructType;
 public class DefaultPartitionExtractor implements PartitionExtractor {
 
     private static final String DEFAULT_SEPARATOR_PATTERN = "[,/]";
+    private static final String QUOTE_SEPARATOR_PATTERN = "[`'\"]";
+    private static final String EQUAL_SEPARATOR = "=";
+    private static final String COMMA_SEPARATOR = ",";
+    private static final String SLASH_SEPARATOR = "/";
+    private static final String DYNAMIC_KEY_PREFIX = "$";
 
     // partition spec separator
     private final String separator;
@@ -63,7 +68,8 @@ public class DefaultPartitionExtractor implements PartitionExtractor {
             }
             columns[i] = index;
             types[i] = schema.getType(index);
-            sb.append(partitionColumn).append("=$").append(partitionColumn).append(",");
+            sb.append(partitionColumn).append(EQUAL_SEPARATOR).append(DYNAMIC_KEY_PREFIX)
+                    .append(partitionColumn).append(COMMA_SEPARATOR);
         }
         return new DefaultPartitionExtractor(sb.substring(0, sb.length() - 1), columns, types);
     }
@@ -82,7 +88,7 @@ public class DefaultPartitionExtractor implements PartitionExtractor {
         List<Integer> index = new ArrayList<>();
         List<IType<?>> types = new ArrayList<>();
         for (String group : groups) {
-            String[] kv = group.split("=");
+            String[] kv = group.split(EQUAL_SEPARATOR);
             if (kv.length != 2) {
                 throw new IllegalArgumentException("Invalid partition spec.");
             }
@@ -91,7 +97,7 @@ public class DefaultPartitionExtractor implements PartitionExtractor {
             if (k.isEmpty() || v.isEmpty()) {
                 throw new IllegalArgumentException("Invalid partition spec.");
             }
-            if (v.startsWith("$")) {
+            if (v.startsWith(DYNAMIC_KEY_PREFIX)) {
                 int val = schema.indexOf(v.substring(1));
                 if (val != -1) {
                     index.add(val);
@@ -109,11 +115,11 @@ public class DefaultPartitionExtractor implements PartitionExtractor {
             throw new IllegalArgumentException("Argument 'spec' cannot be null");
         }
         String[] groups = spec.split(DEFAULT_SEPARATOR_PATTERN);
-        this.separator = spec.contains(",") ? "," : "/";
+        this.separator = spec.contains(COMMA_SEPARATOR) ? COMMA_SEPARATOR : SLASH_SEPARATOR;
         this.keys = new String[groups.length];
         this.values = new String[groups.length];
         for (int i = 0; i < groups.length; i++) {
-            String[] kv = groups[i].split("=");
+            String[] kv = groups[i].split(EQUAL_SEPARATOR);
             if (kv.length != 2) {
                 throw new IllegalArgumentException("Invalid partition spec.");
             }
@@ -123,7 +129,7 @@ public class DefaultPartitionExtractor implements PartitionExtractor {
                 throw new IllegalArgumentException("Invalid partition spec.");
             }
             this.keys[i] = k;
-            this.values[i] = v.startsWith("$") ? null : v;
+            this.values[i] = v.startsWith(DYNAMIC_KEY_PREFIX) ? null : v;
         }
     }
 
@@ -132,8 +138,8 @@ public class DefaultPartitionExtractor implements PartitionExtractor {
      * @param s the string
      * @return the unquoted string
      */
-    private static String unquoted(String s) {
-        return s.replaceAll("'", "").replaceAll("\"", "").replaceAll("`", "");
+    public static String unquoted(String s) {
+        return s.replaceAll(QUOTE_SEPARATOR_PATTERN, "");
     }
 
     @Override
@@ -142,7 +148,7 @@ public class DefaultPartitionExtractor implements PartitionExtractor {
         // dynamic field
         int col = 0;
         for (int i = 0; i < keys.length; i++) {
-            sb.append(keys[i]).append("=");
+            sb.append(keys[i]).append(EQUAL_SEPARATOR);
             if (values[i] == null) {
                 sb.append(row.getField(columns[col], types[col]));
                 col++;

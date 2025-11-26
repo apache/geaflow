@@ -105,4 +105,12 @@ public class DefaultPartitionExtractorTest {
         Assert.assertEquals("", extractor6.extractPartition(row6));
 
     }
+
+    @Test
+    public void testUnquoted() {
+        Assert.assertEquals("dt", DefaultPartitionExtractor.unquoted("dt"));
+        Assert.assertEquals("dt", DefaultPartitionExtractor.unquoted("`dt`"));
+        Assert.assertEquals("dt", DefaultPartitionExtractor.unquoted("'dt'"));
+        Assert.assertEquals("dt", DefaultPartitionExtractor.unquoted("\"dt\""));
+    }
 }
