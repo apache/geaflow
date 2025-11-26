@@ -326,7 +326,8 @@ class GraphSAGEModel(nn.Module):
         Returns:
             Node embedding tensor of shape [output_dim]
         """
-        h = node_features.unsqueeze(0)  # Add batch dimension: [1, input_dim]
+        # Start with the node features (1D tensor: [input_dim])
+        h = node_features
         
         for i, layer in enumerate(self.layers):
             if i < len(neighbor_features_list):
@@ -334,10 +335,32 @@ class GraphSAGEModel(nn.Module):
             else:
                 neighbor_features = []
             
-            h = layer(h.squeeze(0), neighbor_features)  # Remove batch dim for layer
-            h = h.unsqueeze(0)  # Add batch dim back: [1, hidden_dim]
+            # For layers after the first, we need to handle the fact that neighbor features
+            # are still in the original input dimension while current node features are in
+            # hidden/output dimension. Project neighbors to match the current feature space.
+            if i > 0 and len(neighbor_features) > 0:
+                # The layer's in_dim matches h's dimension, but neighbor features are still
+                # in the original input_dim. We need to pad/project them.
+                # For simplicity, pad neighbor features to match current dimension
+                current_dim = h.shape[0] if h.dim() > 0 else 1
+                adjusted_neighbors = []
+                for neighbor in neighbor_features:
+                    neighbor_dim = neighbor.shape[0] if neighbor.dim() > 0 else 1
+                    if neighbor_dim < current_dim:
+                        # Pad with zeros
+                        padded = torch.cat([neighbor, torch.zeros(current_dim - neighbor_dim, device=neighbor.device, dtype=neighbor.dtype)])
+                        adjusted_neighbors.append(padded)
+                    elif neighbor_dim > current_dim:
+                        # Truncate
+                        adjusted_neighbors.append(neighbor[:current_dim])
+                    else:
+                        adjusted_neighbors.append(neighbor)
+                neighbor_features = adjusted_neighbors
+            
+            # Pass 1D tensor to layer and get 1D output
+            h = layer(h, neighbor_features)  # [in_dim] -> [out_dim]
         
-        return h.squeeze(0)  # Remove batch dimension: [output_dim]
+        return h  # [output_dim]
 
 
 class GraphSAGELayer(nn.Module):
