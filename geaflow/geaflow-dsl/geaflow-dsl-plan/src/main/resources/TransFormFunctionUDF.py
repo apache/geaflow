@@ -89,15 +89,24 @@ class GraphSAGETransFormFunction(TransFormFunction):
         The class is automatically instantiated by the GeaFlow-Infer framework.
         It expects:
         - args[0]: vertex_id (Object)
-        - args[1]: vertex_features (List[Double])
+        - args[1]: vertex_features (List[Double>)
         - args[2]: neighbor_features_map (Map<Integer, List<List<Double>>>)
     """
     
     def __init__(self):
         super().__init__(input_size=3)  # vertexId, features, neighbor_features
         print("Initializing GraphSAGETransFormFunction")
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        print(f"Using device: {self.device}")
+        
+        # Check for Metal support (MPS) on Mac
+        if torch.backends.mps.is_available():
+            self.device = torch.device("mps")
+            print("Using Metal Performance Shaders (MPS) device")
+        elif torch.cuda.is_available():
+            self.device = torch.device("cuda")
+            print("Using CUDA device")
+        else:
+            self.device = torch.device("cpu")
+            print("Using CPU device")
         
         # Default model parameters (can be configured)
         # Note: input_dim should match the reduced feature dimension from Java side
@@ -112,7 +121,7 @@ class GraphSAGETransFormFunction(TransFormFunction):
         model_path = os.getcwd() + "/graphsage_model.pt"
         self.load_model(model_path)
     
-    def load_model(self, model_path: str):
+    def load_model(self, model_path: str = None):
         """
         Load pre-trained GraphSAGE model or initialize a new one.
         
@@ -212,19 +221,22 @@ class GraphSAGETransFormFunction(TransFormFunction):
             # Return zero embedding as fallback
             return [0.0] * self.output_dim, args[0] if len(args) > 0 else None
     
-    def transform_post(self, res):
+    def transform_post(self, *args):
         """
         Post-process the result from transform_pre.
         
         Args:
-            res: The result tuple from transform_pre (embedding, vertex_id)
+            args: The result tuple from transform_pre (embedding, vertex_id)
             
         Returns:
             The embedding as a list of doubles
         """
-        if isinstance(res, tuple) and len(res) > 0:
-            return res[0]  # Return the embedding
-        return res
+        if len(args) > 0:
+            res = args[0]
+            if isinstance(res, tuple) and len(res) > 0:
+                return res[0]  # Return the embedding
+            return res
+        return None
     
     def _parse_neighbor_features(self, neighbor_features_map: Dict[int, List[List[float]]]) -> List[List[torch.Tensor]]:
         """
@@ -440,7 +452,7 @@ class LSTMAggregator(nn.Module):
         """
         if len(neighbor_features) == 0:
             # No neighbors, use zero vector
-            neighbor_agg = torch.zeros(out_dim, device=node_feature.device)
+            neighbor_agg = torch.zeros(self.linear.out_features, device=node_feature.device)
         else:
             # Stack neighbors: [num_neighbors, in_dim]
             neighbor_stack = torch.stack(neighbor_features, dim=0).unsqueeze(0)  # [1, num_neighbors, in_dim]
@@ -507,4 +519,3 @@ class PoolAggregator(nn.Module):
         output = F.relu(output)
         
         return output
-
