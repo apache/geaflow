@@ -315,6 +315,24 @@ public class GQLAlgorithmTest {
             .checkSinkResult();
     }
 
+    @Test
+    public void testAlgorithmLabelPropagation() throws Exception {
+        QueryTester
+            .build()
+            .withQueryPath("/query/gql_algorithm_lpa.sql")
+            .execute()
+            .checkSinkResult("/expect/gql_algorithm_lpa.txt");
+    }
+
+    @Test
+    public void testAlgorithmConnectedComponents() throws Exception {
+        QueryTester
+            .build()
+            .withQueryPath("/query/gql_algorithm_cc.sql")
+            .execute()
+            .checkSinkResult("/expect/gql_algorithm_cc.txt");
+    }
+
     private void clearGraph() throws IOException {
         File file = new File(TEST_GRAPH_PATH);
         if (file.exists()) {
