@@ -102,7 +102,7 @@ class SPSCQueueBase
     void close() {
         if(ipc_) {
             int rc = munmap(reinterpret_cast<void*>(alignedRaw_), mmapLen_);
-            (void)rc;  // ✅ 消除未使用变量警告
+            (void)rc;  // Suppress unused variable warning
             assert(rc==0);
         }
     }

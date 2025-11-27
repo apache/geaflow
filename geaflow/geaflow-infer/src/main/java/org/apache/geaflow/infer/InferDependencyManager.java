@@ -63,7 +63,7 @@ public class InferDependencyManager {
         String pythonFilesDirectory = environmentContext.getInferFilesDirectory();
         InferFileUtils.prepareInferFilesFromJars(pythonFilesDirectory);
         
-        // 复制用户定义的 UDF 文件（如 TransFormFunctionUDF.py）
+        // Copy user-defined UDF files (e.g., TransFormFunctionUDF.py)
         copyUserDefinedUDFFiles(pythonFilesDirectory);
         
         this.inferEnvRequirementsPath = pythonFilesDirectory + File.separator + REQUIREMENTS_TXT;

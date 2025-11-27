@@ -69,7 +69,7 @@ public class InferTaskRunImpl implements InferTaskRun {
 
     @Override
     public void run(List<String> script) {
-        // ✅ 首先编译 Cython 模块（如果存在 setup.py）
+        // First compile Cython modules (if setup.py exists)
         compileCythonModules();
         
         inferScript = Joiner.on(SCRIPT_SEPARATOR).join(script);
@@ -209,7 +209,7 @@ public class InferTaskRunImpl implements InferTaskRun {
      */
     private void ensureCythonInstalled(String pythonExec) {
         try {
-            // ✅ 1. 检查 Cython 是否已安装
+            // 1. Check if Cython is already installed
             List<String> checkCmd = new ArrayList<>();
             checkCmd.add(pythonExec);
             checkCmd.add("-c");
@@ -224,7 +224,7 @@ public class InferTaskRunImpl implements InferTaskRun {
                 return;  // Cython 已安装，无需再安装
             }
             
-            // ✅ 2. Cython 未安装，尝试通过 pip 安装
+            // 2. Cython not found, try to install via pip
             LOGGER.info("Cython not found, attempting to install via pip...");
             List<String> installCmd = new ArrayList<>();
             installCmd.add(pythonExec);
