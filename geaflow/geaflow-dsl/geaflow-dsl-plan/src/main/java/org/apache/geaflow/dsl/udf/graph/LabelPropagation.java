@@ -45,6 +45,11 @@ import org.apache.geaflow.model.graph.edge.EdgeDirection;
  * label that appears most frequently among their neighbors. In case of ties,
  * the smallest label value is selected.</p>
  *
+ * <p><b>Performance Optimization:</b> This implementation uses change detection to minimize
+ * communication overhead. Vertices only propagate their label to neighbors when it changes,
+ * significantly reducing message volume in later iterations when the algorithm stabilizes.
+ * This optimization makes the algorithm efficient for large-scale graphs.</p>
+ *
  * <p>Parameters:</p>
  * <ul>
  *   <li>iterations (optional): Maximum number of iterations (default: 100)</li>
