@@ -72,7 +72,7 @@ data: {
         "DIFFERENT",
         "PARTITIONED",
         "YIELD",
-        "IF"
+        "IF",
     ]
 
     # let noReservedKeywords can be a identifier

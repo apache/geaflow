@@ -55,6 +55,7 @@ import org.apache.geaflow.dsl.rex.RexParameterRef;
 import org.apache.geaflow.dsl.rex.RexSystemVariable;
 import org.apache.geaflow.dsl.rex.RexSystemVariable.SystemVariable;
 import org.apache.geaflow.dsl.runtime.expression.field.SystemVariableExpression;
+import org.apache.geaflow.dsl.runtime.expression.literal.LiteralExpression;
 import org.apache.geaflow.dsl.runtime.expression.subquery.CallQueryExpression;
 import org.apache.geaflow.dsl.runtime.function.graph.StepAggFunctionImpl;
 import org.apache.geaflow.dsl.runtime.function.graph.StepAggregateFunction;
@@ -279,6 +280,16 @@ public class ExpressionTranslator implements RexVisitor<Expression> {
                     default:
                         break;
                 }
+                if (callKind == SqlKind.OTHER) {
+                    String operatorName = call.getOperator().getName().toUpperCase();
+                    if ("IS TYPED".equals(operatorName)) {
+                        assert inputs.size() == 1;
+                        return builder.isTyped(inputs.get(0), outputType);
+                    } else if ("IS NOT TYPED".equals(operatorName)) {
+                        assert inputs.size() == 1;
+                        return builder.isNotTyped(inputs.get(0), outputType);
+                    }
+                }
                 break;
             case PREFIX:
                 switch (callKind) {
@@ -410,9 +421,93 @@ public class ExpressionTranslator implements RexVisitor<Expression> {
             return builder.udtf(inputs, outputType, operator.getImplementClass());
         } else if (call.getOperator() instanceof GeaFlowUserDefinedScalarFunction) {
             GeaFlowUserDefinedScalarFunction operator = (GeaFlowUserDefinedScalarFunction) call.getOperator();
-            return builder.udf(inputs, outputType, operator.getImplementClass());
+            Class<?> implementClass = operator.getImplementClass();
+            
+            // Special handling for TYPED and NOT_TYPED functions
+            // Convert them to IsTypedExpression/IsNotTypedExpression for proper type checking
+            if (implementClass != null) {
+                String className = implementClass.getSimpleName();
+                if ("Typed".equals(className) && inputs.size() == 2) {
+                    // TYPED(value, typename_string)
+                    // Extract type name from the second argument (should be a string literal)
+                    Expression typeNameExpr = inputs.get(1);
+                    if (typeNameExpr instanceof LiteralExpression) {
+                        Object typeNameObj = ((LiteralExpression) typeNameExpr).getValue();
+                        if (typeNameObj instanceof String) {
+                            String typeName = ((String) typeNameObj).toUpperCase();
+                            IType<?> targetType = getTypeFromName(typeName);
+                            if (targetType != null) {
+                                return builder.isTyped(inputs.get(0), targetType);
+                            }
+                        }
+                    }
+                } else if ("NotTyped".equals(className) && inputs.size() == 2) {
+                    // NOT_TYPED(value, typename_string)
+                    Expression typeNameExpr = inputs.get(1);
+                    if (typeNameExpr instanceof LiteralExpression) {
+                        Object typeNameObj = ((LiteralExpression) typeNameExpr).getValue();
+                        if (typeNameObj instanceof String) {
+                            String typeName = ((String) typeNameObj).toUpperCase();
+                            IType<?> targetType = getTypeFromName(typeName);
+                            if (targetType != null) {
+                                return builder.isNotTyped(inputs.get(0), targetType);
+                            }
+                        }
+                    }
+                }
+            }
+            
+            @SuppressWarnings("unchecked")
+            Class<? extends org.apache.geaflow.dsl.common.function.UDF> udfClass = 
+                (Class<? extends org.apache.geaflow.dsl.common.function.UDF>) implementClass;
+            return builder.udf(inputs, outputType, udfClass);
         }
         throw new GeaFlowDSLException("Not support expression: " + call);
+    }
+
+    /**
+     * Helper method to convert type name string to IType object.
+     * Uses Types constants for common types to avoid method signature issues.
+     */
+    private IType<?> getTypeFromName(String typeName) {
+        if (typeName == null) {
+            return null;
+        }
+        String upperName = typeName.toUpperCase();
+        switch (upperName) {
+            case "INTEGER":
+            case "INT":
+                return org.apache.geaflow.common.type.Types.INTEGER;
+            case "LONG":
+            case "BIGINT":
+                return org.apache.geaflow.common.type.Types.LONG;
+            case "DOUBLE":
+                return org.apache.geaflow.common.type.Types.DOUBLE;
+            case "FLOAT":
+                return org.apache.geaflow.common.type.Types.FLOAT;
+            case "STRING":
+            case "VARCHAR":
+                return org.apache.geaflow.common.type.Types.STRING;
+            case "BOOLEAN":
+            case "BOOL":
+                return org.apache.geaflow.common.type.Types.BOOLEAN;
+            case "BINARY_STRING":
+            case "BYTES":
+                return org.apache.geaflow.common.type.Types.BINARY_STRING;
+            case "DECIMAL":
+                return org.apache.geaflow.common.type.Types.DECIMAL;
+            case "TIMESTAMP":
+                return org.apache.geaflow.common.type.Types.TIMESTAMP;
+            case "DATE":
+                return org.apache.geaflow.common.type.Types.DATE;
+            case "BYTE":
+                return org.apache.geaflow.common.type.Types.BYTE;
+            case "SHORT":
+                return org.apache.geaflow.common.type.Types.SHORT;
+            default:
+                // For unsupported types, return null to fall back to UDF implementation
+                return null;
+        }
     }
 
     @SuppressWarnings("unchecked")
@@ -504,7 +599,7 @@ public class ExpressionTranslator implements RexVisitor<Expression> {
     public Expression visitFieldAccess(RexFieldAccess fieldAccess) {
         Expression input = fieldAccess.getReferenceExpr().accept(this);
         int index = fieldAccess.getField().getIndex();
-        IType type = SqlTypeUtil.convertType(fieldAccess.getField().getType());
+        IType<?> type = SqlTypeUtil.convertType(fieldAccess.getField().getType());
 
         return builder.field(input, index, type);
     }
