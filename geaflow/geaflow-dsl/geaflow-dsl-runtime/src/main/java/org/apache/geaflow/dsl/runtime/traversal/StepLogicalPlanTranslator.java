@@ -65,6 +65,7 @@ import org.apache.geaflow.dsl.rel.match.MatchFilter;
 import org.apache.geaflow.dsl.rel.match.MatchJoin;
 import org.apache.geaflow.dsl.rel.match.MatchPathModify;
 import org.apache.geaflow.dsl.rel.match.MatchPathSort;
+import org.apache.geaflow.dsl.rel.match.MatchSharedPredicate;
 import org.apache.geaflow.dsl.rel.match.MatchUnion;
 import org.apache.geaflow.dsl.rel.match.OptionalEdgeMatch;
 import org.apache.geaflow.dsl.rel.match.OptionalVertexMatch;
@@ -432,6 +433,60 @@ public class StepLogicalPlanTranslator {
                     .withOutputPathSchema(unionPlan.getOutputPathSchema())
                     .withOutputType(unionPlan.getOutputType());
             }
+        }
+
+        @Override
+        public StepLogicalPlan visitSharedPredicate(MatchSharedPredicate sharedPredicate) {
+            // Convert shared predicate to union + filter operation
+            // First, create union of left and right path patterns
+            List<StepLogicalPlan> inputPlans = new ArrayList<>();
+
+            // Visit left path pattern
+            Map<String, StepLogicalPlan> prePlanCache = planCache;
+            planCache = new HashMap<>(planCache);
+            inputPlans.add(visit(sharedPredicate.getLeft()));
+            planCache = prePlanCache;
+
+            // Visit right path pattern
+            prePlanCache = planCache;
+            planCache = new HashMap<>(planCache);
+            inputPlans.add(visit(sharedPredicate.getRight()));
+            planCache = prePlanCache;
+            
+            StepLogicalPlan firstPlan = inputPlans.get(0);
+            PathType sharedPredicatePathType = (PathType) SqlTypeUtil.convertType(sharedPredicate.getPathSchema());
+            IType<?> nodeType = SqlTypeUtil.convertType(sharedPredicate.getNodeType());
+
+            // Create union plan
+            StepLogicalPlan unionPlan = firstPlan.union(inputPlans.subList(1, inputPlans.size()))
+                .withModifyGraphSchema(firstPlan.getModifyGraphSchema())
+                .withOutputPathSchema(sharedPredicatePathType)
+                .withOutputType(nodeType);
+
+            // Apply distinct if needed
+            if (!sharedPredicate.isDistinct()) {
+                IType<?>[] types = unionPlan.getOutputPathSchema().getFields().stream()
+                    .map(TableField::getType)
+                    .collect(Collectors.toList()).toArray(new IType[]{});
+                int[] keyIndices = new int[types.length];
+                for (int i = 0, size = types.length; i < size; i++) {
+                    keyIndices[i] = i;
+                }
+                StepKeyFunction keyFunction = new StepKeyFunctionImpl(keyIndices, types);
+                unionPlan = unionPlan.distinct(keyFunction)
+                    .withModifyGraphSchema(unionPlan.getModifyGraphSchema())
+                    .withOutputPathSchema(unionPlan.getOutputPathSchema())
+                    .withOutputType(unionPlan.getOutputType());
+            }
+            
+            // Apply the shared predicate condition as a filter
+            ExpressionTranslator translator = ExpressionTranslator.of(sharedPredicate.getPathSchema());
+            Expression condition = translator.translate(sharedPredicate.getCondition());
+            
+            return unionPlan.filter(new StepBoolFunctionImpl(condition))
+                .withModifyGraphSchema(unionPlan.getModifyGraphSchema())
+                .withOutputPathSchema(unionPlan.getOutputPathSchema())
+                .withOutputType(unionPlan.getOutputType());
         }
 
         @Override

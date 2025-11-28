@@ -89,6 +89,7 @@ import org.apache.geaflow.dsl.udf.table.other.EdgeTimestamp;
 import org.apache.geaflow.dsl.udf.table.other.If;
 import org.apache.geaflow.dsl.udf.table.other.IsDecimal;
 import org.apache.geaflow.dsl.udf.table.other.Label;
+import org.apache.geaflow.dsl.udf.table.other.Shared;
 import org.apache.geaflow.dsl.udf.table.other.VertexId;
 import org.apache.geaflow.dsl.udf.table.string.Ascii2String;
 import org.apache.geaflow.dsl.udf.table.string.Base64Decode;
@@ -203,6 +204,8 @@ public class BuildInSqlFunctionTable extends ListSqlOperatorTable {
             .add(GeaFlowFunction.of(EdgeTargetId.class))
             .add(GeaFlowFunction.of(EdgeTimestamp.class))
             .add(GeaFlowFunction.of(IsDecimal.class))
+            // Graph pattern matching predicates
+            .add(GeaFlowFunction.of(Shared.class))
             // UDAF
             .add(GeaFlowFunction.of(PercentileLong.class))
             .add(GeaFlowFunction.of(PercentileInteger.class))

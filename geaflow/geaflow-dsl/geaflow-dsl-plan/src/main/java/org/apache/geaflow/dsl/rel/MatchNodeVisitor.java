@@ -29,6 +29,7 @@ import org.apache.geaflow.dsl.rel.match.MatchFilter;
 import org.apache.geaflow.dsl.rel.match.MatchJoin;
 import org.apache.geaflow.dsl.rel.match.MatchPathModify;
 import org.apache.geaflow.dsl.rel.match.MatchPathSort;
+import org.apache.geaflow.dsl.rel.match.MatchSharedPredicate;
 import org.apache.geaflow.dsl.rel.match.MatchUnion;
 import org.apache.geaflow.dsl.rel.match.SubQueryStart;
 import org.apache.geaflow.dsl.rel.match.VertexMatch;
@@ -61,6 +62,8 @@ public interface MatchNodeVisitor<T> {
     T visitSort(MatchPathSort pathSort);
 
     T visitAggregate(MatchAggregate matchAggregate);
+
+    T visitSharedPredicate(MatchSharedPredicate sharedPredicate);
 
     T visit(RelNode node);
 }
