@@ -134,6 +134,15 @@ public class GQLAlgorithmTest {
     }
 
     @Test
+    public void testAlgorithmLouvain() throws Exception {
+        QueryTester
+            .build()
+            .withQueryPath("/query/gql_algorithm_louvain.sql")
+            .execute()
+            .checkSinkResult();
+    }
+
+    @Test
     public void testAlgorithmTriangleCount() throws Exception {
         QueryTester
             .build()
