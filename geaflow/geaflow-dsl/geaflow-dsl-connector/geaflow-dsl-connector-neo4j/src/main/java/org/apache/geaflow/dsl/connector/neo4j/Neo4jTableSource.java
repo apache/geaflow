@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import org.apache.geaflow.api.context.RuntimeContext;
 import org.apache.geaflow.api.window.WindowType;
@@ -71,7 +72,7 @@ public class Neo4jTableSource implements TableSource {
     private long connectionAcquisitionTimeout;
 
     private Driver driver;
-    private Map<Partition, Session> partitionSessionMap = new HashMap<>();
+    private Map<Partition, Session> partitionSessionMap = new ConcurrentHashMap<>();
 
     @Override
     public void init(Configuration tableConf, TableSchema tableSchema) {
