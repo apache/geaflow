@@ -18,13 +18,12 @@
   ~ under the License.
   -->
 
-<project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xmlns="http://maven.apache.org/POM/4.0.0"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xstd">
-
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <parent>
-        <artifactId>geaflow-dsl</artifactId>
         <groupId>org.apache.geaflow</groupId>
+        <artifactId>geaflow-dsl</artifactId>
         <version>0.6.8-SNAPSHOT</version>
     </parent>
 
@@ -47,6 +46,7 @@
         <module>geaflow-dsl-connector-pulsar</module>
         <module>geaflow-dsl-connector-random</module>
         <module>geaflow-dsl-connector-paimon</module>
+        <module>geaflow-dsl-connector-elasticsearch</module>
     </modules>
 
     <dependencyManagement>
