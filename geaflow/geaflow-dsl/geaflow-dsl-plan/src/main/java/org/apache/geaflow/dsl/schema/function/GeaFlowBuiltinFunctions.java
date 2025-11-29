@@ -23,9 +23,12 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.sql.Timestamp;
 import java.util.Calendar;
+import java.util.Objects;
 import java.util.Random;
 import org.apache.commons.lang3.time.DateUtils;
 import org.apache.geaflow.common.binary.BinaryString;
+import org.apache.geaflow.dsl.common.data.RowEdge;
+import org.apache.geaflow.dsl.common.data.RowVertex;
 
 public final class GeaFlowBuiltinFunctions {
 
@@ -1426,6 +1429,41 @@ public final class GeaFlowBuiltinFunctions {
             return null;
         }
         return a.equals(b);
+    }
+
+    /**
+     * ISO-GQL SAME predicate function.
+     * Checks if two graph elements refer to the same element by comparing their identities.
+     * For vertices, compares vertex IDs.
+     * For edges, compares both source and target IDs.
+     *
+     * @param a first element (vertex or edge)
+     * @param b second element (vertex or edge)
+     * @return true if elements have the same identity, false otherwise, null if either is null
+     */
+    public static Boolean same(Object a, Object b) {
+        if (a == null || b == null) {
+            return null;
+        }
+        try {
+            // Handle vertex-vertex comparison
+            if (a instanceof RowVertex && b instanceof RowVertex) {
+                Object idA = ((RowVertex) a).getId();
+                Object idB = ((RowVertex) b).getId();
+                return Objects.equals(idA, idB);
+            }
+            // Handle edge-edge comparison
+            if (a instanceof RowEdge && b instanceof RowEdge) {
+                RowEdge edgeA = (RowEdge) a;
+                RowEdge edgeB = (RowEdge) b;
+                return Objects.equals(edgeA.getSrcId(), edgeB.getSrcId())
+                    && Objects.equals(edgeA.getTargetId(), edgeB.getTargetId());
+            }
+            // Different types cannot be the same
+            return false;
+        } catch (ClassCastException ex) {
+            return false;
+        }
     }
 
     public static Boolean unequal(Long a, Long b) {

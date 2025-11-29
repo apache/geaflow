@@ -399,6 +399,9 @@ public class ExpressionTranslator implements RexVisitor<Expression> {
             case "CURRENT_TIMESTAMP":
                 functionName = BuildInExpression.CURRENT_TIMESTAMP;
                 break;
+            case "SAME":
+                functionName = BuildInExpression.SAME;
+                break;
             default:
         }
         if (functionName != null) {
