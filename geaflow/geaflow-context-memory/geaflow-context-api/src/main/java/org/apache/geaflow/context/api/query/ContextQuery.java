@@ -67,7 +67,10 @@ public class ContextQuery implements Serializable {
         VECTOR_ONLY,      // Vector similarity search only
         GRAPH_ONLY,       // Graph traversal only
         KEYWORD_ONLY,     // Keyword search only
-        MEMORY_GRAPH      // Entity memory graph with PMI-based expansion
+        MEMORY_GRAPH,     // Entity memory graph with PMI-based expansion
+        BM25,             // BM25 ranking algorithm
+        HYBRID_BM25_VECTOR,   // BM25 + Vector hybrid (RRF fusion)
+        HYBRID_BM25_GRAPH     // BM25 + Memory Graph hybrid
     }
 
     /**

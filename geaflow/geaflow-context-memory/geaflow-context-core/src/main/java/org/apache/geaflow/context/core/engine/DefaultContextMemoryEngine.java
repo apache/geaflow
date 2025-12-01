@@ -32,6 +32,10 @@ import org.apache.geaflow.context.api.model.Episode;
 import org.apache.geaflow.context.api.query.ContextQuery;
 import org.apache.geaflow.context.api.result.ContextSearchResult;
 import org.apache.geaflow.context.core.memory.EntityMemoryGraphManager;
+import org.apache.geaflow.context.core.retriever.BM25Retriever;
+import org.apache.geaflow.context.core.retriever.HybridFusion;
+import org.apache.geaflow.context.core.retriever.KeywordRetriever;
+import org.apache.geaflow.context.core.retriever.Retriever;
 import org.apache.geaflow.context.core.storage.InMemoryStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -51,6 +55,11 @@ public class DefaultContextMemoryEngine implements ContextMemoryEngine {
     private EntityMemoryGraphManager memoryGraphManager;  // 可选的实体记忆图谱
     private boolean initialized = false;
     private boolean enableMemoryGraph = false;  // 是否启用记忆图谱
+    
+    // Retriever抽象层（可扩展的检索器）
+    private final Map<String, Retriever> retrievers;  // 检索器注册表
+    private BM25Retriever bm25Retriever;  // BM25检索器
+    private KeywordRetriever keywordRetriever;  // 关键词检索器
 
     /**
      * Constructor with configuration.
@@ -61,6 +70,7 @@ public class DefaultContextMemoryEngine implements ContextMemoryEngine {
         this.config = config;
         this.store = new InMemoryStore();
         this.embeddingIndex = new DefaultEmbeddingIndex();
+        this.retrievers = new HashMap<>();  // 初始化检索器注册表
     }
 
     /**
@@ -73,6 +83,9 @@ public class DefaultContextMemoryEngine implements ContextMemoryEngine {
         logger.info("Initializing DefaultContextMemoryEngine with config: {}", config);
         store.initialize();
         embeddingIndex.initialize();
+        
+        // 初始化检索器（Retriever抽象层）
+        initializeRetrievers();
         
         // 初始化实体记忆图谱（如果启用）
         if (config.isEnableMemoryGraph()) {
@@ -99,6 +112,41 @@ public class DefaultContextMemoryEngine implements ContextMemoryEngine {
         
         initialized = true;
         logger.info("DefaultContextMemoryEngine initialized successfully");
+    }
+    
+    /**
+     * 初始化检索器（Retriever抽象层）
+     */
+    private void initializeRetrievers() {
+        // 1. 初始化BM25检索器
+        bm25Retriever = new BM25Retriever(
+            config.getBm25K1(),
+            config.getBm25B()
+        );
+        bm25Retriever.setEntityStore(store.getEntities());
+        bm25Retriever.indexEntities(store.getEntities());
+        registerRetriever("bm25", bm25Retriever);
+        
+        // 2. 初始化关键词检索器
+        keywordRetriever = new KeywordRetriever(store.getEntities());
+        registerRetriever("keyword", keywordRetriever);
+        
+        logger.info("Initialized {} retrievers", retrievers.size());
+    }
+    
+    /**
+     * 注册检索器（支持用户自定义扩展）
+     */
+    public void registerRetriever(String name, Retriever retriever) {
+        retrievers.put(name, retriever);
+        logger.debug("Registered retriever: {}", name);
+    }
+    
+    /**
+     * 获取检索器
+     */
+    public Retriever getRetriever(String name) {
+        return retrievers.get(name);
     }
 
     /**
@@ -190,6 +238,15 @@ public class DefaultContextMemoryEngine implements ContextMemoryEngine {
                     break;
                 case MEMORY_GRAPH:
                     memoryGraphSearch(query, result);
+                    break;
+                case BM25:
+                    bm25Search(query, result);
+                    break;
+                case HYBRID_BM25_VECTOR:
+                    hybridBM25VectorSearch(query, result);
+                    break;
+                case HYBRID_BM25_GRAPH:
+                    hybridBM25GraphSearch(query, result);
                     break;
                 case HYBRID:
                 default:
@@ -340,6 +397,148 @@ public class DefaultContextMemoryEngine implements ContextMemoryEngine {
         // In Phase 1, this is a placeholder
         logger.debug("Expanding results via graph traversal with maxHops={}", maxHops);
     }
+    
+    /**
+     * BM25检索（使用Retriever抽象）
+     */
+    private void bm25Search(ContextQuery query, ContextSearchResult result) throws Exception {
+        if (bm25Retriever == null || !bm25Retriever.isAvailable()) {
+            logger.warn("BM25 retriever not available, falling back to keyword search");
+            keywordSearch(query, result);
+            return;
+        }
+        
+        int topK = query.getTopK() > 0 ? query.getTopK() : 10;
+        List<Retriever.RetrievalResult> retrievalResults = bm25Retriever.retrieve(query, topK);
+        
+        for (Retriever.RetrievalResult retrievalResult : retrievalResults) {
+            Episode.Entity entity = store.getEntities().get(retrievalResult.getEntityId());
+            if (entity != null) {
+                result.addEntity(new ContextSearchResult.ContextEntity(
+                    entity.getId(),
+                    entity.getName(),
+                    entity.getType(),
+                    retrievalResult.getScore()
+                ));
+            }
+        }
+        
+        logger.info("BM25 search: {} results", result.getEntities().size());
+    }
+    
+    /**
+     * BM25 + 向量混合检索 (RRF融合)
+     */
+    private void hybridBM25VectorSearch(ContextQuery query, ContextSearchResult result) throws Exception {
+        int topK = query.getTopK() > 0 ? query.getTopK() : 10;
+        
+        // 1. BM25检索
+        List<Retriever.RetrievalResult> bm25Results = 
+            bm25Retriever != null ? bm25Retriever.retrieve(query, topK * 2) : new ArrayList<>();
+        
+        // 2. 向量检索 (Phase 1为占位符，使用关键词代替)
+        List<Retriever.RetrievalResult> vectorResults = 
+            keywordRetriever != null ? keywordRetriever.retrieve(query, topK * 2) : new ArrayList<>();
+        
+        // 3. 构建排名列表用于RRF融合
+        Map<String, List<String>> rankedLists = new HashMap<>();
+        
+        List<String> bm25Ranked = bm25Results.stream()
+            .map(Retriever.RetrievalResult::getEntityId)
+            .collect(Collectors.toList());
+        rankedLists.put("bm25", bm25Ranked);
+        
+        List<String> vectorRanked = vectorResults.stream()
+            .map(Retriever.RetrievalResult::getEntityId)
+            .collect(Collectors.toList());
+        rankedLists.put("vector", vectorRanked);
+        
+        // 4. RRF融合
+        List<HybridFusion.FusionResult> fusionResults = 
+            HybridFusion.rrfFusion(rankedLists, 60, topK);
+        
+        // 5. 转换为搜索结果
+        for (HybridFusion.FusionResult fusionResult : fusionResults) {
+            Episode.Entity entity = store.getEntities().get(fusionResult.getId());
+            if (entity != null) {
+                result.addEntity(new ContextSearchResult.ContextEntity(
+                    entity.getId(),
+                    entity.getName(),
+                    entity.getType(),
+                    fusionResult.getScore()
+                ));
+            }
+        }
+        
+        logger.info("Hybrid BM25+Vector search: {} results", result.getEntities().size());
+    }
+    
+    /**
+     * BM25 + 记忆图谱混合检索
+     */
+    private void hybridBM25GraphSearch(ContextQuery query, ContextSearchResult result) throws Exception {
+        int topK = query.getTopK() > 0 ? query.getTopK() : 10;
+        
+        // 1. BM25检索获取候选实体
+        List<Retriever.RetrievalResult> bm25Results = 
+            bm25Retriever != null ? bm25Retriever.retrieve(query, topK) : new ArrayList<>();
+        
+        if (bm25Results.isEmpty() || !enableMemoryGraph) {
+            // 退回到BM25单独检索
+            bm25Search(query, result);
+            return;
+        }
+        
+        // 2. 提取top种子实体
+        List<String> seedEntityIds = bm25Results.stream()
+            .limit(5)  // 取top 5作为种子
+            .map(Retriever.RetrievalResult::getEntityId)
+            .collect(Collectors.toList());
+        
+        // 3. 记忆图谱扩散
+        List<EntityMemoryGraphManager.ExpandedEntity> expandedEntities = 
+            memoryGraphManager.expandEntities(seedEntityIds, topK);
+        
+        // 4. 归一化融合
+        Map<String, Map<String, Double>> scoredResults = new HashMap<>();
+        
+        // BM25分数
+        Map<String, Double> bm25Scores = new HashMap<>();
+        for (Retriever.RetrievalResult r : bm25Results) {
+            bm25Scores.put(r.getEntityId(), r.getScore());
+        }
+        scoredResults.put("bm25", bm25Scores);
+        
+        // 记忆图谱分数
+        Map<String, Double> graphScores = new HashMap<>();
+        for (EntityMemoryGraphManager.ExpandedEntity e : expandedEntities) {
+            graphScores.put(e.getEntityId(), e.getActivationStrength());
+        }
+        scoredResults.put("graph", graphScores);
+        
+        // 5. 归一化加权融合 (BM25权重0.6, 图谱权重0.4)
+        Map<String, Double> weights = new HashMap<>();
+        weights.put("bm25", config.getBm25Weight());
+        weights.put("graph", config.getGraphWeight());
+        
+        List<HybridFusion.FusionResult> fusionResults = 
+            HybridFusion.normalizedFusion(scoredResults, weights, topK);
+        
+        // 6. 转换为搜索结果
+        for (HybridFusion.FusionResult fusionResult : fusionResults) {
+            Episode.Entity entity = store.getEntities().get(fusionResult.getId());
+            if (entity != null) {
+                result.addEntity(new ContextSearchResult.ContextEntity(
+                    entity.getId(),
+                    entity.getName(),
+                    entity.getType(),
+                    fusionResult.getScore()
+                ));
+            }
+        }
+        
+        logger.info("Hybrid BM25+Graph search: {} results", result.getEntities().size());
+    }
 
     /**
      * Create a context snapshot at specific timestamp.
@@ -446,6 +645,14 @@ public class DefaultContextMemoryEngine implements ContextMemoryEngine {
         private double memoryGraphNoiseThreshold = 0.2;
         private int memoryGraphMaxEdges = 30;
         private int memoryGraphPruneInterval = 1000;
+        
+        // BM25参数配置
+        private double bm25K1 = 1.5;
+        private double bm25B = 0.75;
+        
+        // 混合检索权重配置
+        private double bm25Weight = 0.6;
+        private double graphWeight = 0.4;
 
         public ContextMemoryConfig() {
         }
@@ -520,6 +727,38 @@ public class DefaultContextMemoryEngine implements ContextMemoryEngine {
         
         public void setMemoryGraphPruneInterval(int memoryGraphPruneInterval) {
             this.memoryGraphPruneInterval = memoryGraphPruneInterval;
+        }
+        
+        public double getBm25K1() {
+            return bm25K1;
+        }
+        
+        public void setBm25K1(double bm25K1) {
+            this.bm25K1 = bm25K1;
+        }
+        
+        public double getBm25B() {
+            return bm25B;
+        }
+        
+        public void setBm25B(double bm25B) {
+            this.bm25B = bm25B;
+        }
+        
+        public double getBm25Weight() {
+            return bm25Weight;
+        }
+        
+        public void setBm25Weight(double bm25Weight) {
+            this.bm25Weight = bm25Weight;
+        }
+        
+        public double getGraphWeight() {
+            return graphWeight;
+        }
+        
+        public void setGraphWeight(double graphWeight) {
+            this.graphWeight = graphWeight;
         }
 
         @Override

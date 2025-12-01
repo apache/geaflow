@@ -44,7 +44,8 @@ public class EntityMemoryGraphManagerTest {
     config.put("entity.memory.max_edges_per_node", "30");
     config.put("entity.memory.prune_interval", "1000");
 
-    manager = new EntityMemoryGraphManager(config);
+    // 使用Mock版本避免启动真实Python进程
+    manager = new MockEntityMemoryGraphManager(config);
     manager.initialize();
   }
 
@@ -75,7 +76,7 @@ public class EntityMemoryGraphManagerTest {
 
   @Test(expected = IllegalStateException.class)
   public void testAddEntitiesWithoutInit() throws Exception {
-    EntityMemoryGraphManager uninitManager = new EntityMemoryGraphManager(config);
+    EntityMemoryGraphManager uninitManager = new MockEntityMemoryGraphManager(config);
     uninitManager.addEntities(Arrays.asList("entity1"));
   }
 
