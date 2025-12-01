@@ -33,12 +33,14 @@
     <artifactId>geaflow-context-memory</artifactId>
     <packaging>pom</packaging>
     <name>GeaFlow Context Memory</name>
-    <description>AI Context Memory Module for GeaFlow - Phase 1 Production Implementation</description>
+    <description>AI Context Memory Module for GeaFlow - Phase 1 &amp; Phase 2 Production Implementation</description>
 
     <modules>
         <module>geaflow-context-api</module>
         <module>geaflow-context-core</module>
         <module>geaflow-context-vector</module>
+        <module>geaflow-context-storage</module>
+        <module>geaflow-context-nlp</module>
     </modules>
 
     <properties>
@@ -48,6 +50,8 @@
         <junit.version>4.13.2</junit.version>
         <slf4j.version>1.7.15</slf4j.version>
         <log4j.version>1.2.17</log4j.version>
+        <rocksdb.version>7.7.3</rocksdb.version>
+        <lucene.version>9.3.0</lucene.version>
     </properties>
 
     <dependencyManagement>
@@ -68,6 +72,16 @@
                 <artifactId>geaflow-context-vector</artifactId>
                 <version>${project.version}</version>
             </dependency>
+            <dependency>
+                <groupId>org.apache.geaflow</groupId>
+                <artifactId>geaflow-context-storage</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.geaflow</groupId>
+                <artifactId>geaflow-context-nlp</artifactId>
+                <version>${project.version}</version>
+            </dependency>
 
             <!-- Common Dependencies -->
             <dependency>
@@ -79,6 +93,25 @@
                 <groupId>com.alibaba</groupId>
                 <artifactId>fastjson</artifactId>
                 <version>${fastjson.version}</version>
+            </dependency>
+
+            <!-- Storage Dependencies -->
+            <dependency>
+                <groupId>org.rocksdb</groupId>
+                <artifactId>rocksdbjni</artifactId>
+                <version>${rocksdb.version}</version>
+            </dependency>
+
+            <!-- Search Dependencies -->
+            <dependency>
+                <groupId>org.apache.lucene</groupId>
+                <artifactId>lucene-core</artifactId>
+                <version>${lucene.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.lucene</groupId>
+                <artifactId>lucene-queryparser</artifactId>
+                <version>${lucene.version}</version>
             </dependency>
 
             <!-- Logging Dependencies -->
