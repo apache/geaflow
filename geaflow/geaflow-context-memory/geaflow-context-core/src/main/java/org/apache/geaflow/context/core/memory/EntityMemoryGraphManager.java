@@ -13,11 +13,15 @@
  * software distributed under the License is distributed on an
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
  * KIND, either express or implied.  See the License for the
+ * KIND, either express or implied.  See the License for the
  * specific language governing permissions and limitations
  * under the License.
  */
 
 package org.apache.geaflow.context.core.memory;
+
+import static org.apache.geaflow.common.config.keys.FrameworkConfigKeys.INFER_ENV_ENABLE;
+import static org.apache.geaflow.common.config.keys.FrameworkConfigKeys.INFER_ENV_USER_TRANSFORM_CLASSNAME;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -29,25 +33,30 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * 实体记忆图谱管理器
+ * 实体记忆图谱管理器 - 生产可用版本
  * 
  * <p>基于 PMI (Pointwise Mutual Information) 和 NetworkX 的实体记忆扩散。
+ * 参考：https://github.com/undertaker86001/higress/pull/1
+ * 
  * <p>核心特性：
  * <ul>
+ *   <li>Python集成：通过GeaFlow-Infer调用entity_memory_graph.py</li>
  *   <li>动态 PMI 权重计算：基于实体共现频率和边缘概率</li>
  *   <li>记忆扩散：模拟海马体的记忆激活扩散机制</li>
  *   <li>自适应裁剪：动态调整噪声阈值，移除低权重连接</li>
+ *   <li>生产可用：完整错误处理和日志记录</li>
  * </ul>
  */
 public class EntityMemoryGraphManager {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(EntityMemoryGraphManager.class);
+  
+  private static final String TRANSFORM_CLASS_NAME = "TransFormFunction";
 
   private final Configuration config;
   private InferContext<Object> inferContext;
   private boolean initialized = false;
 
-  // 配置参数
   private final double baseDecay;
   private final double noiseThreshold;
   private final int maxEdgesPerNode;
@@ -75,17 +84,21 @@ public class EntityMemoryGraphManager {
 
     LOGGER.info("正在初始化实体记忆图谱...");
 
-    // 创建 InferContext 用于 Python 集成
-    // 注意：需要在配置中设置 Python 脚本路径
     try {
-      // 这里需要配置 GeaFlow-Infer 环境
-      // config.put(FrameworkConfigKeys.INFER_ENV_ENABLE, "true");
-      // config.put(FrameworkConfigKeys.INFER_ENV_USER_TRANSFORM_CLASSNAME,
-      //            "EntityMemoryTransformFunction");
+      // 配置GeaFlow-Infer环境
+      config.put(INFER_ENV_ENABLE, "true");
+      config.put(INFER_ENV_USER_TRANSFORM_CLASSNAME, TRANSFORM_CLASS_NAME);
       
-      // TODO: 实际集成时启用 InferContext
-      // inferContext = new InferContext<>(config);
-      // inferContext.init();
+      // 创建InferContext连接Python进程
+      inferContext = new InferContext<>(config);
+      
+      // 调用Python初始化方法
+      Boolean result = (Boolean) inferContext.infer(
+          "init", baseDecay, noiseThreshold, maxEdgesPerNode, pruneInterval);
+      
+      if (result == null || !result) {
+        throw new RuntimeException("Python图谱初始化失败");
+      }
 
       LOGGER.info("实体记忆图谱初始化成功: decay={}, noise={}, max_edges={}, prune_interval={}",
           baseDecay, noiseThreshold, maxEdgesPerNode, pruneInterval);
@@ -118,13 +131,13 @@ public class EntityMemoryGraphManager {
     }
 
     try {
-      // 调用 Python 图谱添加实体
-      // Boolean result = (Boolean) inferContext.infer("add", entityIds);
+      // 调用Python图谱添加实体
+      Boolean result = (Boolean) inferContext.infer("add", entityIds);
       
-      // TODO: 实际集成时启用
-      // if (result == null || !result) {
-      //   LOGGER.error("添加实体失败: {}", entityIds);
-      // }
+      if (result == null || !result) {
+        LOGGER.error("添加实体失败: {}", entityIds);
+        throw new RuntimeException("Python添加实体失败");
+      }
 
       LOGGER.debug("已添加 {} 个实体到记忆图谱", entityIds.size());
 
@@ -158,19 +171,22 @@ public class EntityMemoryGraphManager {
     }
 
     try {
-      // 调用 Python 图谱扩展实体
-      // List<Object[]> result = (List<Object[]>) inferContext.infer("expand", seedEntityIds, topK);
+      // 调用Python图谱扩展实体
+      // Python返回: List<List<Object>> = [[entity_id, strength], ...]
+      List<List<Object>> pythonResult = (List<List<Object>>) inferContext.infer(
+          "expand", seedEntityIds, topK);
 
-      // TODO: 实际集成时启用
       List<ExpandedEntity> expandedEntities = new ArrayList<>();
 
-      // if (result != null) {
-      //   for (Object[] item : result) {
-      //     String entityId = (String) item[0];
-      //     double activationStrength = ((Number) item[1]).doubleValue();
-      //     expandedEntities.add(new ExpandedEntity(entityId, activationStrength));
-      //   }
-      // }
+      if (pythonResult != null) {
+        for (List<Object> item : pythonResult) {
+          if (item.size() >= 2) {
+            String entityId = (String) item.get(0);
+            double activationStrength = ((Number) item.get(1)).doubleValue();
+            expandedEntities.add(new ExpandedEntity(entityId, activationStrength));
+          }
+        }
+      }
 
       LOGGER.info("从 {} 个种子实体扩展得到 {} 个相关实体",
           seedEntityIds.size(), expandedEntities.size());
@@ -196,11 +212,8 @@ public class EntityMemoryGraphManager {
     }
 
     try {
-      // Map<String, Number> stats = (Map<String, Number>) inferContext.infer("stats");
-      // return stats != null ? stats : new HashMap<>();
-
-      // TODO: 实际集成时启用
-      return new HashMap<>();
+      Map<String, Number> stats = (Map<String, Number>) inferContext.infer("stats");
+      return stats != null ? stats : new HashMap<>();
 
     } catch (Exception e) {
       LOGGER.error("获取图谱统计失败", e);
@@ -219,7 +232,7 @@ public class EntityMemoryGraphManager {
     }
 
     try {
-      // inferContext.infer("clear");
+      inferContext.infer("clear");
       LOGGER.info("实体记忆图谱已清空");
 
     } catch (Exception e) {
@@ -240,9 +253,9 @@ public class EntityMemoryGraphManager {
 
     try {
       clear();
-      // if (inferContext != null) {
-      //   inferContext.close();
-      // }
+      if (inferContext != null) {
+        inferContext.close();
+      }
       initialized = false;
       LOGGER.info("实体记忆图谱管理器已关闭");
 
