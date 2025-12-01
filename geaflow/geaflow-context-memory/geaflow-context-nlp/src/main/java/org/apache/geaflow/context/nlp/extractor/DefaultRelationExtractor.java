@@ -20,57 +20,45 @@
 package org.apache.geaflow.context.nlp.extractor;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import org.apache.geaflow.context.nlp.entity.Relation;
+import org.apache.geaflow.context.nlp.rules.ExtractionRule;
+import org.apache.geaflow.context.nlp.rules.RuleManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Default implementation of RelationExtractor using rule-based patterns.
- * This is a production-grade baseline implementation that can be extended
- * to support actual RE models like OpenIE, REBEL, etc.
+ * Configurable relation extractor using rule-based patterns.
+ * Rules are loaded from external configuration files.
  */
 public class DefaultRelationExtractor implements RelationExtractor {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(DefaultRelationExtractor.class);
+  private static final String MODEL_NAME = "configurable-rule-based";
+  private static final String DEFAULT_CONFIG_PATH = "rules/relation-patterns.properties";
 
-  private static final String MODEL_NAME = "default-rule-based";
+  private final RuleManager ruleManager;
+  private final String configPath;
 
-  // Relation patterns: (entity1) RELATION (entity2)
-  private static final Pattern[] RELATION_PATTERNS = {
-      // Pattern for "X prefers Y"
-      Pattern.compile("([A-Z][a-z]+(?:\\s+[A-Z][a-z]+)*)\\s+(?:prefers|likes|loves)\\s+([A-Z][a-z]+(?:\\s+[A-Z][a-z]+)*)"),
-      // Pattern for "X works for Y"
-      Pattern.compile("([A-Z][a-z]+(?:\\s+[A-Z][a-z]+)*)\\s+(?:works\\s+for|works\\s+at|employed\\s+by)\\s+([A-Z][a-z]+(?:\\s+[A-Z][a-z]+)*)"),
-      // Pattern for "X is a Y"
-      Pattern.compile("([A-Z][a-z]+(?:\\s+[A-Z][a-z]+)*)\\s+is\\s+(?:a|an|the)\\s+([A-Z][a-z]+(?:\\s+[A-Z][a-z]+)*)"),
-      // Pattern for "X located in Y"
-      Pattern.compile("([A-Z][a-z]+(?:\\s+[A-Z][a-z]+)*)\\s+(?:is\\s+)?located\\s+(?:in|at)\\s+([A-Z][a-z]+(?:\\s+[A-Z][a-z]+)*)"),
-      // Pattern for "X competes with Y"
-      Pattern.compile("([A-Z][a-z]+(?:\\s+[A-Z][a-z]+)*)\\s+(?:competes\\s+with|rivals|compete\\s+against)\\s+([A-Z][a-z]+(?:\\s+[A-Z][a-z]+)*)"),
-      // Pattern for "X founded by Y"
-      Pattern.compile("([A-Z][a-z]+(?:\\s+[A-Z][a-z]+)*)\\s+(?:was\\s+)?founded\\s+(?:by|in)\\s+([A-Z][a-z]+(?:\\s+[A-Z][a-z]+)*)"),
-  };
-
-  /**
-   * Initialize the extractor.
-   */
-  @Override
-  public void initialize() {
-    LOGGER.info("Initializing DefaultRelationExtractor with rule-based RE");
+  public DefaultRelationExtractor() {
+    this(DEFAULT_CONFIG_PATH);
   }
 
-  /**
-   * Extract relations from text.
-   *
-   * @param text The input text
-   * @return A list of extracted relations
-   * @throws Exception if extraction fails
-   */
+  public DefaultRelationExtractor(String configPath) {
+    this.configPath = configPath;
+    this.ruleManager = new RuleManager();
+  }
+
+  @Override
+  public void initialize() throws Exception {
+    LOGGER.info("Initializing configurable relation extractor from: {}", configPath);
+    ruleManager.loadRelationRules(configPath);
+    LOGGER.info("Loaded {} relation types", ruleManager.getSupportedRelationTypes().size());
+  }
+
   @Override
   public List<Relation> extractRelations(String text) throws Exception {
     if (text == null || text.isEmpty()) {
@@ -79,12 +67,11 @@ public class DefaultRelationExtractor implements RelationExtractor {
 
     List<Relation> relations = new ArrayList<>();
 
-    // Try each relation pattern
-    for (int i = 0; i < RELATION_PATTERNS.length; i++) {
-      Pattern pattern = RELATION_PATTERNS[i];
-      String relationType = getRelationTypeForPattern(i);
+    for (Map.Entry<String, ExtractionRule> entry : ruleManager.getRelationRules().entrySet()) {
+      String relationType = entry.getKey();
+      ExtractionRule rule = entry.getValue();
 
-      Matcher matcher = pattern.matcher(text);
+      Matcher matcher = rule.getPattern().matcher(text);
       while (matcher.find()) {
         if (matcher.groupCount() >= 2) {
           String sourceEntity = matcher.group(1).trim();
@@ -97,7 +84,7 @@ public class DefaultRelationExtractor implements RelationExtractor {
             relation.setRelationType(relationType);
             relation.setId(UUID.randomUUID().toString());
             relation.setSource(MODEL_NAME);
-            relation.setConfidence(0.75);
+            relation.setConfidence(rule.getConfidence());
             relation.setRelationName(relationType);
 
             relations.add(relation);
@@ -109,13 +96,6 @@ public class DefaultRelationExtractor implements RelationExtractor {
     return relations;
   }
 
-  /**
-   * Extract relations from multiple texts.
-   *
-   * @param texts The input texts
-   * @return A list of extracted relations from all texts
-   * @throws Exception if extraction fails
-   */
   @Override
   public List<Relation> extractRelationsBatch(String[] texts) throws Exception {
     List<Relation> allRelations = new ArrayList<>();
@@ -125,65 +105,18 @@ public class DefaultRelationExtractor implements RelationExtractor {
     return allRelations;
   }
 
-  /**
-   * Get the supported relation types.
-   *
-   * @return A list of supported relation types
-   */
   @Override
   public List<String> getSupportedRelationTypes() {
-    return Arrays.asList(
-        "prefers",
-        "works_for",
-        "is_a",
-        "located_in",
-        "competes_with",
-        "founded_by"
-    );
+    return ruleManager.getSupportedRelationTypes();
   }
 
-  /**
-   * Get the model name.
-   *
-   * @return The model name
-   */
   @Override
   public String getModelName() {
     return MODEL_NAME;
   }
 
-  /**
-   * Close the extractor.
-   *
-   * @throws Exception if closing fails
-   */
   @Override
   public void close() throws Exception {
-    LOGGER.info("Closing DefaultRelationExtractor");
-  }
-
-  /**
-   * Get the relation type for a given pattern index.
-   *
-   * @param patternIndex The index of the pattern
-   * @return The relation type
-   */
-  private String getRelationTypeForPattern(int patternIndex) {
-    switch (patternIndex) {
-      case 0:
-        return "prefers";
-      case 1:
-        return "works_for";
-      case 2:
-        return "is_a";
-      case 3:
-        return "located_in";
-      case 4:
-        return "competes_with";
-      case 5:
-        return "founded_by";
-      default:
-        return "unknown";
-    }
+    LOGGER.info("Closing configurable relation extractor");
   }
 }

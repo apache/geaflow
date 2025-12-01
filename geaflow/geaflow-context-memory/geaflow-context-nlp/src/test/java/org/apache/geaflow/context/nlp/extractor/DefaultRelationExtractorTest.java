@@ -117,8 +117,8 @@ public class DefaultRelationExtractorTest {
     List<String> types = extractor.getSupportedRelationTypes();
     Assert.assertNotNull(types);
     Assert.assertTrue(types.size() > 0);
-    Assert.assertTrue(types.contains("prefers"));
-    Assert.assertTrue(types.contains("works_for"));
+    Assert.assertTrue(types.contains("WORKS_FOR"));
+    Assert.assertTrue(types.contains("LOCATED_IN"));
   }
 
   /**
