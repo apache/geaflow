@@ -183,14 +183,6 @@ public class OdpsTableSink implements TableSink {
 
     /**
      * Create an upload session.
-     * @return an upload session
-     */
-    private TableTunnel.StreamUploadSession createUploadSession() {
-        return createUploadSession(null);
-    }
-
-    /**
-     * Create an upload session.
      * @param partition the partition
      * @return an upload session
      */
