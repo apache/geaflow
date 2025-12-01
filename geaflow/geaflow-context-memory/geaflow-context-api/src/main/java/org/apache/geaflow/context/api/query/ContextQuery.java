@@ -87,6 +87,15 @@ public class ContextQuery implements Serializable {
         this.queryText = queryText;
     }
 
+    /**
+     * Create a new builder for ContextQuery.
+     *
+     * @return A new builder instance
+     */
+    public static Builder builder() {
+        return new Builder();
+    }
+
     // Getters and Setters
     public String getQueryText() {
         return queryText;
