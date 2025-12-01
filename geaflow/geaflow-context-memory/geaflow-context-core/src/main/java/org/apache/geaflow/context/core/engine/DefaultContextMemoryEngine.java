@@ -20,13 +20,18 @@
 package org.apache.geaflow.context.core.engine;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
+import org.apache.geaflow.common.config.Configuration;
 import org.apache.geaflow.context.api.engine.ContextMemoryEngine;
 import org.apache.geaflow.context.api.model.Episode;
 import org.apache.geaflow.context.api.query.ContextQuery;
 import org.apache.geaflow.context.api.result.ContextSearchResult;
+import org.apache.geaflow.context.core.memory.EntityMemoryGraphManager;
 import org.apache.geaflow.context.core.storage.InMemoryStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -43,7 +48,9 @@ public class DefaultContextMemoryEngine implements ContextMemoryEngine {
     private final ContextMemoryConfig config;
     private final InMemoryStore store;
     private final DefaultEmbeddingIndex embeddingIndex;
+    private EntityMemoryGraphManager memoryGraphManager;  // 可选的实体记忆图谱
     private boolean initialized = false;
+    private boolean enableMemoryGraph = false;  // 是否启用记忆图谱
 
     /**
      * Constructor with configuration.
@@ -66,6 +73,30 @@ public class DefaultContextMemoryEngine implements ContextMemoryEngine {
         logger.info("Initializing DefaultContextMemoryEngine with config: {}", config);
         store.initialize();
         embeddingIndex.initialize();
+        
+        // 初始化实体记忆图谱（如果启用）
+        if (config.isEnableMemoryGraph()) {
+            try {
+                Configuration memoryGraphConfig = new Configuration();
+                memoryGraphConfig.put("entity.memory.base_decay", 
+                    String.valueOf(config.getMemoryGraphBaseDecay()));
+                memoryGraphConfig.put("entity.memory.noise_threshold", 
+                    String.valueOf(config.getMemoryGraphNoiseThreshold()));
+                memoryGraphConfig.put("entity.memory.max_edges_per_node", 
+                    String.valueOf(config.getMemoryGraphMaxEdges()));
+                memoryGraphConfig.put("entity.memory.prune_interval", 
+                    String.valueOf(config.getMemoryGraphPruneInterval()));
+                
+                memoryGraphManager = new EntityMemoryGraphManager(memoryGraphConfig);
+                memoryGraphManager.initialize();
+                enableMemoryGraph = true;
+                logger.info("Entity memory graph enabled");
+            } catch (Exception e) {
+                logger.warn("Failed to initialize entity memory graph: {}", e.getMessage());
+                enableMemoryGraph = false;
+            }
+        }
+        
         initialized = true;
         logger.info("DefaultContextMemoryEngine initialized successfully");
     }
@@ -106,6 +137,19 @@ public class DefaultContextMemoryEngine implements ContextMemoryEngine {
                     store.addRelation(relation.getSourceId() + "->" + relation.getTargetId(), relation);
                 }
             }
+            
+            // 更新实体记忆图谱（如果启用）
+            if (enableMemoryGraph && episode.getEntities() != null && !episode.getEntities().isEmpty()) {
+                try {
+                    List<String> entityIds = episode.getEntities().stream()
+                        .map(Episode.Entity::getId)
+                        .collect(Collectors.toList());
+                    memoryGraphManager.addEntities(entityIds);
+                    logger.debug("Added {} entities to memory graph", entityIds.size());
+                } catch (Exception e) {
+                    logger.warn("Failed to update memory graph: {}", e.getMessage());
+                }
+            }
 
             long elapsedTime = System.currentTimeMillis() - startTime;
             logger.info("Episode ingested successfully: {} (took {} ms)", episode.getEpisodeId(), elapsedTime);
@@ -143,6 +187,9 @@ public class DefaultContextMemoryEngine implements ContextMemoryEngine {
                     break;
                 case KEYWORD_ONLY:
                     keywordSearch(query, result);
+                    break;
+                case MEMORY_GRAPH:
+                    memoryGraphSearch(query, result);
                     break;
                 case HYBRID:
                 default:
@@ -196,6 +243,81 @@ public class DefaultContextMemoryEngine implements ContextMemoryEngine {
         }
 
         logger.debug("Keyword search found {} entities", result.getEntities().size());
+    }
+    
+    /**
+     * 实体记忆图谱搜索（基于 PMI 的记忆扩散）
+     */
+    private void memoryGraphSearch(ContextQuery query, ContextSearchResult result) throws Exception {
+        if (!enableMemoryGraph) {
+            logger.warn("Memory graph is not enabled, falling back to keyword search");
+            keywordSearch(query, result);
+            return;
+        }
+        
+        // 1. 首先进行关键词搜索，获取种子实体
+        List<String> seedEntityIds = new ArrayList<>();
+        String queryText = query.getQueryText().toLowerCase();
+        
+        for (Map.Entry<String, Episode.Entity> entry : store.getEntities().entrySet()) {
+            Episode.Entity entity = entry.getValue();
+            if (entity.getName() != null && entity.getName().toLowerCase().contains(queryText)) {
+                seedEntityIds.add(entity.getId());
+            }
+        }
+        
+        if (seedEntityIds.isEmpty()) {
+            logger.debug("No seed entities found for query: {}", queryText);
+            return;
+        }
+        
+        // 2. 使用记忆图谱扩展相关实体
+        try {
+            int topK = query.getTopK() > 0 ? query.getTopK() : 10;
+            List<EntityMemoryGraphManager.ExpandedEntity> expandedEntities = 
+                memoryGraphManager.expandEntities(seedEntityIds, topK);
+            
+            logger.debug("Expanded from {} seeds to {} related entities", 
+                seedEntityIds.size(), expandedEntities.size());
+            
+            // 3. 将扩展的实体转换为搜索结果
+            for (EntityMemoryGraphManager.ExpandedEntity expanded : expandedEntities) {
+                Episode.Entity entity = store.getEntities().get(expanded.getEntityId());
+                if (entity != null) {
+                    ContextSearchResult.ContextEntity contextEntity = 
+                        new ContextSearchResult.ContextEntity(
+                            entity.getId(), 
+                            entity.getName(), 
+                            entity.getType(), 
+                            expanded.getActivationStrength()
+                        );
+                    result.addEntity(contextEntity);
+                }
+            }
+            
+            // 4. 添加种子实体（最高激活度）
+            for (String seedId : seedEntityIds) {
+                Episode.Entity entity = store.getEntities().get(seedId);
+                if (entity != null) {
+                    ContextSearchResult.ContextEntity contextEntity = 
+                        new ContextSearchResult.ContextEntity(
+                            entity.getId(), 
+                            entity.getName(), 
+                            entity.getType(), 
+                            1.0  // 种子实体激活度最高
+                        );
+                    result.addEntity(contextEntity);
+                }
+            }
+            
+            logger.info("Memory graph search completed: {} total entities", 
+                result.getEntities().size());
+            
+        } catch (Exception e) {
+            logger.error("Memory graph search failed: {}", e.getMessage(), e);
+            // 失败时退回到关键词搜索
+            keywordSearch(query, result);
+        }
     }
 
     /**
@@ -274,6 +396,16 @@ public class DefaultContextMemoryEngine implements ContextMemoryEngine {
     @Override
     public void close() throws IOException {
         logger.info("Closing DefaultContextMemoryEngine");
+        
+        // 关闭实体记忆图谱
+        if (memoryGraphManager != null) {
+            try {
+                memoryGraphManager.close();
+            } catch (Exception e) {
+                logger.error("Error closing memory graph manager", e);
+            }
+        }
+        
         if (store != null) {
             try {
                 store.close();
@@ -307,6 +439,13 @@ public class DefaultContextMemoryEngine implements ContextMemoryEngine {
         private String vectorIndexType = "memory";
         private int maxEpisodes = 10000;
         private int embeddingDimension = 768;
+        
+        // 实体记忆图谱配置
+        private boolean enableMemoryGraph = false;
+        private double memoryGraphBaseDecay = 0.6;
+        private double memoryGraphNoiseThreshold = 0.2;
+        private int memoryGraphMaxEdges = 30;
+        private int memoryGraphPruneInterval = 1000;
 
         public ContextMemoryConfig() {
         }
@@ -341,6 +480,46 @@ public class DefaultContextMemoryEngine implements ContextMemoryEngine {
 
         public void setEmbeddingDimension(int embeddingDimension) {
             this.embeddingDimension = embeddingDimension;
+        }
+        
+        public boolean isEnableMemoryGraph() {
+            return enableMemoryGraph;
+        }
+        
+        public void setEnableMemoryGraph(boolean enableMemoryGraph) {
+            this.enableMemoryGraph = enableMemoryGraph;
+        }
+        
+        public double getMemoryGraphBaseDecay() {
+            return memoryGraphBaseDecay;
+        }
+        
+        public void setMemoryGraphBaseDecay(double memoryGraphBaseDecay) {
+            this.memoryGraphBaseDecay = memoryGraphBaseDecay;
+        }
+        
+        public double getMemoryGraphNoiseThreshold() {
+            return memoryGraphNoiseThreshold;
+        }
+        
+        public void setMemoryGraphNoiseThreshold(double memoryGraphNoiseThreshold) {
+            this.memoryGraphNoiseThreshold = memoryGraphNoiseThreshold;
+        }
+        
+        public int getMemoryGraphMaxEdges() {
+            return memoryGraphMaxEdges;
+        }
+        
+        public void setMemoryGraphMaxEdges(int memoryGraphMaxEdges) {
+            this.memoryGraphMaxEdges = memoryGraphMaxEdges;
+        }
+        
+        public int getMemoryGraphPruneInterval() {
+            return memoryGraphPruneInterval;
+        }
+        
+        public void setMemoryGraphPruneInterval(int memoryGraphPruneInterval) {
+            this.memoryGraphPruneInterval = memoryGraphPruneInterval;
         }
 
         @Override

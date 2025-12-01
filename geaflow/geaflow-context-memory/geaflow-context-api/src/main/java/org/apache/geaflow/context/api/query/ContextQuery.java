@@ -66,7 +66,8 @@ public class ContextQuery implements Serializable {
         HYBRID,           // Combine vector and graph retrieval
         VECTOR_ONLY,      // Vector similarity search only
         GRAPH_ONLY,       // Graph traversal only
-        KEYWORD_ONLY      // Keyword search only
+        KEYWORD_ONLY,     // Keyword search only
+        MEMORY_GRAPH      // Entity memory graph with PMI-based expansion
     }
 
     /**
