@@ -20,6 +20,7 @@
 package org.apache.geaflow.context.api.engine;
 
 import java.io.Closeable;
+import java.io.IOException;
 import org.apache.geaflow.context.api.model.Episode;
 import org.apache.geaflow.context.api.query.ContextQuery;
 import org.apache.geaflow.context.api.result.ContextSearchResult;
@@ -83,10 +84,10 @@ public interface ContextMemoryEngine extends Closeable {
     /**
      * Shutdown the engine and cleanup resources.
      *
-     * @throws Exception if shutdown fails
+     * @throws IOException if shutdown fails
      */
     @Override
-    void close() throws Exception;
+    void close() throws IOException;
 
     /**
      * ContextSnapshot represents a point-in-time snapshot of context memory.

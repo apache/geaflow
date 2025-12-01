@@ -19,6 +19,10 @@
 
 package org.apache.geaflow.context.core.engine;
 
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
 import org.apache.geaflow.context.api.engine.ContextMemoryEngine;
 import org.apache.geaflow.context.api.model.Episode;
 import org.apache.geaflow.context.api.query.ContextQuery;
@@ -26,10 +30,6 @@ import org.apache.geaflow.context.api.result.ContextSearchResult;
 import org.apache.geaflow.context.core.storage.InMemoryStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.util.HashMap;
-import java.util.Map;
-import java.util.UUID;
 
 /**
  * Default implementation of ContextMemoryEngine.
@@ -269,16 +269,30 @@ public class DefaultContextMemoryEngine implements ContextMemoryEngine {
     /**
      * Close and cleanup resources.
      *
-     * @throws Exception if close fails
+     * @throws IOException if close fails
      */
     @Override
-    public void close() throws Exception {
+    public void close() throws IOException {
         logger.info("Closing DefaultContextMemoryEngine");
         if (store != null) {
-            store.close();
+            try {
+                store.close();
+            } catch (Exception e) {
+                logger.error("Error closing store", e);
+                if (e instanceof IOException) {
+                    throw (IOException) e;
+                }
+            }
         }
         if (embeddingIndex != null) {
-            embeddingIndex.close();
+            try {
+                embeddingIndex.close();
+            } catch (Exception e) {
+                logger.error("Error closing embedding index", e);
+                if (e instanceof IOException) {
+                    throw (IOException) e;
+                }
+            }
         }
         initialized = false;
         logger.info("DefaultContextMemoryEngine closed");
@@ -331,12 +345,18 @@ public class DefaultContextMemoryEngine implements ContextMemoryEngine {
 
         @Override
         public String toString() {
-            return "ContextMemoryConfig{" +
-                    "storageType='" + storageType + '\'' +
-                    ", vectorIndexType='" + vectorIndexType + '\'' +
-                    ", maxEpisodes=" + maxEpisodes +
-                    ", embeddingDimension=" + embeddingDimension +
-                    '}';
+            return new StringBuilder()
+                    .append("ContextMemoryConfig{")
+                    .append("storageType='")
+                    .append(storageType)
+                    .append("', vectorIndexType='")
+                    .append(vectorIndexType)
+                    .append("', maxEpisodes=")
+                    .append(maxEpisodes)
+                    .append(", embeddingDimension=")
+                    .append(embeddingDimension)
+                    .append("}")
+                    .toString();
         }
     }
 

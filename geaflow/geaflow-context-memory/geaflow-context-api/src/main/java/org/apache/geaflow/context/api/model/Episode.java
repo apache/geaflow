@@ -19,7 +19,6 @@
 
 package org.apache.geaflow.context.api.model;
 
-import com.alibaba.fastjson.JSON;
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.List;
@@ -159,14 +158,22 @@ public class Episode implements Serializable {
 
     @Override
     public String toString() {
-        return "Episode{"
-                + "episodeId='" + episodeId + '\'
-                + ", name='" + name + '\'
-                + ", eventTime=" + eventTime
-                + ", ingestTime=" + ingestTime
-                + ", entities=" + (entities != null ? entities.size() : 0)
-                + ", relations=" + (relations != null ? relations.size() : 0)
-                + '}';
+        return new StringBuilder()
+                .append("Episode{")
+                .append("episodeId='")
+                .append(episodeId)
+                .append("', name='")
+                .append(name)
+                .append("', eventTime=")
+                .append(eventTime)
+                .append(", ingestTime=")
+                .append(ingestTime)
+                .append(", entities=")
+                .append(entities != null ? entities.size() : 0)
+                .append(", relations=")
+                .append(relations != null ? relations.size() : 0)
+                .append("}")
+                .toString();
     }
 
     /**
@@ -227,11 +234,16 @@ public class Episode implements Serializable {
 
         @Override
         public String toString() {
-            return "Entity{"
-                    + "id='" + id + '\'
-                    + ", name='" + name + '\'
-                    + ", type='" + type + '\'
-                    + '}';
+            return new StringBuilder()
+                    .append("Entity{")
+                    .append("id='")
+                    .append(id)
+                    .append("', name='")
+                    .append(name)
+                    .append("', type='")
+                    .append(type)
+                    .append("'}")
+                    .toString();
         }
     }
 
@@ -293,11 +305,16 @@ public class Episode implements Serializable {
 
         @Override
         public String toString() {
-            return "Relation{"
-                    + "sourceId='" + sourceId + '\'
-                    + ", targetId='" + targetId + '\'
-                    + ", relationshipType='" + relationshipType + '\'
-                    + '}';
+            return new StringBuilder()
+                    .append("Relation{")
+                    .append("sourceId='")
+                    .append(sourceId)
+                    .append("', targetId='")
+                    .append(targetId)
+                    .append("', relationshipType='")
+                    .append(relationshipType)
+                    .append("'}")
+                    .toString();
         }
     }
 }

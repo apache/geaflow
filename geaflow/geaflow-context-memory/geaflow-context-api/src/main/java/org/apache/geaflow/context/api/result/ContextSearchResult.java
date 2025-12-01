@@ -33,16 +33,24 @@ public class ContextSearchResult implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
-    /** List of entity results */
+    /**
+     * List of entity results.
+     */
     private List<ContextEntity> entities;
 
-    /** List of relation results */
+    /**
+     * List of relation results.
+     */
     private List<ContextRelation> relations;
 
-    /** Query execution time in milliseconds */
+    /**
+     * Query execution time in milliseconds.
+     */
     private long executionTime;
 
-    /** Total score/relevance metrics */
+    /**
+     * Total score/relevance metrics.
+     */
     private Map<String, Object> metrics;
 
     /**
@@ -172,12 +180,18 @@ public class ContextSearchResult implements Serializable {
 
         @Override
         public String toString() {
-            return "ContextEntity{" +
-                    "id='" + id + '\'' +
-                    ", name='" + name + '\'' +
-                    ", type='" + type + '\'' +
-                    ", relevanceScore=" + relevanceScore +
-                    '}';
+            return new StringBuilder()
+                    .append("ContextEntity{")
+                    .append("id='")
+                    .append(id)
+                    .append("', name='")
+                    .append(name)
+                    .append("', type='")
+                    .append(type)
+                    .append("', relevanceScore=")
+                    .append(relevanceScore)
+                    .append("}")
+                    .toString();
         }
     }
 
@@ -250,12 +264,18 @@ public class ContextSearchResult implements Serializable {
 
         @Override
         public String toString() {
-            return "ContextRelation{" +
-                    "sourceId='" + sourceId + '\'' +
-                    ", targetId='" + targetId + '\'' +
-                    ", relationshipType='" + relationshipType + '\'' +
-                    ", relevanceScore=" + relevanceScore +
-                    '}';
+            return new StringBuilder()
+                    .append("ContextRelation{")
+                    .append("sourceId='")
+                    .append(sourceId)
+                    .append("', targetId='")
+                    .append(targetId)
+                    .append("', relationshipType='")
+                    .append(relationshipType)
+                    .append("', relevanceScore=")
+                    .append(relevanceScore)
+                    .append("}")
+                    .toString();
         }
     }
 }

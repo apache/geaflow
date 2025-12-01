@@ -19,13 +19,12 @@
 
 package org.apache.geaflow.context.core.storage;
 
-import org.apache.geaflow.context.api.model.Episode;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import org.apache.geaflow.context.api.model.Episode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * In-memory storage implementation for Phase 1.
@@ -190,11 +189,16 @@ public class InMemoryStore {
 
         @Override
         public String toString() {
-            return "StoreStats{" +
-                    "episodes=" + episodeCount +
-                    ", entities=" + entityCount +
-                    ", relations=" + relationCount +
-                    '}';
+            return new StringBuilder()
+                    .append("StoreStats{")
+                    .append("episodes=")
+                    .append(episodeCount)
+                    .append(", entities=")
+                    .append(entityCount)
+                    .append(", relations=")
+                    .append(relationCount)
+                    .append("}")
+                    .toString();
         }
     }
 }

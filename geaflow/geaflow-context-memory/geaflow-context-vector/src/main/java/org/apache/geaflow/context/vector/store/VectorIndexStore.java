@@ -133,10 +133,14 @@ public interface VectorIndexStore {
 
         @Override
         public String toString() {
-            return "VectorSearchResult{" +
-                    "id='" + id + '\'' +
-                    ", similarity=" + similarity +
-                    '}';
+            return new StringBuilder()
+                    .append("VectorSearchResult{")
+                    .append("id='")
+                    .append(id)
+                    .append("', similarity=")
+                    .append(similarity)
+                    .append("}")
+                    .toString();
         }
     }
 

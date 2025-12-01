@@ -19,14 +19,14 @@
 
 package org.apache.geaflow.context.core.engine;
 
+import java.util.Arrays;
+import org.apache.geaflow.context.api.engine.ContextMemoryEngine;
 import org.apache.geaflow.context.api.model.Episode;
 import org.apache.geaflow.context.api.query.ContextQuery;
 import org.apache.geaflow.context.api.result.ContextSearchResult;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-
-import java.util.Arrays;
 
 import static org.junit.Assert.*;
 

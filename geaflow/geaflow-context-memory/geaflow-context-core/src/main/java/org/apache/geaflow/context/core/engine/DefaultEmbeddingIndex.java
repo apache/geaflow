@@ -19,15 +19,13 @@
 
 package org.apache.geaflow.context.core.engine;
 
-import org.apache.geaflow.context.api.engine.ContextMemoryEngine;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import org.apache.geaflow.context.api.engine.ContextMemoryEngine;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Default implementation of EmbeddingIndex using in-memory storage.
@@ -79,19 +77,19 @@ public class DefaultEmbeddingIndex implements ContextMemoryEngine.EmbeddingIndex
      * @throws Exception if search fails
      */
     @Override
-    public List<EmbeddingSearchResult> search(float[] queryVector, int topK, double threshold) throws Exception {
+    public List<ContextMemoryEngine.EmbeddingSearchResult> search(float[] queryVector, int topK, double threshold) throws Exception {
         if (queryVector == null || queryVector.length == 0) {
             throw new IllegalArgumentException("Query vector cannot be null or empty");
         }
 
-        List<EmbeddingSearchResult> results = new ArrayList<>();
+        List<ContextMemoryEngine.EmbeddingSearchResult> results = new ArrayList<>();
 
         // Calculate similarity with all embeddings
         for (Map.Entry<String, float[]> entry : embeddings.entrySet()) {
             double similarity = cosineSimilarity(queryVector, entry.getValue());
 
             if (similarity >= threshold) {
-                results.add(new EmbeddingSearchResult(entry.getKey(), similarity));
+                results.add(new ContextMemoryEngine.EmbeddingSearchResult(entry.getKey(), similarity));
             }
         }
 
