@@ -45,6 +45,16 @@
             <artifactId>geaflow-context-core</artifactId>
         </dependency>
 
+        <!-- GeaFlow Core -->
+        <dependency>
+            <groupId>org.apache.geaflow</groupId>
+            <artifactId>geaflow-common</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.geaflow</groupId>
+            <artifactId>geaflow-infer</artifactId>
+        </dependency>
+
         <!-- Core dependencies -->
         <dependency>
             <groupId>org.apache.commons</groupId>
