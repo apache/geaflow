@@ -22,6 +22,7 @@ package org.apache.geaflow.dsl.connector.odps;
 import com.aliyun.odps.Column;
 import com.aliyun.odps.Odps;
 import com.aliyun.odps.PartitionSpec;
+import com.aliyun.odps.Table;
 import com.aliyun.odps.TableSchema;
 import com.aliyun.odps.account.Account;
 import com.aliyun.odps.account.AliyunAccount;
@@ -113,7 +114,8 @@ public class OdpsTableSink implements TableSink {
         odps.setEndpoint(endPoint);
         odps.setDefaultProject(project);
         this.tunnel = new TableTunnel(odps);
-        TableSchema tableSchema = createUploadSession().getSchema();
+        Table table = odps.tables().get(tableName);
+        TableSchema tableSchema = table.getSchema();
         this.recordColumns = tableSchema.getColumns().toArray(new Column[0]);
         this.columnIndex = new int[recordColumns.length];
         for (int i = 0; i < this.recordColumns.length; i++) {
