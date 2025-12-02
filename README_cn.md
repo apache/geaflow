@@ -1,4 +1,8 @@
-# GeaFlow
+<p align="center">
+  <img src="https://geaflow.apache.org/img/logo.png" alt="GeaFlow Logo" width="400"/>
+</p>
+
+<h1 align="center">Apache GeaFlow (Incubating)</h1>
 
 [![Discord](https://badgen.net/badge/icon/Discord?icon=discord&label)](https://discord.gg/apKdP3DXuH)
 [![Commit](https://badgen.net/github/last-commit/tugraph-family/tugraph-analytics/master?icon=git&label=Commit)](https://github.com/TuGraph-family/tugraph-analytics/commits/master)
