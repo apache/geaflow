@@ -60,7 +60,6 @@ MATCH (a:person {id: '3'})-[b:acted_in]->(c:movie)
 RETURN a.name, a.id, b.role, c.id, c.title LIMIT 10;
 MATCH (a:person {id: '3'})-[b:acted_in]->(c:movie) WHERE c.id = '102'
 RETURN a.id, b.role, c.id LIMIT 10;
-RETURN a.id, b.role, c.id LIMIT 10;
 -- ISO-GQL labeled predicate extended examples
 -- Multi-label with property specification
 MATCH (n:person|movie{id: 1, name: 'x'}) RETURN n.id, n.name;
