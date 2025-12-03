@@ -17,25 +17,7 @@
  * under the License.
  */
 
-package org.apache.geaflow.dsl;
-
-import org.testng.Assert;
-import org.testng.annotations.Test;
-
-@Test(groups = "SyntaxTest")
-public class IsoGqlSyntaxTest extends BaseDslTest {
-
-    @Test
-    public void testIsoGQLMatch() throws Exception {
-        String unParseSql = parseSqlAndUnParse("IsoGQLMatch.sql");
-        String unParseStmts = parseStmtsAndUnParse(parseStmtsAndUnParse(unParseSql));
-        Assert.assertEquals(unParseStmts, unParseSql);
-    }
-
-    @Test
-    public void testIsoGQLSamePredicate() throws Exception {
-        String unParseSql = parseSqlAndUnParse("IsoGQLSame.sql");
-        String unParseStmts = parseStmtsAndUnParse(parseStmtsAndUnParse(unParseSql));
-        Assert.assertEquals(unParseStmts, unParseSql);
-    }
-}
+MATCH (a:person)-[:know]->(b:person), (b)-[:know]->(c:person) WHERE SAME(a, c) RETURN a.name, b.name;
+MATCH (a:person)-[:know]->(b:person), (c:person)-[:know]->(d:person) WHERE SAME(a, c) RETURN a.id, b.id, c.id, d.id;
+MATCH (a:person {id: 1})-[e1:know]->(b:person), (c:person)-[e2:know]->(d:person) WHERE SAME(a, b, c) RETURN a.id, b.id;
+MATCH (a:person)-[e1:know]->(b:person)-[e2:know]->(c:person) WHERE SAME(a, c) RETURN a.name, b.name, c.name;
