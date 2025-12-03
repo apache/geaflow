@@ -1,0 +1,2 @@
+1,marko,0.5,2,vadas,true
+1,marko,1.0,4,josh,true
