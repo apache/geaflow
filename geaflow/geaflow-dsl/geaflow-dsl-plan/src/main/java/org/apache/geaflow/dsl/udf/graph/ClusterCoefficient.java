@@ -21,7 +21,6 @@ package org.apache.geaflow.dsl.udf.graph;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -31,7 +30,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
-
 import org.apache.geaflow.common.type.primitive.DoubleType;
 import org.apache.geaflow.common.type.primitive.IntegerType;
 import org.apache.geaflow.dsl.common.algo.AlgorithmRuntimeContext;
@@ -273,7 +271,7 @@ public class ClusterCoefficient implements AlgorithmUserFunction<Object, ObjectR
     }
 
     /**
-     * sample some neighbors
+     * sample some neighbors.
      * @param neighbors origin neighbors
      * @return sampled neighbors
      */
@@ -290,7 +288,7 @@ public class ClusterCoefficient implements AlgorithmUserFunction<Object, ObjectR
     }
 
     /**
-     * Auxiliary method: Sampling by random index (to save memory)
+     * Auxiliary method: Sampling by random index (to save memory).
      * @param neighbors origin neighbors
      * @param totalSize origin neighbor's size
      * @return sampled neighbors
@@ -314,7 +312,7 @@ public class ClusterCoefficient implements AlgorithmUserFunction<Object, ObjectR
     }
 
     /**
-     * Auxiliary method: Partial shuffling
+     * Auxiliary method: Partial shuffling.
      * @param neighbors origin neighbors
      * @param totalSize origin neighbor's size
      * @return sampled neighbors
@@ -329,7 +327,7 @@ public class ClusterCoefficient implements AlgorithmUserFunction<Object, ObjectR
     }
 
     /**
-     * Parse parameters from params
+     * Parse parameters from params.
      * @param params params
      */
     private void parseParameters(Object[] params) {
