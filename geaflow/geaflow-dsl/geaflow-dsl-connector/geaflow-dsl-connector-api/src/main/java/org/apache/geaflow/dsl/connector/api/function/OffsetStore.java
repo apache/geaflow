@@ -85,9 +85,14 @@ public class OffsetStore {
         storeContext.withKeySerializer(new DefaultKVSerializer(String.class, String.class));
         jsonOffsetStore.init(storeContext);
 
-        this.bucketNum = 2 * runtimeContext.getConfiguration().getLong(FrameworkConfigKeys.BATCH_NUMBER_PER_CHECKPOINT);
+        long bucketNum = 2 * runtimeContext.getConfiguration().getLong(FrameworkConfigKeys.BATCH_NUMBER_PER_CHECKPOINT);
+        long streamFlyingNum = runtimeContext.getConfiguration().getInteger(FrameworkConfigKeys.STREAMING_FLYING_BATCH_NUM) + 1;
+        if (bucketNum < streamFlyingNum) {
+            bucketNum = streamFlyingNum;
+        }
+        this.bucketNum = bucketNum;
         this.kvStoreCache = new HashMap<>();
-        LOGGER.info("init offset store, store type is: {}", backendType);
+        LOGGER.info("init offset store, store type is: {}, bucket num is: {}", backendType, this.bucketNum);
     }
 
     public Offset readOffset(String partitionName, long batchId) {
