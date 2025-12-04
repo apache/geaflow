@@ -59,7 +59,7 @@ done
 ARCH=$(uname -m)
 if [[ "$ARCH" = "x86_64" ]]; then
   if [[ "$USE_UBUNTU" = "true" ]]; then
-    DOCKER_FILE="Dockerfile-ubuntu"
+    DOCKER_FILE="Dockerfile-ubuntu-centos"
   else
     DOCKER_FILE="Dockerfile-centos"
   fi
