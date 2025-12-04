@@ -21,42 +21,43 @@
 <project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xmlns="http://maven.apache.org/POM/4.0.0"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xstd">
-
     <parent>
-        <artifactId>geaflow-dsl</artifactId>
+        <artifactId>geaflow-dsl-connector</artifactId>
         <groupId>org.apache.geaflow</groupId>
         <version>0.6.8-SNAPSHOT</version>
     </parent>
 
     <modelVersion>4.0.0</modelVersion>
 
-    <artifactId>geaflow-dsl-connector</artifactId>
-    <packaging>pom</packaging>
+    <artifactId>geaflow-dsl-connector-elasticsearch</artifactId>
 
-    <modules>
-        <module>geaflow-dsl-connector-api</module>
-        <module>geaflow-dsl-connector-file</module>
-        <module>geaflow-dsl-connector-kafka</module>
-        <module>geaflow-dsl-connector-hive</module>
-        <module>geaflow-dsl-connector-console</module>
-        <module>geaflow-dsl-connector-socket</module>
-        <module>geaflow-dsl-connector-jdbc</module>
-        <module>geaflow-dsl-connector-odps</module>
-        <module>geaflow-dsl-connector-hudi</module>
-        <module>geaflow-dsl-connector-hbase</module>
-        <module>geaflow-dsl-connector-pulsar</module>
-        <module>geaflow-dsl-connector-random</module>
-        <module>geaflow-dsl-connector-paimon</module>
-        <module>geaflow-dsl-connector-elasticsearch</module>
-    </modules>
+    <dependencies>
+        <dependency>
+            <groupId>org.apache.geaflow</groupId>
+            <artifactId>geaflow-dsl-common</artifactId>
+        </dependency>
 
-    <dependencyManagement>
-        <dependencies>
-            <dependency>
-                <groupId>org.apache.geaflow</groupId>
-                <artifactId>geaflow-dsl-connector-api</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-        </dependencies>
-    </dependencyManagement>
+        <dependency>
+            <groupId>org.apache.geaflow</groupId>
+            <artifactId>geaflow-dsl-connector-api</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.elasticsearch.client</groupId>
+            <artifactId>elasticsearch-rest-high-level-client</artifactId>
+            <version>7.17.9</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.testng</groupId>
+            <artifactId>testng</artifactId>
+            <version>${testng.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
 </project>
