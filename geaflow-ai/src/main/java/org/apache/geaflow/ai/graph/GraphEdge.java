@@ -34,6 +34,11 @@ public class GraphEdge implements GraphEntity {
     }
 
     @Override
+    public String getLabel() {
+        return edge.getLabel();
+    }
+
+    @Override
     public String toString() {
         return edge.toString();
     }

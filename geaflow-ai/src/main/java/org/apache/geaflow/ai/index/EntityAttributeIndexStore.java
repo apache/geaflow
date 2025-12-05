@@ -34,11 +34,10 @@ public class EntityAttributeIndexStore implements IndexStore {
     @Override
     public List<IVector> getVertexIndex(GraphVertex graphVertex) {
         Vertex vertex = graphVertex.getVertex();
-        List<String> sentences  = vertex.getValues();
+        List<String> sentences = new ArrayList<>(vertex.getValues());
         sentences.add(vertex.getId());
         sentences.add(vertex.getLabel());
-        List<String> frequencyWords = WordFrequencyProcessor.processSentences(sentences);
-        KeywordVector keywordVector = new KeywordVector(frequencyWords.toArray(new String[0]));
+        KeywordVector keywordVector = new KeywordVector(sentences.toArray(new String[0]));
         List<IVector> results = new ArrayList<>();
         results.add(keywordVector);
         return results;
@@ -47,12 +46,11 @@ public class EntityAttributeIndexStore implements IndexStore {
     @Override
     public List<IVector> getEdgeIndex(GraphEdge graphEdge) {
         Edge edge = graphEdge.getEdge();
-        List<String> sentences  = edge.getValues();
+        List<String> sentences = new ArrayList<>(edge.getValues());
         sentences.add(edge.getSrcId());
         sentences.add(edge.getDstId());
         sentences.add(edge.getLabel());
-        List<String> frequencyWords = WordFrequencyProcessor.processSentences(sentences);
-        KeywordVector keywordVector = new KeywordVector(frequencyWords.toArray(new String[0]));
+        KeywordVector keywordVector = new KeywordVector(sentences.toArray(new String[0]));
         List<IVector> results = new ArrayList<>();
         results.add(keywordVector);
         return results;

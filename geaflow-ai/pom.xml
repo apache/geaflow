@@ -37,6 +37,7 @@
         <log4j.version>1.2.17</log4j.version>
         <log4j.slf4j.version>2.17.1</log4j.slf4j.version>
         <lmax.disrupter.veresion>3.4.4</lmax.disrupter.veresion>
+        <lucene.version>8.11.2</lucene.version>
     </properties>
 
     <dependencies>
@@ -73,6 +74,20 @@
             <groupId>org.apache.logging.log4j</groupId>
             <artifactId>log4j-api</artifactId>
             <version>${log4j.slf4j.version}</version>
+        </dependency>
+
+        <!-- Lucene Core -->
+        <dependency>
+            <groupId>org.apache.lucene</groupId>
+            <artifactId>lucene-core</artifactId>
+            <version>${lucene.version}</version>
+        </dependency>
+
+        <!-- Lucene Query Parser -->
+        <dependency>
+            <groupId>org.apache.lucene</groupId>
+            <artifactId>lucene-queryparser</artifactId>
+            <version>${lucene.version}</version>
         </dependency>
 
         <!-- 异步日志依赖 -->

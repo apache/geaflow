@@ -21,7 +21,7 @@ package org.apache.geaflow.ai.graph.io;
 
 import java.util.List;
 
-public class Vertex implements Entity {
+public class Vertex {
 
     private final String id;
     private final String label;
@@ -37,13 +37,12 @@ public class Vertex implements Entity {
         return id;
     }
 
-    public List<String> getValues() {
-        return values;
-    }
-
-    @Override
     public String getLabel() {
         return label;
+    }
+
+    public List<String> getValues() {
+        return values;
     }
 
     @Override

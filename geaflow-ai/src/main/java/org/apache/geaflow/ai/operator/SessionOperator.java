@@ -20,59 +20,88 @@
 package org.apache.geaflow.ai.operator;
 
 import org.apache.geaflow.ai.graph.GraphAccessor;
-import org.apache.geaflow.ai.graph.GraphAccessorFactory;
+import org.apache.geaflow.ai.graph.GraphEdge;
+import org.apache.geaflow.ai.graph.GraphEntity;
 import org.apache.geaflow.ai.graph.GraphVertex;
-import org.apache.geaflow.ai.index.IndexStoreCache;
+import org.apache.geaflow.ai.index.IndexStore;
 import org.apache.geaflow.ai.index.vector.IVector;
+import org.apache.geaflow.ai.index.vector.VectorType;
 import org.apache.geaflow.ai.search.VectorSearch;
-import org.apache.geaflow.ai.search.VectorSearcher;
-import org.apache.geaflow.ai.session.SessionManagement;
 import org.apache.geaflow.ai.subgraph.SubGraph;
 
-import java.util.Iterator;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 
-public class SessionOperator {
+public class SessionOperator implements SearchOperator {
 
-    private final GraphAccessor graphAccessor = GraphAccessorFactory.INSTANCE.copy();
+    private final GraphAccessor graphAccessor;
+    private final IndexStore indexStore;
 
-    public boolean vectorSearch(VectorSearch search) {
-        //获取session
-        SessionManagement manager = SessionManagement.INSTANCE;
-        String sessionId = search.getSessionId();
-        if (!manager.sessionExists(sessionId)) {
-            return false;
+    public SessionOperator(GraphAccessor accessor, IndexStore store) {
+        this.graphAccessor = Objects.requireNonNull(accessor);
+        this.indexStore = Objects.requireNonNull(store);
+    }
+
+    @Override
+    public List<SubGraph> apply(List<SubGraph> subGraphList, VectorSearch search) {
+        //没有子图时进行全局匹配
+        Map<GraphEntity, List<IVector>> entityIndexMap = new HashMap<>();
+        List<IVector> keyWordVectors = search.getVectorMap().get(VectorType.KeywordVector);
+        if (keyWordVectors == null || keyWordVectors.isEmpty()) {
+            if (subGraphList == null) {
+                return new ArrayList<>();
+            }
+            return new ArrayList<>(subGraphList);
         }
-        //从管理器获取子图列表
-        List<SubGraph> subGraphList = manager.getSubGraph(sessionId);
-        //如果没有历史子图，进行全图匹配
+        List<String> contents = new ArrayList<>(keyWordVectors.size());
+        for (IVector v : keyWordVectors) {
+            contents.add(v.toString());
+        }
+        String query = String.join("  ", contents);
         if (subGraphList == null || subGraphList.isEmpty()) {
+            //创建备选集
             Iterator<GraphVertex> vertexIterator = graphAccessor.scanVertex();
-            VectorSearcher searcher = new VectorSearcher(search);
             while (vertexIterator.hasNext()) {
                 GraphVertex vertex = vertexIterator.next();
-                //获取每个vertex的索引向量
-                List<IVector> vertexIndex = IndexStoreCache.CACHE.getVertexIndex(vertex);
-                searcher.add(vertex, vertexIndex);
+                //从索引中读出所有点的索引，加入备选集
+                List<IVector> vertexIndex = indexStore.getVertexIndex(vertex);
+                entityIndexMap.put(vertex, vertexIndex);
             }
-            //全局评分比对
-            List<GraphVertex> startVertices = searcher.getResults().stream().filter(
-                    v -> v instanceof GraphVertex
-            ).map(v -> ((GraphVertex) v)).distinct().collect(Collectors.toList());
+            //recall compute
+            GraphSearchStore searchStore = new GraphSearchStore();
+            for (Map.Entry<GraphEntity, List<IVector>> entry : entityIndexMap.entrySet()) {
+                if (entry.getValue() != null && !entry.getValue().isEmpty()) {
+                    if (entry.getKey() instanceof GraphVertex) {
+                        searchStore.indexVertex((GraphVertex) entry.getKey(), entry.getValue());
+                    } else if (entry.getKey() instanceof GraphEdge) {
+                        searchStore.indexEdge((GraphEdge) entry.getKey(), entry.getValue());
+                    }
+                }
+            }
+            searchStore.close();
+            List<GraphEntity> results = searchStore.search(query, graphAccessor);
+            List<GraphVertex> startVertices = new ArrayList<>();
+            for (GraphEntity resEntity : results) {
+                if (resEntity instanceof GraphVertex) {
+                    startVertices.add((GraphVertex) resEntity);
+                }
+            }
+            //Apply to subgraph
             List<SubGraph> subGraphs = startVertices.stream().map(v -> {
                 SubGraph subGraph = new SubGraph();
                 subGraph.addVertex(v);
                 return subGraph;
             }).collect(Collectors.toList());
-            manager.setSubGraph(sessionId, subGraphs);
-            return true;
+            return subGraphs;
+        } else {
+            //遍历子图所有触点，进行搜索
+            //创建备选集
+            //子图触点加入备选集合
+            //recall compute
+            List<GraphEntity> matchEntities = new ArrayList<>();
+            //Apply to subgraph
+            List<SubGraph> subGraphs = new ArrayList<>(subGraphList);
+            return subGraphs;
         }
-        //遍历子图所有触点，进行向量搜索
-        //全局评分比对
-        //更新子图
-
-        //如果检索完成，返回成功
-        return true;
     }
 }

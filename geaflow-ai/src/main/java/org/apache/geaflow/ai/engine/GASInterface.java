@@ -17,43 +17,7 @@
  * under the License.
  */
 
-package org.apache.geaflow.ai.graph.io;
+package org.apache.geaflow.ai.engine;
 
-import java.util.List;
-
-public class Edge {
-
-
-    private final String srcId;
-    private final String dstId;
-    private final String label;
-    private final List<String> values;
-
-    public Edge(String label, String srcId, String dstId, List<String> values) {
-        this.label = label;
-        this.srcId = srcId;
-        this.dstId = dstId;
-        this.values = values;
-    }
-
-    public List<String> getValues() {
-        return values;
-    }
-
-    public String getSrcId() {
-        return srcId;
-    }
-
-    public String getDstId() {
-        return dstId;
-    }
-
-    public String getLabel() {
-        return label;
-    }
-
-    @Override
-    public String toString() {
-        return label + " | " + srcId + " | " + dstId + " | " + String.join("|", values);
-    }
+public interface GASInterface {
 }

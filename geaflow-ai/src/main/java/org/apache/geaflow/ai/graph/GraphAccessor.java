@@ -19,11 +19,17 @@
 
 package org.apache.geaflow.ai.graph;
 
+import org.apache.geaflow.ai.graph.io.*;
+
 import java.util.Iterator;
 
 public interface GraphAccessor {
 
-    GraphVertex getVertex(EntityId entityId);
+    GraphSchema getGraphSchema();
+
+    GraphVertex getVertex(String label, String id);
+
+    GraphEdge getEdge(String label, String src, String dst);
 
     Iterator<GraphVertex> scanVertex();
 

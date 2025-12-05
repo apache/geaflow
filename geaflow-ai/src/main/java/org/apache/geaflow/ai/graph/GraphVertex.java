@@ -34,7 +34,13 @@ public class GraphVertex implements GraphEntity {
     }
 
     @Override
+    public String getLabel() {
+        return vertex.getLabel();
+    }
+
+    @Override
     public String toString() {
         return vertex.toString();
     }
+
 }

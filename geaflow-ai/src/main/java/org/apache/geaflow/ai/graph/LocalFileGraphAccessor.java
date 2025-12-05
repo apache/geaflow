@@ -19,10 +19,7 @@
 
 package org.apache.geaflow.ai.graph;
 
-import org.apache.geaflow.ai.graph.io.Edge;
-import org.apache.geaflow.ai.graph.io.Graph;
-import org.apache.geaflow.ai.graph.io.GraphFileReader;
-import org.apache.geaflow.ai.graph.io.Vertex;
+import org.apache.geaflow.ai.graph.io.*;
 
 import java.util.Iterator;
 import java.util.NoSuchElementException;
@@ -43,10 +40,19 @@ public class LocalFileGraphAccessor implements GraphAccessor {
         }
     }
 
+    @Override
+    public GraphSchema getGraphSchema() {
+        return graph.getGraphSchema();
+    }
 
     @Override
-    public GraphVertex getVertex(EntityId entityId) {
-        throw new RuntimeException("Not support.");
+    public GraphVertex getVertex(String label, String id) {
+        return new GraphVertex(graph.getVertex(label, id));
+    }
+
+    @Override
+    public GraphEdge getEdge(String label, String src, String dst) {
+        return new GraphEdge(graph.getEdge(label, src, dst));
     }
 
     @Override

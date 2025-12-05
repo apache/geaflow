@@ -17,7 +17,14 @@
  * under the License.
  */
 
-package org.apache.geaflow.ai.graph;
+package org.apache.geaflow.ai.operator;
 
-public class EntityId {
+import org.apache.geaflow.ai.search.VectorSearch;
+import org.apache.geaflow.ai.subgraph.SubGraph;
+
+import java.util.List;
+
+public interface SearchOperator {
+
+    List<SubGraph> apply(List<SubGraph> subGraphList, VectorSearch search);
 }

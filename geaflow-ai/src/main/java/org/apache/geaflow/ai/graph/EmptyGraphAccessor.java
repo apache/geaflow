@@ -19,14 +19,28 @@
 
 package org.apache.geaflow.ai.graph;
 
+import org.apache.geaflow.ai.graph.io.Edge;
+import org.apache.geaflow.ai.graph.io.GraphSchema;
+import org.apache.geaflow.ai.graph.io.Vertex;
+
 import java.util.ArrayList;
 import java.util.Iterator;
 
 public class EmptyGraphAccessor implements GraphAccessor {
 
     @Override
-    public GraphVertex getVertex(EntityId entityId) {
-        throw new RuntimeException("Not support.");
+    public GraphSchema getGraphSchema() {
+        return null;
+    }
+
+    @Override
+    public GraphVertex getVertex(String label, String id) {
+        return null;
+    }
+
+    @Override
+    public GraphEdge getEdge(String label, String src, String dst) {
+        return null;
     }
 
     @Override

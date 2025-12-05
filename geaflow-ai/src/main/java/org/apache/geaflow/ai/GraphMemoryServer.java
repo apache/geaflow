@@ -19,19 +19,37 @@
 
 package org.apache.geaflow.ai;
 
+import org.apache.geaflow.ai.graph.GraphAccessor;
+import org.apache.geaflow.ai.index.IndexStore;
+import org.apache.geaflow.ai.operator.SearchOperator;
 import org.apache.geaflow.ai.operator.SessionOperator;
 import org.apache.geaflow.ai.search.VectorSearch;
 import org.apache.geaflow.ai.session.SessionManagement;
 import org.apache.geaflow.ai.subgraph.SubGraph;
-import org.apache.geaflow.ai.subgraph.reduce.ReduceFunction;
 import org.apache.geaflow.ai.verbalization.Context;
 import org.apache.geaflow.ai.verbalization.VerbalizationFunction;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class GraphMemoryServer {
 
     private final SessionManagement sessionManagement = SessionManagement.INSTANCE;
+    private final List<GraphAccessor> graphAccessors = new ArrayList<>();
+    private final List<IndexStore> indexStores = new ArrayList<>();
+
+    public void addGraphAccessor(GraphAccessor graph) {
+        if (graph != null) {
+            graphAccessors.add(graph);
+        }
+    }
+
+    public void addIndexStore(IndexStore indexStore) {
+        if (indexStore != null) {
+            indexStores.add(indexStore);
+        }
+    }
 
     public String createSession() {
         String sessionId = sessionManagement.createSession();
@@ -41,7 +59,7 @@ public class GraphMemoryServer {
         return sessionId;
     }
 
-    public String vectorSearch(VectorSearch search) {
+    public String search(VectorSearch search) {
         String sessionId = search.getSessionId();
         if (sessionId == null || sessionId.isEmpty()) {
             throw new RuntimeException("Session id is empty");
@@ -49,24 +67,33 @@ public class GraphMemoryServer {
         if (!sessionManagement.sessionExists(sessionId)) {
             sessionManagement.createSession(sessionId);
         }
-        SessionOperator op = new SessionOperator();
-        //预处理search
-        search.preProcess();
-        if (op.vectorSearch(search)) {
-            return search.getSessionId();
-        }
-        return null;
+
+        SessionOperator op = new SessionOperator(graphAccessors.get(0), indexStores.get(0));
+        applySearch(sessionId, op, search);
+        return sessionId;
     }
 
-    public String reduce(String sessionId, ReduceFunction reduceFunction) {
-        return sessionId;
+    public void applySearch(String sessionId, SearchOperator operator, VectorSearch search) {
+        //获取session
+        SessionManagement manager = SessionManagement.INSTANCE;
+        if (!manager.sessionExists(sessionId)) {
+            return;
+        }
+        //应用算子于管理器的子图列表
+        List<SubGraph> result = operator.apply(manager.getSubGraph(sessionId), search);
+        manager.setSubGraph(sessionId, result);
     }
 
     public Context verbalize(String sessionId, VerbalizationFunction verbalizationFunction) {
         List<SubGraph> subGraphList = sessionManagement.getSubGraph(sessionId);
-        StringBuilder stringBuilder = new StringBuilder();
+        List<String> subGraphStringList = new ArrayList<>(subGraphList.size());
         for (SubGraph subGraph : subGraphList) {
-            stringBuilder.append(subGraph.toString()).append("\n");
+            subGraphStringList.add(subGraph.toString());
+        }
+        subGraphStringList = subGraphStringList.stream().sorted().collect(Collectors.toList());
+        StringBuilder stringBuilder = new StringBuilder();
+        for (String subGraph : subGraphStringList) {
+            stringBuilder.append(subGraph).append("\n");
         }
         return new Context(stringBuilder.toString());
     }

@@ -20,4 +20,6 @@
 package org.apache.geaflow.ai.graph;
 
 public interface GraphEntity {
+
+    String getLabel();
 }

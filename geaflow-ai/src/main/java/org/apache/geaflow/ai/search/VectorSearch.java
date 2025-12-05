@@ -19,13 +19,14 @@
 
 package org.apache.geaflow.ai.search;
 
-import org.apache.geaflow.ai.index.WordFrequencyProcessor;
 import org.apache.geaflow.ai.index.vector.IVector;
-import org.apache.geaflow.ai.index.vector.KeywordVector;
 import org.apache.geaflow.ai.index.vector.VectorType;
 
-import java.util.*;
-import java.util.stream.Collectors;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 public class VectorSearch {
 
@@ -38,22 +39,6 @@ public class VectorSearch {
     public VectorSearch(String memoryId, String sessionId) {
         this.memoryId = memoryId;
         this.sessionId = sessionId;
-    }
-
-    public void preProcess() {
-        for (Map.Entry<VectorType, List<IVector>> entry : vectorList.entrySet()) {
-            VectorType searchType = entry.getKey();
-            if (searchType == VectorType.KeywordVector) {
-                List<IVector> newSearchVectors = new ArrayList<>();
-                for (IVector oldSearchVector : entry.getValue()) {
-                    KeywordVector keywordVector = (KeywordVector) oldSearchVector;
-                    List<String> newValues = WordFrequencyProcessor.processSentences(
-                            Arrays.stream(keywordVector.getVec()).collect(Collectors.toList()));
-                    newSearchVectors.add(new KeywordVector(newValues.toArray(new String[0])));
-                }
-                entry.setValue(newSearchVectors);
-            }
-        }
     }
 
     public void addVector(IVector vector) {
@@ -89,7 +74,7 @@ public class VectorSearch {
         return sessionId;
     }
 
-    public Map<VectorType, List<IVector>> getVectorList() {
+    public Map<VectorType, List<IVector>> getVectorMap() {
         return vectorList;
     }
 }

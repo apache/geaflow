@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.geaflow.ai.subgraph.reduce;
+package org.apache.geaflow.ai.engine;
 
-public class ReduceFunction {
+public interface GraphComputeEngine {
 }

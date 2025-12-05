@@ -17,9 +17,15 @@
  * under the License.
  */
 
-package org.apache.geaflow.ai.graph.io;
+package org.apache.geaflow.ai.operator;
 
-public interface Entity {
+public class SearchConstants {
 
-    String getLabel();
+    public static String LABEL = "label";
+    public static String ID = "id";
+    public static String SRC = "src";
+    public static String DST = "dst";
+    public static String CONTENT = "content";
+    public static String OPERATOR = "operator";
+
 }
