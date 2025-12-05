@@ -16,4 +16,6 @@
 # specific language governing permissions and limitations
 # under the License.
 #
-org.apache.geaflow.dsl.connector.elasticsearch.ElasticsearchTableConnector
+
+org.apache.geaflow.dsl.connector.elasticsearch.ElasticSearchTableConnector
+
