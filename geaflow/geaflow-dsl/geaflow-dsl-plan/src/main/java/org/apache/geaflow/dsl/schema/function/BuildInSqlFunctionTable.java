@@ -95,6 +95,7 @@ import org.apache.geaflow.dsl.udf.table.other.IsNotDestinationOf;
 import org.apache.geaflow.dsl.udf.table.other.IsNotSourceOf;
 import org.apache.geaflow.dsl.udf.table.other.IsSourceOf;
 import org.apache.geaflow.dsl.udf.table.other.Label;
+import org.apache.geaflow.dsl.udf.table.other.PropertyExists;
 import org.apache.geaflow.dsl.udf.table.other.VertexId;
 import org.apache.geaflow.dsl.udf.table.string.Ascii2String;
 import org.apache.geaflow.dsl.udf.table.string.Base64Decode;
@@ -214,6 +215,8 @@ public class BuildInSqlFunctionTable extends ListSqlOperatorTable {
             .add(GeaFlowFunction.of(IsNotSourceOf.class))
             .add(GeaFlowFunction.of(IsDestinationOf.class))
             .add(GeaFlowFunction.of(IsNotDestinationOf.class))
+            // ISO-GQL property exists predicate
+            .add(GeaFlowFunction.of(PropertyExists.class))
             // UDAF
             .add(GeaFlowFunction.of(PercentileLong.class))
             .add(GeaFlowFunction.of(PercentileInteger.class))
