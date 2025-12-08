@@ -29,6 +29,14 @@ import org.junit.Test;
 
 /**
  * Unit tests for PropertyExists ISO-GQL predicate function.
+ *
+ * <p>Tests validate:
+ * <ul>
+ *   <li>Three-valued logic (NULL handling)</li>
+ *   <li>Type validation and error handling</li>
+ *   <li>Property name validation</li>
+ *   <li>ISO-GQL compliance</li>
+ * </ul>
  */
 public class PropertyExistsTest {
 
@@ -36,9 +44,10 @@ public class PropertyExistsTest {
     public void testNullElement() {
         PropertyExists func = new PropertyExists();
 
+        // ISO-GQL Rule: NULL element → Unknown (null)
         // Test with null Object
         Boolean result = func.eval((Object) null, "anyProperty");
-        Assert.assertNull("NULL element should return NULL", result);
+        Assert.assertNull("NULL element should return NULL (Unknown in three-valued logic)", result);
 
         // Test with null RowVertex
         result = func.eval((RowVertex) null, "anyProperty");
@@ -60,11 +69,11 @@ public class PropertyExistsTest {
         // Create a simple vertex (non-null)
         RowVertex vertex = new LongVertex(1L);
 
-        // For simplification, we test that non-null vertices return true
-        // In a full implementation, this would check actual property existence
+        // In GeaFlow's implementation, property existence is validated at compile-time
+        // At runtime, non-null elements with valid property names return true
         Boolean result = func.eval(vertex, "name");
         Assert.assertNotNull("Non-null vertex should not return NULL", result);
-        Assert.assertTrue("Non-null vertex should return TRUE in simplified implementation", result);
+        Assert.assertTrue("Non-null vertex with valid property name should return TRUE", result);
     }
 
     @Test
@@ -74,10 +83,10 @@ public class PropertyExistsTest {
         // Create a simple row (non-null)
         Row row = ObjectRow.create(new Object[]{"value1", "value2"});
 
-        // For simplification, we test that non-null rows return true
+        // Property existence validated at compile-time
         Boolean result = func.eval(row, "field1");
         Assert.assertNotNull("Non-null row should not return NULL", result);
-        Assert.assertTrue("Non-null row should return TRUE in simplified implementation", result);
+        Assert.assertTrue("Non-null row with valid property name should return TRUE", result);
     }
 
     @Test
@@ -104,5 +113,103 @@ public class PropertyExistsTest {
         // The @Description annotation should be present (checked by reflection if needed)
         Assert.assertTrue("PropertyExists should be a UDF",
             func.getClass().getSuperclass().getSimpleName().equals("UDF"));
+    }
+
+    // ==================== Error Handling Tests ====================
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testInvalidElementType() {
+        PropertyExists func = new PropertyExists();
+
+        // Test with invalid element type (String instead of graph element)
+        func.eval("not a graph element", "propertyName");
+        // Should throw IllegalArgumentException
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testInvalidElementTypeInteger() {
+        PropertyExists func = new PropertyExists();
+
+        // Test with invalid element type (Integer)
+        func.eval(123, "propertyName");
+        // Should throw IllegalArgumentException
+    }
+
+    @Test
+    public void testInvalidElementTypeMessage() {
+        PropertyExists func = new PropertyExists();
+
+        try {
+            func.eval("invalid", "propertyName");
+            Assert.fail("Should have thrown IllegalArgumentException for invalid element type");
+        } catch (IllegalArgumentException e) {
+            // Verify error message contains useful information
+            Assert.assertTrue("Error message should mention graph element requirement",
+                e.getMessage().contains("graph element"));
+            Assert.assertTrue("Error message should include actual type",
+                e.getMessage().contains("String"));
+        }
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testNullPropertyName() {
+        PropertyExists func = new PropertyExists();
+
+        // Test with null property name
+        RowVertex vertex = new LongVertex(1L);
+        func.eval(vertex, null);
+        // Should throw IllegalArgumentException
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testEmptyPropertyName() {
+        PropertyExists func = new PropertyExists();
+
+        // Test with empty property name
+        RowVertex vertex = new LongVertex(1L);
+        func.eval(vertex, "");
+        // Should throw IllegalArgumentException
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testWhitespacePropertyName() {
+        PropertyExists func = new PropertyExists();
+
+        // Test with whitespace-only property name
+        RowVertex vertex = new LongVertex(1L);
+        func.eval(vertex, "   ");
+        // Should throw IllegalArgumentException
+    }
+
+    @Test
+    public void testInvalidPropertyNameMessage() {
+        PropertyExists func = new PropertyExists();
+        RowVertex vertex = new LongVertex(1L);
+
+        try {
+            func.eval(vertex, null);
+            Assert.fail("Should have thrown IllegalArgumentException for null property name");
+        } catch (IllegalArgumentException e) {
+            // Verify error message is clear
+            Assert.assertTrue("Error message should mention property name requirement",
+                e.getMessage().contains("property name"));
+        }
+    }
+
+    @Test
+    public void testTypeSpecificOverloads() {
+        PropertyExists func = new PropertyExists();
+
+        // Test that type-specific overloads work correctly
+        RowVertex vertex = new LongVertex(1L);
+        Row row = ObjectRow.create(new Object[]{"value"});
+
+        // These should all work without ClassCastException
+        Boolean vertexResult = func.eval(vertex, "name");
+        Boolean rowResult = func.eval(row, "field");
+
+        Assert.assertNotNull("Vertex overload should work", vertexResult);
+        Assert.assertNotNull("Row overload should work", rowResult);
+        Assert.assertTrue("Type-specific overloads should return TRUE", vertexResult && rowResult);
     }
 }

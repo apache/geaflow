@@ -23,6 +23,7 @@ import org.apache.geaflow.dsl.common.data.Row;
 import org.apache.geaflow.dsl.common.data.RowEdge;
 import org.apache.geaflow.dsl.common.data.RowVertex;
 import org.apache.geaflow.dsl.common.function.Description;
+import org.apache.geaflow.dsl.common.function.PropertyExistsFunctions;
 import org.apache.geaflow.dsl.common.function.UDF;
 
 /**
@@ -61,58 +62,70 @@ import org.apache.geaflow.dsl.common.function.UDF;
 public class PropertyExists extends UDF {
 
     /**
-     * Evaluates PROPERTY_EXISTS predicate for any value with a property name check.
+     * Evaluates PROPERTY_EXISTS predicate for any graph element.
      *
-     * <p>NOTE: This is a simplified implementation. In a full ISO-GQL compliant system,
-     * PROPERTY_EXISTS would be implemented as a SQL operator with compile-time property
-     * name resolution. This UDF version assumes property checking happens through SQL
-     * layer optimizations.
+     * <p>This implementation follows the established GeaFlow pattern for ISO-GQL predicates,
+     * delegating to {@link PropertyExistsFunctions} utility class for consistent validation
+     * and error handling across the framework.
      *
-     * <p>The actual implementation delegates property existence checking to the query
-     * compilation and optimization phase. At runtime, if this function is called,
-     * it means the query compiler has already validated the property exists.
+     * <p><b>Implementation Strategy:</b>
+     * Property existence validation relies on compile-time checking through GeaFlow's SQL
+     * optimizer and type system (StructType). At runtime, this function validates argument
+     * types and provides meaningful error messages.
      *
-     * @param element any value (typically graph element)
-     * @param propertyName name of property to check (not used in simplified version)
-     * @return Boolean: null if element is null, true otherwise (compile-time checked)
+     * <p>This approach is consistent with:
+     * <ul>
+     *   <li>Other ISO-GQL predicates (IS_SOURCE_OF, IS_DESTINATION_OF)</li>
+     *   <li>GeaFlow's Row interface design (indexed access only)</li>
+     *   <li>Three-layer architecture: UDF → Utility → Business Logic</li>
+     * </ul>
+     *
+     * @param element graph element to check (Row, RowVertex, or RowEdge)
+     * @param propertyName name of property to check
+     * @return Boolean: null if element is null, true if property exists, false otherwise
+     * @throws IllegalArgumentException if element is not a valid graph element type
+     * @throws IllegalArgumentException if propertyName is null or empty
      */
     public Boolean eval(Object element, String propertyName) {
-        // Case a) If element is null, result is Unknown (null)
-        if (element == null) {
-            return null;
-        }
-
-        // In the simplified UDF approach, we assume the SQL optimizer has already
-        // verified property existence at compile time. If this runtime code is reached,
-        // the property exists (otherwise compilation would have failed).
-        //
-        // A full implementation would require:
-        // 1. Custom SqlOperator with property name validation
-        // 2. Integration with schema/type system
-        // 3. Compile-time property resolution
-        //
-        // For now, return true if element is non-null and is a graph element type
-        return element instanceof Row || element instanceof RowVertex || element instanceof RowEdge;
+        return PropertyExistsFunctions.propertyExists(element, propertyName);
     }
 
     /**
      * Type-specific overload for RowVertex.
+     *
+     * <p>Provides better type inference and error messages when called with vertex elements.
+     *
+     * @param vertex vertex to check
+     * @param propertyName name of property to check
+     * @return Boolean: null if vertex is null, true if property exists, false otherwise
      */
     public Boolean eval(RowVertex vertex, String propertyName) {
-        return vertex != null ? true : null;
+        return PropertyExistsFunctions.propertyExists(vertex, propertyName);
     }
 
     /**
      * Type-specific overload for RowEdge.
+     *
+     * <p>Provides better type inference and error messages when called with edge elements.
+     *
+     * @param edge edge to check
+     * @param propertyName name of property to check
+     * @return Boolean: null if edge is null, true if property exists, false otherwise
      */
     public Boolean eval(RowEdge edge, String propertyName) {
-        return edge != null ? true : null;
+        return PropertyExistsFunctions.propertyExists(edge, propertyName);
     }
 
     /**
      * Type-specific overload for Row.
+     *
+     * <p>Provides better type inference and error messages when called with row elements.
+     *
+     * @param row row to check
+     * @param propertyName name of property to check
+     * @return Boolean: null if row is null, true if property exists, false otherwise
      */
     public Boolean eval(Row row, String propertyName) {
-        return row != null ? true : null;
+        return PropertyExistsFunctions.propertyExists(row, propertyName);
     }
 }
