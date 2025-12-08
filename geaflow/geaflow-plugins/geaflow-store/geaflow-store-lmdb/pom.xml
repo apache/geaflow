@@ -22,33 +22,18 @@
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <parent>
-        <artifactId>geaflow-plugins</artifactId>
+        <artifactId>geaflow-store</artifactId>
         <groupId>org.apache.geaflow</groupId>
         <version>0.6.8-SNAPSHOT</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
-    <artifactId>geaflow-store</artifactId>
-    <packaging>pom</packaging>
-
-    <modules>
-        <module>geaflow-store-api</module>
-        <module>geaflow-store-memory</module>
-        <module>geaflow-store-rocksdb</module>
-        <module>geaflow-store-lmdb</module>
-        <module>geaflow-store-redis</module>
-        <module>geaflow-store-jdbc</module>
-        <module>geaflow-store-paimon</module>
-    </modules>
+    <artifactId>geaflow-store-lmdb</artifactId>
 
     <dependencies>
         <dependency>
             <groupId>org.apache.geaflow</groupId>
-            <artifactId>geaflow-common</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.geaflow</groupId>
-            <artifactId>geaflow-model</artifactId>
+            <artifactId>geaflow-store-api</artifactId>
         </dependency>
         <dependency>
             <groupId>org.apache.geaflow</groupId>
@@ -59,10 +44,29 @@
             <artifactId>geaflow-state-api</artifactId>
         </dependency>
         <dependency>
+            <groupId>org.apache.geaflow</groupId>
+            <artifactId>geaflow-file-common</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.geaflow</groupId>
+            <artifactId>geaflow-file-dfs</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.geaflow</groupId>
+            <artifactId>geaflow-file-oss</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.lmdbjava</groupId>
+            <artifactId>lmdbjava</artifactId>
+            <version>0.8.3</version>
+        </dependency>
+
+        <dependency>
             <groupId>org.testng</groupId>
             <artifactId>testng</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>
-
 </project>
