@@ -69,6 +69,9 @@ public class GraphMemoryServer {
         }
 
         SessionOperator op = new SessionOperator(graphAccessors.get(0), indexStores.get(0));
+        SessionOperator casts_op = new SessionOperator(graphAccessors.get(0), indexStores.get(0));
+        SessionOperator lucene_op = new SessionOperator(graphAccessors.get(0), indexStores.get(0));
+        SessionOperator op3 = new SessionOperator(graphAccessors.get(0), indexStores.get(0));
         applySearch(sessionId, op, search);
         return sessionId;
     }
@@ -88,7 +91,7 @@ public class GraphMemoryServer {
         List<SubGraph> subGraphList = sessionManagement.getSubGraph(sessionId);
         List<String> subGraphStringList = new ArrayList<>(subGraphList.size());
         for (SubGraph subGraph : subGraphList) {
-            subGraphStringList.add(subGraph.toString());
+            subGraphStringList.add(verbalizationFunction.verbalize(subGraph));
         }
         subGraphStringList = subGraphStringList.stream().sorted().collect(Collectors.toList());
         StringBuilder stringBuilder = new StringBuilder();

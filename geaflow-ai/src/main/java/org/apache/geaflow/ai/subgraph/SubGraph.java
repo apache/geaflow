@@ -30,16 +30,23 @@ public class SubGraph {
 
     private final List<GraphEntity> graphEntityList = new ArrayList<>();
 
-    public void addVertex(GraphVertex vertex) {
+    public SubGraph addVertex(GraphVertex vertex) {
         graphEntityList.add(vertex);
+        return this;
     }
 
-    public void addEdge(GraphEdge edge) {
+    public SubGraph addEdge(GraphEdge edge) {
         graphEntityList.add(edge);
+        return this;
     }
 
-    public void addEntity(GraphEntity e) {
+    public SubGraph addEntity(GraphEntity e) {
         graphEntityList.add(e);
+        return this;
+    }
+
+    public List<GraphEntity> getGraphEntityList() {
+        return graphEntityList;
     }
 
     @Override

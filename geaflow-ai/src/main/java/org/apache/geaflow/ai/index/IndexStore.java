@@ -19,15 +19,12 @@
 
 package org.apache.geaflow.ai.index;
 
-import org.apache.geaflow.ai.graph.GraphEdge;
-import org.apache.geaflow.ai.graph.GraphVertex;
+import org.apache.geaflow.ai.graph.GraphEntity;
 import org.apache.geaflow.ai.index.vector.IVector;
 
 import java.util.List;
 
 public interface IndexStore {
 
-    List<IVector> getVertexIndex(GraphVertex graphVertex);
-
-    List<IVector> getEdgeIndex(GraphEdge graphEdge);
+    List<IVector> getEntityIndex(GraphEntity entity);
 }

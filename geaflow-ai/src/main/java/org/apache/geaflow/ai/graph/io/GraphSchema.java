@@ -19,10 +19,17 @@
 
 package org.apache.geaflow.ai.graph.io;
 
+import org.apache.geaflow.ai.graph.GraphEdge;
+import org.apache.geaflow.ai.graph.GraphEntity;
+import org.apache.geaflow.ai.graph.GraphVertex;
+import org.apache.geaflow.ai.verbalization.PromptFormatter;
+
 import java.util.ArrayList;
 import java.util.List;
 
 public class GraphSchema implements Schema {
+
+    private PromptFormatter promptFormatter;
 
     public GraphSchema() {
         this.vertexSchemaList = new ArrayList<>();
@@ -75,5 +82,25 @@ public class GraphSchema implements Schema {
     @Override
     public String getName() {
         return "GRAPH";
+    }
+
+    public void setPromptFormatter(PromptFormatter promptFormatter) {
+        this.promptFormatter = promptFormatter;
+    }
+
+    public String getPrompt(GraphVertex entity) {
+        if (promptFormatter == null) {
+            return entity.toString();
+        } else {
+            return promptFormatter.prompt(entity);
+        }
+    }
+
+    public String getPrompt(GraphEdge entity, GraphVertex start, GraphVertex end) {
+        if (promptFormatter == null) {
+            return entity.toString();
+        } else {
+            return promptFormatter.prompt(entity, start, end);
+        }
     }
 }

@@ -120,9 +120,6 @@ public class GraphSearchStore {
 
     private void addItem() {
         entityNum++;
-        if (entityNum % 1000 == 0) {
-            System.out.println("索引实体数量：" + entityNum);
-        }
     }
 
     public void close() {

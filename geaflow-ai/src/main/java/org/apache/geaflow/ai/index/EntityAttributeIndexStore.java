@@ -20,39 +20,45 @@
 package org.apache.geaflow.ai.index;
 
 import org.apache.geaflow.ai.graph.GraphEdge;
+import org.apache.geaflow.ai.graph.GraphEntity;
 import org.apache.geaflow.ai.graph.GraphVertex;
-import org.apache.geaflow.ai.graph.io.Edge;
-import org.apache.geaflow.ai.graph.io.Vertex;
 import org.apache.geaflow.ai.index.vector.IVector;
 import org.apache.geaflow.ai.index.vector.KeywordVector;
+import org.apache.geaflow.ai.subgraph.SubGraph;
+import org.apache.geaflow.ai.verbalization.SubgraphSemanticPromptFunction;
+import org.apache.geaflow.ai.verbalization.VerbalizationFunction;
 
 import java.util.ArrayList;
 import java.util.List;
 
 public class EntityAttributeIndexStore implements IndexStore {
 
-    @Override
-    public List<IVector> getVertexIndex(GraphVertex graphVertex) {
-        Vertex vertex = graphVertex.getVertex();
-        List<String> sentences = new ArrayList<>(vertex.getValues());
-        sentences.add(vertex.getId());
-        sentences.add(vertex.getLabel());
-        KeywordVector keywordVector = new KeywordVector(sentences.toArray(new String[0]));
-        List<IVector> results = new ArrayList<>();
-        results.add(keywordVector);
-        return results;
+    private VerbalizationFunction verbFunc;
+
+    public void setVerbalizationFunction(VerbalizationFunction func) {
+        if (func != null) {
+            this.verbFunc = func;
+        }
     }
 
     @Override
-    public List<IVector> getEdgeIndex(GraphEdge graphEdge) {
-        Edge edge = graphEdge.getEdge();
-        List<String> sentences = new ArrayList<>(edge.getValues());
-        sentences.add(edge.getSrcId());
-        sentences.add(edge.getDstId());
-        sentences.add(edge.getLabel());
-        KeywordVector keywordVector = new KeywordVector(sentences.toArray(new String[0]));
-        List<IVector> results = new ArrayList<>();
-        results.add(keywordVector);
-        return results;
+    public List<IVector> getEntityIndex(GraphEntity entity) {
+        if (entity instanceof GraphVertex) {
+            String verbalization = verbFunc.verbalize(new SubGraph().addVertex((GraphVertex)entity));
+            List<String> sentences = new ArrayList<>();
+            sentences.add(verbalization);
+            KeywordVector keywordVector = new KeywordVector(sentences.toArray(new String[0]));
+            List<IVector> results = new ArrayList<>();
+            results.add(keywordVector);
+            return results;
+        } else {
+            String verbalization = verbFunc.verbalize(new SubGraph().addEdge((GraphEdge)entity));
+            List<String> sentences = new ArrayList<>();
+            sentences.add(verbalization);
+            KeywordVector keywordVector = new KeywordVector(sentences.toArray(new String[0]));
+            List<IVector> results = new ArrayList<>();
+            results.add(keywordVector);
+            return results;
+        }
     }
 }

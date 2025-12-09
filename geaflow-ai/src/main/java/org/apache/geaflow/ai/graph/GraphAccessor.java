@@ -22,6 +22,7 @@ package org.apache.geaflow.ai.graph;
 import org.apache.geaflow.ai.graph.io.*;
 
 import java.util.Iterator;
+import java.util.List;
 
 public interface GraphAccessor {
 
@@ -34,6 +35,8 @@ public interface GraphAccessor {
     Iterator<GraphVertex> scanVertex();
 
     Iterator<GraphEdge> scanEdge(GraphVertex vertex);
+
+    List<GraphEntity> expand(GraphEntity entity);
 
     GraphAccessor copy();
 

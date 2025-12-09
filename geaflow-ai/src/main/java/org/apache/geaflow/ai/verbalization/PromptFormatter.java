@@ -19,5 +19,12 @@
 
 package org.apache.geaflow.ai.verbalization;
 
-public class PromptFunction implements VerbalizationFunction {
+import org.apache.geaflow.ai.graph.GraphEdge;
+import org.apache.geaflow.ai.graph.GraphVertex;
+
+public interface PromptFormatter {
+
+    String prompt(GraphVertex entity);
+
+    String prompt(GraphEdge entity, GraphVertex start, GraphVertex end);
 }

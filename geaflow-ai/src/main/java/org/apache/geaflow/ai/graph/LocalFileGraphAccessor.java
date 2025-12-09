@@ -21,7 +21,9 @@ package org.apache.geaflow.ai.graph;
 
 import org.apache.geaflow.ai.graph.io.*;
 
+import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
 import java.util.NoSuchElementException;
 
 public class LocalFileGraphAccessor implements GraphAccessor {
@@ -63,6 +65,22 @@ public class LocalFileGraphAccessor implements GraphAccessor {
     @Override
     public Iterator<GraphEdge> scanEdge(GraphVertex vertex) {
         return new GraphEdgeIterator(graph.scanEdge(vertex));
+    }
+
+    @Override
+    public List<GraphEntity> expand(GraphEntity entity) {
+        List<GraphEntity> results = new ArrayList<>();
+        if (entity instanceof GraphVertex) {
+            Iterator<Edge> iterator = graph.scanEdge((GraphVertex) entity);
+            while (iterator.hasNext()) {
+                results.add(new GraphEdge(iterator.next()));
+            }
+        } else if (entity instanceof GraphEdge) {
+            GraphEdge graphEdge = (GraphEdge) entity;
+            results.add(new GraphVertex(graph.getVertex(null, graphEdge.getEdge().getSrcId())));
+            results.add(new GraphVertex(graph.getVertex(null, graphEdge.getEdge().getDstId())));
+        }
+        return results;
     }
 
     @Override

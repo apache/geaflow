@@ -23,11 +23,13 @@ import org.apache.geaflow.ai.graph.GraphAccessor;
 import org.apache.geaflow.ai.graph.GraphEdge;
 import org.apache.geaflow.ai.graph.GraphEntity;
 import org.apache.geaflow.ai.graph.GraphVertex;
+import org.apache.geaflow.ai.index.EntityAttributeIndexStore;
 import org.apache.geaflow.ai.index.IndexStore;
 import org.apache.geaflow.ai.index.vector.IVector;
 import org.apache.geaflow.ai.index.vector.VectorType;
 import org.apache.geaflow.ai.search.VectorSearch;
 import org.apache.geaflow.ai.subgraph.SubGraph;
+import org.apache.geaflow.ai.verbalization.SubgraphSemanticPromptFunction;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -40,12 +42,14 @@ public class SessionOperator implements SearchOperator {
     public SessionOperator(GraphAccessor accessor, IndexStore store) {
         this.graphAccessor = Objects.requireNonNull(accessor);
         this.indexStore = Objects.requireNonNull(store);
+        ((EntityAttributeIndexStore)this.indexStore).setVerbalizationFunction(
+                new SubgraphSemanticPromptFunction(this.graphAccessor)
+        );
     }
 
     @Override
     public List<SubGraph> apply(List<SubGraph> subGraphList, VectorSearch search) {
         //没有子图时进行全局匹配
-        Map<GraphEntity, List<IVector>> entityIndexMap = new HashMap<>();
         List<IVector> keyWordVectors = search.getVectorMap().get(VectorType.KeywordVector);
         if (keyWordVectors == null || keyWordVectors.isEmpty()) {
             if (subGraphList == null) {
@@ -58,50 +62,90 @@ public class SessionOperator implements SearchOperator {
             contents.add(v.toString());
         }
         String query = String.join("  ", contents);
+        List<GraphEntity> globalResults = searchWithGlobalGraph(query);
         if (subGraphList == null || subGraphList.isEmpty()) {
-            //创建备选集
-            Iterator<GraphVertex> vertexIterator = graphAccessor.scanVertex();
-            while (vertexIterator.hasNext()) {
-                GraphVertex vertex = vertexIterator.next();
-                //从索引中读出所有点的索引，加入备选集
-                List<IVector> vertexIndex = indexStore.getVertexIndex(vertex);
-                entityIndexMap.put(vertex, vertexIndex);
-            }
-            //recall compute
-            GraphSearchStore searchStore = new GraphSearchStore();
-            for (Map.Entry<GraphEntity, List<IVector>> entry : entityIndexMap.entrySet()) {
-                if (entry.getValue() != null && !entry.getValue().isEmpty()) {
-                    if (entry.getKey() instanceof GraphVertex) {
-                        searchStore.indexVertex((GraphVertex) entry.getKey(), entry.getValue());
-                    } else if (entry.getKey() instanceof GraphEdge) {
-                        searchStore.indexEdge((GraphEdge) entry.getKey(), entry.getValue());
-                    }
-                }
-            }
-            searchStore.close();
-            List<GraphEntity> results = searchStore.search(query, graphAccessor);
             List<GraphVertex> startVertices = new ArrayList<>();
-            for (GraphEntity resEntity : results) {
+            for (GraphEntity resEntity : globalResults) {
                 if (resEntity instanceof GraphVertex) {
                     startVertices.add((GraphVertex) resEntity);
                 }
             }
             //Apply to subgraph
-            List<SubGraph> subGraphs = startVertices.stream().map(v -> {
+            return startVertices.stream().map(v -> {
                 SubGraph subGraph = new SubGraph();
                 subGraph.addVertex(v);
                 return subGraph;
             }).collect(Collectors.toList());
-            return subGraphs;
         } else {
-            //遍历子图所有触点，进行搜索
             //创建备选集
-            //子图触点加入备选集合
+            Map<GraphEntity, List<IVector>> extendEntityIndexMap = new HashMap<>();
+            //遍历子图所有扩展点，在扩展范围内搜索
+            for (SubGraph subGraph : subGraphList) {
+                List<GraphEntity> extendEntities = getSubgraphExpand(subGraph);
+                for (GraphEntity extendEntity : extendEntities) {
+                    List<IVector> entityIndex = indexStore.getEntityIndex(extendEntity);
+                    extendEntityIndexMap.put(extendEntity, entityIndex);
+                }
+            }
             //recall compute
-            List<GraphEntity> matchEntities = new ArrayList<>();
+            GraphSearchStore searchStore = initSearchStore(extendEntityIndexMap);
+            List<GraphEntity> matchEntities = searchStore.search(query, graphAccessor);
+            Set<GraphEntity> matchEntitiesSet = new HashSet<>(matchEntities);
+
             //Apply to subgraph
             List<SubGraph> subGraphs = new ArrayList<>(subGraphList);
+            for (SubGraph subGraph : subGraphs) {
+                Set<GraphEntity> subgraphEntitySet = new HashSet<>(subGraph.getGraphEntityList());
+                List<GraphEntity> extendEntities = getSubgraphExpand(subGraph);
+                for (GraphEntity extendEntity : extendEntities) {
+                    if (matchEntitiesSet.contains(extendEntity)
+                            && !subgraphEntitySet.contains(extendEntity)) {
+                        subgraphEntitySet.add(extendEntity);
+                        subGraph.addEntity(extendEntity);
+                    }
+                }
+            }
             return subGraphs;
         }
+    }
+
+    private List<GraphEntity> getSubgraphExpand(SubGraph subGraph) {
+        List<GraphEntity> entityList = subGraph.getGraphEntityList();
+        List<GraphEntity> expandEntities = new ArrayList<>();
+        for (GraphEntity entity : entityList) {
+            List<GraphEntity> entityExpand = graphAccessor.expand(entity);
+            expandEntities.addAll(entityExpand);
+        }
+        return expandEntities;
+    }
+
+    private List<GraphEntity> searchWithGlobalGraph(String query) {
+        //创建备选集
+        Map<GraphEntity, List<IVector>> entityIndexMap = new HashMap<>();
+        Iterator<GraphVertex> vertexIterator = graphAccessor.scanVertex();
+        while (vertexIterator.hasNext()) {
+            GraphVertex vertex = vertexIterator.next();
+            //从索引中读出所有点的索引，加入备选集
+            List<IVector> vertexIndex = indexStore.getEntityIndex(vertex);
+            entityIndexMap.put(vertex, vertexIndex);
+        }
+        //recall compute
+        GraphSearchStore searchStore = initSearchStore(entityIndexMap);
+        return searchStore.search(query, graphAccessor);
+    }
+
+    private GraphSearchStore initSearchStore(Map<GraphEntity, List<IVector>> entityIndexMap) {
+        GraphSearchStore searchStore = new GraphSearchStore();
+        for (Map.Entry<GraphEntity, List<IVector>> entry : entityIndexMap.entrySet()) {
+            if (entry.getValue() != null && !entry.getValue().isEmpty()) {
+                if (entry.getKey() instanceof GraphVertex) {
+                    searchStore.indexVertex((GraphVertex) entry.getKey(), entry.getValue());
+                } else if (entry.getKey() instanceof GraphEdge) {
+                    searchStore.indexEdge((GraphEdge) entry.getKey(), entry.getValue());
+                }
+            }
+        }
+        searchStore.close();
+        return searchStore;
     }
 }

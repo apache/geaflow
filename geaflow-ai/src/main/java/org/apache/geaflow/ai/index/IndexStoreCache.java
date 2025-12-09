@@ -38,7 +38,7 @@ public class IndexStoreCache {
     public List<IVector> getVertexIndex(GraphVertex graphVertex) {
         List<IVector> results = new ArrayList<>();
         for (IndexStore indexStore : STORE) {
-            results.addAll(indexStore.getVertexIndex(graphVertex));
+            results.addAll(indexStore.getEntityIndex(graphVertex));
         }
         return results;
     }
@@ -46,7 +46,7 @@ public class IndexStoreCache {
     public List<IVector> getEdgeIndex(GraphEdge graphEdge) {
         List<IVector> results = new ArrayList<>();
         for (IndexStore indexStore : STORE) {
-            results.addAll(indexStore.getEdgeIndex(graphEdge));
+            results.addAll(indexStore.getEntityIndex(graphEdge));
         }
         return results;
     }

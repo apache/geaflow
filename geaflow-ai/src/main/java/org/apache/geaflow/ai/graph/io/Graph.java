@@ -46,8 +46,18 @@ public class Graph {
     }
 
     public Vertex getVertex(String label, String id) {
-        VertexGroup vg = (VertexGroup) getEntity(label);
-        return vg.getVertex(id);
+        if (label == null) {
+            for (VertexSchema schema : getGraphSchema().getVertexSchemaList()) {
+                Vertex res = getVertex(schema.getLabel(), id);
+                if (res != null) {
+                    return res;
+                }
+            }
+        } else {
+            VertexGroup vg = (VertexGroup) getEntity(label);
+            return vg.getVertex(id);
+        }
+        return null;
     }
 
     public Edge getEdge(String label, String src, String dst) {

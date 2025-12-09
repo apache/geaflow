@@ -24,7 +24,9 @@ import org.apache.geaflow.ai.graph.io.GraphSchema;
 import org.apache.geaflow.ai.graph.io.Vertex;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Iterator;
+import java.util.List;
 
 public class EmptyGraphAccessor implements GraphAccessor {
 
@@ -45,12 +47,17 @@ public class EmptyGraphAccessor implements GraphAccessor {
 
     @Override
     public Iterator<GraphVertex> scanVertex() {
-        return new ArrayList<GraphVertex>().iterator();
+        return Collections.emptyIterator();
     }
 
     @Override
     public Iterator<GraphEdge> scanEdge(GraphVertex vertex) {
-        return new ArrayList<GraphEdge>().iterator();
+        return Collections.emptyIterator();
+    }
+
+    @Override
+    public List<GraphEntity> expand(GraphEntity entity) {
+        return new ArrayList<>();
     }
 
     @Override
