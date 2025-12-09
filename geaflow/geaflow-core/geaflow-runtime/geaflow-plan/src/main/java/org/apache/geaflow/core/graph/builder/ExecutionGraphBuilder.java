@@ -183,6 +183,10 @@ public class ExecutionGraphBuilder implements Serializable {
 
     /**
      * Build execution vertex group.
+     *
+     * <p>This method supports co-location hints from LocalShuffleOptimizer.
+     * Vertices with the same coLocationGroup will be placed in the same execution group
+     * to enable automatic local shuffle through LocalInputChannel.
      */
     private Map<Integer, ExecutionVertexGroup> buildExecutionVertexGroup(Map<Integer, Integer> vertexId2GroupIdMap,
                                                                          Queue<PipelineVertex> pipelineVertexQueue) {
@@ -191,6 +195,48 @@ public class ExecutionGraphBuilder implements Serializable {
 
         Set<Integer> groupedVertices = new HashSet<>();
 
+        // Step 1: Process co-location groups first for local shuffle optimization.
+        // Collect vertices by coLocationGroup for local shuffle optimization.
+        Map<String, List<PipelineVertex>> coLocationGroupMap = new HashMap<>();
+        List<PipelineVertex> verticesWithoutCoLocation = new ArrayList<>();
+
+        for (PipelineVertex vertex : plan.getVertexMap().values()) {
+            String coLocationGroup = vertex.getCoLocationGroup();
+            if (coLocationGroup != null && !coLocationGroup.isEmpty()) {
+                coLocationGroupMap.computeIfAbsent(coLocationGroup, k -> new ArrayList<>()).add(vertex);
+            }
+        }
+
+        // Process co-located vertices first.
+        for (Map.Entry<String, List<PipelineVertex>> entry : coLocationGroupMap.entrySet()) {
+            List<PipelineVertex> coLocatedVertices = entry.getValue();
+            if (coLocatedVertices.isEmpty()) {
+                continue;
+            }
+
+            // Create execution group for co-located vertices.
+            ExecutionVertexGroup vertexGroup = new ExecutionVertexGroup(groupId);
+            Map<Integer, ExecutionVertex> currentVertexGroupMap = new HashMap<>();
+
+            for (PipelineVertex vertex : coLocatedVertices) {
+                if (!groupedVertices.contains(vertex.getVertexId())) {
+                    ExecutionVertex executionVertex = buildExecutionVertex(vertex);
+                    currentVertexGroupMap.put(vertex.getVertexId(), executionVertex);
+                    groupedVertices.add(vertex.getVertexId());
+                    vertexId2GroupIdMap.put(vertex.getVertexId(), groupId);
+                }
+            }
+
+            if (!currentVertexGroupMap.isEmpty()) {
+                vertexGroup.getVertexMap().putAll(currentVertexGroupMap);
+                vertexGroupMap.put(groupId, vertexGroup);
+                LOGGER.info("Created co-located execution group {} with {} vertices for coLocationGroup '{}'",
+                    groupId, currentVertexGroupMap.size(), entry.getKey());
+                groupId++;
+            }
+        }
+
+        // Step 2: Process remaining vertices using standard grouping logic.
         while (!pipelineVertexQueue.isEmpty()) {
             PipelineVertex pipelineVertex = pipelineVertexQueue.poll();
             // Ignore already grouped vertex.
