@@ -29,8 +29,10 @@ public class LdbcPromptFormatter implements PromptFormatter {
 
     @Override
     public String prompt(GraphVertex entity) {
-        if (entity == null || entity.getVertex() == null) {
+        if (entity == null) {
             return "Empty Vertex.";
+        } else if (entity.getVertex() == null) {
+            return "The Vertex.";
         }
         Vertex obj;
         Edge edge;
@@ -48,7 +50,7 @@ public class LdbcPromptFormatter implements PromptFormatter {
                         obj.getValues().get(2), obj.getId(), obj.getValues().get(0));
             case "TagClass":
                 obj = ((GraphVertex) entity).getVertex();
-                return String.format("A tag class, name is %s, id is %s, url %s",
+                return String.format("A TagClass, name is %s, id is %s, url %s",
                         obj.getValues().get(1), obj.getId(), obj.getValues().get(2));
             case "Tag":
                 obj = ((GraphVertex) entity).getVertex();
@@ -66,7 +68,7 @@ public class LdbcPromptFormatter implements PromptFormatter {
                         obj.getId(), obj.getValues().get(0), obj.getValues().get(3), obj.getValues().get(4), obj.getValues().get(5), obj.getValues().get(6));
             case "Organisation":
                 obj = ((GraphVertex) entity).getVertex();
-                return String.format("A organisation of %s, name is %s, id is %s, url %s",
+                return String.format("An organisation of %s, name is %s, id is %s, url %s",
                         obj.getValues().get(1), obj.getValues().get(2), obj.getId(), obj.getValues().get(3));
             case "Place":
                 obj = ((GraphVertex) entity).getVertex();
@@ -79,8 +81,10 @@ public class LdbcPromptFormatter implements PromptFormatter {
 
     @Override
     public String prompt(GraphEdge entity, GraphVertex start, GraphVertex end) {
-        if (entity == null || entity.getEdge() == null) {
+        if (entity == null) {
             return "Empty Edge.";
+        } else if (entity.getEdge() == null) {
+            return "The Edge.";
         }
         StringBuilder builder = new StringBuilder();
         builder.append(promptEdge(entity));
@@ -99,95 +103,95 @@ public class LdbcPromptFormatter implements PromptFormatter {
         switch (entity.getLabel()) {
             case "Forum_hasMember_Person":
                 edge = ((GraphEdge) entity).getEdge();
-                return String.format("Forum id %s has member id %s, register at %s",
+                return String.format("One edge of Type Forum_hasMember_Person, Forum id %s has member id %s, register at %s",
                         edge.getSrcId(), edge.getDstId(), edge.getValues().get(0));
             case "Person_workAt_Company":
                 edge = ((GraphEdge) entity).getEdge();
-                return String.format("Person id %s work at company id %s, start from %s year",
+                return String.format("One edge of Type Person_workAt_Company, Person id %s work at company id %s, start from %s year",
                         edge.getSrcId(), edge.getDstId(), edge.getValues().get(3));
             case "Organisation_isLocatedIn_Place":
                 edge = ((GraphEdge) entity).getEdge();
-                return String.format("Organisation id %s is located in place id %s",
+                return String.format("One edge of Type Organisation_isLocatedIn_Place, Organisation id %s is located in place id %s",
                         edge.getSrcId(), edge.getDstId());
             case "Person_hasInterest_Tag":
                 edge = ((GraphEdge) entity).getEdge();
-                return String.format("Person id %s interest at tag id %s",
+                return String.format("One edge of Type Person_hasInterest_Tag, Person id %s interest at tag id %s",
                         edge.getSrcId(), edge.getDstId());
             case "Forum_hasTag_Tag":
                 edge = ((GraphEdge) entity).getEdge();
-                return String.format("Forum id %s has tag id %s",
+                return String.format("One edge of Type Forum_hasTag_Tag, Forum id %s has tag id %s",
                         edge.getSrcId(), edge.getDstId());
             case "Forum_hasModerator_Person":
                 edge = ((GraphEdge) entity).getEdge();
-                return String.format("Forum id %s has moderator id %s",
+                return String.format("One edge of Type Forum_hasModerator_Person, Forum id %s has moderator id %s",
                         edge.getSrcId(), edge.getDstId());
             case "Forum_containerOf_Post":
                 edge = ((GraphEdge) entity).getEdge();
-                return String.format("Forum id %s contain of the post id %s",
+                return String.format("One edge of Type Forum_containerOf_Post, Forum id %s contain of the post id %s",
                         edge.getSrcId(), edge.getDstId());
             case "Tag_hasType_TagClass":
                 edge = ((GraphEdge) entity).getEdge();
-                return String.format("Tag id %s has type of tag class id %s",
+                return String.format("One edge of Type Tag_hasType_TagClass, Tag id %s has type of tag class id %s",
                         edge.getSrcId(), edge.getDstId());
             case "Place_isPartOf_Place":
                 edge = ((GraphEdge) entity).getEdge();
-                return String.format("The place id %s is part of place id %s",
+                return String.format("One edge of Type Place_isPartOf_Place, The place id %s is part of place id %s",
                         edge.getSrcId(), edge.getDstId());
             case "Person_isLocatedIn_City":
                 edge = ((GraphEdge) entity).getEdge();
-                return String.format("The person id %s is located in city id %s",
+                return String.format("One edge of Type Person_isLocatedIn_City, The person id %s is located in city id %s",
                         edge.getSrcId(), edge.getDstId());
             case "Person_knows_Person":
                 edge = ((GraphEdge) entity).getEdge();
-                return String.format("The person id %s knows person id %s",
+                return String.format("One edge of Type Person_knows_Person, The person id %s knows person id %s",
                         edge.getSrcId(), edge.getDstId());
             case "Person_studyAt_University":
                 edge = ((GraphEdge) entity).getEdge();
-                return String.format("The person id %s study at university id %s",
+                return String.format("One edge of Type Person_studyAt_University, The person id %s study at university id %s",
                         edge.getSrcId(), edge.getDstId());
             case "Comment_hasCreator_Person":
                 edge = ((GraphEdge) entity).getEdge();
-                return String.format("The comment id %s has creator person id %s",
+                return String.format("One edge of Type Comment_hasCreator_Person, The comment id %s has creator person id %s",
                         edge.getSrcId(), edge.getDstId());
             case "Post_hasCreator_Person":
                 edge = ((GraphEdge) entity).getEdge();
-                return String.format("The post id %s has creator person id %s",
+                return String.format("One edge of Type Post_hasCreator_Person, The post id %s has creator person id %s",
                         edge.getSrcId(), edge.getDstId());
             case "Person_likes_Post":
                 edge = ((GraphEdge) entity).getEdge();
-                return String.format("The person id %s likes person id %s",
+                return String.format("One edge of Type Person_likes_Post, The person id %s likes person id %s",
                         edge.getSrcId(), edge.getDstId());
             case "Person_likes_Comment":
                 edge = ((GraphEdge) entity).getEdge();
-                return String.format("The person id %s likes comment id %s",
+                return String.format("One edge of Type Person_likes_Comment, The person id %s likes comment id %s",
                         edge.getSrcId(), edge.getDstId());
             case "Comment_replyOf_Post":
                 edge = ((GraphEdge) entity).getEdge();
-                return String.format("The comment id %s reply of the post id %s",
+                return String.format("One edge of Type Comment_replyOf_Post, The comment id %s reply of the post id %s",
                         edge.getSrcId(), edge.getDstId());
             case "Post_isLocatedIn_Country":
                 edge = ((GraphEdge) entity).getEdge();
-                return String.format("The post id %s is located in country id %s",
+                return String.format("One edge of Type Post_isLocatedIn_Country, The post id %s is located in country id %s",
                         edge.getSrcId(), edge.getDstId());
             case "Post_hasTag_Tag":
                 edge = ((GraphEdge) entity).getEdge();
-                return String.format("The post id %s has tag id %s",
+                return String.format("One edge of Type Post_hasTag_Tag, The post id %s has tag id %s",
                         edge.getSrcId(), edge.getDstId());
             case "Comment_hasTag_Tag":
                 edge = ((GraphEdge) entity).getEdge();
-                return String.format("The comment id %s has tag id %s",
+                return String.format("One edge of Type Comment_hasTag_Tag, The comment id %s has tag id %s",
                         edge.getSrcId(), edge.getDstId());
             case "Comment_isLocatedIn_Country":
                 edge = ((GraphEdge) entity).getEdge();
-                return String.format("The comment id %s is located in country id %s",
+                return String.format("One edge of Type Comment_isLocatedIn_Country, The comment id %s is located in country id %s",
                         edge.getSrcId(), edge.getDstId());
             case "Comment_replyOf_Comment":
                 edge = ((GraphEdge) entity).getEdge();
-                return String.format("The comment id %s is reply of comment id %s",
+                return String.format("One edge of Type Comment_replyOf_Comment, The comment id %s is reply of comment id %s",
                         edge.getSrcId(), edge.getDstId());
             case "TagClass_isSubclassOf_TagClass":
                 edge = ((GraphEdge) entity).getEdge();
-                return String.format("The tag class id %s is subclass of the tag class id %s",
+                return String.format("One edge of Type TagClass_isSubclassOf_TagClass, The tag class id %s is subclass of the tag class id %s",
                         edge.getSrcId(), edge.getDstId());
             default:
                 return entity.toString();

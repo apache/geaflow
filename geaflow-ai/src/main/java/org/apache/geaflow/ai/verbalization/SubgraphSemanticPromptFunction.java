@@ -26,9 +26,7 @@ import org.apache.geaflow.ai.graph.GraphVertex;
 import org.apache.geaflow.ai.graph.io.GraphSchema;
 import org.apache.geaflow.ai.subgraph.SubGraph;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Objects;
+import java.util.*;
 
 public class SubgraphSemanticPromptFunction implements VerbalizationFunction {
 
@@ -45,15 +43,23 @@ public class SubgraphSemanticPromptFunction implements VerbalizationFunction {
         }
         List<String> sentences = new ArrayList<>();
         GraphSchema schema = graphAccessor.getGraphSchema();
+        Set<GraphEntity> existsEntities = new HashSet<>();
         for (GraphEntity entity : subGraph.getGraphEntityList()) {
             if (entity instanceof GraphVertex) {
                 GraphVertex graphVertex = (GraphVertex) entity;
-                sentences.add(schema.getPrompt(graphVertex));
+                if (!existsEntities.contains(graphVertex)) {
+                    sentences.add(schema.getPrompt(graphVertex));
+                    existsEntities.add(graphVertex);
+                }
             } else if (entity instanceof GraphEdge) {
                 GraphEdge graphEdge = (GraphEdge) entity;
                 GraphVertex start = graphAccessor.getVertex(null, graphEdge.getEdge().getSrcId());
                 GraphVertex end = graphAccessor.getVertex(null, graphEdge.getEdge().getDstId());
-                sentences.add(schema.getPrompt(graphEdge, start, end));
+                sentences.add(schema.getPrompt(graphEdge,
+                        existsEntities.contains(start) ? new GraphVertex(null) : start,
+                        existsEntities.contains(end) ? new GraphVertex(null) : end));
+                existsEntities.add(start);
+                existsEntities.add(end);
             }
         }
         return String.join("  ", sentences);

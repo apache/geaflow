@@ -20,9 +20,9 @@
 package org.apache.geaflow.ai.graph.io;
 
 import java.util.List;
+import java.util.Objects;
 
 public class Edge {
-
 
     private final String srcId;
     private final String dstId;
@@ -55,5 +55,18 @@ public class Edge {
     @Override
     public String toString() {
         return label + " | " + srcId + " | " + dstId + " | " + String.join("|", values);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Edge edge = (Edge) o;
+        return Objects.equals(srcId, edge.srcId) && Objects.equals(dstId, edge.dstId) && Objects.equals(label, edge.label);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(srcId, dstId, label);
     }
 }

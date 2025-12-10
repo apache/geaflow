@@ -68,7 +68,7 @@ public class SearchStore {
             readStats = true;
         }
         QueryParser parser = new QueryParser(field, analyzer);
-        return searcher.search(parser.parse(content), 20);
+        return searcher.search(parser.parse(content), 30);
     }
 
     public Document getDoc(int docId) {

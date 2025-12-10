@@ -21,6 +21,8 @@ package org.apache.geaflow.ai.graph;
 
 import org.apache.geaflow.ai.graph.io.Edge;
 
+import java.util.Objects;
+
 public class GraphEdge implements GraphEntity {
 
     public final Edge edge;
@@ -43,4 +45,16 @@ public class GraphEdge implements GraphEntity {
         return edge.toString();
     }
 
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        GraphEdge graphEdge = (GraphEdge) o;
+        return Objects.equals(edge, graphEdge.edge);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(edge);
+    }
 }

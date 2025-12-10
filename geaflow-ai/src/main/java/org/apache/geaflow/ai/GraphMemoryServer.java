@@ -69,9 +69,6 @@ public class GraphMemoryServer {
         }
 
         SessionOperator op = new SessionOperator(graphAccessors.get(0), indexStores.get(0));
-        SessionOperator casts_op = new SessionOperator(graphAccessors.get(0), indexStores.get(0));
-        SessionOperator lucene_op = new SessionOperator(graphAccessors.get(0), indexStores.get(0));
-        SessionOperator op3 = new SessionOperator(graphAccessors.get(0), indexStores.get(0));
         applySearch(sessionId, op, search);
         return sessionId;
     }

@@ -20,6 +20,7 @@
 package org.apache.geaflow.ai.graph.io;
 
 import java.util.List;
+import java.util.Objects;
 
 public class Vertex {
 
@@ -48,5 +49,18 @@ public class Vertex {
     @Override
     public String toString() {
         return label + " | " + id + " | " + String.join("|", values);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Vertex vertex = (Vertex) o;
+        return Objects.equals(id, vertex.id) && Objects.equals(label, vertex.label);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id, label);
     }
 }
