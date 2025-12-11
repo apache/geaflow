@@ -88,6 +88,10 @@ public class GraphSchema implements Schema {
         this.promptFormatter = promptFormatter;
     }
 
+    public String getPrompt() {
+        return promptFormatter.prompt(this);
+    }
+
     public String getPrompt(GraphVertex entity) {
         if (promptFormatter == null) {
             return entity.toString();

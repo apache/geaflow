@@ -74,12 +74,10 @@ public class GraphMemoryServer {
     }
 
     public void applySearch(String sessionId, SearchOperator operator, VectorSearch search) {
-        //获取session
         SessionManagement manager = SessionManagement.INSTANCE;
         if (!manager.sessionExists(sessionId)) {
             return;
         }
-        //应用算子于管理器的子图列表
         List<SubGraph> result = operator.apply(manager.getSubGraph(sessionId), search);
         manager.setSubGraph(sessionId, result);
     }
@@ -95,6 +93,7 @@ public class GraphMemoryServer {
         for (String subGraph : subGraphStringList) {
             stringBuilder.append(subGraph).append("\n");
         }
+        stringBuilder.append(verbalizationFunction.verbalizeGraphSchema()).append("\n");
         return new Context(stringBuilder.toString());
     }
 

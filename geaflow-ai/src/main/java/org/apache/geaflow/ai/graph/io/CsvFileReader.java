@@ -34,23 +34,16 @@ public class CsvFileReader {
     Map<String, List<String>> fileContent;
     long limit;
 
-    // 构造函数
     public CsvFileReader(long limit) {
         this.colSchema = new ArrayList<>();
         this.fileContent = new HashMap<>();
         this.limit = limit;
     }
 
-    /**
-     * 从resources目录读取CSV文件
-     * @param fileName 文件名
-     * @throws IOException 读取文件异常
-     */
     public void readCsvFile(String fileName) throws IOException {
-        // 获取资源文件输入流
         InputStream inputStream = getClass().getClassLoader().getResourceAsStream(fileName);
         if (inputStream == null) {
-            throw new IOException("无法找到文件: " + fileName);
+            throw new IOException("Cannot find the file: " + fileName);
         }
 
         long count = 0;
@@ -61,11 +54,9 @@ public class CsvFileReader {
             while ((line = reader.readLine()) != null) {
                 count++;
                 if (isFirstLine) {
-                    // 处理表头
                     parseHeader(line);
                     isFirstLine = false;
                 } else {
-                    // 处理数据行
                     parseDataRow(line);
                 }
                 if (count > limit) {
@@ -75,42 +66,29 @@ public class CsvFileReader {
         }
     }
 
-    /**
-     * 解析表头行
-     * @param headerLine 表头行
-     */
     private void parseHeader(String headerLine) {
         String[] headers = headerLine.split("\\|");
 
-        // 清空之前的数据
         colSchema.clear();
         fileContent.clear();
 
-        // 初始化列名和对应的列表
         for (String header : headers) {
             colSchema.add(header.trim());
             fileContent.put(header.trim(), new ArrayList<>());
         }
     }
 
-    /**
-     * 解析数据行
-     * @param dataLine 数据行
-     */
     private void parseDataRow(String dataLine) {
         if (dataLine == null || dataLine.trim().isEmpty()) {
             return;
         }
 
         String[] values = dataLine.split("\\|");
-
-        // 确保值的数量与列数匹配
         if (values.length != colSchema.size()) {
-            System.err.println("警告: 数据列数不匹配 - " + dataLine);
+            System.err.println("WARNING: line number does not match - " + dataLine);
             return;
         }
 
-        // 将每个值添加到对应的列列表中
         for (int i = 0; i < colSchema.size(); i++) {
             String columnName = colSchema.get(i);
             String value = values[i].trim();
@@ -118,13 +96,11 @@ public class CsvFileReader {
         }
     }
 
-    // Getter方法
     public List<String> getColSchema() {
         return new ArrayList<>(colSchema);
     }
 
     public Map<String, List<String>> getFileContent() {
-        // 返回一个副本以防止外部修改
         Map<String, List<String>> copy = new HashMap<>();
         for (Map.Entry<String, List<String>> entry : fileContent.entrySet()) {
             copy.put(entry.getKey(), new ArrayList<>(entry.getValue()));
@@ -132,39 +108,24 @@ public class CsvFileReader {
         return copy;
     }
 
-    /**
-     * 获取指定列的所有数据
-     * @param columnName 列名
-     * @return 该列的数据列表
-     */
     public List<String> getColumnData(String columnName) {
         List<String> data = fileContent.get(columnName);
         return data != null ? new ArrayList<>(data) : new ArrayList<>();
     }
 
-    /**
-     * 获取行数（不包括表头）
-     * @return 行数
-     */
     public int getRowCount() {
         if (fileContent.isEmpty()) {
             return 0;
         }
-        // 获取任意一列的大小即可
         return fileContent.values().iterator().next().size();
     }
 
-    /**
-     * 获取指定行的数据
-     * @param rowIndex 行索引（从0开始）
-     * @return 该行的数据映射
-     */
     public List<String> getRow(int rowIndex) {
         List<String> row = new ArrayList<>();
         int rowCount = getRowCount();
 
         if (rowIndex < 0 || rowIndex >= rowCount) {
-            throw new IndexOutOfBoundsException("行索引超出范围: " + rowIndex);
+            throw new IndexOutOfBoundsException("Row index out of range: " + rowIndex);
         }
 
         for (String columnName : colSchema) {
@@ -177,15 +138,12 @@ public class CsvFileReader {
         return row;
     }
 
-    /**
-     * 打印文件内容（用于调试）
-     */
     public void printContent() {
-        System.out.println("列名: " + colSchema);
-        System.out.println("数据内容:");
+        System.out.println("ColName: " + colSchema);
+        System.out.println("Data content:");
         for (Map.Entry<String, List<String>> entry : fileContent.entrySet()) {
             System.out.println(entry.getKey() + ": " + entry.getValue());
         }
-        System.out.println("总行数: " + getRowCount());
+        System.out.println("Total row count: " + getRowCount());
     }
 }

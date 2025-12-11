@@ -21,26 +21,24 @@ package org.apache.geaflow.ai.graph.io;
 
 import java.io.IOException;
 import java.util.*;
+import java.util.function.Function;
 
 public class GraphFileReader {
 
-    public static Graph getGraph(ClassLoader classLoader, String path, long limit) throws IOException {
+    public static Graph getGraph(ClassLoader classLoader, String path, long limit,
+                                 Function<Vertex, Vertex> vertexMapper,
+                                 Function<Edge, Edge> edgeMapper) throws IOException {
         Map<String, List<String>> result = ResourceFileScanner.scanGraphLdbcSfFolder(classLoader, path);
-
-        Set<String> vertexNames = new HashSet<>(Arrays.asList(
-                "Comment","Forum","Organisation","Person","Place","Post","Tag","TagClass"
-        ));
-
         GraphSchema graphSchema = new GraphSchema();
         Map<String, EntityGroup> entities = new HashMap<>();
         for (Map.Entry<String, List<String>> entry : result.entrySet()) {
             String entityName = entry.getKey();
-            boolean isVertex = vertexNames.contains(entityName);
             List<String> fileNames = entry.getValue();
             for (String fileName : fileNames) {
                 CsvFileReader reader = new CsvFileReader(limit);
                 reader.readCsvFile(path + "/" + entityName + "/" + fileName);
                 List<String> colSchema = reader.getColSchema();
+                boolean isVertex = colSchema.contains("id");
                 if (isVertex) {
                     int idIndex = colSchema.indexOf("id");
                     if (idIndex < 0) {
@@ -50,7 +48,7 @@ public class GraphFileReader {
                     List<Vertex> vertices = new ArrayList<>(reader.getRowCount());
                     for (int i = 0; i < reader.getRowCount(); i++) {
                         List<String> row = reader.getRow(i);
-                        vertices.add(new Vertex(entityName, row.get(idIndex), row));
+                        vertices.add(vertexMapper.apply(new Vertex(entityName, row.get(idIndex), row)));
                     }
                     VertexGroup vertexGroup = new VertexGroup(vertexSchema, vertices);
                     entities.put(entityName, vertexGroup);
@@ -63,7 +61,7 @@ public class GraphFileReader {
                     List<Edge> edges = new ArrayList<>(reader.getRowCount());
                     for (int i = 0; i < reader.getRowCount(); i++) {
                         List<String> row = reader.getRow(i);
-                        edges.add(new Edge(entityName, row.get(srcIdIndex), row.get(dstIdIndex), row));
+                        edges.add(edgeMapper.apply(new Edge(entityName, row.get(srcIdIndex), row.get(dstIdIndex), row)));
                     }
                     EdgeGroup edgeGroup = new EdgeGroup(edgeSchema, edges);
                     entities.put(entityName, edgeGroup);
@@ -71,8 +69,7 @@ public class GraphFileReader {
                 }
             }
         }
-        Graph ldbcGraph =  new Graph(graphSchema, entities);
-        return ldbcGraph;
+        return new Graph(graphSchema, entities);
     }
 
 }

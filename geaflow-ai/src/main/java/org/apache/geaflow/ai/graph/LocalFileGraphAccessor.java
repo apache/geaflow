@@ -25,6 +25,7 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.function.Function;
 
 public class LocalFileGraphAccessor implements GraphAccessor {
 
@@ -32,11 +33,14 @@ public class LocalFileGraphAccessor implements GraphAccessor {
     private final ClassLoader resourceClassLoader;
     private final Graph graph;
 
-    public LocalFileGraphAccessor(ClassLoader classLoader, String resourcePath, Long limit) {
+    public LocalFileGraphAccessor(ClassLoader classLoader, String resourcePath, Long limit,
+                                  Function<Vertex, Vertex> vertexMapper,
+                                  Function<Edge, Edge> edgeMapper) {
         this.resourcePath = resourcePath;
         this.resourceClassLoader = classLoader;
         try {
-            this.graph = GraphFileReader.getGraph(resourceClassLoader, resourcePath, limit);
+            this.graph = GraphFileReader.getGraph(resourceClassLoader, resourcePath, limit,
+                    vertexMapper, edgeMapper);
         } catch (Throwable e) {
             throw new RuntimeException("Init local graph error", e);
         }

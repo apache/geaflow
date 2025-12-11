@@ -21,11 +21,127 @@ package org.apache.geaflow.ai;
 
 import org.apache.geaflow.ai.graph.GraphEdge;
 import org.apache.geaflow.ai.graph.GraphVertex;
-import org.apache.geaflow.ai.graph.io.Edge;
-import org.apache.geaflow.ai.graph.io.Vertex;
+import org.apache.geaflow.ai.graph.io.*;
 import org.apache.geaflow.ai.verbalization.PromptFormatter;
 
+import java.util.stream.Collectors;
+
 public class LdbcPromptFormatter implements PromptFormatter {
+
+    public Vertex vertexMapper(Vertex v) {
+        String idPrefix = v.getLabel();
+        return new Vertex(v.getLabel(), idPrefix + v.getId(), v.getValues());
+    }
+
+    public Edge edgeMapper(Edge e) {
+        String srcPrefix = "";
+        String dstPrefix = "";
+        switch (e.getLabel()) {
+            case "Forum_hasMember_Person":
+            case "Forum_hasModerator_Person":
+                srcPrefix = "Forum";
+                dstPrefix = "Person";
+                break;
+            case "Person_knows_Person":
+                srcPrefix = "Person";
+                dstPrefix = "Person";
+                break;
+            case "Comment_replyOf_Post":
+                srcPrefix = "Comment";
+                dstPrefix = "Post";
+                break;
+            case "Person_isLocatedIn_City":
+                srcPrefix = "Person";
+                dstPrefix = "Place";
+                break;
+            case "Comment_hasTag_Tag":
+                srcPrefix = "Comment";
+                dstPrefix = "Tag";
+                break;
+            case "Person_workAt_Company":
+                srcPrefix = "Person";
+                dstPrefix = "Company";
+                break;
+            case "Comment_replyOf_Comment":
+                srcPrefix = "Comment";
+                dstPrefix = "Comment";
+                break;
+            case "Organisation_isLocatedIn_Place":
+                srcPrefix = "Organisation";
+                dstPrefix = "Place";
+                break;
+            case "Comment_isLocatedIn_Country":
+                srcPrefix = "Comment";
+                dstPrefix = "Country";
+                break;
+            case "Person_hasInterest_Tag":
+                srcPrefix = "Person";
+                dstPrefix = "Tag";
+                break;
+            case "Forum_hasTag_Tag":
+                srcPrefix = "Forum";
+                dstPrefix = "Tag";
+                break;
+            case "Person_studyAt_University":
+                srcPrefix = "Person";
+                dstPrefix = "Organisation";
+                break;
+            case "Comment_hasCreator_Person":
+                srcPrefix = "Comment";
+                dstPrefix = "Person";
+                break;
+            case "TagClass_isSubclassOf_TagClass":
+                srcPrefix = "TagClass";
+                dstPrefix = "TagClass";
+                break;
+            case "Post_isLocatedIn_Country":
+                srcPrefix = "Post";
+                dstPrefix = "Country";
+                break;
+            case "Post_hasCreator_Person":
+                srcPrefix = "Post";
+                dstPrefix = "Person";
+                break;
+            case "Post_hasTag_Tag":
+                srcPrefix = "Post";
+                dstPrefix = "Tag";
+                break;
+            case "Person_likes_Post":
+                srcPrefix = "Person";
+                dstPrefix = "Post";
+                break;
+            case "Person_likes_Comment":
+                srcPrefix = "Person";
+                dstPrefix = "Comment";
+                break;
+            case "Forum_containerOf_Post":
+                srcPrefix = "Forum";
+                dstPrefix = "Post";
+                break;
+            case "Tag_hasType_TagClass":
+                srcPrefix = "Tag";
+                dstPrefix = "TagClass";
+                break;
+            case "Place_isPartOf_Place":
+                srcPrefix = "Place";
+                dstPrefix = "Place";
+                break;
+            default:
+                srcPrefix = "";
+                dstPrefix = "";
+                break;
+        }
+        return new Edge(e.getLabel(), srcPrefix + e.getSrcId(),
+                dstPrefix + e.getDstId(), e.getValues());
+    }
+
+    @Override
+    public String prompt(GraphSchema graphSchema) {
+        return "allVerticesType:[" + graphSchema.getVertexSchemaList()
+                .stream().map(VertexSchema::getLabel).collect(Collectors.joining(",")) + "]\n"
+                + "allRelations:[" + graphSchema.getEdgeSchemaList()
+                .stream().map(EdgeSchema::getLabel).collect(Collectors.joining(",")) + "]\n";
+    }
 
     @Override
     public String prompt(GraphVertex entity) {
@@ -41,7 +157,7 @@ public class LdbcPromptFormatter implements PromptFormatter {
                 obj = ((GraphVertex) entity).getVertex();
                 return String.format("A Person, %s, register at %s, id is %s, name is %s %s, birthday is %s, " +
                                 "ip is %s, use browser is %s, use language are %s, email address is %s",
-                        obj.getValues().get(4), obj.getValues().get(0), obj.getValues().get(1),
+                        obj.getValues().get(4), obj.getValues().get(0), obj.getId(),
                         obj.getValues().get(2), obj.getValues().get(3), obj.getValues().get(5),
                         obj.getValues().get(6), obj.getValues().get(7), obj.getValues().get(8), obj.getValues().get(9));
             case "Forum":

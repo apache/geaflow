@@ -21,8 +21,11 @@ package org.apache.geaflow.ai.verbalization;
 
 import org.apache.geaflow.ai.graph.GraphEdge;
 import org.apache.geaflow.ai.graph.GraphVertex;
+import org.apache.geaflow.ai.graph.io.GraphSchema;
 
 public interface PromptFormatter {
+
+    String prompt(GraphSchema graphSchema);
 
     String prompt(GraphVertex entity);
 

@@ -64,4 +64,9 @@ public class SubgraphSemanticPromptFunction implements VerbalizationFunction {
         }
         return String.join("  ", sentences);
     }
+
+    @Override
+    public String verbalizeGraphSchema() {
+        return graphAccessor.getGraphSchema().getPrompt();
+    }
 }

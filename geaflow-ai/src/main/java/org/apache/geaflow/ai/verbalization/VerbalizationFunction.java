@@ -24,4 +24,6 @@ import org.apache.geaflow.ai.subgraph.SubGraph;
 public interface VerbalizationFunction {
 
     String verbalize(SubGraph subGraph);
+
+    String verbalizeGraphSchema();
 }
