@@ -50,18 +50,13 @@ public class GraphMemoryTest {
     @Test
     public void testEmptyMainPipeline() {
         GraphMemoryServer server =  new GraphMemoryServer();
-        //创建图索引
         IndexStore indexStore = new EntityAttributeIndexStore();
-        //加载图数据，加载索引数据
         GraphAccessor graphAccessor = new EmptyGraphAccessor();
         server.addGraphAccessor(graphAccessor);
         server.addIndexStore(indexStore);
 
-        //创建会话
         String sessionId = server.createSession();
-        //创建图检索
         VectorSearch search = new VectorSearch(null, sessionId);
-        //进行图检索
         String context = produceCycle(server, search, graphAccessor);
         Assert.assertEquals(context, "Context{prompt=''}");
 
