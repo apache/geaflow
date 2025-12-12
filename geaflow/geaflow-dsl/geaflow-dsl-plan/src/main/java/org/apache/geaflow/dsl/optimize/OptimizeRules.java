@@ -85,10 +85,14 @@ public class OptimizeRules {
         TableJoinMatchToGraphMatchRule.INSTANCE,
         MatchJoinMatchMergeRule.INSTANCE,
         FilterToMatchRule.INSTANCE,
+        // Issue #363 optimization rules - ID filter optimization and join reordering
+        IdFilterPushdownRule.INSTANCE,  // Push ID filters down early for direct index lookup
         FilterMatchNodeTransposeRule.INSTANCE,
         MatchFilterMergeRule.INSTANCE,
         TableScanToGraphRule.INSTANCE,
         MatchIdFilterSimplifyRule.INSTANCE,
+        AnchorNodePriorityRule.INSTANCE,  // Identify and prioritize anchor nodes with ID filters
+        GraphJoinReorderRule.INSTANCE,  // Reorder joins based on anchor node selectivity
         MatchEdgeLabelFilterRemoveRule.INSTANCE,
         GraphMatchFieldPruneRule.INSTANCE,
         ProjectFieldPruneRule.INSTANCE
