@@ -23,6 +23,7 @@ import java.io.Serializable;
 import java.util.Collection;
 import java.util.Map;
 import java.util.Set;
+import org.apache.geaflow.operator.impl.graph.algo.vc.IGraphVertexCentricAggOp;
 import org.apache.geaflow.partitioner.IPartitioner;
 import org.apache.geaflow.plan.graph.PipelineEdge;
 import org.apache.geaflow.plan.graph.PipelineGraph;
@@ -123,6 +124,16 @@ public class LocalShuffleOptimizer implements Serializable {
                                               PipelineVertex targetVertex,
                                               PipelineEdge edge,
                                               PipelineGraph pipelineGraph) {
+        // Condition 0: Exclude vertices with aggregation requirement
+        // Vertices implementing IGraphVertexCentricAggOp must stay grouped with their
+        // aggregation vertex (ID=0) to satisfy SchedulerGraphAggregateProcessor validation
+        if (hasAggregationRequirement(srcVertex) || hasAggregationRequirement(targetVertex)) {
+            LOGGER.debug("Skipping co-location for vertex with aggregation requirement: "
+                    + "src={}, target={}",
+                srcVertex.getVertexId(), targetVertex.getVertexId());
+            return false;
+        }
+
         // Condition 1: Source vertex must be a graph operator
         if (!isGraphOperator(srcVertex)) {
             LOGGER.debug("Source vertex {} is not a graph operator, skipping",
@@ -160,6 +171,23 @@ public class LocalShuffleOptimizer implements Serializable {
         }
 
         return true;
+    }
+
+    /**
+     * Check if vertex has aggregation requirement.
+     *
+     * <p>Vertices implementing IGraphVertexCentricAggOp must stay grouped with their
+     * aggregation vertex to ensure proper execution. These vertices should NOT be
+     * marked for co-location with downstream operators.
+     *
+     * @param vertex the vertex to check
+     * @return true if vertex has aggregation requirement
+     */
+    private boolean hasAggregationRequirement(PipelineVertex vertex) {
+        if (vertex.getOperator() == null) {
+            return false;
+        }
+        return vertex.getOperator() instanceof IGraphVertexCentricAggOp;
     }
 
     /**
