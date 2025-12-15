@@ -321,7 +321,7 @@ public class GQLAlgorithmTest {
             .build()
             .withQueryPath("/query/gql_algorithm_lpa.sql")
             .execute()
-            .checkSinkResult("/expect/gql_algorithm_lpa.txt");
+            .checkSinkResult();
     }
 
     @Test
@@ -330,7 +330,7 @@ public class GQLAlgorithmTest {
             .build()
             .withQueryPath("/query/gql_algorithm_cc.sql")
             .execute()
-            .checkSinkResult("/expect/gql_algorithm_cc.txt");
+            .checkSinkResult();
     }
 
     private void clearGraph() throws IOException {

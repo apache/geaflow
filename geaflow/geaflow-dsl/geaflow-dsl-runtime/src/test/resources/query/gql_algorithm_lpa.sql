@@ -22,12 +22,12 @@ set geaflow.dsl.ignore.exception = true;
 
 CREATE GRAPH IF NOT EXISTS test_lpa_graph (
   Vertex person (
-    id bigint ID,
+    id varchar ID,
     name varchar
   ),
   Edge knows (
-    srcId bigint SOURCE ID,
-    targetId bigint DESTINATION ID,
+    srcId varchar SOURCE ID,
+    targetId varchar DESTINATION ID,
     weight double
   )
 ) WITH (
@@ -36,22 +36,25 @@ CREATE GRAPH IF NOT EXISTS test_lpa_graph (
 );
 
 CREATE TABLE IF NOT EXISTS tbl_source (
-  text varchar
+  id varchar,
+  name varchar
 ) WITH (
   type='file',
   geaflow.dsl.file.path = 'resource:///data/algo_test_vertex.txt'
 );
 
 CREATE TABLE IF NOT EXISTS tbl_edge_source (
-  text varchar
+  srcId varchar,
+  targetId varchar,
+  weight double
 ) WITH (
   type='file',
   geaflow.dsl.file.path = 'resource:///data/algo_test_edges.txt'
 );
 
 CREATE TABLE IF NOT EXISTS tbl_result (
-  vid bigint,
-  label bigint
+  vid varchar,
+  label varchar
 ) WITH (
   type='file',
   geaflow.dsl.file.path = '${target}'
@@ -60,20 +63,13 @@ CREATE TABLE IF NOT EXISTS tbl_result (
 USE GRAPH test_lpa_graph;
 
 INSERT INTO test_lpa_graph.person(id, name)
-SELECT
-  cast(split_ex(text, ',', 0) as bigint) as id,
-  split_ex(text, ',', 1) as name
-FROM tbl_source;
+SELECT id, name FROM tbl_source;
 
 INSERT INTO test_lpa_graph.knows(srcId, targetId, weight)
-SELECT
-  cast(split_ex(text, ',', 0) as bigint) as srcId,
-  cast(split_ex(text, ',', 1) as bigint) as targetId,
-  cast(split_ex(text, ',', 2) as double) as weight
-FROM tbl_edge_source;
+SELECT srcId, targetId, weight FROM tbl_edge_source;
 
 INSERT INTO tbl_result(vid, label)
 CALL lpa(100, 'label') YIELD (id, label)
-RETURN CAST(id as bigint), CAST(label as bigint)
+RETURN id, label
 ORDER BY id
 ;
