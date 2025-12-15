@@ -26,7 +26,7 @@ const Footer: React.FC = () => {
   const intl = useIntl();
   const defaultMessage = intl.formatMessage({
     id: 'app.copyright.produced',
-    defaultMessage: 'Apache GeaFlow(孵化中)',
+    defaultMessage: 'Apache GeaFlow(Incubating)',
   });
 
   const currentYear = new Date().getFullYear();
