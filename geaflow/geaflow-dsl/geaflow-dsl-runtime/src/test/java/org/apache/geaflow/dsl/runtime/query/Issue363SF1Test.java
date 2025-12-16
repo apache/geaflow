@@ -41,6 +41,13 @@ import org.testng.annotations.Test;
  * - 2.05M Comments, 1.00M Posts, 90K Forums
  *
  * Expected performance improvement: 30-50% for optimized query
+ *
+ * <p>NOTE: This test is disabled in CI because the SF1 dataset files are not included
+ * in the repository due to their large size. To run this test manually:
+ * 1. Download LDBC SF1 dataset
+ * 2. Convert data using scripts/generate_ldbc_test_data.py
+ * 3. Place data files in src/test/resources/data_sf1/
+ * 4. Enable the test by removing (enabled = false)
  */
 public class Issue363SF1Test {
 
@@ -69,7 +76,7 @@ public class Issue363SF1Test {
     /**
      * Comprehensive performance benchmark with SF1 dataset
      */
-    @Test
+    @Test(enabled = false)
     public void testSF1Performance() throws Exception {
         System.out.println("\n======================================================================");
         System.out.println("Issue #363 SF1 Performance Benchmark");
