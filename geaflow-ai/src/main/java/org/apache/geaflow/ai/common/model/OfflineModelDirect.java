@@ -20,6 +20,7 @@
 package org.apache.geaflow.ai.common.model;
 
 import com.google.gson.Gson;
+import org.apache.geaflow.common.utils.RetryCommand;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -48,8 +49,15 @@ public class OfflineModelDirect {
         ModelInfo info = context.getModelInfo();
         OkHttpDirectConnector connector = new OkHttpDirectConnector(
                 info.getUrl(), info.getApi(), info.getUserToken());
-        String request = new Gson().toJson(context);
-        EmbeddingResponse response = connector.embeddingPost(request);
+        ModelEmbedding requestContext = new ModelEmbedding(null, context.input);
+        requestContext.setModel(context.getModel());
+        String request = new Gson().toJson(requestContext);
+        final EmbeddingResponse response = RetryCommand.run(() -> {
+            return connector.embeddingPost(request);
+        }, 10, 3000);
+        if (response == null) {
+            return new ArrayList<>();
+        }
         List<ChatRobot.EmbeddingResult> embeddingResults = new ArrayList<>();
         for (EmbeddingResponse.EmbeddingVector v : response.data) {
             int index = v.index;

@@ -25,7 +25,6 @@ import org.apache.geaflow.ai.graph.GraphVertex;
 import org.apache.geaflow.ai.index.vector.IVector;
 import org.apache.geaflow.ai.index.vector.KeywordVector;
 import org.apache.geaflow.ai.subgraph.SubGraph;
-import org.apache.geaflow.ai.verbalization.SubgraphSemanticPromptFunction;
 import org.apache.geaflow.ai.verbalization.VerbalizationFunction;
 
 import java.util.ArrayList;
@@ -35,7 +34,7 @@ public class EntityAttributeIndexStore implements IndexStore {
 
     private VerbalizationFunction verbFunc;
 
-    public void setVerbalizationFunction(VerbalizationFunction func) {
+    public void initStore(VerbalizationFunction func) {
         if (func != null) {
             this.verbFunc = func;
         }

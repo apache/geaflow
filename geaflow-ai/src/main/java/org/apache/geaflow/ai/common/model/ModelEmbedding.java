@@ -44,6 +44,14 @@ public class ModelEmbedding {
         }
     }
 
+    public String getModel() {
+        return model;
+    }
+
+    public void setModel(String model) {
+        this.model = model;
+    }
+
     public static ModelEmbedding embedding(ModelInfo modelInfo, String... strings) {
         return new ModelEmbedding(modelInfo, strings);
     }

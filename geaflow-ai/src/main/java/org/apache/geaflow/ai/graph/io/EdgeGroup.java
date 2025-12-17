@@ -19,6 +19,7 @@
 
 package org.apache.geaflow.ai.graph.io;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -29,18 +30,23 @@ public class EdgeGroup implements EntityGroup {
     public final EdgeSchema edgeSchema;
     private final List<Edge> edges;
     private final Map<String, Integer> index;
+    private final Map<String, List<Integer>> pointIndices;
 
     public EdgeGroup(EdgeSchema edgeSchema, List<Edge> edges) {
         this.edgeSchema = edgeSchema;
         this.edges = edges;
         this.index = new HashMap<>(edges.size());
+        this.pointIndices = new HashMap<>(10000);
         buildIndex();
     }
 
     private void buildIndex() {
         int index = 0;
         for (Edge e : edges) {
-            this.index.put(makeKey(e.getSrcId(), e.getDstId()), index);
+            String key = makeKey(e.getSrcId(), e.getDstId());
+            this.index.put(key, index);
+            this.pointIndices.computeIfAbsent(e.getSrcId(), k -> new ArrayList<>()).add(index);
+            this.pointIndices.computeIfAbsent(e.getDstId(), k -> new ArrayList<>()).add(index);
             index++;
         }
     }
@@ -54,11 +60,21 @@ public class EdgeGroup implements EntityGroup {
     }
 
     public List<Edge> getOutEdges(String src) {
-        return edges.stream().filter(e -> e.getSrcId().equals(src)).collect(Collectors.toList());
+        if (pointIndices.get(src) == null) {
+            return new ArrayList<>();
+        }
+        return pointIndices.get(src).stream().map(edges::get)
+                .filter(e -> e.getSrcId().equals(src))
+                .collect(Collectors.toList());
     }
 
     public List<Edge> getInEdges(String src) {
-        return edges.stream().filter(e -> e.getDstId().equals(src)).collect(Collectors.toList());
+        if (pointIndices.get(src) == null) {
+            return new ArrayList<>();
+        }
+        return pointIndices.get(src).stream().map(edges::get)
+                .filter(e -> e.getDstId().equals(src))
+                .collect(Collectors.toList());
     }
 
     public Edge getEdge(String src, String dst) {

@@ -23,13 +23,11 @@ import org.apache.geaflow.ai.graph.GraphAccessor;
 import org.apache.geaflow.ai.graph.GraphEdge;
 import org.apache.geaflow.ai.graph.GraphEntity;
 import org.apache.geaflow.ai.graph.GraphVertex;
-import org.apache.geaflow.ai.index.EntityAttributeIndexStore;
 import org.apache.geaflow.ai.index.IndexStore;
 import org.apache.geaflow.ai.index.vector.IVector;
 import org.apache.geaflow.ai.index.vector.VectorType;
 import org.apache.geaflow.ai.search.VectorSearch;
 import org.apache.geaflow.ai.subgraph.SubGraph;
-import org.apache.geaflow.ai.verbalization.SubgraphSemanticPromptFunction;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -42,14 +40,10 @@ public class SessionOperator implements SearchOperator {
     public SessionOperator(GraphAccessor accessor, IndexStore store) {
         this.graphAccessor = Objects.requireNonNull(accessor);
         this.indexStore = Objects.requireNonNull(store);
-        ((EntityAttributeIndexStore)this.indexStore).setVerbalizationFunction(
-                new SubgraphSemanticPromptFunction(this.graphAccessor)
-        );
     }
 
     @Override
     public List<SubGraph> apply(List<SubGraph> subGraphList, VectorSearch search) {
-        //没有子图时进行全局匹配
         List<IVector> keyWordVectors = search.getVectorMap().get(VectorType.KeywordVector);
         if (keyWordVectors == null || keyWordVectors.isEmpty()) {
             if (subGraphList == null) {
@@ -77,9 +71,8 @@ public class SessionOperator implements SearchOperator {
                 return subGraph;
             }).collect(Collectors.toList());
         } else {
-            //创建备选集
             Map<GraphEntity, List<IVector>> extendEntityIndexMap = new HashMap<>();
-            //遍历子图所有扩展点，在扩展范围内搜索
+            //Traverse all extension points of the subgraph and search within the extension area
             for (SubGraph subGraph : subGraphList) {
                 List<GraphEntity> extendEntities = getSubgraphExpand(subGraph);
                 for (GraphEntity extendEntity : extendEntities) {
@@ -120,12 +113,11 @@ public class SessionOperator implements SearchOperator {
     }
 
     private List<GraphEntity> searchWithGlobalGraph(String query) {
-        //创建备选集
         Map<GraphEntity, List<IVector>> entityIndexMap = new HashMap<>();
         Iterator<GraphVertex> vertexIterator = graphAccessor.scanVertex();
         while (vertexIterator.hasNext()) {
             GraphVertex vertex = vertexIterator.next();
-            //从索引中读出所有点的索引，加入备选集
+            //Read all vertices indices from the index and add them to the candidate set.
             List<IVector> vertexIndex = indexStore.getEntityIndex(vertex);
             entityIndexMap.put(vertex, vertexIndex);
         }

@@ -24,9 +24,11 @@ import org.apache.geaflow.ai.graph.GraphEdge;
 import org.apache.geaflow.ai.graph.GraphEntity;
 import org.apache.geaflow.ai.graph.GraphVertex;
 import org.apache.geaflow.ai.graph.io.GraphSchema;
+import org.apache.geaflow.ai.operator.SearchUtils;
 import org.apache.geaflow.ai.subgraph.SubGraph;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 public class SubgraphSemanticPromptFunction implements VerbalizationFunction {
 
@@ -63,6 +65,22 @@ public class SubgraphSemanticPromptFunction implements VerbalizationFunction {
             }
         }
         return String.join("  ", sentences);
+    }
+
+    @Override
+    public List<String> verbalize(GraphEntity entity) {
+        if (entity instanceof GraphVertex) {
+            GraphVertex graphVertex = (GraphVertex) entity;
+            return graphVertex.vertex.getValues().stream()
+                    .filter(str -> !SearchUtils.isAllAllowedChars(str))
+                    .map(SearchUtils::formatQuery).collect(Collectors.toList());
+        } else if (entity instanceof GraphEdge) {
+            GraphEdge graphEdge = (GraphEdge) entity;
+            return graphEdge.getEdge().getValues().stream()
+                    .filter(str -> !SearchUtils.isAllAllowedChars(str))
+                    .map(SearchUtils::formatQuery).collect(Collectors.toList());
+        }
+        return new ArrayList<>();
     }
 
     @Override

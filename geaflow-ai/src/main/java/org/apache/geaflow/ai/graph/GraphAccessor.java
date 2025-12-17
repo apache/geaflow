@@ -19,7 +19,7 @@
 
 package org.apache.geaflow.ai.graph;
 
-import org.apache.geaflow.ai.graph.io.*;
+import org.apache.geaflow.ai.graph.io.GraphSchema;
 
 import java.util.Iterator;
 import java.util.List;

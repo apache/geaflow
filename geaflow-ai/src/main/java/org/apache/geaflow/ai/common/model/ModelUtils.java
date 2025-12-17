@@ -17,9 +17,21 @@
  * under the License.
  */
 
-package org.apache.geaflow.ai.graph;
+package org.apache.geaflow.ai.common.model;
 
-public class GraphAccessorFactory {
+import java.util.ArrayList;
+import java.util.List;
 
-    public static GraphAccessor INSTANCE = new EmptyGraphAccessor();
+public class ModelUtils {
+
+    public static List<String> splitLongText(int maxChunkSize, String... textList) {
+        List<String> chunks = new ArrayList<>();
+        for (String text : textList) {
+            for (int i = 0; i < text.length(); i += maxChunkSize) {
+                int end = Math.min(i + maxChunkSize, text.length());
+                chunks.add(text.substring(i, end));
+            }
+        }
+        return chunks;
+    }
 }

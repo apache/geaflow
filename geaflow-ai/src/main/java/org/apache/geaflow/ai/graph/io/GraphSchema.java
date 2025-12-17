@@ -20,7 +20,6 @@
 package org.apache.geaflow.ai.graph.io;
 
 import org.apache.geaflow.ai.graph.GraphEdge;
-import org.apache.geaflow.ai.graph.GraphEntity;
 import org.apache.geaflow.ai.graph.GraphVertex;
 import org.apache.geaflow.ai.verbalization.PromptFormatter;
 

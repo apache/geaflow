@@ -19,10 +19,11 @@
 
 package org.apache.geaflow.ai;
 
+import org.apache.geaflow.ai.common.model.ModelInfo;
 import org.apache.geaflow.ai.graph.EmptyGraphAccessor;
 import org.apache.geaflow.ai.graph.GraphAccessor;
-import org.apache.geaflow.ai.graph.GraphAccessorFactory;
 import org.apache.geaflow.ai.graph.LocalFileGraphAccessor;
+import org.apache.geaflow.ai.index.EmbeddingIndexStore;
 import org.apache.geaflow.ai.index.EntityAttributeIndexStore;
 import org.apache.geaflow.ai.index.IndexStore;
 import org.apache.geaflow.ai.index.vector.EmbeddingVector;
@@ -83,15 +84,28 @@ public class GraphMemoryTest {
         LdbcPromptFormatter ldbcPromptFormatter = new LdbcPromptFormatter();
         LocalFileGraphAccessor graphAccessor =
                 new LocalFileGraphAccessor(this.getClass().getClassLoader(),
-                        "org/apache/geaflow/ai/graph_ldbc_sf", 10000L,
+                        "org/apache/geaflow/ai/graph_ldbc_sf", 7500L,
                         ldbcPromptFormatter::vertexMapper, ldbcPromptFormatter::edgeMapper);
         graphAccessor.getGraphSchema().setPromptFormatter(ldbcPromptFormatter);
-        GraphAccessorFactory.INSTANCE = graphAccessor;
-        IndexStore indexStore = new EntityAttributeIndexStore();
+        System.out.println("Success to init graph data.");
+
+        EntityAttributeIndexStore indexStore = new EntityAttributeIndexStore();
+        indexStore.initStore(new SubgraphSemanticPromptFunction(graphAccessor));
+        System.out.println("Success to init EntityAttributeIndexStore.");
+
+        EmbeddingIndexStore embeddingStore = new EmbeddingIndexStore();
+        embeddingStore.initStore(graphAccessor,
+                new SubgraphSemanticPromptFunction(graphAccessor),
+                "/tmp/GraphMemory/EmbeddingIndexStore",
+                new ModelInfo(ChatRobotTest.EMBEDDING_MODEL, ChatRobotTest.URL,
+                        ChatRobotTest.EMBEDDING_API, ChatRobotTest.API_KEY));
+        System.out.println("Success to init EmbeddingIndexStore.");
 
         GraphMemoryServer server =  new GraphMemoryServer();
         server.addGraphAccessor(graphAccessor);
         server.addIndexStore(indexStore);
+        server.addIndexStore(embeddingStore);
+
         {
             String sessionId = server.createSession();
             VectorSearch search = new VectorSearch(null, sessionId);

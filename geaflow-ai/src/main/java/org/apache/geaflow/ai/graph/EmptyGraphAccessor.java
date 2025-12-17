@@ -19,9 +19,7 @@
 
 package org.apache.geaflow.ai.graph;
 
-import org.apache.geaflow.ai.graph.io.Edge;
 import org.apache.geaflow.ai.graph.io.GraphSchema;
-import org.apache.geaflow.ai.graph.io.Vertex;
 
 import java.util.ArrayList;
 import java.util.Collections;
