@@ -99,7 +99,7 @@ public class GraphMemoryTest {
         EmbeddingIndexStore embeddingStore = new EmbeddingIndexStore();
         embeddingStore.initStore(graphAccessor,
                 new SubgraphSemanticPromptFunction(graphAccessor),
-                "/tmp/GraphMemory/EmbeddingIndexStore",
+                "org/apache/geaflow/ai/index/LDBCEmbeddingIndexStore",
                 new ModelInfo(ChatRobotTest.EMBEDDING_MODEL, ChatRobotTest.URL,
                         ChatRobotTest.EMBEDDING_API, ChatRobotTest.API_KEY));
         System.out.println("Success to init EmbeddingIndexStore.");
@@ -108,7 +108,7 @@ public class GraphMemoryTest {
         server.addGraphAccessor(graphAccessor);
         server.addIndexStore(indexStore);
         server.addIndexStore(embeddingStore);
-        ChatRobot robot = new ChatRobot();
+        MockChatRobot robot = new MockChatRobot();
         robot.setModelInfo(modelInfo);
 
         {
