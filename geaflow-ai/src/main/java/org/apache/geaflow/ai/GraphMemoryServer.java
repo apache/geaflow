@@ -20,7 +20,10 @@
 package org.apache.geaflow.ai;
 
 import org.apache.geaflow.ai.graph.GraphAccessor;
+import org.apache.geaflow.ai.index.EmbeddingIndexStore;
+import org.apache.geaflow.ai.index.EntityAttributeIndexStore;
 import org.apache.geaflow.ai.index.IndexStore;
+import org.apache.geaflow.ai.operator.EmbeddingOperator;
 import org.apache.geaflow.ai.operator.SearchOperator;
 import org.apache.geaflow.ai.operator.SessionOperator;
 import org.apache.geaflow.ai.search.VectorSearch;
@@ -68,8 +71,16 @@ public class GraphMemoryServer {
             sessionManagement.createSession(sessionId);
         }
 
-        SessionOperator op = new SessionOperator(graphAccessors.get(0), indexStores.get(0));
-        applySearch(sessionId, op, search);
+        for (IndexStore indexStore : indexStores) {
+            if (indexStore instanceof EntityAttributeIndexStore) {
+                SessionOperator searchOperator = new SessionOperator(graphAccessors.get(0), indexStore);
+                applySearch(sessionId, searchOperator, search);
+            }
+            if (indexStore instanceof EmbeddingIndexStore) {
+                EmbeddingOperator embeddingOperator = new EmbeddingOperator(graphAccessors.get(0), indexStore);
+                applySearch(sessionId, embeddingOperator, search);
+            }
+        }
         return sessionId;
     }
 
