@@ -33,7 +33,38 @@ public class EmbeddingVector implements IVector {
 
     @Override
     public double match(IVector other) {
-        return 0;
+        // Type check: must be same implementation class
+        if (!(other instanceof EmbeddingVector)) {
+            return 0.0;
+        }
+        EmbeddingVector otherVec = (EmbeddingVector) other;
+
+        // Dimension check: vectors must have same length
+        if (this.vec.length != otherVec.vec.length) {
+            return 0.0;
+        }
+
+        double dotProduct = 0.0;  // Accumulator for dot product
+        double normSquared1 = 0.0; // Accumulator for squared L2 norm of this vector
+        double normSquared2 = 0.0; // Accumulator for squared L2 norm of other vector
+
+        // Single-pass computation for dot product and squared norms
+        for (int i = 0; i < this.vec.length; i++) {
+            dotProduct += this.vec[i] * otherVec.vec[i];
+            normSquared1 += this.vec[i] * this.vec[i];
+            normSquared2 += otherVec.vec[i] * otherVec.vec[i];
+        }
+
+        // Calculate denominator (product of L2 norms)
+        double denominator = Math.sqrt(normSquared1) * Math.sqrt(normSquared2);
+
+        // Handle zero-vector case (avoid division by zero)
+        if (denominator == 0.0) {
+            return 0.0;
+        }
+
+        // Return cosine similarity: dot product divided by norms product
+        return dotProduct / denominator;
     }
 
     @Override

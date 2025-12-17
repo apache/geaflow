@@ -20,10 +20,7 @@
 package org.apache.geaflow.ai.graph.io;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.function.Function;
 
 public class GraphFileReader {
@@ -51,7 +48,8 @@ public class GraphFileReader {
                     List<Vertex> vertices = new ArrayList<>(reader.getRowCount());
                     for (int i = 0; i < reader.getRowCount(); i++) {
                         List<String> row = reader.getRow(i);
-                        vertices.add(vertexMapper.apply(new Vertex(entityName, row.get(idIndex), row)));
+                        Vertex newVertex = vertexMapper.apply(new Vertex(entityName, row.get(idIndex), row));
+                        vertices.add(newVertex);
                     }
                     VertexGroup vertexGroup = new VertexGroup(vertexSchema, vertices);
                     entities.put(entityName, vertexGroup);
@@ -64,7 +62,8 @@ public class GraphFileReader {
                     List<Edge> edges = new ArrayList<>(reader.getRowCount());
                     for (int i = 0; i < reader.getRowCount(); i++) {
                         List<String> row = reader.getRow(i);
-                        edges.add(edgeMapper.apply(new Edge(entityName, row.get(srcIdIndex), row.get(dstIdIndex), row)));
+                        Edge newEdge = edgeMapper.apply(new Edge(entityName, row.get(srcIdIndex), row.get(dstIdIndex), row));
+                        edges.add(newEdge);
                     }
                     EdgeGroup edgeGroup = new EdgeGroup(edgeSchema, edges);
                     entities.put(entityName, edgeGroup);
