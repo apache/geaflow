@@ -19,6 +19,7 @@
 
 package org.apache.geaflow.ai;
 
+import org.apache.geaflow.ai.common.model.ChatRobot;
 import org.apache.geaflow.ai.common.model.ModelInfo;
 import org.apache.geaflow.ai.graph.EmptyGraphAccessor;
 import org.apache.geaflow.ai.graph.GraphAccessor;
@@ -93,6 +94,8 @@ public class GraphMemoryTest {
         indexStore.initStore(new SubgraphSemanticPromptFunction(graphAccessor));
         System.out.println("Success to init EntityAttributeIndexStore.");
 
+        ModelInfo modelInfo = new ModelInfo(ChatRobotTest.EMBEDDING_MODEL, ChatRobotTest.URL,
+                ChatRobotTest.EMBEDDING_API, ChatRobotTest.API_KEY);
         EmbeddingIndexStore embeddingStore = new EmbeddingIndexStore();
         embeddingStore.initStore(graphAccessor,
                 new SubgraphSemanticPromptFunction(graphAccessor),
@@ -105,11 +108,15 @@ public class GraphMemoryTest {
         server.addGraphAccessor(graphAccessor);
         server.addIndexStore(indexStore);
         server.addIndexStore(embeddingStore);
+        ChatRobot robot = new ChatRobot();
+        robot.setModelInfo(modelInfo);
 
         {
             String sessionId = server.createSession();
             VectorSearch search = new VectorSearch(null, sessionId);
-            search.addVector(new KeywordVector("What comments has Chaim Azriel posted?"));
+            String query = "What comments has Chaim Azriel posted?";
+            search.addVector(new KeywordVector(query));
+            search.addVector(new EmbeddingVector(robot.embeddingSingle(query).embedding));
             System.out.println("Round 1: \n" + search);
 
             String context = produceCycle(server, search, graphAccessor);
@@ -118,7 +125,9 @@ public class GraphMemoryTest {
             Assert.assertTrue(context.contains("A Person, male, register at 2011-09-18T02:40:31.062+00:00, id is Person21990232556059, name is Chaim Azriel Epstein, birthday is 1981-07-17, ip is 80.94.167.126, use browser is Firefox, use language are ru;pl;en, email address is Chaim.Azriel21990232556059@gmx.com;Chaim.Azriel21990232556059@gmail.com;Chaim.Azriel21990232556059@hotmail.com;Chaim.Azriel21990232556059@yahoo.com;Chaim.Azriel21990232556059@zoho.com"));
 
             search = new VectorSearch(null, sessionId);
-            search.addVector(new KeywordVector("Chaim Azriel, Comment_hasCreator_Person, personId, comment author, Person166, Person21990232556059"));
+            query = "Chaim Azriel, Comment_hasCreator_Person, personId, comment author, Person166, Person21990232556059";
+            search.addVector(new KeywordVector(query));
+            search.addVector(new EmbeddingVector(robot.embeddingSingle(query).embedding));
             System.out.println("Round 2: \n" + search);
 
             context = produceCycle(server, search, graphAccessor);
@@ -131,7 +140,10 @@ public class GraphMemoryTest {
         {
             String sessionId = server.createSession();
             VectorSearch search = new VectorSearch(null, sessionId);
-            search.addVector(new KeywordVector("How many posts has Chaim Azriel posted?"));
+            String query = "How many posts has Chaim Azriel posted?";
+            search.addVector(new KeywordVector(query));
+            search.addVector(new EmbeddingVector(robot.embeddingSingle(query).embedding));
+
             System.out.println("Round 1: \n" + search);
 
             String context = produceCycle(server, search, graphAccessor);
@@ -141,7 +153,9 @@ public class GraphMemoryTest {
             Assert.assertTrue(context.contains("A Person, male, register at 2011-09-18T02:40:31.062+00:00, id is Person21990232556059, name is Chaim Azriel Epstein, birthday is 1981-07-17, ip is 80.94.167.126, use browser is Firefox, use language are ru;pl;en, email address is Chaim.Azriel21990232556059@gmx.com;Chaim.Azriel21990232556059@gmail.com;Chaim.Azriel21990232556059@hotmail.com;Chaim.Azriel21990232556059@yahoo.com;Chaim.Azriel21990232556059@zoho.com"));
 
             search = new VectorSearch(null, sessionId);
-            search.addVector(new KeywordVector("Chaim Azriel, Post_hasCreator_Person, Post"));
+            query = "Chaim Azriel, Post_hasCreator_Person, Post";
+            search.addVector(new KeywordVector(query));
+            search.addVector(new EmbeddingVector(robot.embeddingSingle(query).embedding));
             System.out.println("Round 2: \n" + search);
 
             context = produceCycle(server, search, graphAccessor);
@@ -151,5 +165,36 @@ public class GraphMemoryTest {
             Assert.assertTrue(context.contains("One edge of Type Post_hasCreator_Person, The post id Post274877910399 has creator person id Person166"));
         }
 
+        {
+            String sessionId = server.createSession();
+            VectorSearch search = new VectorSearch(null, sessionId);
+            String query = "Which historical comments exist, who posted them, and how many have been published?";
+            search.addVector(new KeywordVector(query));
+            search.addVector(new EmbeddingVector(robot.embeddingSingle(query).embedding));
+
+            System.out.println("Round 1: \n" + search);
+
+            String context = produceCycle(server, search, graphAccessor);
+            System.out.println("Round 1: \n" + context);
+            Assert.assertTrue(context.contains("Comment1030792157359"));
+            Assert.assertTrue(context.contains("Comment1099511634167"));
+            Assert.assertTrue(context.contains("Comment1030792164752"));
+            Assert.assertTrue(context.contains("Comment1099511645848"));
+            Assert.assertTrue(context.contains("Comment1168231110927"));
+
+            search = new VectorSearch(null, sessionId);
+            query = "Comment_hasCreator_Person, Person, Comment IDs, Comment1030792157359";
+            search.addVector(new KeywordVector(query));
+            search.addVector(new EmbeddingVector(robot.embeddingSingle(query).embedding));
+            System.out.println("Round 2: \n" + search);
+
+            context = produceCycle(server, search, graphAccessor);
+            System.out.println("Round 2: \n" + context);
+            Assert.assertTrue(context.contains("Person10995116279002"));
+            Assert.assertTrue(context.contains("Person24189255812253"));
+            Assert.assertTrue(context.contains("Person30786325577990"));
+            Assert.assertTrue(context.contains("Person26388279067480"));
+            Assert.assertTrue(context.contains("Person8796093023077"));
+        }
     }
 }
