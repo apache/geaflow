@@ -184,7 +184,7 @@ public class ExecutionGraphBuilderTest {
         PipelineGraph pipelineGraph = planBuilder.buildPlan(context);
 
         PipelineGraphOptimizer optimizer = new PipelineGraphOptimizer();
-        optimizer.optimizePipelineGraph(pipelineGraph);
+        optimizer.optimizePipelineGraph(pipelineGraph, new Configuration());
 
         ExecutionGraphBuilder builder = new ExecutionGraphBuilder(pipelineGraph);
         ExecutionGraph graph = builder.buildExecutionGraph(new Configuration());
@@ -225,7 +225,7 @@ public class ExecutionGraphBuilderTest {
         PipelineGraph pipelineGraph = planBuilder.buildPlan(context);
 
         PipelineGraphOptimizer optimizer = new PipelineGraphOptimizer();
-        optimizer.optimizePipelineGraph(pipelineGraph);
+        optimizer.optimizePipelineGraph(pipelineGraph, new Configuration());
 
         ExecutionGraphBuilder builder = new ExecutionGraphBuilder(pipelineGraph);
         ExecutionGraph graph = builder.buildExecutionGraph(new Configuration());
@@ -262,7 +262,7 @@ public class ExecutionGraphBuilderTest {
         PipelinePlanBuilder planBuilder = new PipelinePlanBuilder();
         PipelineGraph pipelineGraph = planBuilder.buildPlan(context);
         PipelineGraphOptimizer optimizer = new PipelineGraphOptimizer();
-        optimizer.optimizePipelineGraph(pipelineGraph);
+        optimizer.optimizePipelineGraph(pipelineGraph, new Configuration());
 
         ExecutionGraphBuilder builder = new ExecutionGraphBuilder(pipelineGraph);
         ExecutionGraph graph = builder.buildExecutionGraph(new Configuration());
@@ -309,7 +309,7 @@ public class ExecutionGraphBuilderTest {
         PipelinePlanBuilder planBuilder = new PipelinePlanBuilder();
         PipelineGraph pipelineGraph = planBuilder.buildPlan(context);
         PipelineGraphOptimizer optimizer = new PipelineGraphOptimizer();
-        optimizer.optimizePipelineGraph(pipelineGraph);
+        optimizer.optimizePipelineGraph(pipelineGraph, new Configuration());
 
         ExecutionGraphBuilder builder = new ExecutionGraphBuilder(pipelineGraph);
         ExecutionGraph graph = builder.buildExecutionGraph(new Configuration());
@@ -368,21 +368,19 @@ public class ExecutionGraphBuilderTest {
         PipelinePlanBuilder planBuilder = new PipelinePlanBuilder();
         PipelineGraph pipelineGraph = planBuilder.buildPlan(context);
         PipelineGraphOptimizer optimizer = new PipelineGraphOptimizer();
-        optimizer.optimizePipelineGraph(pipelineGraph);
+        optimizer.optimizePipelineGraph(pipelineGraph, new Configuration());
 
         ExecutionGraphBuilder builder = new ExecutionGraphBuilder(pipelineGraph);
         ExecutionGraph graph = builder.buildExecutionGraph(new Configuration());
 
-        // LocalShuffleOptimizer co-locates Graph operator and Sink, reducing group count from 4 to 2
-        Assert.assertEquals(2, graph.getVertexGroupMap().size());
+        Assert.assertEquals(4, graph.getVertexGroupMap().size());
         Assert.assertEquals(1, graph.getCycleGroupMeta().getFlyingCount());
         Assert.assertEquals(Long.MAX_VALUE, graph.getCycleGroupMeta().getIterationCount());
 
-        // Find co-located vertex group (graph operator + sink) dynamically
-        ExecutionVertexGroup vertexGroup = findCoLocatedGraphGroup(graph);
-        Assert.assertNotNull("Should find co-located graph group", vertexGroup);
-        Assert.assertEquals(1, vertexGroup.getCycleGroupMeta().getIterationCount());
+        ExecutionVertexGroup vertexGroup = graph.getVertexGroupMap().get(3);
+        Assert.assertEquals(3, vertexGroup.getCycleGroupMeta().getIterationCount());
         Assert.assertEquals(1, vertexGroup.getCycleGroupMeta().getFlyingCount());
+        Assert.assertTrue(vertexGroup.getCycleGroupMeta().isIterative());
         Assert.assertTrue(vertexGroup.getCycleGroupMeta().getAffinityLevel() == AffinityLevel.worker);
         Assert.assertTrue(vertexGroup.getCycleGroupMeta().getGroupType() == CycleGroupType.incremental);
         Assert.assertTrue(graph.getCycleGroupMeta().getGroupType() == CycleGroupType.incremental);
@@ -416,7 +414,7 @@ public class ExecutionGraphBuilderTest {
         PipelinePlanBuilder planBuilder = new PipelinePlanBuilder();
         PipelineGraph pipelineGraph = planBuilder.buildPlan(context);
         PipelineGraphOptimizer optimizer = new PipelineGraphOptimizer();
-        optimizer.optimizePipelineGraph(pipelineGraph);
+        optimizer.optimizePipelineGraph(pipelineGraph, new Configuration());
 
         ExecutionGraphBuilder builder = new ExecutionGraphBuilder(pipelineGraph);
         ExecutionGraph graph = builder.buildExecutionGraph(new Configuration());
@@ -429,6 +427,7 @@ public class ExecutionGraphBuilderTest {
         ExecutionVertexGroup vertexGroup = graph.getVertexGroupMap().get(3);
         Assert.assertEquals(3, vertexGroup.getCycleGroupMeta().getIterationCount());
         Assert.assertEquals(1, vertexGroup.getCycleGroupMeta().getFlyingCount());
+        Assert.assertTrue(vertexGroup.getCycleGroupMeta().isIterative());
         Assert.assertTrue(vertexGroup.getCycleGroupMeta().getAffinityLevel() == AffinityLevel.worker);
         Assert.assertTrue(vertexGroup.getCycleGroupMeta().getGroupType() == CycleGroupType.statical);
         Assert.assertTrue(graph.getCycleGroupMeta().getGroupType() == CycleGroupType.statical);
@@ -461,7 +460,7 @@ public class ExecutionGraphBuilderTest {
         PipelinePlanBuilder planBuilder = new PipelinePlanBuilder();
         PipelineGraph pipelineGraph = planBuilder.buildPlan(context);
         PipelineGraphOptimizer optimizer = new PipelineGraphOptimizer();
-        optimizer.optimizePipelineGraph(pipelineGraph);
+        optimizer.optimizePipelineGraph(pipelineGraph, new Configuration());
 
         ExecutionGraphBuilder builder = new ExecutionGraphBuilder(pipelineGraph);
         ExecutionGraph graph = builder.buildExecutionGraph(new Configuration());
@@ -474,6 +473,7 @@ public class ExecutionGraphBuilderTest {
         ExecutionVertexGroup vertexGroup = graph.getVertexGroupMap().get(3);
         Assert.assertEquals(3, vertexGroup.getCycleGroupMeta().getIterationCount());
         Assert.assertEquals(1, vertexGroup.getCycleGroupMeta().getFlyingCount());
+        Assert.assertTrue(vertexGroup.getCycleGroupMeta().isIterative());
         Assert.assertTrue(vertexGroup.getCycleGroupMeta().getAffinityLevel() == AffinityLevel.worker);
         Assert.assertTrue(vertexGroup.getCycleGroupMeta().getGroupType() == CycleGroupType.statical);
         Assert.assertTrue(graph.getCycleGroupMeta().getGroupType() == CycleGroupType.statical);
@@ -507,23 +507,21 @@ public class ExecutionGraphBuilderTest {
         PipelinePlanBuilder planBuilder = new PipelinePlanBuilder();
         PipelineGraph pipelineGraph = planBuilder.buildPlan(context);
         PipelineGraphOptimizer optimizer = new PipelineGraphOptimizer();
-        optimizer.optimizePipelineGraph(pipelineGraph);
+        optimizer.optimizePipelineGraph(pipelineGraph, new Configuration());
 
         ExecutionGraphBuilder builder = new ExecutionGraphBuilder(pipelineGraph);
         ExecutionGraph graph = builder.buildExecutionGraph(new Configuration());
-        // LocalShuffleOptimizer co-locates Graph operator and Sink, reducing group count from 5 to 2
-        Assert.assertEquals(2, graph.getVertexGroupMap().size());
-        Assert.assertEquals(3, graph.getGroupEdgeMap().size());
+        Assert.assertEquals(5, graph.getVertexGroupMap().size());
+        Assert.assertEquals(5, graph.getGroupEdgeMap().size());
         Assert.assertEquals(1, graph.getCycleGroupMeta().getFlyingCount());
         Assert.assertEquals(Long.MAX_VALUE, graph.getCycleGroupMeta().getIterationCount());
 
-        // Find co-located vertex group (graph operator + sink) dynamically
-        ExecutionVertexGroup vertexGroup = findCoLocatedGraphGroup(graph);
-        Assert.assertNotNull("Should find co-located graph group", vertexGroup);
-        Assert.assertEquals(1, vertexGroup.getCycleGroupMeta().getIterationCount());
+        ExecutionVertexGroup vertexGroup = graph.getVertexGroupMap().get(4);
+        Assert.assertEquals(3, vertexGroup.getCycleGroupMeta().getIterationCount());
         Assert.assertEquals(1, vertexGroup.getCycleGroupMeta().getFlyingCount());
+        Assert.assertTrue(vertexGroup.getCycleGroupMeta().isIterative());
         Assert.assertTrue(vertexGroup.getCycleGroupMeta().getAffinityLevel() == AffinityLevel.worker);
-        // Note: After co-location, groupType may change from statical to pipelined
+        Assert.assertTrue(vertexGroup.getCycleGroupMeta().getGroupType() == CycleGroupType.statical);
         Assert.assertTrue(graph.getCycleGroupMeta().getGroupType() == CycleGroupType.statical);
     }
 
@@ -558,22 +556,20 @@ public class ExecutionGraphBuilderTest {
         PipelinePlanBuilder planBuilder = new PipelinePlanBuilder();
         PipelineGraph pipelineGraph = planBuilder.buildPlan(context);
         PipelineGraphOptimizer optimizer = new PipelineGraphOptimizer();
-        optimizer.optimizePipelineGraph(pipelineGraph);
+        optimizer.optimizePipelineGraph(pipelineGraph, new Configuration());
 
         ExecutionGraphBuilder builder = new ExecutionGraphBuilder(pipelineGraph);
         ExecutionGraph graph = builder.buildExecutionGraph(new Configuration());
-        // LocalShuffleOptimizer co-locates Graph operator and Sink, reducing group count from 4 to 2
-        Assert.assertEquals(2, graph.getVertexGroupMap().size());
-        Assert.assertEquals(2, graph.getGroupEdgeMap().size());
+        Assert.assertEquals(4, graph.getVertexGroupMap().size());
+        Assert.assertEquals(4, graph.getGroupEdgeMap().size());
         Assert.assertEquals(1, graph.getCycleGroupMeta().getFlyingCount());
         Assert.assertEquals(Long.MAX_VALUE, graph.getCycleGroupMeta().getIterationCount());
 
-        // Find co-located vertex group (graph operator + sink) dynamically
-        ExecutionVertexGroup vertexGroup = findCoLocatedGraphGroup(graph);
-        Assert.assertNotNull("Should find co-located graph group", vertexGroup);
-        Assert.assertEquals(1, vertexGroup.getCycleGroupMeta().getIterationCount());
+        ExecutionVertexGroup vertexGroup = graph.getVertexGroupMap().get(3);
+        Assert.assertEquals(3, vertexGroup.getCycleGroupMeta().getIterationCount());
         Assert.assertEquals(1, vertexGroup.getCycleGroupMeta().getFlyingCount());
-        // Note: After co-location, groupType may change from statical to pipelined
+        Assert.assertTrue(vertexGroup.getCycleGroupMeta().isIterative());
+        Assert.assertTrue(vertexGroup.getCycleGroupMeta().getGroupType() == CycleGroupType.statical);
         Assert.assertTrue(graph.getCycleGroupMeta().getGroupType() == CycleGroupType.statical);
     }
 
@@ -603,23 +599,21 @@ public class ExecutionGraphBuilderTest {
         PipelinePlanBuilder planBuilder = new PipelinePlanBuilder();
         PipelineGraph pipelineGraph = planBuilder.buildPlan(context);
         PipelineGraphOptimizer optimizer = new PipelineGraphOptimizer();
-        optimizer.optimizePipelineGraph(pipelineGraph);
+        optimizer.optimizePipelineGraph(pipelineGraph, new Configuration());
 
         ExecutionGraphBuilder builder = new ExecutionGraphBuilder(pipelineGraph);
         ExecutionGraph graph = builder.buildExecutionGraph(new Configuration());
-        // LocalShuffleOptimizer co-locates Graph operator and Sink, reducing group count from 4 to 3
-        Assert.assertEquals(3, graph.getVertexGroupMap().size());
-        Assert.assertEquals(2, graph.getGroupEdgeMap().size());
+        Assert.assertEquals(4, graph.getVertexGroupMap().size());
+        Assert.assertEquals(4, graph.getGroupEdgeMap().size());
         Assert.assertEquals(1, graph.getCycleGroupMeta().getFlyingCount());
         Assert.assertEquals(1, graph.getCycleGroupMeta().getIterationCount());
 
-        // Find co-located vertex group (graph operator + sink) dynamically
-        ExecutionVertexGroup vertexGroup = findCoLocatedGraphGroup(graph);
-        Assert.assertNotNull("Should find co-located graph group", vertexGroup);
-        Assert.assertEquals(1, vertexGroup.getCycleGroupMeta().getIterationCount());
+        ExecutionVertexGroup vertexGroup = graph.getVertexGroupMap().get(3);
+        Assert.assertEquals(3, vertexGroup.getCycleGroupMeta().getIterationCount());
         Assert.assertEquals(1, vertexGroup.getCycleGroupMeta().getFlyingCount());
+        Assert.assertTrue(vertexGroup.getCycleGroupMeta().isIterative());
         Assert.assertTrue(vertexGroup.getCycleGroupMeta().getAffinityLevel() == AffinityLevel.worker);
-        // Note: After co-location, groupType may change from statical to pipelined
+        Assert.assertTrue(vertexGroup.getCycleGroupMeta().getGroupType() == CycleGroupType.statical);
         Assert.assertTrue(graph.getCycleGroupMeta().getGroupType() == CycleGroupType.statical);
     }
 
@@ -655,21 +649,19 @@ public class ExecutionGraphBuilderTest {
         PipelinePlanBuilder planBuilder = new PipelinePlanBuilder();
         PipelineGraph pipelineGraph = planBuilder.buildPlan(context);
         PipelineGraphOptimizer optimizer = new PipelineGraphOptimizer();
-        optimizer.optimizePipelineGraph(pipelineGraph);
+        optimizer.optimizePipelineGraph(pipelineGraph, new Configuration());
 
         ExecutionGraphBuilder builder = new ExecutionGraphBuilder(pipelineGraph);
         ExecutionGraph graph = builder.buildExecutionGraph(new Configuration());
-        // LocalShuffleOptimizer co-locates Graph operator and Sink, reducing group count from 3 to 2
-        Assert.assertEquals(2, graph.getVertexGroupMap().size());
-        Assert.assertEquals(2, graph.getGroupEdgeMap().size());
+        Assert.assertEquals(3, graph.getVertexGroupMap().size());
+        Assert.assertEquals(4, graph.getGroupEdgeMap().size());
         Assert.assertEquals(1, graph.getCycleGroupMeta().getFlyingCount());
         Assert.assertEquals(Long.MAX_VALUE, graph.getCycleGroupMeta().getIterationCount());
 
-        // Find co-located vertex group (graph operator + sink) dynamically
-        ExecutionVertexGroup vertexGroup = findCoLocatedGraphGroup(graph);
-        Assert.assertNotNull("Should find co-located graph group", vertexGroup);
-        Assert.assertEquals(1, vertexGroup.getCycleGroupMeta().getIterationCount());
+        ExecutionVertexGroup vertexGroup = graph.getVertexGroupMap().get(2);
+        Assert.assertEquals(3, vertexGroup.getCycleGroupMeta().getIterationCount());
         Assert.assertEquals(1, vertexGroup.getCycleGroupMeta().getFlyingCount());
+        Assert.assertTrue(vertexGroup.getCycleGroupMeta().isIterative());
         Assert.assertTrue(vertexGroup.getCycleGroupMeta().getAffinityLevel() == AffinityLevel.worker);
     }
 
@@ -711,21 +703,19 @@ public class ExecutionGraphBuilderTest {
         PipelinePlanBuilder planBuilder = new PipelinePlanBuilder();
         PipelineGraph pipelineGraph = planBuilder.buildPlan(context);
         PipelineGraphOptimizer optimizer = new PipelineGraphOptimizer();
-        optimizer.optimizePipelineGraph(pipelineGraph);
+        optimizer.optimizePipelineGraph(pipelineGraph, new Configuration());
 
         ExecutionGraphBuilder builder = new ExecutionGraphBuilder(pipelineGraph);
         ExecutionGraph graph = builder.buildExecutionGraph(new Configuration());
-        // LocalShuffleOptimizer co-locates Graph operator and Sink, reducing group count from 3 to 2
-        Assert.assertEquals(2, graph.getVertexGroupMap().size());
-        Assert.assertEquals(2, graph.getGroupEdgeMap().size());
+        Assert.assertEquals(3, graph.getVertexGroupMap().size());
+        Assert.assertEquals(4, graph.getGroupEdgeMap().size());
         Assert.assertEquals(1, graph.getCycleGroupMeta().getFlyingCount());
         Assert.assertEquals(Long.MAX_VALUE, graph.getCycleGroupMeta().getIterationCount());
 
-        // Find co-located vertex group (graph operator + sink) dynamically
-        ExecutionVertexGroup vertexGroup = findCoLocatedGraphGroup(graph);
-        Assert.assertNotNull("Should find co-located graph group", vertexGroup);
-        Assert.assertEquals(1, vertexGroup.getCycleGroupMeta().getIterationCount());
+        ExecutionVertexGroup vertexGroup = graph.getVertexGroupMap().get(2);
+        Assert.assertEquals(3, vertexGroup.getCycleGroupMeta().getIterationCount());
         Assert.assertEquals(1, vertexGroup.getCycleGroupMeta().getFlyingCount());
+        Assert.assertTrue(vertexGroup.getCycleGroupMeta().isIterative());
         Assert.assertTrue(vertexGroup.getCycleGroupMeta().getAffinityLevel() == AffinityLevel.worker);
     }
 
@@ -799,21 +789,19 @@ public class ExecutionGraphBuilderTest {
         PipelinePlanBuilder planBuilder = new PipelinePlanBuilder();
         PipelineGraph pipelineGraph = planBuilder.buildPlan(context);
         PipelineGraphOptimizer optimizer = new PipelineGraphOptimizer();
-        optimizer.optimizePipelineGraph(pipelineGraph);
+        optimizer.optimizePipelineGraph(pipelineGraph, new Configuration());
 
         ExecutionGraphBuilder builder = new ExecutionGraphBuilder(pipelineGraph);
         ExecutionGraph graph = builder.buildExecutionGraph(new Configuration());
-        // LocalShuffleOptimizer co-locates Graph operator and Sink, reducing group count from 3 to 2
-        Assert.assertEquals(2, graph.getVertexGroupMap().size());
-        Assert.assertEquals(2, graph.getGroupEdgeMap().size());
+        Assert.assertEquals(3, graph.getVertexGroupMap().size());
+        Assert.assertEquals(4, graph.getGroupEdgeMap().size());
         Assert.assertEquals(1, graph.getCycleGroupMeta().getFlyingCount());
         Assert.assertEquals(Long.MAX_VALUE, graph.getCycleGroupMeta().getIterationCount());
 
-        // Find co-located vertex group (graph operator + sink) dynamically
-        ExecutionVertexGroup vertexGroup = findCoLocatedGraphGroup(graph);
-        Assert.assertNotNull("Should find co-located graph group", vertexGroup);
-        Assert.assertEquals(1, vertexGroup.getCycleGroupMeta().getIterationCount());
+        ExecutionVertexGroup vertexGroup = graph.getVertexGroupMap().get(2);
+        Assert.assertEquals(3, vertexGroup.getCycleGroupMeta().getIterationCount());
         Assert.assertEquals(1, vertexGroup.getCycleGroupMeta().getFlyingCount());
+        Assert.assertTrue(vertexGroup.getCycleGroupMeta().isIterative());
         Assert.assertTrue(vertexGroup.getCycleGroupMeta().getAffinityLevel() == AffinityLevel.worker);
     }
 
@@ -840,7 +828,7 @@ public class ExecutionGraphBuilderTest {
         PipelinePlanBuilder planBuilder = new PipelinePlanBuilder();
         PipelineGraph pipelineGraph = planBuilder.buildPlan(context);
         PipelineGraphOptimizer optimizer = new PipelineGraphOptimizer();
-        optimizer.optimizePipelineGraph(pipelineGraph);
+        optimizer.optimizePipelineGraph(pipelineGraph, new Configuration());
 
         ExecutionGraphBuilder builder = new ExecutionGraphBuilder(pipelineGraph);
         ExecutionGraph graph = builder.buildExecutionGraph(new Configuration());
@@ -890,13 +878,12 @@ public class ExecutionGraphBuilderTest {
         PipelinePlanBuilder planBuilder = new PipelinePlanBuilder();
         PipelineGraph pipelineGraph = planBuilder.buildPlan(context);
         PipelineGraphOptimizer optimizer = new PipelineGraphOptimizer();
-        optimizer.optimizePipelineGraph(pipelineGraph);
+        optimizer.optimizePipelineGraph(pipelineGraph, new Configuration());
 
         ExecutionGraphBuilder builder = new ExecutionGraphBuilder(pipelineGraph);
         ExecutionGraph graph = builder.buildExecutionGraph(new Configuration());
-        // LocalShuffleOptimizer co-locates Graph operator and Sink, reducing group count from 7 to 6
-        Assert.assertEquals(6, graph.getVertexGroupMap().size());
-        Assert.assertEquals(7, graph.getGroupEdgeMap().size());
+        Assert.assertEquals(7, graph.getVertexGroupMap().size());
+        Assert.assertEquals(9, graph.getGroupEdgeMap().size());
         Assert.assertTrue(graph.getCycleGroupMeta().getGroupType() == CycleGroupType.statical);
     }
 
@@ -1024,25 +1011,6 @@ public class ExecutionGraphBuilderTest {
         public Tuple<Long, Long> merge(Tuple<Long, Long> a, Tuple<Long, Long> b) {
             return null;
         }
-    }
-
-    /**
-     * Find vertex group containing co-located graph operator and sink/map.
-     * Helper method to locate co-located groups after LocalShuffleOptimizer optimization.
-     * After co-location, the graph operator and sink are in the same group with iterationCount=1.
-     */
-    private ExecutionVertexGroup findCoLocatedGraphGroup(ExecutionGraph graph) {
-        for (ExecutionVertexGroup group : graph.getVertexGroupMap().values()) {
-            // Co-located groups have iterationCount=1 and flyingCount=1
-            if (group.getCycleGroupMeta().getIterationCount() == 1
-                && group.getCycleGroupMeta().getFlyingCount() == 1) {
-                // Check if this group contains graph operators (should have >1 vertices when co-located)
-                if (group.getVertexMap().size() > 1) {
-                    return group;
-                }
-            }
-        }
-        return null;
     }
 
     private GraphViewDesc createGraphViewDesc(int shardNum) {

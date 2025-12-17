@@ -198,7 +198,6 @@ public class ExecutionGraphBuilder implements Serializable {
         // Step 1: Process co-location groups first for local shuffle optimization.
         // Collect vertices by coLocationGroup for local shuffle optimization.
         Map<String, List<PipelineVertex>> coLocationGroupMap = new HashMap<>();
-        List<PipelineVertex> verticesWithoutCoLocation = new ArrayList<>();
 
         for (PipelineVertex vertex : plan.getVertexMap().values()) {
             String coLocationGroup = vertex.getCoLocationGroup();
