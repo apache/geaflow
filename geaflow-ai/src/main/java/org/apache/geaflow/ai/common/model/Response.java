@@ -35,7 +35,7 @@ public class Response {
     public String systemFingerprint;
 
     public static class Choice {
-        public String finish_reason;
+        public String finishReason;
         public int index;
         public Message message;
         public Object logprobs;
