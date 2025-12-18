@@ -25,7 +25,7 @@
     <parent>
         <groupId>org.apache.geaflow</groupId>
         <artifactId>geaflow-service-discovery</artifactId>
-        <version>0.6.8-SNAPSHOT</version>
+        <version>0.8.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>geaflow-service-discovery-api</artifactId>

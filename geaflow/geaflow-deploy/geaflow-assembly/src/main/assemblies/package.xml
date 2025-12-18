@@ -47,12 +47,6 @@
 	</dependencySets>
 
 	<files>
-		<!-- copy fat jar -->
-		<file>
-			<source>target/geaflow-assembly-${project.version}.jar</source>
-			<outputDirectory>lib/</outputDirectory>
-			<fileMode>0644</fileMode>
-		</file>
 
 		<!-- copy log4j conf -->
 		<file>
@@ -70,6 +64,20 @@
 	</files>
 
 	<fileSets>
+
+		<!-- copy fat jar -->
+		<fileSet>
+			<directory>target</directory>
+			<outputDirectory>lib/</outputDirectory>
+			<fileMode>0644</fileMode>
+			<includes>
+				<include>geaflow-assembly-${project.version}*.jar</include>
+			</includes>
+			<excludes>
+				<exclude>geaflow-assembly-${project.version}*-sources.jar</exclude>
+				<exclude>geaflow-assembly-${project.version}*-javadoc.jar</exclude>
+			</excludes>
+		</fileSet>
 
 		<!-- copy *.txt files -->
 		<fileSet>

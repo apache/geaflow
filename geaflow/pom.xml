@@ -25,7 +25,7 @@
     <parent>
         <groupId>org.apache.geaflow</groupId>
         <artifactId>geaflow-parent</artifactId>
-        <version>0.6.8-SNAPSHOT</version>
+        <version>0.8.0-SNAPSHOT</version>
     </parent>
 
     <modelVersion>4.0.0</modelVersion>
@@ -54,7 +54,7 @@
         <rocksdb.version>7.7.3</rocksdb.version>
         <paimon.version>1.0.1</paimon.version>
         <snappy.version>1.1.8.4</snappy.version>
-        <lz4.version>1.2.0</lz4.version>
+        <lz4.version>1.10.1</lz4.version>
         <grpc.version>1.15.1</grpc.version>
         <kryo.version>4.0.2</kryo.version>
         <kryo.serializers.version>0.42</kryo.serializers.version>
@@ -151,8 +151,8 @@
                 <version>${snappy.version}</version>
             </dependency>
             <dependency>
-                <groupId>net.jpountz.lz4</groupId>
-                <artifactId>lz4</artifactId>
+                <groupId>at.yawk.lz4</groupId>
+                <artifactId>lz4-java</artifactId>
                 <version>${lz4.version}</version>
             </dependency>
 

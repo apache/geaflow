@@ -25,7 +25,7 @@
 
     <groupId>org.apache.geaflow</groupId>
     <artifactId>geaflow-parent</artifactId>
-    <version>0.6.8-SNAPSHOT</version>
+    <version>0.8.0-SNAPSHOT</version>
     <packaging>pom</packaging>
 
     <properties>
@@ -90,9 +90,9 @@
     </developers>
 
     <scm>
-        <connection>https://github.com/TuGraph-family/tugraph-analytics.git</connection>
-        <developerConnection>https://github.com/TuGraph-family/analytics.git</developerConnection>
-        <url>https://github.com/TuGraph-family/analytics</url>
+        <connection>https://github.com/apache/geaflow.git</connection>
+        <developerConnection>https://github.com/apache/geaflow.git</developerConnection>
+        <url>https://github.com/apache/geaflow</url>
     </scm>
 
     <name>${project.groupId}:${project.artifactId}</name>
@@ -139,6 +139,21 @@
                     <fork>true</fork>
                     <meminitial>512m</meminitial>
                     <maxmem>1048m</maxmem>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>3.4.1</version>
+                <configuration>
+                    <archive>
+                        <addMavenDescriptor>false</addMavenDescriptor>
+                        <manifest>
+                            <addDefaultImplementationEntries>true</addDefaultImplementationEntries>
+                        </manifest>
+                    </archive>
+                    <skipIfEmpty>false</skipIfEmpty>
+                    <forceCreation>true</forceCreation>
                 </configuration>
             </plugin>
             <plugin>
@@ -282,69 +297,83 @@
                         <goals>
                             <goal>check</goal>
                         </goals>
-                        <configuration>
-                            <consoleOutput>true</consoleOutput>
-                            <excludeSubProjects>false</excludeSubProjects>
-                            <numUnapprovedLicenses>0</numUnapprovedLicenses>
-                            <licenses>
-                                <license>
-                                    <family>AL2</family>
-                                    <notes></notes>
-                                    <text>Licensed to the Apache Software Foundation (ASF) under one</text>
-                                </license>
-                            </licenses>
-                            <families>
-                                <family>
-                                    <id>AL2</id>
-                                    <name>ApacheLicense 2.0</name>
-                                </family>
-                            </families>
-                            <approvedLicenses>
-                                <id>AL2</id>
-                            </approvedLicenses>
-                            <addDefaultLicenses>false</addDefaultLicenses>
-                            <excludes>
-                                <!-- Docs related -->
-                                <exclude>docs/**/**</exclude>
-                                <exclude>ci/**/**</exclude>
-                                <exclude>.github/**/**</exclude>
-                                <exclude>tools/**/*</exclude>
-                                <exclude>geaflow-web/**/**</exclude>
-                                <exclude>**/geaflow-web/**</exclude>
-                                <exclude>**/target/**</exclude>
-                                <exclude>**/docs/**</exclude>
-                                <exclude>**/ci/**</exclude>
-                                <exclude>**/web-dashboard/**</exclude>
-                                <exclude>**/codegen/**</exclude>
-                                <exclude>**/template/*.vm</exclude>
-                                <exclude>**/resources/data/**</exclude>
-                                <exclude>**/resources/expect/**</exclude>
-                                <exclude>**/resources/zip_test2.txt</exclude>
-                                <exclude>**/resources/zip_test.txt</exclude>
-                                <exclude>**/resources/demo/demo_job_data.txt</exclude>
-                                <exclude>**/resources/input/**</exclude>
-                                <exclude>**/resources/i18n/**</exclude>
-                                <exclude>**/resources/public/**</exclude>
-                                <exclude>**/dependency-reduced-pom.xml</exclude>
-                                <exclude>**/*.log</exclude>
-                                <exclude>**/*.md</exclude>
-                                <exclude>**/**/data/geaflow.sql</exclude>
-                                <exclude>**/**/Filter.template</exclude>
-                                <exclude>**/**/version.txt</exclude>
-                                <exclude>**/**/graph_data.fbs</exclude>
-                                <exclude>**/**/*.toml</exclude>
-                                <exclude>**/**/.helmignore</exclude>
-                                <exclude>**/**/templates/NOTES.txt</exclude>
-                                <exclude>.readthedocs.yaml</exclude>
-                                <exclude>.aci-plugin-outputs.sh</exclude>
-                                <exclude>.aci.yml</exclude>
-                                <exclude>mkdocs.yml</exclude>
-                                <exclude>data/**</exclude>
-                                <exclude>sync_code.sh</exclude>
-                            </excludes>
-                        </configuration>
                     </execution>
                 </executions>
+                <configuration>
+                    <consoleOutput>true</consoleOutput>
+                    <excludeSubProjects>false</excludeSubProjects>
+                    <numUnapprovedLicenses>0</numUnapprovedLicenses>
+                    <licenses>
+                        <license>
+                            <family>AL2</family>
+                            <notes></notes>
+                            <text>Licensed to the Apache Software Foundation (ASF) under one</text>
+                        </license>
+                    </licenses>
+                    <families>
+                        <family>
+                            <id>AL2</id>
+                            <name>ApacheLicense 2.0</name>
+                        </family>
+                    </families>
+                    <approvedLicenses>
+                        <id>AL2</id>
+                    </approvedLicenses>
+                    <addDefaultLicenses>false</addDefaultLicenses>
+                    <excludes>
+                        <!-- Docs related -->
+                        <exclude>docs/**/**</exclude>
+                        <exclude>ci/**/**</exclude>
+                        <exclude>.github/**/**</exclude>
+                        <exclude>tools/**/*</exclude>
+                        <exclude>geaflow-web/**/**</exclude>
+                        <exclude>**/geaflow-web/**</exclude>
+                        <exclude>**/target/**</exclude>
+                        <exclude>**/docs/**</exclude>
+                        <exclude>**/ci/**</exclude>
+                        <exclude>**/web-dashboard/**</exclude>
+                        <exclude>**/codegen/**</exclude>
+                        <exclude>**/template/*.vm</exclude>
+                        <exclude>**/resources/data/**</exclude>
+                        <exclude>**/resources/expect/**</exclude>
+                        <exclude>**/resources/zip_test2.txt</exclude>
+                        <exclude>**/resources/zip_test.txt</exclude>
+                        <exclude>**/resources/demo/demo_job_data.txt</exclude>
+                        <exclude>**/resources/input/**</exclude>
+                        <exclude>**/resources/i18n/**</exclude>
+                        <exclude>**/resources/public/**</exclude>
+                        <exclude>**/dependency-reduced-pom.xml</exclude>
+                        <exclude>**/*.log</exclude>
+                        <exclude>**/*.md</exclude>
+                        <exclude>**/**/data/geaflow.sql</exclude>
+                        <exclude>**/**/Filter.template</exclude>
+                        <exclude>**/**/version.txt</exclude>
+                        <exclude>**/**/graph_data.fbs</exclude>
+                        <exclude>**/**/*.toml</exclude>
+                        <exclude>**/**/.helmignore</exclude>
+                        <exclude>**/**/templates/NOTES.txt</exclude>
+                        <exclude>.readthedocs.yaml</exclude>
+                        <exclude>.aci-plugin-outputs.sh</exclude>
+                        <exclude>.aci.yml</exclude>
+                        <exclude>mkdocs.yml</exclude>
+                        <exclude>data/**</exclude>
+                        <exclude>sync_code.sh</exclude>
+
+                        <!-- Third-party works related -->
+                        <exclude>**/MultiIterator.java</exclude>
+                        <exclude>**/memory/cleaner/**</exclude>
+                        <exclude>**/geaflow/memory/Chunk.java</exclude>
+                        <exclude>**/geaflow/memory/DirectMemory.java</exclude>
+                        <exclude>**/geaflow/memory/Page.java</exclude>
+                        <exclude>**/geaflow/memory/PlatformDependent.java</exclude>
+                        <exclude>**/analytics/service/client/jdbc/property/**</exclude>
+                        <exclude>**/analytics/service/client/jdbc/AnalyticsDriver.java</exclude>
+                        <exclude>**/analytics/service/client/HttpResponse.java</exclude>
+                        <exclude>**/geaflow/analytics/service/query/IQueryStatus.java</exclude>
+                        <exclude>**/geaflow/analytics/service/query/QueryIdGenerator.java</exclude>
+                        <exclude>**/geaflow/analytics/service/query/QueryResults.java</exclude>
+                    </excludes>
+                </configuration>
             </plugin>
         </plugins>
     </build>
@@ -392,15 +421,6 @@
             <id>maven-release</id>
             <build>
                 <plugins>
-                    <plugin>
-                        <groupId>org.sonatype.central</groupId>
-                        <artifactId>central-publishing-maven-plugin</artifactId>
-                        <version>0.8.0</version>
-                        <extensions>true</extensions>
-                        <configuration>
-                            <publishingServerId>central</publishingServerId>
-                        </configuration>
-                    </plugin>
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-source-plugin</artifactId>
@@ -504,6 +524,14 @@
                                     </descriptorRefs>
                                     <finalName>apache-geaflow-${project.version}-src</finalName>
                                     <appendAssemblyId>false</appendAssemblyId>
+                                    <!-- Output file format: tar.gz -->
+                                    <formats>
+                                        <format>tar.gz</format>
+                                    </formats>
+                                    <tarLongFileMode>gnu</tarLongFileMode>
+                                    <archive>
+                                        <addMavenDescriptor>false</addMavenDescriptor>
+                                    </archive>
                                 </configuration>
                             </execution>
                         </executions>
@@ -547,9 +575,15 @@
     </repositories>
 
     <distributionManagement>
-        <repository>
-            <id>ossrh</id>
-            <url>https://oss.sonatype.org/service/local/staging/deploy/maven2/</url>
-        </repository>
+    	<repository>
+      	    <id>apache.releases.https</id>
+            <name>Apache Release Distribution Repository</name>
+      	    <url>https://repository.apache.org/service/local/staging/deploy/maven2/</url>
+    	</repository>
+    	<snapshotRepository>
+      	    <id>apache.snapshots.https</id>
+      	    <name>Apache Snapshot Distribution Repository</name>
+      	    <url>https://repository.apache.org/content/repositories/snapshots/</url>
+    	</snapshotRepository>
     </distributionManagement>
 </project>

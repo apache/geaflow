@@ -25,7 +25,7 @@
     <parent>
         <artifactId>geaflow-dsl</artifactId>
         <groupId>org.apache.geaflow</groupId>
-        <version>0.6.8-SNAPSHOT</version>
+        <version>0.8.0-SNAPSHOT</version>
     </parent>
 
     <modelVersion>4.0.0</modelVersion>
@@ -47,6 +47,8 @@
         <module>geaflow-dsl-connector-pulsar</module>
         <module>geaflow-dsl-connector-random</module>
         <module>geaflow-dsl-connector-paimon</module>
+        <module>geaflow-dsl-connector-neo4j</module>
+        <module>geaflow-dsl-connector-elasticsearch</module>
     </modules>
 
     <dependencyManagement>

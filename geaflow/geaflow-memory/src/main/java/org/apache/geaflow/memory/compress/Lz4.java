@@ -34,8 +34,8 @@ import org.apache.geaflow.memory.channel.ByteArrayOutputStream;
 public class Lz4 {
 
     private static final int BLOCK_SIZE = 1024 * 8;
-    private static final LZ4Compressor COMPRESSOR = LZ4Factory.fastestInstance().fastCompressor();
-    private static final LZ4FastDecompressor DECOMPRESSOR = LZ4Factory.fastestInstance().fastDecompressor();
+    private static final LZ4Compressor COMPRESSOR = LZ4Factory.safeInstance().fastCompressor();
+    private static final LZ4FastDecompressor DECOMPRESSOR = LZ4Factory.safeInstance().fastDecompressor();
 
     public static MemoryView compress(MemoryView view) {
         MemoryView v =
