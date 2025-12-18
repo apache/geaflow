@@ -25,7 +25,7 @@
     <parent>
         <groupId>org.apache.geaflow</groupId>
         <artifactId>geaflow-parent</artifactId>
-        <version>0.6.8-SNAPSHOT</version>
+        <version>0.8.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>geaflow-ai</artifactId>
@@ -103,75 +103,6 @@
             <version>${junit.version}</version>
             <scope>test</scope>
         </dependency>
-        <dependency>
-            <groupId>org.apache.geaflow</groupId>
-            <artifactId>geaflow-cluster</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.geaflow</groupId>
-            <artifactId>geaflow-api</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.geaflow</groupId>
-            <artifactId>geaflow-cluster</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-
-        <dependency>
-            <groupId>org.apache.geaflow</groupId>
-            <artifactId>geaflow-on-local</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.geaflow</groupId>
-            <artifactId>geaflow-assembly</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-
-        <dependency>
-            <groupId>org.apache.geaflow</groupId>
-            <artifactId>geaflow-pipeline</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-
-        <dependency>
-            <groupId>org.apache.geaflow</groupId>
-            <artifactId>geaflow-dsl-common</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-
-        <dependency>
-            <groupId>org.apache.geaflow</groupId>
-            <artifactId>geaflow-dsl-plan</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-
-        <dependency>
-            <groupId>org.apache.geaflow</groupId>
-            <artifactId>geaflow-dsl-connector-api</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-
-        <dependency>
-            <groupId>org.apache.geaflow</groupId>
-            <artifactId>geaflow-dsl-connector-console</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-
-        <dependency>
-            <groupId>org.apache.geaflow</groupId>
-            <artifactId>geaflow-dsl-connector-random</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-
-        <dependency>
-            <groupId>org.apache.geaflow</groupId>
-            <artifactId>geaflow-dsl-connector-file</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-
     </dependencies>
 
     <repositories>
