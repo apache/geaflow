@@ -33,7 +33,7 @@
         <jctools-core.version>2.1.2</jctools-core.version>
         <druid.version>0.22.1</druid.version>
         <flink.version>1.14.3</flink.version>
-        <spark.version>3.2.0</spark.version>
+        <spark.version>3.3.3</spark.version>
     </properties>
 
     <dependencies>
