@@ -103,7 +103,7 @@ public class GraphMemoryServer {
         for (String subGraph : subGraphStringList) {
             stringBuilder.append(subGraph).append("\n");
         }
-        stringBuilder.append(verbalizationFunction.verbalizeGraphSchema()).append("\n");
+        stringBuilder.append(verbalizationFunction.verbalizeGraphSchema());
         return new Context(stringBuilder.toString());
     }
 

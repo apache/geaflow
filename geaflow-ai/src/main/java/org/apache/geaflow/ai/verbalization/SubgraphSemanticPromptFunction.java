@@ -84,6 +84,6 @@ public class SubgraphSemanticPromptFunction implements VerbalizationFunction {
 
     @Override
     public String verbalizeGraphSchema() {
-        return graphAccessor.getGraphSchema().getPrompt();
+        return "";
     }
 }

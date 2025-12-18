@@ -181,18 +181,18 @@
                         <goals>
                             <goal>prepare-agent</goal>
                         </goals>
-                        <configuration>  
+                        <configuration>
                             <propertyName>coverageAgent</propertyName>
                             <destFile>${jacoco.path}</destFile>
-                            <!-- Allocate 400MB for each test process, reserve system overhead -->  
-                            <argLine>${coverageAgent} -Xmx400m -XX:MaxMetaspaceSize=128m -XX:+UseG1GC</argLine>  
-      
-                            <!-- Maximum 2 parallel processes -->  
-                            <forkCount>2</forkCount>  
-                            <reuseForks>false</reuseForks>  
-                            <parallel>classes</parallel>  
-                            <threadCount>2</threadCount>  
-                            <perCoreThreadCount>false</perCoreThreadCount>  
+                            <!-- Allocate 400MB for each test process, reserve system overhead -->
+                            <argLine>${coverageAgent} -Xmx400m -XX:MaxMetaspaceSize=128m -XX:+UseG1GC</argLine>
+
+                            <!-- Maximum 2 parallel processes -->
+                            <forkCount>2</forkCount>
+                            <reuseForks>false</reuseForks>
+                            <parallel>classes</parallel>
+                            <threadCount>2</threadCount>
+                            <perCoreThreadCount>false</perCoreThreadCount>
                         </configuration>
                     </execution>
                     <execution>
@@ -334,6 +334,8 @@
                         <exclude>**/web-dashboard/**</exclude>
                         <exclude>**/codegen/**</exclude>
                         <exclude>**/template/*.vm</exclude>
+                        <exclude>**/resources/graph_ldbc_sf/**/**</exclude>
+                        <exclude>**/resources/index/**</exclude>
                         <exclude>**/resources/data/**</exclude>
                         <exclude>**/resources/expect/**</exclude>
                         <exclude>**/resources/zip_test2.txt</exclude>

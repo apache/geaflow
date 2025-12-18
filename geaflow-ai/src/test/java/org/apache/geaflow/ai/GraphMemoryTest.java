@@ -33,8 +33,8 @@ import org.apache.geaflow.ai.index.vector.TraversalVector;
 import org.apache.geaflow.ai.search.VectorSearch;
 import org.apache.geaflow.ai.verbalization.Context;
 import org.apache.geaflow.ai.verbalization.SubgraphSemanticPromptFunction;
-import org.testng.Assert;
-import org.testng.annotations.Test;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 
 public class GraphMemoryTest {
 
@@ -59,23 +59,23 @@ public class GraphMemoryTest {
         String sessionId = server.createSession();
         VectorSearch search = new VectorSearch(null, sessionId);
         String context = produceCycle(server, search, graphAccessor);
-        Assert.assertEquals(context, "Context{prompt=''}");
+        Assertions.assertEquals(context, "Context{prompt=''}");
 
         context = produceCycle(server, search, graphAccessor);
-        Assert.assertEquals(context, "Context{prompt=''}");
+        Assertions.assertEquals(context, "Context{prompt=''}");
 
         context = produceCycle(server, search, graphAccessor);
-        Assert.assertEquals(context, "Context{prompt=''}");
+        Assertions.assertEquals(context, "Context{prompt=''}");
     }
 
     private String produceCycle(GraphMemoryServer server, VectorSearch search,
                                 GraphAccessor graphAccessor) {
         String sessionId = search.getSessionId();
         String searchResult = server.search(search);
-        Assert.assertNotNull(searchResult);
+        Assertions.assertNotNull(searchResult);
         Context context = server.verbalize(sessionId,
                 new SubgraphSemanticPromptFunction(graphAccessor));
-        Assert.assertNotNull(context);
+        Assertions.assertNotNull(context);
         return context.toString();
     }
 
@@ -84,7 +84,7 @@ public class GraphMemoryTest {
         LdbcPromptFormatter ldbcPromptFormatter = new LdbcPromptFormatter();
         LocalFileGraphAccessor graphAccessor =
                 new LocalFileGraphAccessor(this.getClass().getClassLoader(),
-                        "org/apache/geaflow/ai/graph_ldbc_sf", 7500L,
+                        "graph_ldbc_sf", 7500L,
                         ldbcPromptFormatter::vertexMapper, ldbcPromptFormatter::edgeMapper);
         graphAccessor.getGraphSchema().setPromptFormatter(ldbcPromptFormatter);
         System.out.println("Success to init graph data.");
@@ -97,7 +97,7 @@ public class GraphMemoryTest {
         EmbeddingIndexStore embeddingStore = new EmbeddingIndexStore();
         embeddingStore.initStore(graphAccessor,
                 new SubgraphSemanticPromptFunction(graphAccessor),
-                "org/apache/geaflow/ai/index/LDBCEmbeddingIndexStore",
+                "src/test/resources/index/LDBCEmbeddingIndexStore",
                 new ModelInfo(ChatRobotTest.EMBEDDING_MODEL, ChatRobotTest.URL,
                         ChatRobotTest.EMBEDDING_API, ChatRobotTest.API_KEY));
         System.out.println("Success to init EmbeddingIndexStore.");
@@ -119,8 +119,8 @@ public class GraphMemoryTest {
 
             String context = produceCycle(server, search, graphAccessor);
             System.out.println("Round 1: \n" + context);
-            Assert.assertTrue(context.contains("A Person, male, register at 2010-02-19T12:42:14.255+00:00, id is Person166, name is Chaim Azriel Hleb, birthday is 1985-10-01, ip is 178.238.2.172, use browser is Firefox, use language are ru;pl;en, email address is Chaim.Azriel166@yahoo.com;Chaim.Azriel166@gmail.com;Chaim.Azriel166@gmx.com;Chaim.Azriel166@hotmail.com;Chaim.Azriel166@theblackmarket.com"));
-            Assert.assertTrue(context.contains("A Person, male, register at 2011-09-18T02:40:31.062+00:00, id is Person21990232556059, name is Chaim Azriel Epstein, birthday is 1981-07-17, ip is 80.94.167.126, use browser is Firefox, use language are ru;pl;en, email address is Chaim.Azriel21990232556059@gmx.com;Chaim.Azriel21990232556059@gmail.com;Chaim.Azriel21990232556059@hotmail.com;Chaim.Azriel21990232556059@yahoo.com;Chaim.Azriel21990232556059@zoho.com"));
+            Assertions.assertTrue(context.contains("A Person, male, register at 2010-02-19T12:42:14.255+00:00, id is Person166, name is Chaim Azriel Hleb, birthday is 1985-10-01, ip is 178.238.2.172, use browser is Firefox, use language are ru;pl;en, email address is Chaim.Azriel166@yahoo.com;Chaim.Azriel166@gmail.com;Chaim.Azriel166@gmx.com;Chaim.Azriel166@hotmail.com;Chaim.Azriel166@theblackmarket.com"));
+            Assertions.assertTrue(context.contains("A Person, male, register at 2011-09-18T02:40:31.062+00:00, id is Person21990232556059, name is Chaim Azriel Epstein, birthday is 1981-07-17, ip is 80.94.167.126, use browser is Firefox, use language are ru;pl;en, email address is Chaim.Azriel21990232556059@gmx.com;Chaim.Azriel21990232556059@gmail.com;Chaim.Azriel21990232556059@hotmail.com;Chaim.Azriel21990232556059@yahoo.com;Chaim.Azriel21990232556059@zoho.com"));
 
             search = new VectorSearch(null, sessionId);
             query = "Chaim Azriel, Comment_hasCreator_Person, personId, comment author, Person166, Person21990232556059";
@@ -130,9 +130,9 @@ public class GraphMemoryTest {
 
             context = produceCycle(server, search, graphAccessor);
             System.out.println("Round 2: \n" + context);
-            Assert.assertTrue(context.contains("Comment824633737550"));
-            Assert.assertTrue(context.contains("Comment962072691263"));
-            Assert.assertTrue(context.contains("Comment687194784946"));
+            Assertions.assertTrue(context.contains("Comment824633737550"));
+            Assertions.assertTrue(context.contains("Comment962072691263"));
+            Assertions.assertTrue(context.contains("Comment687194784946"));
         }
 
         {
@@ -146,9 +146,9 @@ public class GraphMemoryTest {
 
             String context = produceCycle(server, search, graphAccessor);
             System.out.println("Round 1: \n" + context);
-            Assert.assertTrue(context.contains("A Forum, name is Wall of Chaim Azriel Hleb, id is Forum220, created at 2010-02-19T12:42:24.255+00:00"));
-            Assert.assertTrue(context.contains("A Person, male, register at 2010-02-19T12:42:14.255+00:00, id is Person166, name is Chaim Azriel Hleb, birthday is 1985-10-01, ip is 178.238.2.172, use browser is Firefox, use language are ru;pl;en, email address is Chaim.Azriel166@yahoo.com;Chaim.Azriel166@gmail.com;Chaim.Azriel166@gmx.com;Chaim.Azriel166@hotmail.com;Chaim.Azriel166@theblackmarket.com"));
-            Assert.assertTrue(context.contains("A Person, male, register at 2011-09-18T02:40:31.062+00:00, id is Person21990232556059, name is Chaim Azriel Epstein, birthday is 1981-07-17, ip is 80.94.167.126, use browser is Firefox, use language are ru;pl;en, email address is Chaim.Azriel21990232556059@gmx.com;Chaim.Azriel21990232556059@gmail.com;Chaim.Azriel21990232556059@hotmail.com;Chaim.Azriel21990232556059@yahoo.com;Chaim.Azriel21990232556059@zoho.com"));
+            Assertions.assertTrue(context.contains("A Forum, name is Wall of Chaim Azriel Hleb, id is Forum220, created at 2010-02-19T12:42:24.255+00:00"));
+            Assertions.assertTrue(context.contains("A Person, male, register at 2010-02-19T12:42:14.255+00:00, id is Person166, name is Chaim Azriel Hleb, birthday is 1985-10-01, ip is 178.238.2.172, use browser is Firefox, use language are ru;pl;en, email address is Chaim.Azriel166@yahoo.com;Chaim.Azriel166@gmail.com;Chaim.Azriel166@gmx.com;Chaim.Azriel166@hotmail.com;Chaim.Azriel166@theblackmarket.com"));
+            Assertions.assertTrue(context.contains("A Person, male, register at 2011-09-18T02:40:31.062+00:00, id is Person21990232556059, name is Chaim Azriel Epstein, birthday is 1981-07-17, ip is 80.94.167.126, use browser is Firefox, use language are ru;pl;en, email address is Chaim.Azriel21990232556059@gmx.com;Chaim.Azriel21990232556059@gmail.com;Chaim.Azriel21990232556059@hotmail.com;Chaim.Azriel21990232556059@yahoo.com;Chaim.Azriel21990232556059@zoho.com"));
 
             search = new VectorSearch(null, sessionId);
             query = "Chaim Azriel, Post_hasCreator_Person, Post";
@@ -158,9 +158,9 @@ public class GraphMemoryTest {
 
             context = produceCycle(server, search, graphAccessor);
             System.out.println("Round 2: \n" + context);
-            Assert.assertTrue(context.contains("Post755914247530"));
-            Assert.assertTrue(context.contains("Post1099511644342"));
-            Assert.assertTrue(context.contains("Person166"));
+            Assertions.assertTrue(context.contains("Post755914247530"));
+            Assertions.assertTrue(context.contains("Post1099511644342"));
+            Assertions.assertTrue(context.contains("Person166"));
         }
 
         {
@@ -174,9 +174,9 @@ public class GraphMemoryTest {
 
             String context = produceCycle(server, search, graphAccessor);
             System.out.println("Round 1: \n" + context);
-            Assert.assertTrue(context.contains("Comment1099511634167"));
-            Assert.assertTrue(context.contains("Comment1030792164752"));
-            Assert.assertTrue(context.contains("Comment1099511645848"));
+            Assertions.assertTrue(context.contains("Comment1099511634167"));
+            Assertions.assertTrue(context.contains("Comment1030792164752"));
+            Assertions.assertTrue(context.contains("Comment1099511645848"));
 
             search = new VectorSearch(null, sessionId);
             query = "Comment_hasCreator_Person, Person, Comment IDs, Comment1030792157359";
@@ -186,8 +186,8 @@ public class GraphMemoryTest {
 
             context = produceCycle(server, search, graphAccessor);
             System.out.println("Round 2: \n" + context);
-            Assert.assertTrue(context.contains("Person24189255812253"));
-            Assert.assertTrue(context.contains("Person26388279067480"));
+            Assertions.assertTrue(context.contains("Person24189255812253"));
+            Assertions.assertTrue(context.contains("Person26388279067480"));
         }
     }
 }

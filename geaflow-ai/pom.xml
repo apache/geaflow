@@ -96,6 +96,12 @@
             <version>${lmax.disrupter.veresion}</version>
         </dependency>
 
+      <dependency>
+        <groupId>org.apache.geaflow</groupId>
+        <artifactId>geaflow-api</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+
         <!-- test -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>
