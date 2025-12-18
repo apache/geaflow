@@ -96,10 +96,9 @@ public class GraphMemoryTest {
         ModelInfo modelInfo = new ModelInfo(null, null, null, null);
         EmbeddingIndexStore embeddingStore = new EmbeddingIndexStore();
         embeddingStore.initStore(graphAccessor,
-                new SubgraphSemanticPromptFunction(graphAccessor),
-                "src/test/resources/index/LDBCEmbeddingIndexStore",
-                new ModelInfo(ChatRobotTest.EMBEDDING_MODEL, ChatRobotTest.URL,
-                        ChatRobotTest.EMBEDDING_API, ChatRobotTest.API_KEY));
+            new SubgraphSemanticPromptFunction(graphAccessor),
+            "src/test/resources/index/LDBCEmbeddingIndexStore",
+            modelInfo);
         System.out.println("Success to init EmbeddingIndexStore.");
 
         GraphMemoryServer server = new GraphMemoryServer();
