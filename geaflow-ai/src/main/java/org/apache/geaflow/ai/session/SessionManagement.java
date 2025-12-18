@@ -19,23 +19,20 @@
 
 package org.apache.geaflow.ai.session;
 
-import org.apache.geaflow.ai.subgraph.SubGraph;
-
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.apache.geaflow.ai.subgraph.SubGraph;
 
 public class SessionManagement {
 
-    public final static SessionManagement INSTANCE = new SessionManagement();
-
-    private SessionManagement() {
-
-    }
-
+    public static final SessionManagement INSTANCE = new SessionManagement();
     private final Map<String, Long> session2ActiveTime = new HashMap<>();
     private final Map<String, List<SubGraph>> session2Graphs = new HashMap<>();
+
+    private SessionManagement() {
+    }
 
     public boolean createSession(String sessionId) {
         if (session2ActiveTime.containsKey(sessionId)) {

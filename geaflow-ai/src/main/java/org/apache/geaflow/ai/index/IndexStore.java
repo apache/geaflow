@@ -19,10 +19,9 @@
 
 package org.apache.geaflow.ai.index;
 
+import java.util.List;
 import org.apache.geaflow.ai.graph.GraphEntity;
 import org.apache.geaflow.ai.index.vector.IVector;
-
-import java.util.List;
 
 public interface IndexStore {
 

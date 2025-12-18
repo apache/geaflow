@@ -19,6 +19,8 @@
 
 package org.apache.geaflow.ai.operator;
 
+import java.util.*;
+import java.util.stream.Collectors;
 import org.apache.geaflow.ai.graph.GraphAccessor;
 import org.apache.geaflow.ai.graph.GraphEdge;
 import org.apache.geaflow.ai.graph.GraphEntity;
@@ -28,9 +30,6 @@ import org.apache.geaflow.ai.index.vector.IVector;
 import org.apache.geaflow.ai.index.vector.VectorType;
 import org.apache.geaflow.ai.search.VectorSearch;
 import org.apache.geaflow.ai.subgraph.SubGraph;
-
-import java.util.*;
-import java.util.stream.Collectors;
 
 public class SessionOperator implements SearchOperator {
 

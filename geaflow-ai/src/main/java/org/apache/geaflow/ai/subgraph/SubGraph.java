@@ -19,12 +19,11 @@
 
 package org.apache.geaflow.ai.subgraph;
 
+import java.util.ArrayList;
+import java.util.List;
 import org.apache.geaflow.ai.graph.GraphEdge;
 import org.apache.geaflow.ai.graph.GraphEntity;
 import org.apache.geaflow.ai.graph.GraphVertex;
-
-import java.util.ArrayList;
-import java.util.List;
 
 public class SubGraph {
 
@@ -51,8 +50,8 @@ public class SubGraph {
 
     @Override
     public String toString() {
-        return "SubGraph{" +
-                "graphEntityList=" + graphEntityList +
-                '}';
+        return "SubGraph{"
+                + "graphEntityList=" + graphEntityList
+                + '}';
     }
 }

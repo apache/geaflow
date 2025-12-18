@@ -19,6 +19,8 @@
 
 package org.apache.geaflow.ai.index;
 
+import java.util.ArrayList;
+import java.util.List;
 import org.apache.geaflow.ai.graph.GraphEdge;
 import org.apache.geaflow.ai.graph.GraphEntity;
 import org.apache.geaflow.ai.graph.GraphVertex;
@@ -26,9 +28,6 @@ import org.apache.geaflow.ai.index.vector.IVector;
 import org.apache.geaflow.ai.index.vector.KeywordVector;
 import org.apache.geaflow.ai.subgraph.SubGraph;
 import org.apache.geaflow.ai.verbalization.VerbalizationFunction;
-
-import java.util.ArrayList;
-import java.util.List;
 
 public class EntityAttributeIndexStore implements IndexStore {
 
@@ -43,7 +42,7 @@ public class EntityAttributeIndexStore implements IndexStore {
     @Override
     public List<IVector> getEntityIndex(GraphEntity entity) {
         if (entity instanceof GraphVertex) {
-            String verbalization = verbFunc.verbalize(new SubGraph().addVertex((GraphVertex)entity));
+            String verbalization = verbFunc.verbalize(new SubGraph().addVertex((GraphVertex) entity));
             List<String> sentences = new ArrayList<>();
             sentences.add(verbalization);
             KeywordVector keywordVector = new KeywordVector(sentences.toArray(new String[0]));
@@ -51,7 +50,7 @@ public class EntityAttributeIndexStore implements IndexStore {
             results.add(keywordVector);
             return results;
         } else {
-            String verbalization = verbFunc.verbalize(new SubGraph().addEdge((GraphEdge)entity));
+            String verbalization = verbFunc.verbalize(new SubGraph().addEdge((GraphEdge) entity));
             List<String> sentences = new ArrayList<>();
             sentences.add(verbalization);
             KeywordVector keywordVector = new KeywordVector(sentences.toArray(new String[0]));

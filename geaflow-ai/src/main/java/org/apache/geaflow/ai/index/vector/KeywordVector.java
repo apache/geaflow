@@ -58,8 +58,8 @@ public class KeywordVector implements IVector {
 
     @Override
     public String toString() {
-        return "KeywordVector{" +
-                "vec=" + Arrays.toString(vec) +
-                '}';
+        return "KeywordVector{"
+                + "vec=" + Arrays.toString(vec)
+                + '}';
     }
 }

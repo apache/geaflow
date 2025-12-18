@@ -19,6 +19,8 @@
 
 package org.apache.geaflow.ai.operator;
 
+import java.io.IOException;
+import java.util.Map;
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.standard.StandardAnalyzer;
 import org.apache.lucene.document.Document;
@@ -34,9 +36,6 @@ import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.store.ByteBuffersDirectory;
 import org.apache.lucene.store.Directory;
-
-import java.io.IOException;
-import java.util.Map;
 
 public class SearchStore {
 

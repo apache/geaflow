@@ -19,9 +19,8 @@
 
 package org.apache.geaflow.ai.graph;
 
-import org.apache.geaflow.ai.graph.io.Vertex;
-
 import java.util.Objects;
+import org.apache.geaflow.ai.graph.io.Vertex;
 
 public class GraphVertex implements GraphEntity {
 
@@ -47,8 +46,12 @@ public class GraphVertex implements GraphEntity {
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
         GraphVertex that = (GraphVertex) o;
         return Objects.equals(vertex, that.vertex);
     }

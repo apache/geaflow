@@ -20,7 +20,6 @@
 package org.apache.geaflow.ai.common.model;
 
 import com.google.gson.annotations.SerializedName;
-
 import java.util.List;
 
 

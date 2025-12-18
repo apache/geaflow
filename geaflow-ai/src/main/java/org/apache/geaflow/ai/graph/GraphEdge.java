@@ -19,9 +19,8 @@
 
 package org.apache.geaflow.ai.graph;
 
-import org.apache.geaflow.ai.graph.io.Edge;
-
 import java.util.Objects;
+import org.apache.geaflow.ai.graph.io.Edge;
 
 public class GraphEdge implements GraphEntity {
 
@@ -47,8 +46,12 @@ public class GraphEdge implements GraphEntity {
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
         GraphEdge graphEdge = (GraphEdge) o;
         return Objects.equals(edge, graphEdge.edge);
     }

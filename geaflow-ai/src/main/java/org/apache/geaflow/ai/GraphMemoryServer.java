@@ -19,6 +19,9 @@
 
 package org.apache.geaflow.ai;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Collectors;
 import org.apache.geaflow.ai.graph.GraphAccessor;
 import org.apache.geaflow.ai.index.EmbeddingIndexStore;
 import org.apache.geaflow.ai.index.EntityAttributeIndexStore;
@@ -31,10 +34,6 @@ import org.apache.geaflow.ai.session.SessionManagement;
 import org.apache.geaflow.ai.subgraph.SubGraph;
 import org.apache.geaflow.ai.verbalization.Context;
 import org.apache.geaflow.ai.verbalization.VerbalizationFunction;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.stream.Collectors;
 
 public class GraphMemoryServer {
 

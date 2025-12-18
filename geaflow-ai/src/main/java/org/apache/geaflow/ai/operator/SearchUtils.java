@@ -61,6 +61,7 @@ public class SearchUtils {
         ignored.add('~');
         return Collections.unmodifiableSet(ignored);
     }
+
     /**
      * Formats the input query string by replacing each excluded character with a space.
      * This helps sanitize search queries for parsing or indexing.
@@ -84,6 +85,7 @@ public class SearchUtils {
         replacedQuery = replacedQuery.replace("http", "");
         return replacedQuery;
     }
+
     /**
      * Checks whether all characters in the given string are within the allowed character set.
      * Useful for validating usernames, identifiers, or safe input formats.

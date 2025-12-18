@@ -20,14 +20,13 @@
 package org.apache.geaflow.ai.common.model;
 
 import com.google.gson.Gson;
+import java.io.IOException;
+import java.util.Objects;
+import java.util.concurrent.TimeUnit;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.RequestBody;
-
-import java.io.IOException;
-import java.util.Objects;
-import java.util.concurrent.TimeUnit;
 
 public class OkHttpDirectConnector {
 
@@ -99,10 +98,10 @@ public class OkHttpDirectConnector {
                 return GSON.fromJson(responseBody, EmbeddingResponse.class);
             } else {
                 System.out.println("Request failed with code: " + response.code());
-                System.out.println("Request failed with request bodyJson: " +
-                        bodyJson);
-                System.out.println("Request failed with response body: " +
-                        Objects.requireNonNull(response.body()).string());
+                System.out.println("Request failed with request bodyJson: "
+                        + bodyJson);
+                System.out.println("Request failed with response body: "
+                        + Objects.requireNonNull(response.body()).string());
             }
         } catch (IOException e) {
             throw new RuntimeException(e);

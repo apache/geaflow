@@ -19,10 +19,9 @@
 
 package org.apache.geaflow.ai.operator;
 
+import java.util.List;
 import org.apache.geaflow.ai.search.VectorSearch;
 import org.apache.geaflow.ai.subgraph.SubGraph;
-
-import java.util.List;
 
 public interface SearchOperator {
 

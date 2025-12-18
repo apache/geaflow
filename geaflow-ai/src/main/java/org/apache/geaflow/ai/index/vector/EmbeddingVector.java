@@ -75,8 +75,8 @@ public class EmbeddingVector implements IVector {
 
     @Override
     public String toString() {
-        return "EmbeddingVector{" +
-                "vec=" + Arrays.toString(vec) +
-                '}';
+        return "EmbeddingVector{"
+                + "vec=" + Arrays.toString(vec)
+                + '}';
     }
 }

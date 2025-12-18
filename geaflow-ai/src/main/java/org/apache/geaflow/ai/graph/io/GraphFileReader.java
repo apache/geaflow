@@ -20,7 +20,10 @@
 package org.apache.geaflow.ai.graph.io;
 
 import java.io.IOException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.function.Function;
 
 public class GraphFileReader {
@@ -42,7 +45,7 @@ public class GraphFileReader {
                 if (isVertex) {
                     int idIndex = colSchema.indexOf("id");
                     if (idIndex < 0) {
-                        throw new RuntimeException("找不到Id的索引下标");
+                        throw new RuntimeException("Cannot find index of the id column.");
                     }
                     VertexSchema vertexSchema = new VertexSchema(entityName, colSchema.get(idIndex), colSchema);
                     List<Vertex> vertices = new ArrayList<>(reader.getRowCount());

@@ -19,12 +19,11 @@
 
 package org.apache.geaflow.ai.graph;
 
-import org.apache.geaflow.ai.graph.io.GraphSchema;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import org.apache.geaflow.ai.graph.io.GraphSchema;
 
 public class EmptyGraphAccessor implements GraphAccessor {
 

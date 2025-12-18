@@ -36,30 +36,27 @@ public class ResourceFileScanner {
         Map<String, List<String>> resultMap = new HashMap<>();
 
         try {
-            // 获取resource目录下的graph_ldbc_sf文件夹路径
             Path resourcePath = Paths.get(classLoader.getResource(path).toURI());
 
-            // 遍历graph_ldbc_sf目录下的所有子目录
             Files.list(resourcePath)
-                    .filter(Files::isDirectory)  // 只处理目录
+                    .filter(Files::isDirectory)
                     .forEach(dirPath -> {
                         String folderName = dirPath.getFileName().toString();
                         try {
-                            // 获取该目录下所有文件的文件名
                             List<String> fileNames = Files.list(dirPath)
-                                    .filter(Files::isRegularFile)  // 只处理文件
+                                    .filter(Files::isRegularFile)
                                     .map(filePath -> filePath.getFileName().toString())
                                     .collect(Collectors.toList());
 
                             resultMap.put(folderName, fileNames);
                         } catch (IOException e) {
-                            System.err.println("读取目录失败: " + dirPath.toString());
+                            System.err.println("Fail to read: " + dirPath.toString());
                             e.printStackTrace();
                         }
                     });
 
         } catch (IOException | URISyntaxException e) {
-            System.err.println("扫描资源文件夹失败");
+            System.err.println("Fail to scan resource files.");
             e.printStackTrace();
         }
 

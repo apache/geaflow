@@ -19,17 +19,16 @@
 
 package org.apache.geaflow.ai.index;
 
+import java.util.ArrayList;
+import java.util.List;
 import org.apache.geaflow.ai.graph.GraphEdge;
 import org.apache.geaflow.ai.graph.GraphVertex;
 import org.apache.geaflow.ai.index.vector.IVector;
 
-import java.util.ArrayList;
-import java.util.List;
-
 public class IndexStoreCache {
 
-    public final static IndexStoreCache CACHE = new IndexStoreCache();
-    public final static List<IndexStore> STORE = new ArrayList<>();
+    public static final IndexStoreCache CACHE = new IndexStoreCache();
+    public static final List<IndexStore> STORE = new ArrayList<>();
 
     static {
         STORE.add(new EntityAttributeIndexStore());

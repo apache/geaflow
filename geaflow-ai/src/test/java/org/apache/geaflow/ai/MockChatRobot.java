@@ -19,7 +19,8 @@
 
 package org.apache.geaflow.ai;
 
-import org.apache.geaflow.ai.common.model.*;
+import org.apache.geaflow.ai.common.model.ChatRobot;
+import org.apache.geaflow.ai.common.model.ModelInfo;
 
 public class MockChatRobot {
 

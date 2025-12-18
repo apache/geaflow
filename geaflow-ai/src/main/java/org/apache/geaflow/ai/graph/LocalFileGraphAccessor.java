@@ -19,13 +19,12 @@
 
 package org.apache.geaflow.ai.graph;
 
-import org.apache.geaflow.ai.graph.io.*;
-
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.function.Function;
+import org.apache.geaflow.ai.graph.io.*;
 
 public class LocalFileGraphAccessor implements GraphAccessor {
 
@@ -105,18 +104,21 @@ public class LocalFileGraphAccessor implements GraphAccessor {
         public GraphVertexIterator(Iterator<Vertex> vertexIterator) {
             this.vertexIterator = vertexIterator;
         }
+
         @Override
         public boolean hasNext() {
             return vertexIterator.hasNext();
         }
+
         @Override
         public GraphVertex next() {
             if (!hasNext()) {
                 throw new NoSuchElementException();
             }
             Vertex nextVertex = vertexIterator.next();
-            return new GraphVertex(nextVertex); // 假设GraphVertex有一个接受Vertex的构造器
+            return new GraphVertex(nextVertex);
         }
+
         @Override
         public void remove() {
             vertexIterator.remove();
@@ -138,7 +140,7 @@ public class LocalFileGraphAccessor implements GraphAccessor {
         @Override
         public GraphEdge next() {
             Edge edge = delegate.next();
-            return new GraphEdge(edge); // 使用Edge构造GraphEdge
+            return new GraphEdge(edge);
         }
 
         @Override

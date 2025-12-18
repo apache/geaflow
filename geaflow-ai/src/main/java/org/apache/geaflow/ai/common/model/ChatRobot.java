@@ -20,7 +20,6 @@
 package org.apache.geaflow.ai.common.model;
 
 import com.google.gson.Gson;
-
 import java.util.List;
 
 public class ChatRobot {
@@ -65,6 +64,14 @@ public class ChatRobot {
         return embeddingResults.get(0);
     }
 
+    public ModelInfo getModelInfo() {
+        return modelInfo;
+    }
+
+    public void setModelInfo(ModelInfo modelInfo) {
+        this.modelInfo = modelInfo;
+    }
+
     public static class EmbeddingResult {
         public String input;
         public double[] embedding;
@@ -73,14 +80,5 @@ public class ChatRobot {
             this.input = input;
             this.embedding = embedding;
         }
-    }
-
-
-    public ModelInfo getModelInfo() {
-        return modelInfo;
-    }
-
-    public void setModelInfo(ModelInfo modelInfo) {
-        this.modelInfo = modelInfo;
     }
 }

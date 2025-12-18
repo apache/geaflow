@@ -19,6 +19,8 @@
 
 package org.apache.geaflow.ai.operator;
 
+import java.util.*;
+import java.util.stream.Collectors;
 import org.apache.geaflow.ai.graph.GraphAccessor;
 import org.apache.geaflow.ai.graph.GraphEdge;
 import org.apache.geaflow.ai.graph.GraphEntity;
@@ -34,9 +36,6 @@ import org.apache.lucene.index.IndexWriterConfig;
 import org.apache.lucene.search.ScoreDoc;
 import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.store.Directory;
-
-import java.util.*;
-import java.util.stream.Collectors;
 
 public class GraphSearchStore {
 

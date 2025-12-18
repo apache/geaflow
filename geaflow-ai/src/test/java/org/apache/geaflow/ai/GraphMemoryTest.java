@@ -19,7 +19,6 @@
 
 package org.apache.geaflow.ai;
 
-import org.apache.geaflow.ai.common.model.ChatRobot;
 import org.apache.geaflow.ai.common.model.ModelInfo;
 import org.apache.geaflow.ai.graph.EmptyGraphAccessor;
 import org.apache.geaflow.ai.graph.GraphAccessor;
@@ -51,7 +50,7 @@ public class GraphMemoryTest {
 
     @Test
     public void testEmptyMainPipeline() {
-        GraphMemoryServer server =  new GraphMemoryServer();
+        GraphMemoryServer server = new GraphMemoryServer();
         IndexStore indexStore = new EntityAttributeIndexStore();
         GraphAccessor graphAccessor = new EmptyGraphAccessor();
         server.addGraphAccessor(graphAccessor);
@@ -94,8 +93,7 @@ public class GraphMemoryTest {
         indexStore.initStore(new SubgraphSemanticPromptFunction(graphAccessor));
         System.out.println("Success to init EntityAttributeIndexStore.");
 
-        ModelInfo modelInfo = new ModelInfo(ChatRobotTest.EMBEDDING_MODEL, ChatRobotTest.URL,
-                ChatRobotTest.EMBEDDING_API, ChatRobotTest.API_KEY);
+        ModelInfo modelInfo = new ModelInfo(null, null, null, null);
         EmbeddingIndexStore embeddingStore = new EmbeddingIndexStore();
         embeddingStore.initStore(graphAccessor,
                 new SubgraphSemanticPromptFunction(graphAccessor),
@@ -104,7 +102,7 @@ public class GraphMemoryTest {
                         ChatRobotTest.EMBEDDING_API, ChatRobotTest.API_KEY));
         System.out.println("Success to init EmbeddingIndexStore.");
 
-        GraphMemoryServer server =  new GraphMemoryServer();
+        GraphMemoryServer server = new GraphMemoryServer();
         server.addGraphAccessor(graphAccessor);
         server.addIndexStore(indexStore);
         server.addIndexStore(embeddingStore);

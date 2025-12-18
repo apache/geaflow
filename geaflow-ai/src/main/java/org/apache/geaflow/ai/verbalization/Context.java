@@ -29,8 +29,8 @@ public class Context {
 
     @Override
     public String toString() {
-        return "Context{" +
-                "prompt='" + prompt + '\'' +
-                '}';
+        return "Context{"
+                + "prompt='" + prompt + '\''
+                + '}';
     }
 }

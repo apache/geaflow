@@ -19,9 +19,8 @@
 
 package org.apache.geaflow.ai.graph.io;
 
-import org.apache.geaflow.ai.graph.GraphVertex;
-
 import java.util.*;
+import org.apache.geaflow.ai.graph.GraphVertex;
 
 public class Graph {
 
@@ -66,33 +65,26 @@ public class Graph {
     }
 
     public Iterator<Edge> scanEdge(GraphVertex vertex) {
-        // 创建一个列表来保存所有的 VertexGroup
         List<Iterator<Edge>> iterators = new ArrayList<>();
-        // 遍历 entities，找到所有的 VertexGroup，并获取它们的 Vertex 迭代器
         for (EntityGroup entityGroup : this.entities.values()) {
             if (entityGroup instanceof EdgeGroup) {
                 iterators.add(((EdgeGroup) entityGroup).getOutEdges(vertex.getVertex().getId()).iterator());
                 iterators.add(((EdgeGroup) entityGroup).getInEdges(vertex.getVertex().getId()).iterator());
             }
         }
-        // 返回一个组合的迭代器
         return new CompositeIterator<>(iterators);
     }
 
     public Iterator<Vertex> scanVertex() {
-        // 创建一个列表来保存所有的 VertexGroup
         List<Iterator<Vertex>> iterators = new ArrayList<>();
-        // 遍历 entities，找到所有的 VertexGroup，并获取它们的 Vertex 迭代器
         for (EntityGroup entityGroup : this.entities.values()) {
             if (entityGroup instanceof VertexGroup) {
                 iterators.add(((VertexGroup) entityGroup).getVertices().iterator());
             }
         }
-        // 返回一个组合的迭代器
         return new CompositeIterator<>(iterators);
     }
 
-    // 自定义组合迭代器
     static class CompositeIterator<T> implements Iterator<T> {
 
         private final List<Iterator<T>> iterators;
@@ -104,7 +96,6 @@ public class Graph {
 
         @Override
         public boolean hasNext() {
-            // 跳过已经遍历完的迭代器
             while (currentIndex < iterators.size()) {
                 if (iterators.get(currentIndex).hasNext()) {
                     return true;

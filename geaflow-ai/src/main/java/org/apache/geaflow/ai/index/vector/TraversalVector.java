@@ -46,7 +46,6 @@ public class TraversalVector implements IVector {
         StringBuilder builder = new StringBuilder();
 
         for (int i = 0; i < vec.length; i++) {
-            String value = vec[i];
             if (i > 0 && i % 3 == 0) {
                 builder.append("; ");
             }
@@ -56,10 +55,11 @@ public class TraversalVector implements IVector {
             if (i % 3 == 2) {
                 builder.append(">");
             }
+            String value = vec[i];
             builder.append(value);
         }
-        return "TraversalVector{" +
-                "vec=" + builder.toString() +
-                '}';
+        return "TraversalVector{"
+                + "vec=" + builder.toString()
+                + '}';
     }
 }

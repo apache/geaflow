@@ -20,10 +20,9 @@
 package org.apache.geaflow.ai.common.model;
 
 import com.google.gson.Gson;
-import org.apache.geaflow.common.utils.RetryCommand;
-
 import java.util.ArrayList;
 import java.util.List;
+import org.apache.geaflow.common.utils.RetryCommand;
 
 public class OfflineModelDirect {
 

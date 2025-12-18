@@ -19,6 +19,8 @@
 
 package org.apache.geaflow.ai.verbalization;
 
+import java.util.*;
+import java.util.stream.Collectors;
 import org.apache.geaflow.ai.graph.GraphAccessor;
 import org.apache.geaflow.ai.graph.GraphEdge;
 import org.apache.geaflow.ai.graph.GraphEntity;
@@ -26,9 +28,6 @@ import org.apache.geaflow.ai.graph.GraphVertex;
 import org.apache.geaflow.ai.graph.io.GraphSchema;
 import org.apache.geaflow.ai.operator.SearchUtils;
 import org.apache.geaflow.ai.subgraph.SubGraph;
-
-import java.util.*;
-import java.util.stream.Collectors;
 
 public class SubgraphSemanticPromptFunction implements VerbalizationFunction {
 

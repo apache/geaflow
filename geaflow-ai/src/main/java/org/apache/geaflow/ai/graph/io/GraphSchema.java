@@ -19,15 +19,16 @@
 
 package org.apache.geaflow.ai.graph.io;
 
+import java.util.ArrayList;
+import java.util.List;
 import org.apache.geaflow.ai.graph.GraphEdge;
 import org.apache.geaflow.ai.graph.GraphVertex;
 import org.apache.geaflow.ai.verbalization.PromptFormatter;
 
-import java.util.ArrayList;
-import java.util.List;
-
 public class GraphSchema implements Schema {
 
+    private final List<VertexSchema> vertexSchemaList;
+    private final List<EdgeSchema> edgeSchemaList;
     private PromptFormatter promptFormatter;
 
     public GraphSchema() {
@@ -39,9 +40,6 @@ public class GraphSchema implements Schema {
         this.vertexSchemaList = vertexSchemaList;
         this.edgeSchemaList = edgeSchemaList;
     }
-
-    private final List<VertexSchema> vertexSchemaList;
-    private final List<EdgeSchema> edgeSchemaList;
 
     public void addVertex(VertexSchema vertexSchema) {
         vertexSchemaList.add(vertexSchema);

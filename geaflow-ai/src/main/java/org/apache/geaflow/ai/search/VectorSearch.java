@@ -19,10 +19,9 @@
 
 package org.apache.geaflow.ai.search;
 
+import java.util.*;
 import org.apache.geaflow.ai.index.vector.IVector;
 import org.apache.geaflow.ai.index.vector.VectorType;
-
-import java.util.*;
 
 public class VectorSearch {
 
@@ -55,11 +54,11 @@ public class VectorSearch {
 
     @Override
     public String toString() {
-        return "VectorSearch{" +
-                "memoryId='" + memoryId + '\'' +
-                ", sessionId='" + sessionId + '\'' +
-                ", vectorList=" + vectorList +
-                '}';
+        return "VectorSearch{"
+                + "memoryId='" + memoryId + '\''
+                + ", sessionId='" + sessionId + '\''
+                + ", vectorList=" + vectorList
+                + '}';
     }
 
     public String getMemoryId() {

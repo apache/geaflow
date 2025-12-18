@@ -19,10 +19,9 @@
 
 package org.apache.geaflow.ai.verbalization;
 
+import java.util.List;
 import org.apache.geaflow.ai.graph.GraphEntity;
 import org.apache.geaflow.ai.subgraph.SubGraph;
-
-import java.util.List;
 
 public interface VerbalizationFunction {
 

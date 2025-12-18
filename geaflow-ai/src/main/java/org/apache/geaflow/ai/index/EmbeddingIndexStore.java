@@ -20,6 +20,9 @@
 package org.apache.geaflow.ai.index;
 
 import com.google.gson.Gson;
+import java.io.*;
+import java.nio.charset.Charset;
+import java.util.*;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.geaflow.ai.common.model.ChatRobot;
@@ -32,10 +35,6 @@ import org.apache.geaflow.ai.graph.GraphVertex;
 import org.apache.geaflow.ai.index.vector.EmbeddingVector;
 import org.apache.geaflow.ai.index.vector.IVector;
 import org.apache.geaflow.ai.verbalization.VerbalizationFunction;
-
-import java.io.*;
-import java.nio.charset.Charset;
-import java.util.*;
 
 public class EmbeddingIndexStore implements IndexStore {
 
@@ -124,7 +123,7 @@ public class EmbeddingIndexStore implements IndexStore {
         final int REPORT_SIZE = 100;
         long reportedCount = this.indexStoreMap.size();
         long addedCount = this.indexStoreMap.size();
-        for (Iterator<GraphVertex> itV = graphAccessor.scanVertex(); itV.hasNext();) {
+        for (Iterator<GraphVertex> itV = graphAccessor.scanVertex(); itV.hasNext(); ) {
             GraphVertex vertex = itV.next();
 
             // Scan vertices or edges, skip already indexed data,
@@ -141,7 +140,7 @@ public class EmbeddingIndexStore implements IndexStore {
                 }
             }
 
-            for (Iterator<GraphEdge> itE = graphAccessor.scanEdge(vertex); itE.hasNext();) {
+            for (Iterator<GraphEdge> itE = graphAccessor.scanEdge(vertex); itE.hasNext(); ) {
                 GraphEdge edge = itE.next();
                 if (!indexStoreMap.containsKey(edge) && !batchEntitiesBuffer.contains(edge)) {
                     batchEntitiesBuffer.add(edge);

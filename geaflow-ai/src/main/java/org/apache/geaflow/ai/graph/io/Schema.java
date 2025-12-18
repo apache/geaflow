@@ -24,6 +24,7 @@ import java.util.List;
 public interface Schema {
 
     String getName();
+
     List<String> getFields();
 
 }

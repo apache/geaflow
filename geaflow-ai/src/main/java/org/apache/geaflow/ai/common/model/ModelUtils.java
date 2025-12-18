@@ -19,12 +19,11 @@
 
 package org.apache.geaflow.ai.common.model;
 
+import java.util.ArrayList;
+import java.util.List;
 import org.apache.geaflow.ai.graph.GraphEdge;
 import org.apache.geaflow.ai.graph.GraphEntity;
 import org.apache.geaflow.ai.graph.GraphVertex;
-
-import java.util.ArrayList;
-import java.util.List;
 
 public class ModelUtils {
 
@@ -41,10 +40,10 @@ public class ModelUtils {
 
     public static String getGraphEntityKey(GraphEntity entity) {
         if (entity instanceof GraphVertex) {
-            return "V" + ((GraphVertex) entity).getVertex().getId() + entity.getLabel() ;
+            return "V" + ((GraphVertex) entity).getVertex().getId() + entity.getLabel();
         } else if (entity instanceof GraphEdge) {
             return "E" + ((GraphEdge) entity).getEdge().getSrcId()
-                    + entity.getLabel()  + ((GraphEdge) entity).getEdge().getDstId();
+                    + entity.getLabel() + ((GraphEdge) entity).getEdge().getDstId();
         }
         return "";
     }

@@ -19,12 +19,11 @@
 
 package org.apache.geaflow.ai;
 
+import java.util.stream.Collectors;
 import org.apache.geaflow.ai.graph.GraphEdge;
 import org.apache.geaflow.ai.graph.GraphVertex;
 import org.apache.geaflow.ai.graph.io.*;
 import org.apache.geaflow.ai.verbalization.PromptFormatter;
-
-import java.util.stream.Collectors;
 
 public class LdbcPromptFormatter implements PromptFormatter {
 
@@ -155,8 +154,8 @@ public class LdbcPromptFormatter implements PromptFormatter {
         switch (entity.getLabel()) {
             case "Person":
                 obj = ((GraphVertex) entity).getVertex();
-                return String.format("A Person, %s, register at %s, id is %s, name is %s %s, birthday is %s, " +
-                                "ip is %s, use browser is %s, use language are %s, email address is %s",
+                return String.format("A Person, %s, register at %s, id is %s, name is %s %s, birthday is %s, "
+                                + "ip is %s, use browser is %s, use language are %s, email address is %s",
                         obj.getValues().get(4), obj.getValues().get(0), obj.getId(),
                         obj.getValues().get(2), obj.getValues().get(3), obj.getValues().get(5),
                         obj.getValues().get(6), obj.getValues().get(7), obj.getValues().get(8), obj.getValues().get(9));
@@ -174,13 +173,13 @@ public class LdbcPromptFormatter implements PromptFormatter {
                         obj.getValues().get(1), obj.getId(), obj.getValues().get(2));
             case "Comment":
                 obj = ((GraphVertex) entity).getVertex();
-                return String.format("A comment, id is %s, created at %s, user ip is %s, " +
-                                "user use browser is %s, content is %s",
+                return String.format("A comment, id is %s, created at %s, user ip is %s, "
+                                + "user use browser is %s, content is %s",
                         obj.getId(), obj.getValues().get(0), obj.getValues().get(2), obj.getValues().get(3), obj.getValues().get(4));
             case "Post":
                 obj = ((GraphVertex) entity).getVertex();
-                return String.format("A post, id is %s, created at %s, user ip is %s, " +
-                                "user use browser is %s, use language is %s, content is %s",
+                return String.format("A post, id is %s, created at %s, user ip is %s, "
+                                + "user use browser is %s, use language is %s, content is %s",
                         obj.getId(), obj.getValues().get(0), obj.getValues().get(3), obj.getValues().get(4), obj.getValues().get(5), obj.getValues().get(6));
             case "Organisation":
                 obj = ((GraphVertex) entity).getVertex();

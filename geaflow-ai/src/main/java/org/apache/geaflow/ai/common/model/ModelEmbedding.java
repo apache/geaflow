@@ -33,6 +33,10 @@ public class ModelEmbedding {
         }
     }
 
+    public static ModelEmbedding embedding(ModelInfo modelInfo, String... strings) {
+        return new ModelEmbedding(modelInfo, strings);
+    }
+
     public ModelInfo getModelInfo() {
         return modelInfo;
     }
@@ -50,9 +54,5 @@ public class ModelEmbedding {
 
     public void setModel(String model) {
         this.model = model;
-    }
-
-    public static ModelEmbedding embedding(ModelInfo modelInfo, String... strings) {
-        return new ModelEmbedding(modelInfo, strings);
     }
 }
