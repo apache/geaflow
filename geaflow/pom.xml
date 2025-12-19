@@ -46,7 +46,7 @@
         <commons.collections.version>3.2.2</commons.collections.version>
         <slf4j.version>1.7.15</slf4j.version>
         <log4j.version>1.2.17</log4j.version>
-        <log4j.slf4j.version>2.17.1</log4j.slf4j.version>
+        <log4j.slf4j.version>2.25.3</log4j.slf4j.version>
         <fastjson.version>1.2.71_noneautotype</fastjson.version>
         <hikaricp.version>4.0.3</hikaricp.version>
         <sqlite.version>3.40.0.0</sqlite.version>
