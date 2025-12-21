@@ -224,6 +224,7 @@ public class AnchorNodePriorityRule extends RelOptRule {
     /**
      * Swap join condition when operands are swapped.
      * Updates field references to reflect new input positions.
+     * Preserves PathInputRef labels which are critical for graph pattern matching.
      */
     private RexNode swapJoinCondition(RexNode condition, int leftFieldCount,
                                       int rightFieldCount, RexBuilder builder) {
@@ -241,7 +242,11 @@ public class AnchorNodePriorityRule extends RelOptRule {
                     newIndex = index - leftFieldCount;
                 }
 
-                return builder.makeInputRef(inputRef.getType(), newIndex);
+                // Preserve PathInputRef with label information - critical for graph patterns
+                if (inputRef instanceof PathInputRef) {
+                    return ((PathInputRef) inputRef).copy(newIndex);
+                }
+                return new RexInputRef(newIndex, inputRef.getType());
             }
         });
     }

@@ -39,6 +39,7 @@ import org.apache.geaflow.dsl.rel.match.IMatchNode;
 import org.apache.geaflow.dsl.rel.match.MatchFilter;
 import org.apache.geaflow.dsl.rel.match.MatchJoin;
 import org.apache.geaflow.dsl.rel.match.VertexMatch;
+import org.apache.geaflow.dsl.util.GQLRelUtil;
 
 /**
  * Rule for Issue #363: Reorders graph pattern joins based on filter selectivity.
@@ -281,20 +282,17 @@ public class GraphJoinReorderRule extends RelOptRule {
     }
 
     /**
-     * Build join condition between two patterns based on original conditions.
-     * This is a simplified version that uses TRUE for now.
-     * A complete implementation would analyze shared variables and build proper equi-join conditions.
+     * Build join condition between two patterns based on common labels.
+     * Uses GQLRelUtil.createPathJoinCondition() to build proper equi-join conditions
+     * based on shared labels (variables) between the left and right patterns.
      */
     private RexNode buildJoinCondition(IMatchNode left, IMatchNode right,
                                        RexNode originalLeftCondition,
                                        RexNode originalTopCondition,
                                        RexBuilder rexBuilder) {
-        // Simplified: for graph pattern joins, conditions are often implicit through shared labels
-        // A complete implementation would:
-        // 1. Find shared labels between left and right patterns
-        // 2. Build equality conditions on those labels
-        // 3. Adjust field references based on new schema
-        return rexBuilder.makeLiteral(true);
+        // Use the proven utility to build join conditions based on common labels
+        // caseSensitive is typically false for GQL, matching standard SQL behavior
+        return GQLRelUtil.createPathJoinCondition(left, right, false, rexBuilder);
     }
 
     /**

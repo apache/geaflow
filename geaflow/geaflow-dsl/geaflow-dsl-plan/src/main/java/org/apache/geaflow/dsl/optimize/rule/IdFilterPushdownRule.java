@@ -34,6 +34,7 @@ import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.sql.SqlKind;
 import org.apache.geaflow.dsl.calcite.MetaFieldType;
 import org.apache.geaflow.dsl.calcite.MetaFieldType.MetaField;
+import org.apache.geaflow.dsl.rel.match.IMatchNode;
 import org.apache.geaflow.dsl.rel.match.MatchFilter;
 import org.apache.geaflow.dsl.rel.match.VertexMatch;
 import org.apache.geaflow.dsl.rex.PathInputRef;
@@ -79,7 +80,7 @@ public class IdFilterPushdownRule extends RelOptRule {
         List<RexNode> otherFilters = new ArrayList<>();
 
         for (RexNode condition : conditions) {
-            if (isIdFilter(condition, vertexMatch.getLabel())) {
+            if (isIdFilter(condition, vertexMatch.getLabel(), vertexMatch)) {
                 idFilters.add(condition);
             } else {
                 otherFilters.add(condition);
@@ -132,7 +133,7 @@ public class IdFilterPushdownRule extends RelOptRule {
     /**
      * Check if a condition is an ID equality filter for the target label.
      */
-    private boolean isIdFilter(RexNode condition, String targetLabel) {
+    private boolean isIdFilter(RexNode condition, String targetLabel, IMatchNode matchNode) {
         if (!(condition instanceof RexCall)) {
             return false;
         }
@@ -154,7 +155,7 @@ public class IdFilterPushdownRule extends RelOptRule {
 
             if (first instanceof RexFieldAccess && second instanceof RexLiteral) {
                 RexFieldAccess fieldAccess = (RexFieldAccess) first;
-                if (isIdFieldAccess(fieldAccess, targetLabel)) {
+                if (isIdFieldAccess(fieldAccess, targetLabel, matchNode)) {
                     return true;
                 }
             }
@@ -165,8 +166,9 @@ public class IdFilterPushdownRule extends RelOptRule {
 
     /**
      * Check if a field access references an ID field for the target label.
+     * Uses the FilterMatchNodeTransposeRule pattern: index == fieldCount - 1 to detect current node.
      */
-    private boolean isIdFieldAccess(RexFieldAccess fieldAccess, String targetLabel) {
+    private boolean isIdFieldAccess(RexFieldAccess fieldAccess, String targetLabel, IMatchNode matchNode) {
         RexNode referenceExpr = fieldAccess.getReferenceExpr();
         RelDataTypeField field = fieldAccess.getField();
 
@@ -176,8 +178,11 @@ public class IdFilterPushdownRule extends RelOptRule {
             PathInputRef pathRef = (PathInputRef) referenceExpr;
             referencesTarget = pathRef.getLabel().equals(targetLabel);
         } else if (referenceExpr instanceof RexInputRef) {
-            // Direct reference to current vertex
-            referencesTarget = true;
+            // RexInputRef (not PathInputRef) must reference current node
+            // Use FilterMatchNodeTransposeRule pattern: index == fieldCount - 1
+            RexInputRef inputRef = (RexInputRef) referenceExpr;
+            int currentNodeIndex = matchNode.getPathSchema().getFieldCount() - 1;
+            referencesTarget = (inputRef.getIndex() == currentNodeIndex);
         }
 
         // Check if field is VERTEX_ID
