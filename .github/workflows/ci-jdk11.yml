@@ -68,6 +68,7 @@ jobs:
         with:
           java-version: '11'
           distribution: 'temurin'
+          cache: maven
 
       - name: Setup Protoc
         uses: arduino/setup-protoc@v2
@@ -76,7 +77,4 @@ jobs:
 
       # Current hive connector is incompatible with jdk11, implement 4.0.0+ hive version in later.
       - name: Build and Test On JDK 11
-        run: |
-          test_modules="!geaflow/geaflow-dsl/geaflow-dsl-connector/geaflow-dsl-connector-hive,"
-          test_modules+="!geaflow/geaflow-dsl/geaflow-dsl-connector-tests"
-          mvn -B -e clean test -Pjdk11 -pl "${test_modules}" -Duser.timezone=Asia/Shanghai -Dlog4j.configuration="log4j.rootLogger=WARN, stdout"
+        run: make test-jdk11
