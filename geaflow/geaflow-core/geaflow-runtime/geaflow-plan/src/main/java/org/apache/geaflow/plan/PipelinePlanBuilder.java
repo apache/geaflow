@@ -543,7 +543,7 @@ public class PipelinePlanBuilder implements Serializable {
             LOGGER.info("union optimize: {}",
                 new PlanGraphVisualization(pipelineGraph).getGraphviz());
         }
-        new PipelineGraphOptimizer().optimizePipelineGraph(pipelineGraph);
+        new PipelineGraphOptimizer().optimizePipelineGraph(pipelineGraph, pipelineConfig);
     }
 
 }
