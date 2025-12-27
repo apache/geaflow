@@ -21,42 +21,19 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
     <parent>
-        <artifactId>geaflow-plugins</artifactId>
+        <artifactId>geaflow-store</artifactId>
         <groupId>org.apache.geaflow</groupId>
         <version>0.8.0-SNAPSHOT</version>
     </parent>
-    <modelVersion>4.0.0</modelVersion>
 
-    <artifactId>geaflow-store</artifactId>
-    <packaging>pom</packaging>
-
-    <modules>
-        <module>geaflow-store-api</module>
-        <module>geaflow-store-memory</module>
-        <module>geaflow-store-rocksdb</module>
-        <module>geaflow-store-redis</module>
-        <module>geaflow-store-jdbc</module>
-        <module>geaflow-store-paimon</module>
-        <module>geaflow-store-vector</module>
-    </modules>
+    <artifactId>geaflow-store-vector</artifactId>
 
     <dependencies>
         <dependency>
-            <groupId>org.apache.geaflow</groupId>
-            <artifactId>geaflow-common</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.geaflow</groupId>
-            <artifactId>geaflow-model</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.geaflow</groupId>
-            <artifactId>geaflow-state-common</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.geaflow</groupId>
-            <artifactId>geaflow-state-api</artifactId>
+            <groupId>org.apache.lucene</groupId>
+            <artifactId>lucene-core</artifactId>
         </dependency>
         <dependency>
             <groupId>org.testng</groupId>
