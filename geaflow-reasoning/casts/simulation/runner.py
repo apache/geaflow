@@ -66,12 +66,12 @@ async def run_simulation():
             return
 
         # Evaluate a single path
-        results = batch_evaluator.evaluate_batch(
+        results, metadata = batch_evaluator.evaluate_batch(
             {request_id: path_data}, schema=schema_summary
         )
         if results:
             all_evaluation_results.update(results)
-            batch_evaluator.print_batch_summary(results)
+            batch_evaluator.print_batch_summary(results, metadata)
 
     # Run simulation
     metrics_collector = await engine.run_simulation(

@@ -47,7 +47,6 @@ class LLMOracle:
 
         self.model = model
 
-    # --- Unified parsing & validation of decision strings ---
     @staticmethod
     def _parse_and_validate_decision(
         decision: str,
@@ -230,6 +229,7 @@ Return ONLY valid JSON inside <output> tags. Example:
 </output>
 """
         try:
+            print(f"[debug] LLM Oracle Prompt:\n{prompt}\n--- End of Prompt ---\n")
             response = await self.client.chat.completions.create(
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
@@ -292,84 +292,4 @@ Return ONLY valid JSON inside <output> tags. Example:
             )
         except Exception as e:
             print(f"LLM API error: {e}, using goal-aware fallback")
-            return await self._fallback_generate_sku(context, schema)
-
-    async def _fallback_generate_sku(
-        self, context: Context, schema: GraphSchema
-    ) -> StrategyKnowledgeUnit:
-        """Enhanced fallback that considers the goal when LLM is unavailable.
-
-        Args:
-            context: The current traversal context
-            schema: Graph schema for validation
-        """
-        properties = context.safe_properties
-        structural_signature = context.structural_signature
-        goal = context.goal
-
-        node_type = properties.get("type", "")
-        goal_lower = goal.lower()
-
-        # Map goals to sensible defaults
-        if "friend" in goal_lower:
-            # "Logistics Partner" plays the old TypeB role (more social / connector)
-            target_label = "friend" if node_type == "Logistics Partner" else "related"
-        elif "connect" in goal_lower:
-            target_label = "related"
-        elif "product" in goal_lower or "recommend" in goal_lower:
-            target_label = "supplies" if node_type == "TypeC" else "manages"
-        elif "fraud" in goal_lower or "risk" in goal_lower:
-            target_label = "knows"
-        elif "communit" in goal_lower:
-            target_label = "friend"
-        else:
-            target_label = "related"
-
-        # FIX: Validate label exists for this node
-        node_id = context.properties.get("id", "")
-        available_labels = schema.get_valid_edge_labels(node_id)
-        if target_label not in available_labels and available_labels:
-            target_label = available_labels[0]  # Use first available
-
-        # All predicate lambdas assume input is "properties without id"
-        if node_type == "Retail SME":  # formerly TypeA
-            decision = f"out('{target_label}')"
-            predicate = lambda x: x.get("type") == "Retail SME"
-            sigma = 1
-        elif node_type == "Logistics Partner":  # formerly TypeB
-            decision = f"out('{target_label}')"
-            predicate = lambda x: x.get("type") == "Logistics Partner"
-            sigma = 1
-        elif node_type == "Enterprise Vendor":  # formerly TypeC
-            decision = f"in('{target_label}')"
-            predicate = lambda x: x.get("type") == "Enterprise Vendor"
-            sigma = 1
-        else:
-            decision = "stop"
-            age = properties.get("age", 0)
-            status = properties.get("status", "inactive")
-
-            if age > 30:
-                predicate = lambda x: x.get("age", 0) > 30
-            else:
-                predicate = lambda x: x.get("age", 0) <= 30
-
-            if status == "active":
-                base_pred = predicate
-                predicate = lambda x: base_pred(x) and x.get("status") == "active"
-                decision = f"out('{target_label}')"
-
-            sigma = 2
-
-        property_vector = await self.embed_service.embed_properties(properties)
-        return StrategyKnowledgeUnit(
-            id=f"SKU_{self.sku_counter}",
-            structural_signature=structural_signature,
-            goal_template=goal,
-            predicate=predicate,
-            property_vector=property_vector,
-            decision_template=decision,
-            schema_fingerprint="schema_v1",
-            confidence_score=1.0,
-            logic_complexity=sigma,
-        )
+            raise ValueError(f"LLM Oracle failed, LLM API error : {e}") from e

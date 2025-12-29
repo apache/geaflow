@@ -139,6 +139,48 @@ class TraversalExecutor:
                 # Continue with current node, no edge traversed
                 next_nodes.append((current_node_id, None, None))
 
+            # 6) Edge-to-vertex navigation: inV(), outV(), otherV()
+            elif decision in ("inV()", "outV()", "otherV()"):
+                is_filter_step = True
+                print(f"    → Execute: {decision} (simplified as filter/no-op)")
+                next_nodes.append((current_node_id, None, None))
+
+            # 7) Property value extraction: values('prop') or values()
+            elif decision.startswith("values("):
+                is_filter_step = True
+                m = re.match(r"^values\((?:\'([^\']*)\')?\)$", decision)
+                if m:
+                    prop = m.group(1) if m.group(1) else "all"
+                    print(f"    → Execute: values('{prop}') (treated as filter/no-op)")
+                else:
+                    print(f"    → Execute: values() parse error for '{decision}'")
+                next_nodes.append((current_node_id, None, None))
+
+            # 8) Result ordering: order() or order().by('prop')
+            elif decision.startswith("order("):
+                is_filter_step = True
+                if decision.startswith("order().by("):
+                    m = re.match(r"^order\(\)\.by\(\'([^\']*)\'\)$", decision)
+                    if m:
+                        prop = m.group(1)
+                        print(f"    → Execute: order().by('{prop}') (treated as filter/no-op)")
+                    else:
+                        print(f"    → Execute: order().by() parse error for '{decision}'")
+                else:
+                    print("    → Execute: order() (treated as filter/no-op)")
+                next_nodes.append((current_node_id, None, None))
+
+            # 9) Result limiting: limit(n)
+            elif decision.startswith("limit("):
+                is_filter_step = True
+                m = re.match(r"^limit\((\d+)\)$", decision)
+                if m:
+                    n = m.group(1)
+                    print(f"    → Execute: limit({n}) (treated as filter/no-op)")
+                else:
+                    print(f"    → Execute: limit() parse error for '{decision}'")
+                next_nodes.append((current_node_id, None, None))
+
             # 5) stop: Terminate traversal
             elif decision == "stop":
                 print("    → Execute: stop (terminates this path)")

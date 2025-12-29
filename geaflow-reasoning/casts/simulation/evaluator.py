@@ -59,8 +59,6 @@ class PathEvaluator:
 
     def __init__(self, llm_judge: PathJudge) -> None:
         self.llm_judge = llm_judge
-        self.last_goal = None
-        self.last_rubric = None
 
     def evaluate_subgraph(
         self,
@@ -74,8 +72,6 @@ class PathEvaluator:
         """
         Evaluate a traversal subgraph and return detailed scoring.
         """
-        self.last_goal = goal
-        self.last_rubric = rubric
 
         if not path_steps:
             return PathEvaluationScore(
@@ -232,7 +228,7 @@ Output requirements (IMPORTANT):
         }
 
         raw_response = str(self.llm_judge.judge(payload))
-        print(f"[debug] LLM Judge Raw Response:\n{raw_response}\n[\\debug]\n")
+        # print(f"[debug] LLM Judge Raw Response:\n{raw_response}\n[\\debug]\n")
 
         parsed = parse_jsons(raw_response)
         llm_score: float = 0.0
@@ -428,11 +424,12 @@ class BatchEvaluator:
         self,
         paths: Dict[int, Dict[str, Any]],
         schema: Optional[Dict[str, Any]] = None,
-    ) -> Dict[int, PathEvaluationScore]:
+    ) -> Tuple[Dict[int, PathEvaluationScore], Dict[int, Dict[str, str]]]:
         """
-        Evaluate a batch of paths and return their evaluation scores.
+        Evaluate a batch of paths and return their evaluation scores with metadata.
         """
         results: Dict[int, PathEvaluationScore] = {}
+        metadata: Dict[int, Dict[str, str]] = {}
         for request_id, path_data in paths.items():
             score = self.path_evaluator.evaluate_subgraph(
                 path_steps=path_data.get("steps", []),
@@ -443,9 +440,17 @@ class BatchEvaluator:
                 schema=path_data.get("schema", schema),
             )
             results[request_id] = score
-        return results
+            metadata[request_id] = {
+                "goal": path_data.get("goal", ""),
+                "rubric": path_data.get("rubric", ""),
+            }
+        return results, metadata
 
-    def print_batch_summary(self, results: Dict[int, PathEvaluationScore]) -> None:
+    def print_batch_summary(
+        self,
+        results: Dict[int, PathEvaluationScore],
+        metadata: Optional[Dict[int, Dict[str, str]]] = None,
+    ) -> None:
         """
         Print a summary of evaluation results for a batch of paths.
         """
@@ -456,18 +461,15 @@ class BatchEvaluator:
         # If only one result, print a detailed summary for it
         if len(results) == 1:
             request_id, score = next(iter(results.items()))
-            goal = (
-                self.path_evaluator.last_goal
-                if hasattr(self.path_evaluator, "last_goal")
-                else "N/A"
-            )
-            rubric = (
-                self.path_evaluator.last_rubric
-                if hasattr(self.path_evaluator, "last_rubric")
-                else "N/A"
-            )
+            goal = "N/A"
+            rubric = "N/A"
+            if metadata and request_id in metadata:
+                goal = metadata[request_id].get("goal", "N/A")
+                rubric = metadata[request_id].get("rubric", "N/A")
             print(f"  - Goal: {goal}")
             print(f"  - Rubric: {rubric}")
+            print(f"  - Detailed Evaluation for Request #{request_id}:")
+            print(f"    {score.details}")
             print(f"  - Result: Grade {score.grade} (Score: {score.total_score:.1f}/100)")
             if score.details.get("llm_reasoning") and score.details["llm_reasoning"].get("notes"):
                 print(f"  - Judge's Note: {score.details['llm_reasoning']['notes']}")

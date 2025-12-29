@@ -41,7 +41,7 @@ class DefaultConfiguration(Configuration):
     # ============================================
     SIMULATION_GRAPH_SIZE = 40  # For synthetic data: the number of nodes in the generated graph.
     SIMULATION_NUM_EPOCHS = 5  # Number of simulation epochs to run.
-    SIMULATION_MAX_DEPTH = 5  # Max traversal depth for a single path.
+    SIMULATION_MAX_DEPTH = 10  # Max traversal depth for a single path.
     SIMULATION_USE_REAL_DATA = (
         True  # If True, use real data from CSVs; otherwise, generate synthetic data.
     )
