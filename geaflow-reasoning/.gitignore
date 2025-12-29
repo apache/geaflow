@@ -1,0 +1,18 @@
+# Byte-compiled / optimized files
+__pycache__/
+*.py[cod]
+
+# Environment variables
+.env
+
+# Virtual environment
+.venv/
+uv.lock
+
+# IDE / OS specific
+.vscode/
+.DS_Store
+
+# Data files
+data/real_graph_data/
+casts_traversal_path_req_*.png
