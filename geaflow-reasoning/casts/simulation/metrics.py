@@ -51,7 +51,7 @@ class MetricsCollector:
         self.paths: Dict[int, Dict[str, Any]] = {}
         self.next_request_id = 0
 
-    def record_step(self, match_type: str = None):
+    def record_step(self, match_type: str | None = None):
         """Record a traversal step execution."""
         self.metrics.total_steps += 1
         if match_type == 'Tier1':

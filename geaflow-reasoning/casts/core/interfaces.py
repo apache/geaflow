@@ -56,8 +56,13 @@ class GraphSchema(ABC):
         pass
 
     @abstractmethod
-    def get_valid_edge_labels(self, node_id: str) -> List[str]:
-        """Get valid edge labels for a specific node."""
+    def get_valid_outgoing_edge_labels(self, node_id: str) -> List[str]:
+        """Get valid outgoing edge labels for a specific node."""
+        pass
+
+    @abstractmethod
+    def get_valid_incoming_edge_labels(self, node_id: str) -> List[str]:
+        """Get valid incoming edge labels for a specific node."""
         pass
 
     @abstractmethod
@@ -156,4 +161,9 @@ class Configuration(ABC):
     @abstractmethod
     def get_str(self, key: str, default: str = "") -> str:
         """Get string configuration value."""
+        pass
+
+    @abstractmethod
+    def get_llm_config(self) -> Dict[str, str]:
+        """Get LLM service configuration."""
         pass

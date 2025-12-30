@@ -8,7 +8,7 @@ from collections import deque
 import csv
 from pathlib import Path
 import random
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 import networkx as nx
 
@@ -163,8 +163,8 @@ class RealBusinessGraphGoalGenerator(GoalGenerator):
         """
 
         # Simple heuristic: filter a small candidate subset by node_type
-        candidates = self._goals
-        weights = self._goal_weights
+        candidates: list[tuple[str, str]] = self._goals
+        weights: list[int] = self._goal_weights
 
         if node_type is not None:
             node_type_lower = node_type.lower()
@@ -177,9 +177,9 @@ class RealBusinessGraphGoalGenerator(GoalGenerator):
                     filtered.append((goal_tuple, w * 2))
 
             if filtered:
-                candidates, weights = zip(*filtered, strict=False)
-                candidates = list(candidates)
-                weights = list(weights)
+                c_tuple, w_tuple = zip(*filtered, strict=False)
+                candidates = list(c_tuple)
+                weights = list(w_tuple)
 
         selected_goal, selected_rubric = random.choices(
             candidates, weights=weights, k=1
@@ -353,23 +353,15 @@ class RealDataSource(DataSource):
         self._max_nodes = max_nodes
         self._config = DefaultConfiguration()
 
-        # Schema is constructed *once* from the data that is actually loaded in
-        # `_load_real_graph()`. After this initial load, the schema is treated
-        # as immutable and will not change unless you explicitly call
-        # `reload()` to rebuild the data + schema snapshot.
+        # Schema is now lazily loaded and will be constructed on the first
+        # call to `get_schema()` after the data is loaded.
+        self._schema: Optional[GraphSchema] = None
+        self._schema_dirty = True  # Start with a dirty schema
         self._goal_generator: Optional[GoalGenerator] = None
         self._load_real_graph()
-        self._schema = InMemoryGraphSchema(self._nodes, self._edges)
 
-        # Use specific goal generator that reflects actual entity/relation types
-        node_types: set[str] = {node["type"] for node in self._nodes.values()}
-        edge_labels: set[str] = set()
-        for edge_list in self._edges.values():
-            for edge in edge_list:
-                label = edge.get("label")
-                if label:
-                    edge_labels.add(label)
-        self._goal_generator = RealBusinessGraphGoalGenerator(node_types, edge_labels)
+        # Defer goal generator creation until schema is accessed
+        # self._goal_generator = RealBusinessGraphGoalGenerator(node_types, edge_labels)
 
     @property
     def nodes(self) -> Dict[str, Dict[str, Any]]:
@@ -397,23 +389,31 @@ class RealDataSource(DataSource):
                 neighbors.append(edge['target'])
         return neighbors
 
+    def reload(self):
+        """Reload data from source and invalidate the schema and goal generator."""
+        self._load_real_graph()
+        self._schema_dirty = True
+        self._goal_generator = None
+
     def get_schema(self) -> GraphSchema:
         """Get the graph schema for this data source.
 
-        For real data, the schema is derived from whatever CSV content was
-        loaded the last time `_load_real_graph()` (or `reload()`) ran. If
-        the underlying CSVs change and you want the schema (and its
-        fingerprint) to reflect that, call `reload()` to rebuild both the
-        data and the schema.
+        The schema is created on first access and recreated if the data
+        source has been reloaded.
         """
-        if self._schema is None:
+        if self._schema is None or self._schema_dirty:
             self._schema = InMemoryGraphSchema(self._nodes, self._edges)
+            self._schema_dirty = False
         return self._schema
 
     def get_goal_generator(self) -> GoalGenerator:
         """Get the goal generator for this data source."""
         if self._goal_generator is None:
-            self._goal_generator = SyntheticBusinessGraphGoalGenerator()
+            # The goal generator depends on the schema, so ensure it's fresh.
+            schema = self.get_schema()
+            self._goal_generator = RealBusinessGraphGoalGenerator(
+                node_types=schema.node_types, edge_labels=schema.edge_labels
+            )
         return self._goal_generator
 
     def _load_real_graph(self):
@@ -469,7 +469,7 @@ class RealDataSource(DataSource):
     def _add_shared_medium_links(self):
         """Add edges between account owners who share a login medium."""
         medium_to_accounts = {}
-        signin_edges = self._find_edges_by_label('signin', 'Medium', 'Account')
+        signin_edges: list[tuple[str, str]] = self._find_edges_by_label('signin', 'Medium', 'Account')
 
         for medium_id, account_id in signin_edges:
             if medium_id not in medium_to_accounts:
@@ -478,8 +478,8 @@ class RealDataSource(DataSource):
 
         # Build owner map
         owner_map = {}
-        person_owns = self._find_edges_by_label('own', 'Person', 'Account')
-        company_owns = self._find_edges_by_label('own', 'Company', 'Account')
+        person_owns: list[tuple[str, str]] = self._find_edges_by_label('own', 'Person', 'Account')
+        company_owns: list[tuple[str, str]] = self._find_edges_by_label('own', 'Company', 'Account')
         for src, tgt in person_owns:
             owner_map[tgt] = src
         for src, tgt in company_owns:
@@ -509,8 +509,8 @@ class RealDataSource(DataSource):
         """Add edges between owners of accounts that have transactions."""
         # Build an owner map: account_id -> owner_id
         owner_map = {}
-        person_owns = self._find_edges_by_label('own', 'Person', 'Account')
-        company_owns = self._find_edges_by_label('own', 'Company', 'Account')
+        person_owns: list[tuple[str, str]] = self._find_edges_by_label('own', 'Person', 'Account')
+        company_owns: list[tuple[str, str]] = self._find_edges_by_label('own', 'Company', 'Account')
 
         for src, tgt in person_owns:
             owner_map[tgt] = src
@@ -518,7 +518,7 @@ class RealDataSource(DataSource):
             owner_map[tgt] = src
 
         # Find all transfer edges
-        transfer_edges = self._find_edges_by_label('transfer', 'Account', 'Account')
+        transfer_edges: list[tuple[str, str]] = self._find_edges_by_label('transfer', 'Account', 'Account')
 
         new_edges = 0
         for acc1_id, acc2_id in transfer_edges:
@@ -534,7 +534,9 @@ class RealDataSource(DataSource):
         if new_edges > 0:
             print(f"Connectivity enhancement: Added {new_edges} 'related_to' edges based on ownership.")
 
-    def _find_edges_by_label(self, label, from_type, to_type):
+    def _find_edges_by_label(
+        self, label: str, from_type: str, to_type: str
+    ) -> list[tuple[str, str]]:
         """Helper to find all edges of a certain type."""
         edges = []
 

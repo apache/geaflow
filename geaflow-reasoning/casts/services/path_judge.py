@@ -1,10 +1,10 @@
 """LLM-based path judge for CASTS evaluation."""
 
-from typing import Dict
+from typing import Mapping
 
 from openai import OpenAI
 
-from casts.core.config import Configuration
+from casts.core.interfaces import Configuration
 
 
 class PathJudge:
@@ -32,7 +32,7 @@ class PathJudge:
         self.model = model
         self.client = OpenAI(api_key=api_key, base_url=endpoint)
 
-    def judge(self, payload: Dict[str, object]) -> str:
+    def judge(self, payload: Mapping[str, object]) -> str:
         """Call the LLM judge and return its raw content.
 
         The concrete scoring logic (e.g. extracting a numeric score or

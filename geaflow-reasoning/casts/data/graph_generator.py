@@ -60,7 +60,7 @@ class GraphGenerator:
 
     def to_networkx(self) -> nx.DiGraph:
         """Convert to NetworkX graph for visualization and analysis."""
-        G = nx.DiGraph()
+        G: nx.DiGraph = nx.DiGraph()
         for node_id, node in self.nodes.items():
             G.add_node(node_id, **node)
         for node_id, edge_list in self.edges.items():

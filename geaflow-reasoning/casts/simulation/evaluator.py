@@ -9,7 +9,7 @@ Scoring is aligned to CASTS core goals:
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from casts.services.path_judge import PathJudge
 from casts.utils.helpers import parse_jsons
@@ -67,7 +67,7 @@ class PathEvaluator:
         rubric: str,
         start_node: str,
         start_node_props: Dict[str, Any],
-        schema: Optional[Dict[str, Any]] = None,
+        schema: Dict[str, Any],
     ) -> PathEvaluationScore:
         """
         Evaluate a traversal subgraph and return detailed scoring.
@@ -80,7 +80,7 @@ class PathEvaluator:
             )
 
         # Reconstruct the subgraph tree for the LLM prompt
-        subgraph_nodes = {
+        subgraph_nodes: Dict[int, Dict[str, Any]] = {
             -1: {"step": {"node": start_node, "p": start_node_props}, "children": []}
         }  # sentinel root
         for i, step in enumerate(path_steps):
@@ -131,7 +131,6 @@ class PathEvaluator:
             "info": info_detail,
             "nodes": len(all_props),
             "edges": len(path_steps),
-            "schema_provided": schema is not None,
         }
 
         return PathEvaluationScore(
@@ -178,8 +177,8 @@ class PathEvaluator:
         self,
         goal: str,
         rubric: str,
-        subgraph: Dict,  # Changed from edges and props
-        schema: Optional[Dict[str, Any]] = None,
+        subgraph: Dict,
+        schema: Dict[str, Any],
     ) -> Tuple[float, Dict[str, Any]]:
         """Score query effectiveness via LLM judge (0–35)."""
 
@@ -220,7 +219,7 @@ Output requirements (IMPORTANT):
 - Do NOT include any text outside the ```json ... ``` block.
 """
 
-        payload = {
+        payload: Dict[str, Any] = {
             "goal": goal,
             "subgraph_ascii": subgraph_ascii,
             "schema": schema,
@@ -365,7 +364,7 @@ Output requirements (IMPORTANT):
         if not props:
             return 0.0, {"note": "no_properties"}
 
-        keys = set()
+        keys: Set[str] = set()
         non_null = 0
         total = 0
         for prop in props:
@@ -423,7 +422,7 @@ class BatchEvaluator:
     def evaluate_batch(
         self,
         paths: Dict[int, Dict[str, Any]],
-        schema: Optional[Dict[str, Any]] = None,
+        schema: Dict[str, Any],
     ) -> Tuple[Dict[int, PathEvaluationScore], Dict[int, Dict[str, str]]]:
         """
         Evaluate a batch of paths and return their evaluation scores with metadata.
@@ -437,7 +436,7 @@ class BatchEvaluator:
                 rubric=path_data.get("rubric", ""),
                 start_node=path_data.get("start_node", ""),
                 start_node_props=path_data.get("start_node_props", {}),
-                schema=path_data.get("schema", schema),
+                schema=schema,
             )
             results[request_id] = score
             metadata[request_id] = {

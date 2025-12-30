@@ -1,16 +1,19 @@
 """Visualization and reporting for CASTS simulation results."""
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
-from matplotlib.lines import Line2D
 import matplotlib.pyplot as plt
 import networkx as nx
+from matplotlib.lines import Line2D
 
 from casts.core.interfaces import DataSource
 from casts.core.models import Context, StrategyKnowledgeUnit
 from casts.core.services import StrategyCache
 from casts.simulation.metrics import SimulationMetrics
-from casts.utils.helpers import calculate_dynamic_similarity_threshold, calculate_tier2_threshold
+from casts.utils.helpers import (
+    calculate_dynamic_similarity_threshold,
+    calculate_tier2_threshold,
+)
 
 
 class SimulationVisualizer:
@@ -101,7 +104,9 @@ class SimulationVisualizer:
             print(f"  - structural_signature: {sku.structural_signature}")
             vector_head = sku.property_vector[:3]
             rounded_head = [round(x, 3) for x in vector_head]
-            vector_summary = f"Vector(dim={len(sku.property_vector)}, head={rounded_head}...)"
+            vector_summary = (
+                f"Vector(dim={len(sku.property_vector)}, head={rounded_head}...)"
+            )
             print(f"  - property_vector: {vector_summary}")
             print(f"  - goal_template: {sku.goal_template}")
             print(f"  - decision_template: {sku.decision_template}")
@@ -177,7 +182,7 @@ class SimulationVisualizer:
         metrics: SimulationMetrics,
         cache: StrategyCache,
         sorted_skus: List[StrategyKnowledgeUnit],
-        graph: DataSource = None,
+        graph: Optional[DataSource] = None,
         show_plots: bool = True,
     ):
         """Master function to print all simulation results.
@@ -205,7 +210,9 @@ class SimulationVisualizer:
 
         # Generate matplotlib visualizations if graph is provided
         if graph is not None:
-            SimulationVisualizer.plot_all_traversal_paths(paths=paths, graph=graph, show=show_plots)
+            SimulationVisualizer.plot_all_traversal_paths(
+                paths=paths, graph=graph, show=show_plots
+            )
 
     @staticmethod
     def plot_traversal_path(
@@ -225,7 +232,7 @@ class SimulationVisualizer:
         steps: List[Dict[str, Any]] = path_info["steps"]
 
         # Create a directed graph for visualization
-        G = nx.DiGraph()
+        G: nx.DiGraph = nx.DiGraph()
 
         # Track visited nodes and edges
         visited_nodes = set()
@@ -280,7 +287,14 @@ class SimulationVisualizer:
 
         # Draw all edges in light gray
         nx.draw_networkx_edges(
-            G, pos, edge_color="#CCCCCC", width=1, alpha=0.3, arrows=True, arrowsize=20, ax=ax
+            G,
+            pos,
+            edge_color="#CCCCCC",
+            width=1,
+            alpha=0.3,
+            arrows=True,
+            arrowsize=20,
+            ax=ax,
         )
 
         # Draw traversal edges in color B (teal)

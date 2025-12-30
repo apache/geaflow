@@ -1,8 +1,7 @@
 """Simulation engine for managing CASTS strategy cache experiments."""
 
 import random
-import re
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from casts.core.interfaces import DataSource
 from casts.core.models import Context
@@ -22,12 +21,14 @@ class SimulationEngine:
         llm_oracle: LLMOracle,
         max_depth: int = 10,
         verbose: bool = True,
+        nodes_per_epoch: int = 2,
     ):
         self.graph = graph
         self.strategy_cache = strategy_cache
         self.llm_oracle = llm_oracle
         self.max_depth = max_depth
         self.verbose = verbose
+        self.nodes_per_epoch = nodes_per_epoch
         self.schema = graph.get_schema()
         self.executor = TraversalExecutor(graph, self.schema)
 
@@ -36,198 +37,41 @@ class SimulationEngine:
 
     async def run_epoch(
         self, epoch: int, metrics_collector: MetricsCollector
-    ) -> List[
-        Tuple[str, str, str, int, int | None]
-    ]:  # List of (node_id, signature, goal, request_id, parent_step_index)
-        """Run a single simulation epoch."""
-        print(f"\n--- Epoch {epoch} ---")
+    ) -> List[Tuple[str, str, str, int, int | None, str | None, str | None]]:
+        """Run a single epoch, initializing a layer of traversers."""
+        if self.verbose:
+            print(f"\n--- Epoch {epoch} ---")
 
-        def infer_anchor_node_types(goal_text: str) -> List[str]:
-            """Infer likely start node types from a natural-language goal.
+        # Take a sample of starting nodes
+        num_starters = min(
+            self.nodes_per_epoch,
+            len(self.graph.nodes),
+        )
+        sample_nodes = (
+            # Use random.sample to avoid repeating nodes in an epoch
+            random.sample(sorted(self.graph.nodes.keys()), k=num_starters)
+            if num_starters > 0
+            else []
+        )
 
-            This is intentionally lightweight and schema-driven: it only maps
-            tokens in the goal to known schema node types.
-            """
-            schema_types = list(getattr(self.schema, "node_types", set()) or [])
-            if not schema_types:
-                return []
-
-            # Case-insensitive matching against known types.
-            lower_to_type = {t.lower(): t for t in schema_types}
-
-            # Common patterns in our goal templates.
-            single_type_patterns = (
-                r"\bStarting\s+from\s+an?\s+([A-Za-z_]+)",
-                r"\bStarting\s+with\s+an?\s+([A-Za-z_]+)",
-                r"\bGiven\s+an?\s+([A-Za-z_]+)",
-                r"\bFor\s+a\s+single\s+([A-Za-z_]+)",
-                r"\bFor\s+a\s+given\s+([A-Za-z_]+)",
-                r"\bPick\s+a\s+high-risk\s+([A-Za-z_]+)",
-            )
-
-            matches: List[str] = []
-            for pat in single_type_patterns:
-                for m in re.finditer(pat, goal_text, flags=re.IGNORECASE):
-                    raw = (m.group(1) or "").strip().strip(".,;:()[]{}\"'")
-                    if not raw:
-                        continue
-                    token = raw.lower()
-                    # crude singularization for "accounts" -> "account"
-                    if token.endswith("s") and token[:-1] in lower_to_type:
-                        token = token[:-1]
-                    if token in lower_to_type:
-                        matches.append(lower_to_type[token])
-
-            # Two-type pattern used by some goals.
-            between = re.search(
-                r"\bBetween\s+([A-Za-z_]+)\s+and\s+([A-Za-z_]+)\s+nodes\b",
-                goal_text,
-                flags=re.IGNORECASE,
-            )
-            if between:
-                for raw in (between.group(1), between.group(2)):
-                    token = (raw or "").strip().strip(".,;:()[]{}\"'").lower()
-                    if token.endswith("s") and token[:-1] in lower_to_type:
-                        token = token[:-1]
-                    if token in lower_to_type:
-                        matches.append(lower_to_type[token])
-
-            between_one = re.search(
-                r"\bBetween\s+([A-Za-z_]+)\s+nodes\b",
-                goal_text,
-                flags=re.IGNORECASE,
-            )
-            if between_one:
-                raw = between_one.group(1)
-                token = (raw or "").strip().strip(".,;:()[]{}\"'").lower()
-                if token.endswith("s") and token[:-1] in lower_to_type:
-                    token = token[:-1]
-                if token in lower_to_type:
-                    matches.append(lower_to_type[token])
-
-            # De-dupe while preserving order.
-            seen = set()
-            result: List[str] = []
-            for t in matches:
-                if t not in seen:
-                    seen.add(t)
-                    result.append(t)
-            return result
-
-        def weighted_unique_choices(
-            population: List[str], weights: List[float], k: int
-        ) -> List[str]:
-            """Like random.choices, but attempts to avoid duplicates."""
-            if k <= 0 or not population:
-                return []
-            if len(population) == 1:
-                return [population[0]] * k
-
-            chosen: List[str] = []
-            chosen_set = set()
-            attempts = 0
-            max_attempts = max(10, k * 10)
-            while len(chosen) < k and attempts < max_attempts:
-                attempts += 1
-                picked = random.choices(population, weights=weights, k=1)[0]
-                if picked in chosen_set:
-                    continue
-                chosen.append(picked)
-                chosen_set.add(picked)
-
-            # Fallback: fill remaining with random sample of leftovers.
-            if len(chosen) < k:
-                leftovers = [n for n in population if n not in chosen_set]
-                if leftovers:
-                    needed = min(k - len(chosen), len(leftovers))
-                    chosen.extend(random.sample(leftovers, k=needed))
-
-            # Final fallback: allow duplicates to reach k.
-            if len(chosen) < k:
-                needed = k - len(chosen)
-                chosen.extend(random.choices(population, weights=weights, k=needed))
-            return chosen
-
-        # Generate access pattern following Zipf's law
-        node_ids = list(self.graph.nodes.keys())
-        zipf_weights = [1.0 / (i + 1) ** 1.2 for i in range(len(node_ids))]
-        node_weight_map = {node_id: w for node_id, w in zip(node_ids, zipf_weights, strict=False)}
-
-        # Precompute in-degrees for lightweight structural checks.
-        in_degree: Dict[str, int] = dict.fromkeys(node_ids, 0)
-        for _src_id, edges in self.graph.edges.items():
-            for edge in edges:
-                tgt = edge.get("target")
-                if tgt in in_degree:
-                    in_degree[tgt] += 1
-
-        # Draw a main goal for this epoch from the data source's goal generator.
-        # If the inferred anchor types are missing from the current (sub)graph,
-        # resample a few times to avoid unavoidable mismatches.
-        available_types = {props.get("type") for props in self.graph.nodes.values()}
-        epoch_main_goal, epoch_main_rubric = self.goal_generator.select_goal()
-        anchor_types = infer_anchor_node_types(epoch_main_goal)
-        for _ in range(5):
-            if not anchor_types:
-                break
-            if any(t in available_types for t in anchor_types):
-                break
-            epoch_main_goal, epoch_main_rubric = self.goal_generator.select_goal()
-            anchor_types = infer_anchor_node_types(epoch_main_goal)
-
-        # Filter start candidates to reduce immediate dead-ends (no incident edges).
-        # Keep this purely structural (no dataset-specific rules).
-        def has_any_incident_edge(node_id: str) -> bool:
-            out_deg = len(self.schema.get_valid_edge_labels(node_id))
-            return (out_deg + in_degree.get(node_id, 0)) > 0
-
-        if anchor_types:
-            start_candidates_by_type = [
-                node_id
-                for node_id, props in self.graph.nodes.items()
-                if props.get("type") in anchor_types
-            ]
-            start_candidates = [
-                node_id for node_id in start_candidates_by_type if has_any_incident_edge(node_id)
-            ]
-            # If the sampled subgraph has the right type but those nodes have no incident edges,
-            # prefer matching the goal's type over falling back to unrelated types.
-            if not start_candidates and start_candidates_by_type:
-                start_candidates = start_candidates_by_type
-        else:
-            start_candidates = [node_id for node_id in node_ids if has_any_incident_edge(node_id)]
-
-        # Fallback if graph is very sparse or anchor_types are too restrictive.
-        if not start_candidates:
-            start_candidates = node_ids
-
-        start_weights = [node_weight_map.get(n, 1.0) for n in start_candidates]
-
-        # Pick start nodes (simultaneous start)
-        start_nodes = weighted_unique_choices(start_candidates, start_weights, k=2)
-
-        # Initialize current layer: List of (node_id, signature, goal, request_id, parent_step_index, source_node, edge_label)
-        # parent_step_index is for visualization only, tracking which previous step this traverser came from
-        # source_node and edge_label track the actual provenance of this traversal step
         current_layer: List[Tuple[str, str, str, int, int | None, str | None, str | None]] = []
-        for node_id in start_nodes:
+        for node_id in sample_nodes:
+            # Infer goal from node type if possible
+            goal_text = "Explore the graph"
+            rubric = ""
             node_type = self.graph.nodes[node_id].get("type")
-            # With high probability, reuse the epoch main goal; otherwise, sample another goal
-            if random.random() < 0.8:
-                goal_text = epoch_main_goal
-                rubric = epoch_main_rubric
-            else:
-                goal_text, rubric = self.goal_generator.select_goal(node_type=node_type)
-                # Avoid obvious anchor mismatches (e.g., goal anchored on Company but starting from Account)
-                # when the goal text happens to mention the node_type somewhere else.
-                for _ in range(5):
-                    inferred = infer_anchor_node_types(goal_text)
+            if self.goal_generator:
+                # Check if the generator has goal inference logic
+                inferred = getattr(self.goal_generator, "INFER_GOALS_FROM_TYPES", None)
+                while True:
                     if (not inferred) or (node_type in inferred):
                         break
                     goal_text, rubric = self.goal_generator.select_goal(node_type=node_type)
 
             # Initialize path tracking
-            request_id = metrics_collector.initialize_path(epoch, node_id, self.graph.nodes[node_id], goal_text, rubric)
+            request_id = metrics_collector.initialize_path(
+                epoch, node_id, self.graph.nodes[node_id], goal_text, rubric
+            )
             # Root nodes have no parent step, source_node, or edge_label (all None)
             current_layer.append((node_id, "V()", goal_text, request_id, None, None, None))
 
@@ -247,7 +91,7 @@ class SimulationEngine:
         if self.verbose:
             print(f"\n[Tick {tick}] Processing {len(current_layer)} active traversers")
 
-        next_layer = []
+        next_layer: List[Tuple[str, str, str, int, int | None, str | None, str | None]] = []
 
         for idx, traversal_state in enumerate(current_layer):
             (
@@ -273,7 +117,9 @@ class SimulationEngine:
 
             # Create context and find strategy
             context = Context(
-                structural_signature=current_signature, properties=node, goal=current_goal
+                structural_signature=current_signature,
+                properties=node,
+                goal=current_goal,
             )
 
             decision, sku, match_type = await self.strategy_cache.find_strategy(context)
@@ -424,7 +270,7 @@ class SimulationEngine:
         distribution_note = "Zipf distribution" if source_label == "synthetic" else "real dataset"
         print(f"1. Graph Data: {len(self.graph.nodes)} nodes ({distribution_note})")
 
-        type_counts = {}
+        type_counts: Dict[Any, Any] = {}
         for node in self.graph.nodes.values():
             node_type = node["type"]
             type_counts[node_type] = type_counts.get(node_type, 0) + 1
@@ -438,10 +284,7 @@ class SimulationEngine:
             current_layer = await self.run_epoch(epoch, metrics_collector)
 
             tick = 0
-            visited_history = set()
-            edge_history = {}
-
-            active_request_ids = {layer[3] for layer in current_layer}
+            edge_history: Dict[Any, Any] = {}
 
             while current_layer:
                 tick += 1
@@ -460,10 +303,6 @@ class SimulationEngine:
                 if completed_requests and on_request_completed:
                     for request_id in completed_requests:
                         on_request_completed(request_id, metrics_collector)
-
-                # Update visited history
-                for node_id, _, _, _, _, _, _ in current_layer:
-                    visited_history.add(node_id)
 
                 if tick > self.max_depth:
                     print(

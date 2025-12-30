@@ -1,5 +1,8 @@
 """LLM Oracle for generating Strategy Knowledge Units (SKUs)."""
 
+from datetime import datetime
+from json import JSONDecodeError
+from pathlib import Path
 import re
 from typing import Any, Dict, List
 
@@ -26,6 +29,12 @@ class LLMOracle:
         self.embed_service = embed_service
         self.sku_counter = 0
 
+        # Setup debug log file
+        log_dir = Path("logs")
+        log_dir.mkdir(exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.debug_log_file = log_dir / f"llm_oracle_debug_{timestamp}.txt"
+
         # Use the centralized configuration method
 
         if isinstance(config, DefaultConfiguration):
@@ -40,86 +49,64 @@ class LLMOracle:
             model = config.get_str("LLM_MODEL_NAME", "")
 
         if not api_key or not endpoint:
-            print("Warning: LLM API credentials not configured, using fallback responses")
+            self._write_debug(
+                "Warning: LLM API credentials not configured, using fallback responses"
+            )
             self.client = None
         else:
             self.client = AsyncOpenAI(api_key=api_key, base_url=endpoint)
 
         self.model = model
 
+    def _write_debug(self, message: str) -> None:
+        """Write debug message to log file.
+
+        Args:
+            message: Debug message to write
+        """
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with open(self.debug_log_file, "a", encoding="utf-8") as f:
+            f.write(f"[{timestamp}] {message}\n")
+
     @staticmethod
     def _parse_and_validate_decision(
         decision: str,
-        valid_labels: List[str],
+        valid_options: List[str],
         safe_properties: Dict[str, Any],
     ) -> str:
         """
-        Validate decision string against whitelist of Gremlin steps.
+        Validate the LLM's decision against the list of valid options provided by the state machine.
 
-        Allowed formats:
-        - out('label'), inV(), bothE('label'), otherV()
-        - has('prop','value'), dedup(), limit(10)
-        - order().by('prop'), values('name')
-        - stop
+        Args:
+            decision: The decision string from the LLM.
+            valid_options: A list of valid, fully-formed Gremlin steps.
+            safe_properties: A dictionary of the current node's safe properties.
+
+        Returns:
+            The validated decision string.
+
+        Raises:
+            ValueError: If the decision is not in the list of valid options.
         """
         decision = decision.strip()
 
-        # Simple steps without arguments
-        if decision == "stop":
-            return "stop"
-        if decision in ("dedup()", "dedup"):
-            return "dedup()"
-        if decision in ("inV()", "inV"):
-            return "inV()"
-        if decision in ("outV()", "outV"):
-            return "outV()"
-        if decision in ("otherV()", "otherV"):
-            return "otherV()"
-
-        # Traversal steps with a label argument
-        m = re.match(r"^(out|in|both|outE|inE|bothE)\('([^']+)'\)$", decision)
-        if m:
-            step, label = m.group(1), m.group(2)
-            if label not in valid_labels:
-                raise ValueError(f"Invalid edge label '{label}' for step {step}")
-            return f"{step}('{label}')"
-
-        # has('prop','value')
-        m = re.match(r"^has\('([^']+)'\s*,\s*'([^']*)'\)$", decision)
-        if m:
-            prop, value = m.group(1), m.group(2)
-            # Only use properties that exist in safe_properties
-            if prop not in safe_properties:
-                raise ValueError(f"Invalid has prop '{prop}' (not in safe_properties)")
-            allowed_val = str(safe_properties[prop])
-            if value != allowed_val:
-                raise ValueError(
-                    f"Invalid has value '{value}' for prop '{prop}', "
-                    f"expected '{allowed_val}' from safe_properties"
-                )
-            return f"has('{prop}','{value}')"
-
-        # values('prop') or values()
-        m = re.match(r"^values\((?:'([^']*)')?\)$", decision)
-        if m:
-            prop = m.group(1)
-            # prop can be None for values() or a string for values('prop')
-            return f"values('{prop}')" if prop is not None else "values()"
-
-        # order().by('prop') or order()
-        m = re.match(r"^order\(\)\.by\('([^']*)'\)$", decision)
-        if m:
-            # Could validate prop, but for now we accept any string
-            return decision
-        if decision in ("order()", "order"):
-            return "order()"
-
-        # limit(n)
-        m = re.match(r"^limit\((\d+)\)$", decision)
-        if m:
+        if decision in valid_options:
+            # Additionally, validate `has` step values against current properties
+            if decision.startswith("has("):
+                m = re.match(r"^has\('([^']+)'\s*,\s*'([^']*)'\)$", decision)
+                if m:
+                    prop, value = m.group(1), m.group(2)
+                    if prop not in safe_properties:
+                        raise ValueError(f"Invalid has prop '{prop}' (not in safe_properties)")
+                    allowed_val = str(safe_properties[prop])
+                    if value != allowed_val:
+                        raise ValueError(
+                            f"Invalid has value '{value}' for prop '{prop}', "
+                            f"expected '{allowed_val}' from safe_properties"
+                        )
             return decision
 
-        raise ValueError(f"Unsupported decision format: {decision}")
+        raise ValueError(f"Decision '{decision}' is not in the list of valid options.")
 
     async def generate_sku(self, context: Context, schema: GraphSchema) -> StrategyKnowledgeUnit:
         """Generate a new Strategy Knowledge Unit based on the current context.
@@ -131,8 +118,9 @@ class LLMOracle:
         self.sku_counter += 1
 
         # Get current state and next step options from state machine
+        node_id = context.properties.get("id", "")
         current_state, next_step_options = GremlinStateMachine.get_state_and_options(
-            context.structural_signature
+            context.structural_signature, schema, node_id
         )
 
         # If no more steps are possible, force stop
@@ -149,11 +137,6 @@ class LLMOracle:
                 confidence_score=1.0,
                 logic_complexity=1,
             )
-
-        node_id = context.properties.get("id", "")
-        valid_labels = schema.get_valid_edge_labels(node_id)
-        if not valid_labels:
-            valid_labels = list(schema.edge_labels)
 
         safe_properties = context.safe_properties
         options_str = "\n      - ".join(next_step_options)
@@ -174,19 +157,6 @@ Mathematical model (do NOT change it):
   * p : current node properties, a dict WITHOUT id/uuid (pure state)
   * g : goal text, describes the user's intent
 
-- A Strategy Knowledge Unit (SKU) is:
-  SKU = (c_sku, d_template, rho, v_proto, eta, sigma_logic)
-  where
-    * c_sku = (s_sku, Φ, g_sku)
-      - s_sku: must EXACTLY equal the current s
-      - Φ: a boolean predicate over p, written as a Python lambda
-      - g_sku: must EXACTLY equal the current g
-    * d_template: one traversal step template
-    * rho: schema fingerprint (use "schema_v1")
-    * v_proto: embedding of p at SKU creation time (runtime will fill this)
-    * eta: confidence score (runtime initializes to 1.0)
-    * sigma_logic: intrinsic logic complexity (fields + nesting), small integer
-
 Your task in THIS CALL:
 - Given current c = (s, p, g) below, you must propose ONE new SKU:
   * s_sku = current s
@@ -201,95 +171,121 @@ Current context c:
 - p      = {safe_properties}
 - g      = {context.goal}
 
-SCHEMA CONSTRAINTS (CRITICAL - MUST FOLLOW):
-- Available edge labels from this node: {", ".join(valid_labels)}
-- **IMPORTANT**: You MUST ONLY use edge labels from the list above. Using any other label will cause validation failure.
-- If the goal suggests a label not in the list, choose the closest match from available labels.
-- For traversal steps (out/in/both), the label MUST be one of: {", ".join(valid_labels)}
-
 You must also define a `predicate` (a Python lambda on properties `p`) and a `sigma_logic` score (1-3 for complexity).
 
 High-level requirements:
 1) The `predicate` Φ should be general yet meaningful (e.g., check type, category, status, or ranges). NEVER use `id` or `uuid`.
 2) The `d_template` should reflect the goal `g` when possible.
-   - "Find friends": prefer 'friend'/'related' labels.
-   - "Recommend products": prefer 'supplies'/'manages' labels.
-   - "Detect fraud": prefer 'knows' or filter by risk properties.
-   - Use `has()` for filtering, `order().by()` for sorting, `limit()` for restricting results.
-   - **CRITICAL**: Only use edge labels that are in the available list above.
 3) `sigma_logic`: 1 for a simple check, 2 for 2-3 conditions, 3 for more complex logic.
 
 Return ONLY valid JSON inside <output> tags. Example:
 <output>
 {{
+  "reasoning": "...",
   "decision": "out('related')",
   "predicate": "lambda x: x.get('type') == 'TypeA' and x.get('status') == 'active'",
   "sigma_logic": 2
 }}
 </output>
 """
-        try:
-            print(f"[debug] LLM Oracle Prompt:\n{prompt}\n--- End of Prompt ---\n")
-            response = await self.client.chat.completions.create(
-                model=self.model,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.1,
-                max_tokens=200,
-            )
+        last_error = "Unknown error"
+        prompt_with_feedback = prompt
 
-            content = response.choices[0].message.content.strip()
-            results = parse_jsons(content, start_marker=r"^\s*<output>\s*", end_marker=r"</output>")
-            if not results:
-                raise ValueError(
-                    f"No valid JSON found in response\nmessage: {content}\nprompt: {prompt}"
+        for attempt in range(2):  # Allow one retry
+            # Augment prompt on the second attempt
+            if attempt > 0:
+                prompt_with_feedback = (
+                    prompt + f'\n\nYour previous decision was invalid. Error: "{last_error}". '
+                    f"Please review the valid options and provide a new, valid decision."
                 )
 
-            result = results[0]
-            raw_decision = result.get("decision", "stop")
-
             try:
+                self._write_debug(
+                    f"LLM Oracle Prompt (Attempt {attempt + 1}):\n{prompt_with_feedback}\n--- End of Prompt ---\n"
+                )
+                if not self.client:
+                    raise ValueError("LLM client not available.")
+
+                response = await self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[{"role": "user", "content": prompt_with_feedback}],
+                    temperature=0.1 + (attempt * 0.2),  # Increase temperature on retry
+                    max_tokens=200,
+                )
+
+                content = response.choices[0].message.content
+                if not content:
+                    raise ValueError("LLM response content is empty.")
+
+                results = parse_jsons(
+                    content.strip(), start_marker=r"^\s*<output>\s*", end_marker=r"</output>"
+                )
+                if not results:
+                    raise ValueError(f"No valid JSON found in response on attempt {attempt + 1}")
+
+                result = results[0]
+                if isinstance(result, JSONDecodeError):
+                    raise ValueError(f"JSON decoding failed on attempt {attempt + 1}: {result}")
+                self._write_debug(
+                    f"LLM Oracle Response (Attempt {attempt + 1}):\n{result}\n--- End of Response ---\n"
+                )
+
+                if isinstance(result, JSONDecodeError):
+                    raise ValueError(f"JSON decoding failed on attempt {attempt + 1}: {result}")
+                if isinstance(result, JSONDecodeError):
+                    raise ValueError(f"JSON decoding failed on attempt {attempt + 1}: {result}")
+                raw_decision = result.get("decision", "stop")
                 decision = LLMOracle._parse_and_validate_decision(
-                    raw_decision, valid_labels=valid_labels, safe_properties=safe_properties
+                    raw_decision, valid_options=next_step_options, safe_properties=safe_properties
                 )
 
-                decision_base = decision.split("(")[0].split(".")[0]
-                allowed_bases = [opt.split("(")[0].split(".")[0] for opt in next_step_options]
-                if decision_base not in allowed_bases:
-                    raise ValueError(
-                        f"Decision '{decision}' is not a valid next step from state '{current_state}'"
-                    )
+                # --- Success Path ---
+                # If validation succeeds, construct and return the SKU immediately
+                try:
+                    predicate_code = result.get("predicate", "lambda x: True")
+                    predicate = eval(predicate_code)
+                    if not callable(predicate):
+                        predicate = lambda x: True
+                    _ = predicate(safe_properties)  # Test call
+                except Exception:
+                    predicate = lambda x: True
 
-            except Exception as e:
-                print(f"Decision validation failed: {e}, using fallback")
-                raise
+                property_vector = await self.embed_service.embed_properties(safe_properties)
+                sigma_val = result.get("sigma_logic", 1)
+                if sigma_val not in (1, 2, 3):
+                    sigma_val = 2
 
-            try:
-                predicate_code = result.get("predicate", "lambda x: True")
-                predicate = eval(predicate_code)
-                if not callable(predicate):
-                    raise ValueError("Predicate not callable")
-                _ = predicate(safe_properties)
-            except Exception as e:
-                print(f"Predicate validation failed: {e}, using default")
+                return StrategyKnowledgeUnit(
+                    id=f"SKU_{self.sku_counter}",
+                    structural_signature=context.structural_signature,
+                    predicate=predicate,
+                    goal_template=context.goal,
+                    property_vector=property_vector,
+                    decision_template=decision,
+                    schema_fingerprint="schema_v1",
+                    confidence_score=1.0,  # Start with high confidence
+                    logic_complexity=sigma_val,
+                )
 
-                def predicate(x):
-                    return True
+            except (ValueError, AttributeError, TypeError) as e:
+                last_error = str(e)
+                self._write_debug(f"LLM Oracle Attempt {attempt + 1} failed: {last_error}")
+                continue  # Go to the next attempt
 
-            property_vector = await self.embed_service.embed_properties(safe_properties)
-            sigma_val = result.get("sigma_logic", 1)
-            if sigma_val not in (1, 2, 3):
-                sigma_val = 2
-            return StrategyKnowledgeUnit(
-                id=f"SKU_{self.sku_counter}",
-                structural_signature=context.structural_signature,
-                predicate=predicate,
-                goal_template=context.goal,
-                property_vector=property_vector,
-                decision_template=decision,
-                schema_fingerprint="schema_v1",
-                confidence_score=1.0,
-                logic_complexity=sigma_val,
-            )
-        except Exception as e:
-            print(f"LLM API error: {e}, using goal-aware fallback")
-            raise ValueError(f"LLM Oracle failed, LLM API error : {e}") from e
+        # --- Fallback Path ---
+        # If the loop completes without returning, all attempts have failed.
+        self._write_debug(
+            f"All LLM attempts failed. Last error: {last_error}. Falling back to 'stop'."
+        )
+        property_vector = await self.embed_service.embed_properties(safe_properties)
+        return StrategyKnowledgeUnit(
+            id=f"SKU_{self.sku_counter}",
+            structural_signature=context.structural_signature,
+            predicate=lambda x: True,
+            goal_template=context.goal,
+            decision_template="stop",
+            schema_fingerprint="schema_v1",
+            property_vector=property_vector,
+            confidence_score=1.0,
+            logic_complexity=1,
+        )
