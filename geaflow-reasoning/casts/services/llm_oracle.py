@@ -187,7 +187,7 @@ Return ONLY valid JSON inside <output> tags. Example:
   "sigma_logic": 2
 }}
 </output>
-"""
+"""  # noqa: E501
         last_error = "Unknown error"
         prompt_with_feedback = prompt
 
@@ -201,7 +201,8 @@ Return ONLY valid JSON inside <output> tags. Example:
 
             try:
                 self._write_debug(
-                    f"LLM Oracle Prompt (Attempt {attempt + 1}):\n{prompt_with_feedback}\n--- End of Prompt ---\n"
+                    f"LLM Oracle Prompt (Attempt {attempt + 1}):\n{prompt_with_feedback}\n"
+                    "--- End of Prompt ---\n"
                 )
                 if not self.client:
                     raise ValueError("LLM client not available.")
@@ -227,7 +228,8 @@ Return ONLY valid JSON inside <output> tags. Example:
                 if isinstance(result, JSONDecodeError):
                     raise ValueError(f"JSON decoding failed on attempt {attempt + 1}: {result}")
                 self._write_debug(
-                    f"LLM Oracle Response (Attempt {attempt + 1}):\n{result}\n--- End of Response ---\n"
+                    f"LLM Oracle Response (Attempt {attempt + 1}):\n{result}\n"
+                    "--- End of Response ---\n"
                 )
 
                 if isinstance(result, JSONDecodeError):

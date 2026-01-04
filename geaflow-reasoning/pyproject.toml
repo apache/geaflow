@@ -15,6 +15,7 @@ dependencies = [
     "pytest>=8.4.0",
     "mypy>=1.19.1",
     "types-networkx>=3.6.1.20251220",
+    "ruff>=0.14.9",
 ]
 
 [project.optional-dependencies]

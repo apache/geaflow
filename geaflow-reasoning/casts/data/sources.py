@@ -8,7 +8,7 @@ from collections import deque
 import csv
 from pathlib import Path
 import random
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import networkx as nx
 
@@ -163,8 +163,8 @@ class RealBusinessGraphGoalGenerator(GoalGenerator):
         """
 
         # Simple heuristic: filter a small candidate subset by node_type
-        candidates: list[tuple[str, str]] = self._goals
-        weights: list[int] = self._goal_weights
+        candidates: List[tuple[str, str]] = self._goals
+        weights: List[int] = self._goal_weights
 
         if node_type is not None:
             node_type_lower = node_type.lower()
@@ -178,8 +178,8 @@ class RealBusinessGraphGoalGenerator(GoalGenerator):
 
             if filtered:
                 c_tuple, w_tuple = zip(*filtered, strict=False)
-                candidates = list(c_tuple)
-                weights = list(w_tuple)
+                candidates = List(c_tuple)
+                weights = List(w_tuple)
 
         selected_goal, selected_rubric = random.choices(
             candidates, weights=weights, k=1
@@ -469,7 +469,9 @@ class RealDataSource(DataSource):
     def _add_shared_medium_links(self):
         """Add edges between account owners who share a login medium."""
         medium_to_accounts = {}
-        signin_edges: list[tuple[str, str]] = self._find_edges_by_label('signin', 'Medium', 'Account')
+        signin_edges: List[tuple[str, str]] = self._find_edges_by_label(
+            "signin", "Medium", "Account"
+        )
 
         for medium_id, account_id in signin_edges:
             if medium_id not in medium_to_accounts:
@@ -478,8 +480,8 @@ class RealDataSource(DataSource):
 
         # Build owner map
         owner_map = {}
-        person_owns: list[tuple[str, str]] = self._find_edges_by_label('own', 'Person', 'Account')
-        company_owns: list[tuple[str, str]] = self._find_edges_by_label('own', 'Company', 'Account')
+        person_owns: List[tuple[str, str]] = self._find_edges_by_label("own", "Person", "Account")
+        company_owns: List[tuple[str, str]] = self._find_edges_by_label("own", "Company", "Account")
         for src, tgt in person_owns:
             owner_map[tgt] = src
         for src, tgt in company_owns:
@@ -492,12 +494,12 @@ class RealDataSource(DataSource):
                 owners = {owner_map.get(acc_id) for acc_id in accounts if owner_map.get(acc_id)}
 
                 if len(owners) > 1:
-                    owner_list = list(owners)
+                    owner_List = List(owners)
                     # Add edges between all pairs of owners
-                    for i in range(len(owner_list)):
-                        for j in range(i + 1, len(owner_list)):
-                            owner1_id = owner_list[i]
-                            owner2_id = owner_list[j]
+                    for i in range(len(owner_List)):
+                        for j in range(i + 1, len(owner_List)):
+                            owner1_id = owner_List[i]
+                            owner2_id = owner_List[j]
                             self._add_edge_if_not_exists(owner1_id, owner2_id, 'shared_medium')
                             self._add_edge_if_not_exists(owner2_id, owner1_id, 'shared_medium')
                             new_edges += 2
@@ -509,8 +511,16 @@ class RealDataSource(DataSource):
         """Add edges between owners of accounts that have transactions."""
         # Build an owner map: account_id -> owner_id
         owner_map = {}
-        person_owns: list[tuple[str, str]] = self._find_edges_by_label('own', 'Person', 'Account')
-        company_owns: list[tuple[str, str]] = self._find_edges_by_label('own', 'Company', 'Account')
+        person_owns: List[tuple[str, str]] = self._find_edges_by_label(
+            "own",
+            "Person",
+            "Account",
+        )
+        company_owns: List[tuple[str, str]] = self._find_edges_by_label(
+            "own",
+            "Company",
+            "Account",
+        )
 
         for src, tgt in person_owns:
             owner_map[tgt] = src
@@ -518,7 +528,11 @@ class RealDataSource(DataSource):
             owner_map[tgt] = src
 
         # Find all transfer edges
-        transfer_edges: list[tuple[str, str]] = self._find_edges_by_label('transfer', 'Account', 'Account')
+        transfer_edges: List[tuple[str, str]] = self._find_edges_by_label(
+            "transfer",
+            "Account",
+            "Account",
+        )
 
         new_edges = 0
         for acc1_id, acc2_id in transfer_edges:
@@ -536,7 +550,7 @@ class RealDataSource(DataSource):
 
     def _find_edges_by_label(
         self, label: str, from_type: str, to_type: str
-    ) -> list[tuple[str, str]]:
+    ) -> List[tuple[str, str]]:
         """Helper to find all edges of a certain type."""
         edges = []
 
@@ -659,8 +673,8 @@ class RealDataSource(DataSource):
         G = nx.DiGraph()
         for node_id, node in self._nodes.items():
             G.add_node(node_id, **node)
-        for src_id, edge_list in self._edges.items():
-            for edge in edge_list:
+        for src_id, edge_List in self._edges.items():
+            for edge in edge_List:
                 G.add_edge(src_id, edge['target'], label=edge['label'])
 
         # Find largest connected component
@@ -685,7 +699,7 @@ class RealDataSource(DataSource):
             for node_id in largest_cc:
                 node_type = G.nodes[node_id].get("type", "Unknown")
                 nodes_by_type.setdefault(node_type, []).append(node_id)
-            seed_type = random.choice(list(nodes_by_type.keys()))
+            seed_type = random.choice(List(nodes_by_type.keys()))
             seed = random.choice(nodes_by_type[seed_type])
             visited: set[str] = {seed}
             queue: deque[str] = deque([seed])

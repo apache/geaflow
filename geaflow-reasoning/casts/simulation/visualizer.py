@@ -2,9 +2,9 @@
 
 from typing import Any, Dict, List, Optional
 
+from matplotlib.lines import Line2D
 import matplotlib.pyplot as plt
 import networkx as nx
-from matplotlib.lines import Line2D
 
 from casts.core.interfaces import DataSource
 from casts.core.models import Context, StrategyKnowledgeUnit

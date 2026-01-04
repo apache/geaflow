@@ -217,7 +217,7 @@ Output requirements (IMPORTANT):
 }}
 ```
 - Do NOT include any text outside the ```json ... ``` block.
-"""
+"""  # noqa: E501
 
         payload: Dict[str, Any] = {
             "goal": goal,

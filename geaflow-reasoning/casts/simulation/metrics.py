@@ -69,8 +69,15 @@ class MetricsCollector:
     def record_sku_eviction(self, count: int = 1):
         """Record SKU evictions from cache cleanup."""
         self.metrics.sku_evictions += count
-    
-    def initialize_path(self, epoch: int, start_node: str, start_node_props: Dict[str, Any], goal: str, rubric: str) -> int:
+
+    def initialize_path(
+        self,
+        epoch: int,
+        start_node: str,
+        start_node_props: Dict[str, Any],
+        goal: str,
+        rubric: str,
+    ) -> int:
         """Initialize a new traversal path tracking record."""
         request_id = self.next_request_id
         self.next_request_id += 1
