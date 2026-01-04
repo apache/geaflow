@@ -51,7 +51,7 @@ async def run_simulation():
         strategy_cache=strategy_cache,
         llm_oracle=llm_oracle,
         max_depth=config.get_int("SIMULATION_MAX_DEPTH"),
-        verbose=config.get_bool("SIMULATION_VERBOSE_LOGGING")
+        verbose=config.get_bool("SIMULATION_VERBOSE_LOGGING"),
     )
 
     # Define the callback for completed requests

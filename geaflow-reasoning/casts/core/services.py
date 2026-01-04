@@ -1,5 +1,6 @@
 """Core strategy cache service for storing and retrieving traversal strategies."""
 
+import re
 from typing import Any, List, Optional, Tuple
 
 from casts.core.models import Context, StrategyKnowledgeUnit
@@ -34,6 +35,8 @@ class StrategyCache:
         self.similarity_kappa = config.get_float("CACHE_SIMILARITY_KAPPA", 0.25)
         self.similarity_beta = config.get_float("CACHE_SIMILARITY_BETA", 0.05)
         self.tier2_gamma = config.get_float("CACHE_TIER2_GAMMA", 1.2)
+        self.signature_level = config.get_int("SIGNATURE_LEVEL", 1)
+        self.edge_whitelist = config.get("SIGNATURE_EDGE_WHITELIST", None)
 
     async def find_strategy(
         self,
@@ -56,21 +59,19 @@ class StrategyCache:
         if not skip_tier1:  # Can bypass Tier1 for testing
             for sku in self.knowledge_base:
                 # Exact matching on structural signature, goal, and schema
-                if (
-                    sku.structural_signature == context.structural_signature
-                    and sku.goal_template == context.goal
-                    and sku.schema_fingerprint == self.current_schema_fingerprint
-                ):
-                    # Predicate only uses safe properties (no identity fields)
-                    try:
-                        if sku.confidence_score >= self.min_confidence_threshold and sku.predicate(
-                            context.safe_properties
-                        ):
-                            tier1_candidates.append(sku)
-                    except (KeyError, TypeError, ValueError, AttributeError) as e:
-                        # Defensive: some predicates may error on missing fields
-                        print(f"[warn] Tier1 predicate error on SKU {sku.id}: {e}")
-                        continue
+                    if self._signatures_match(
+                        context.structural_signature, sku.structural_signature
+                    ) and sku.goal_template == context.goal and sku.schema_fingerprint == self.current_schema_fingerprint:
+                        # Predicate only uses safe properties (no identity fields)
+                        try:
+                            if sku.confidence_score >= self.min_confidence_threshold and sku.predicate(
+                                context.safe_properties
+                            ):
+                                tier1_candidates.append(sku)
+                        except (KeyError, TypeError, ValueError, AttributeError) as e:
+                            # Defensive: some predicates may error on missing fields
+                            print(f"[warn] Tier1 predicate error on SKU {sku.id}: {e}")
+                            continue
 
         if tier1_candidates:
             # Pick best by confidence score
@@ -88,11 +89,9 @@ class StrategyCache:
 
         for sku in self.knowledge_base:
             # Require exact match on structural signature, goal, and schema
-            if (
-                sku.structural_signature == context.structural_signature
-                and sku.goal_template == context.goal
-                and sku.schema_fingerprint == self.current_schema_fingerprint
-            ):
+            if self._signatures_match(
+                context.structural_signature, sku.structural_signature
+            ) and sku.goal_template == context.goal and sku.schema_fingerprint == self.current_schema_fingerprint:
                 if sku.confidence_score >= tier2_confidence_threshold:  # Higher bar for Tier 2
                     similarity = cosine_similarity(property_vector, sku.property_vector)
                     threshold = calculate_dynamic_similarity_threshold(
@@ -112,6 +111,58 @@ class StrategyCache:
 
         # Explicitly type-safe None return for all components
         return None, None, ""
+
+    def _to_abstract_signature(self, signature: str) -> str:
+        """Convert a canonical Level-2 signature to the configured abstraction level."""
+        if self.signature_level == 2:
+            return signature
+
+        abstract_parts = []
+        steps = signature.split('.')
+        for i, step in enumerate(steps):
+            if i == 0:
+                abstract_parts.append(step)
+                continue
+
+            match = re.match(r"([a-zA-Z_][a-zA-Z0-9_]*)(\(.*\))?", step)
+            if not match:
+                abstract_parts.append(step)
+                continue
+
+            op = match.group(1)
+            params = match.group(2) or "()"
+
+            # Level 0: Abstract everything
+            if self.signature_level == 0:
+                if op in ["out", "in", "both", "outE", "inE", "bothE"]:
+                    base_op = op.replace("E", "").replace("V", "")
+                    abstract_parts.append(f"{base_op}()")
+                else:
+                    abstract_parts.append("filter()")
+                continue
+
+            # Level 1: Edge-aware
+            if self.signature_level == 1:
+                if op in ["out", "in", "both", "outE", "inE", "bothE"]:
+                    if self.edge_whitelist:
+                        label_match = re.search(r"\('([^']+)'\)", params)
+                        if label_match and label_match.group(1) in self.edge_whitelist:
+                            abstract_parts.append(step)
+                        else:
+                            base_op = op.replace("E", "").replace("V", "")
+                            abstract_parts.append(f"{base_op}()")
+                    else:
+                        abstract_parts.append(step)
+                else:
+                    abstract_parts.append("filter()")
+
+        return ".".join(abstract_parts)
+
+    def _signatures_match(self, runtime_sig: str, stored_sig: str) -> bool:
+        """Check if two canonical signatures match at the configured abstraction level."""
+        runtime_abstract = self._to_abstract_signature(runtime_sig)
+        stored_abstract = self._to_abstract_signature(stored_sig)
+        return runtime_abstract == stored_abstract
 
     def add_sku(self, sku: StrategyKnowledgeUnit):
         """Add a new Strategy Knowledge Unit to the cache."""

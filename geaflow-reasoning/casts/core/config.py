@@ -77,6 +77,18 @@ class DefaultConfiguration(Configuration):
     # Fingerprint for the current graph schema. Changing this will invalidate all existing SKUs.
     CACHE_SCHEMA_FINGERPRINT = "schema_v1"
 
+    # SIGNATURE CONFIGURATION
+    # Signature abstraction level, used as a MATCHING STRATEGY at runtime.
+    # SKUs are always stored in their canonical, most detailed (Level 2) format.
+    #   0 = Abstract (out/in/both only)
+    #   1 = Edge-aware (out('friend'))
+    #   2 = Full path (including filters like has())
+    SIGNATURE_LEVEL = 2
+
+    # Optional: Whitelist of edge labels to track (None = track all).
+    # Only applicable if SIGNATURE_LEVEL >= 1.
+    SIGNATURE_EDGE_WHITELIST = None
+
     def get(self, key: str, default: Any = None) -> Any:
         """Get configuration value by key."""
         # Map key names to class attributes
@@ -101,6 +113,7 @@ class DefaultConfiguration(Configuration):
             "CACHE_SIMILARITY_KAPPA": self.CACHE_SIMILARITY_KAPPA,
             "CACHE_SIMILARITY_BETA": self.CACHE_SIMILARITY_BETA,
             "CACHE_SCHEMA_FINGERPRINT": self.CACHE_SCHEMA_FINGERPRINT,
+            "SIGNATURE_LEVEL": self.SIGNATURE_LEVEL,
         }
         return key_map.get(key, default)
 
@@ -112,6 +125,7 @@ class DefaultConfiguration(Configuration):
             "SIMULATION_NUM_EPOCHS": self.SIMULATION_NUM_EPOCHS,
             "SIMULATION_MAX_DEPTH": self.SIMULATION_MAX_DEPTH,
             "SIMULATION_REAL_SUBGRAPH_SIZE": self.SIMULATION_REAL_SUBGRAPH_SIZE,
+            "SIGNATURE_LEVEL": self.SIGNATURE_LEVEL,
         }
         return key_map.get(key, default)
 

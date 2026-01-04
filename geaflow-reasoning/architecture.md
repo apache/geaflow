@@ -43,10 +43,12 @@ casts/
 
 ### Simulation Engine Features
 
-- `casts/simulation/executor.py` natively supports bidirectional traversal templates (`both('label')` and `bothE('label')`), merging inbound and outbound edges before extending the traversal signature.
+- `casts/simulation/executor.py` always generates **Level 2 (canonical)** signatures by appending the full decision string (e.g., `out('friend')`, `has('type','Person')`) to the traversal path. This ensures all edge labels and filter parameters are preserved in the knowledge base.
+- The executor natively supports bidirectional traversal templates (`both('label')` and `bothE('label')`), merging inbound and outbound edges.
+- Signature abstraction for matching purposes is handled separately by `StrategyCache` at query time (see Section 2.1 and 2.3).
 - Execution logging for all edge modes is normalized to keep diagnostics readable and lint-compliant.
 - Traversal errors are trapped via a narrow set of runtime exceptions so simulations keep running even if a malformed SKU decision occurs.
-- The simulation engine does not own hard-coded business goals; all traversal objectives come from the `DataSource`’s `GoalGenerator`, keeping experiments domain-agnostic.
+- The simulation engine does not own hard-coded business goals; all traversal objectives come from the `DataSource`'s `GoalGenerator`, keeping experiments domain-agnostic.
 
 ### LLM-Based Path Evaluation (Verifier)
 
@@ -175,11 +177,30 @@ We summarize the key correspondences between the mathematical model and the refa
 
 - In the model, each decision context is decomposed as $c = (s, p, g)$, where $s$ is the structural path signature, $p$ the local property state, and $g$ the query goal.
 - In the architecture, `casts/core/models.py` defines a `Context` dataclass that explicitly carries:
-  - `structural_signature`: Current traversal path as a string (e.g., "V().out().in()") (realizing $s$)
+  - `structural_signature`: Current traversal path as a string (realizing $s$). The system uses a **"Canonical Storage, Abstract Matching"** architecture:
+    - **Storage**: SKUs always store signatures in **Level 2 (canonical)** format: `"V().out('friend').has('type','Person').out('supplier')"` - preserving all edge labels and filter parameters
+    - **Matching**: At runtime, both the query signature $s$ and stored signature $s_{\text{sku}}$ are dynamically abstracted to the configured `SIGNATURE_LEVEL` before comparison:
+      - **Level 0** (Abstract matching): `"V().out().filter().out()"` - only Step types
+      - **Level 1** (Edge-aware matching, default): `"V().out('friend').filter().out('supplier')"` - preserves edge labels, abstracts filters
+      - **Level 2** (Full path matching): `"V().out('friend').has('type','Person').out('supplier')"` - exact match
+    - This decoupling ensures the knowledge base remains information-lossless while matching strategy is flexibly configurable
   - `properties`: Current node properties dictionary (realizing $p$)
   - `goal`: Natural language description of the traversal objective (realizing $g$)
 - The `Context` class provides a `safe_properties` property that filters out identity fields (id, node_id, uuid, etc.) using `IDENTITY_KEYS`, ensuring only decision-relevant attributes are used.
 - Property filtering is implemented directly in the `Context` class rather than in separate helpers, keeping the logic close to the data structure.
+
+**Rationale for canonical storage with edge labels**:
+
+The "Canonical Storage, Abstract Matching" architecture addresses critical design requirements:
+
+- **Problem**: If signatures were stored in abstract form (Level 0), edge semantics would be permanently lost. Abstract signatures like `"V().out().out()"` cannot distinguish semantically different paths such as `friend→friend` vs `transfer→loan` vs `guarantee→guarantee`, leading to SKU collision and incorrect decision reuse in fraud detection scenarios.
+
+- **Solution**: By storing all SKUs in Level 2 (canonical) format, the knowledge base preserves complete path semantics. The abstraction logic is moved to the matching phase in `StrategyCache._to_abstract_signature()`:
+  - Signature space: Level 0 = $O(3^d)$, Level 1 = $O((3|E|)^d)$, Level 2 = $O((3|E| \cdot F)^d)$ where $|E|$ is edge types and $F$ is filter combinations
+  - Hash collision reduction: Level 1 vs Level 0 reduces collisions by ~1000x for typical graphs ($|E|=10$, $d=3$)
+  - Runtime flexibility: Matching strategy can be changed via configuration without regenerating SKUs
+
+- **Trade-off**: Level 1 (default) balances precision (edge semantics) with generalization (abstract filters). Level 0 remains available for highly homogeneous graphs, while Level 2 enables zero-tolerance critical paths.
 
 #### 2.2 Strategy Knowledge Units (SKUs) and knowledge base $\mathcal{K}$
 
@@ -218,8 +239,13 @@ $$
 
 In the architecture, these constructions are realized by `StrategyCache` in `casts/core/services.py`:
 
-- SKUs are indexed by $(s, g)$ so that all candidates with matching structure and goal can be retrieved in expected $O(1)$ time;
-- $\mathcal{C}_{\text{strict}}(c)$ is formed in memory by filtering this list using the predicate $\Phi$ on $p$, the fingerprint equality $\rho = \rho_{\text{current}}$, and the confidence bound $\eta \ge \eta_{\min}$;
+- Structural signature matching $(s_{\text{sku}}=s)$ is implemented via `_signatures_match(runtime_sig, stored_sig)`, which dynamically abstracts both signatures to the configured `SIGNATURE_LEVEL` before comparison (see Section 2.1 for the canonical storage architecture);
+- $\mathcal{C}_{\text{strict}}(c)$ is formed by iterating through all SKUs in the knowledge base and filtering by:
+  1. Signature match via `_signatures_match()` (abstracts both $s$ and $s_{\text{sku}}$ to the same level)
+  2. Exact goal match ($g_{\text{sku}}=g$)
+  3. Predicate evaluation ($\Phi(p)$ returns True)
+  4. Fingerprint equality ($\rho = \rho_{\text{current}}$)
+  5. Confidence threshold ($\eta \ge \eta_{\min}$)
 - if $\mathcal{C}_{\text{strict}}(c)$ is empty, `StrategyCache` delegates to `EmbeddingService` (in `casts/services/embedding.py`) to compute $e(p)$ and similarities to $v_{\text{proto}}$, and then applies the stricter Tier 2 constraints ($\delta_{\text{sim}}$, $\eta_{\text{tier2}}(\eta_{\min})$) to obtain $\mathcal{C}_{\text{sim}}(c)$;
 - finally, the union $\mathcal{C}_{\text{valid}}(c)$ is implicitly constructed by taking Tier 1 results if available, otherwise Tier 2 results, exactly as in the theory.
 

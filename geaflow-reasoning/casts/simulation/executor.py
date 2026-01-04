@@ -137,13 +137,9 @@ class TraversalExecutor:
         # Build final signatures for all nodes
         final_nodes: List[Tuple[str, str, Tuple[Any, ...] | None]] = []
         for next_node_id, _, traversed_edge in next_nodes:
-            if is_filter_step:
-                next_signature = f"{current_signature}.filter()"
-            else:
-                if direction is not None:
-                    next_signature = f"{current_signature}.{direction}()"
-                else:
-                    next_signature = current_signature
+            # Always append the full decision to create a canonical, Level-2 signature.
+            # The abstraction logic is now handled by the StrategyCache during matching.
+            next_signature = f"{current_signature}.{decision}"
             final_nodes.append((next_node_id, next_signature, traversed_edge))
 
         return final_nodes
