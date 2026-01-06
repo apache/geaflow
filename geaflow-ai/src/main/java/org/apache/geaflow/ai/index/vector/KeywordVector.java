@@ -50,7 +50,7 @@ public class KeywordVector implements IVector {
         int count = 0;
         for (String keyword : large) {
             if (keyword2TimesMap.containsKey(keyword)) {
-                count+=keyword2TimesMap.get(keyword);
+                count += keyword2TimesMap.get(keyword);
             }
         }
         return count;
