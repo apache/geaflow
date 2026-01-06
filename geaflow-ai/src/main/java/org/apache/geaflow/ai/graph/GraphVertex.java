@@ -24,7 +24,7 @@ import org.apache.geaflow.ai.graph.io.Vertex;
 
 public class GraphVertex implements GraphEntity {
 
-    public final Vertex vertex;
+    private final Vertex vertex;
 
     public GraphVertex(Vertex vertex) {
         this.vertex = vertex;

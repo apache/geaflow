@@ -27,26 +27,33 @@ import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.RequestBody;
+import org.apache.geaflow.ai.common.config.Constants;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class OkHttpDirectConnector {
 
-    private static Gson GSON = new Gson();
+    private static final Logger LOGGER = LoggerFactory.getLogger(OkHttpDirectConnector.class);
 
-    private String endpoint;
-    private String useApi;
-    private String userToken;
-    private OkHttpClient client;
+    private static final Gson GSON = new Gson();
+    private static OkHttpClient client;
+
+    private final String endpoint;
+    private final String useApi;
+    private final String userToken;
 
     public OkHttpDirectConnector(String endpoint, String useApi, String userToken) {
         this.endpoint = endpoint;
         this.useApi = useApi;
         this.userToken = userToken;
-        OkHttpClient.Builder builder = new OkHttpClient.Builder();
-        builder.callTimeout(300, TimeUnit.SECONDS);
-        builder.connectTimeout(300, TimeUnit.SECONDS);
-        builder.readTimeout(300, TimeUnit.SECONDS);
-        builder.writeTimeout(300, TimeUnit.SECONDS);
-        this.client = builder.build();
+        if (client == null) {
+            OkHttpClient.Builder builder = new OkHttpClient.Builder();
+            builder.callTimeout(Constants.HTTP_CALL_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            builder.connectTimeout(Constants.HTTP_CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            builder.readTimeout(Constants.HTTP_READ_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            builder.writeTimeout(Constants.HTTP_WRITE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            client = builder.build();
+        }
     }
 
     public org.apache.geaflow.ai.common.model.Response post(String bodyJson) {
@@ -56,7 +63,7 @@ public class OkHttpDirectConnector {
         );
 
         String url = endpoint + useApi;
-        System.out.println(url);
+        LOGGER.info(url);
         Request request = new Request.Builder()
                 .url(url)
                 .addHeader("Authorization", "Bearer " + userToken)
@@ -69,10 +76,11 @@ public class OkHttpDirectConnector {
                 String responseBody = response.body().string();
                 return GSON.fromJson(responseBody, org.apache.geaflow.ai.common.model.Response.class);
             } else {
-                System.out.println("Request failed with code: " + response.code());
+                LOGGER.info("Request failed with code: " + response.code());
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            LOGGER.error("Http connect exception", e);
+            throw new RuntimeException(e);
         }
         return null;
     }
@@ -97,10 +105,10 @@ public class OkHttpDirectConnector {
                 String responseBody = response.body().string();
                 return GSON.fromJson(responseBody, EmbeddingResponse.class);
             } else {
-                System.out.println("Request failed with code: " + response.code());
-                System.out.println("Request failed with request bodyJson: "
+                LOGGER.info("Request failed with code: " + response.code());
+                LOGGER.info("Request failed with request bodyJson: "
                         + bodyJson);
-                System.out.println("Request failed with response body: "
+                LOGGER.info("Request failed with response body: "
                         + Objects.requireNonNull(response.body()).string());
             }
         } catch (IOException e) {

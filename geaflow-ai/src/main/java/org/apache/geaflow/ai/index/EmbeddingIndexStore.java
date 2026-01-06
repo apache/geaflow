@@ -25,8 +25,9 @@ import java.nio.charset.Charset;
 import java.util.*;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.tuple.Pair;
-import org.apache.geaflow.ai.common.model.ChatRobot;
-import org.apache.geaflow.ai.common.model.ModelInfo;
+import org.apache.geaflow.ai.common.config.Constants;
+import org.apache.geaflow.ai.common.model.EmbeddingService;
+import org.apache.geaflow.ai.common.model.ModelConfig;
 import org.apache.geaflow.ai.common.model.ModelUtils;
 import org.apache.geaflow.ai.graph.GraphAccessor;
 import org.apache.geaflow.ai.graph.GraphEdge;
@@ -35,21 +36,25 @@ import org.apache.geaflow.ai.graph.GraphVertex;
 import org.apache.geaflow.ai.index.vector.EmbeddingVector;
 import org.apache.geaflow.ai.index.vector.IVector;
 import org.apache.geaflow.ai.verbalization.VerbalizationFunction;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class EmbeddingIndexStore implements IndexStore {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(EmbeddingIndexStore.class);
 
     private GraphAccessor graphAccessor;
     private VerbalizationFunction verbFunc;
     private String indexFilePath;
-    private ModelInfo modelInfo;
-    private Map<GraphEntity, List<ChatRobot.EmbeddingResult>> indexStoreMap;
+    private ModelConfig modelConfig;
+    private Map<GraphEntity, List<EmbeddingService.EmbeddingResult>> indexStoreMap;
 
     public void initStore(GraphAccessor graphAccessor, VerbalizationFunction func,
-                          String indexFilePath, ModelInfo modelInfo) {
+                          String indexFilePath, ModelConfig modelInfo) {
         this.graphAccessor = graphAccessor;
         this.verbFunc = func;
         this.indexFilePath = indexFilePath;
-        this.modelInfo = modelInfo;
+        this.modelConfig = modelInfo;
         this.indexStoreMap = new HashMap<>();
 
         //Read index items from indexFilePath
@@ -62,7 +67,7 @@ public class EmbeddingIndexStore implements IndexStore {
                 key2EntityMap.put(ModelUtils.getGraphEntityKey(edge), edge);
             }
         }
-        System.out.println("Success to scan entities. total entities num: " + key2EntityMap.size());
+        LOGGER.info("Success to scan entities. total entities num: " + key2EntityMap.size());
 
         try {
             File indexFile = new File(this.indexFilePath);
@@ -73,7 +78,7 @@ public class EmbeddingIndexStore implements IndexStore {
                     parentDir.mkdirs();
                 }
                 indexFile.createNewFile();
-                System.out.println("Success to create new index store file. Path: " + this.indexFilePath);
+                LOGGER.info("Success to create new index store file. Path: " + this.indexFilePath);
             }
         } catch (Throwable e) {
             throw new RuntimeException(e);
@@ -92,8 +97,8 @@ public class EmbeddingIndexStore implements IndexStore {
                     continue;
                 }
                 try {
-                    ChatRobot.EmbeddingResult embedding =
-                            new Gson().fromJson(line, ChatRobot.EmbeddingResult.class);
+                    EmbeddingService.EmbeddingResult embedding =
+                            new Gson().fromJson(line, EmbeddingService.EmbeddingResult.class);
                     String key = embedding.input;
                     GraphEntity entity = key2EntityMap.get(key);
                     if (entity != null) {
@@ -101,26 +106,26 @@ public class EmbeddingIndexStore implements IndexStore {
                     }
                     count++;
                 } catch (Throwable e) {
-                    System.out.println("Cannot parse embedding item: " + line);
+                    LOGGER.info("Cannot parse embedding item: " + line);
                 }
             }
         } catch (Throwable e) {
             throw new RuntimeException(e);
         }
 
-        System.out.println("Success to read index store file. items num: " + count);
-        System.out.println("Success to rebuild index with file. index num: " + this.indexStoreMap.size());
+        LOGGER.info("Success to read index store file. items num: " + count);
+        LOGGER.info("Success to rebuild index with file. index num: " + this.indexStoreMap.size());
 
 
         //Scan entities in the graph, make new index items
-        ChatRobot chatRobot = new ChatRobot();
-        chatRobot.setModelInfo(modelInfo);
+        EmbeddingService embeddingService = new EmbeddingService();
+        embeddingService.setModelConfig(modelInfo);
 
-        final int BATCH_SIZE = 32;
+        final int BATCH_SIZE = Constants.EMBEDDING_INDEX_STORE_BATCH_SIZE;
         List<GraphEntity> pendingEntities = new ArrayList<>(BATCH_SIZE);
         Set<GraphEntity> batchEntitiesBuffer = new HashSet<>(BATCH_SIZE);
         List<String> result = new ArrayList<>();
-        final int REPORT_SIZE = 100;
+        final int REPORT_SIZE = Constants.EMBEDDING_INDEX_STORE_REPORT_SIZE;
         long reportedCount = this.indexStoreMap.size();
         long addedCount = this.indexStoreMap.size();
         for (Iterator<GraphVertex> itV = graphAccessor.scanVertex(); itV.hasNext(); ) {
@@ -132,7 +137,7 @@ public class EmbeddingIndexStore implements IndexStore {
                 batchEntitiesBuffer.add(vertex);
                 pendingEntities.add(vertex);
                 if (pendingEntities.size() >= BATCH_SIZE) {
-                    result.addAll(indexBatch(chatRobot, pendingEntities));
+                    result.addAll(indexBatch(embeddingService, pendingEntities));
                     flushBatchIndex(result, false);
                     pendingEntities.clear();
                     batchEntitiesBuffer.clear();
@@ -146,7 +151,7 @@ public class EmbeddingIndexStore implements IndexStore {
                     batchEntitiesBuffer.add(edge);
                     pendingEntities.add(edge);
                     if (pendingEntities.size() >= BATCH_SIZE) {
-                        result.addAll(indexBatch(chatRobot, pendingEntities));
+                        result.addAll(indexBatch(embeddingService, pendingEntities));
                         flushBatchIndex(result, false);
                         pendingEntities.clear();
                         batchEntitiesBuffer.clear();
@@ -155,31 +160,32 @@ public class EmbeddingIndexStore implements IndexStore {
                 }
             }
             if (addedCount - reportedCount > REPORT_SIZE) {
-                System.out.println("added batch index. added num: " + addedCount);
+                LOGGER.info("added batch index. added num: " + addedCount);
                 reportedCount = addedCount;
             }
         }
         if (pendingEntities.size() > 0) {
-            result.addAll(indexBatch(chatRobot, pendingEntities));
+            result.addAll(indexBatch(embeddingService, pendingEntities));
             flushBatchIndex(result, true);
             addedCount += pendingEntities.size();
             pendingEntities.clear();
             batchEntitiesBuffer.clear();
         }
 
-        System.out.printf("Successfully added %d new index items. Total indexed: %d%n",
+        LOGGER.info("Successfully added {} new index items. Total indexed: {}",
                 addedCount, indexStoreMap.size());
     }
 
-    private List<String> indexBatch(ChatRobot chatRobot, List<GraphEntity> pendingEntities) {
-        if (pendingEntities == null || chatRobot == null || pendingEntities.isEmpty()) {
+    private List<String> indexBatch(EmbeddingService service, List<GraphEntity> pendingEntities) {
+        if (pendingEntities == null || service == null || pendingEntities.isEmpty()) {
             return new ArrayList<>();
         }
         List<String> pendingTexts = new ArrayList<>(pendingEntities.size());
         Map<GraphEntity, Pair<Integer, Integer>> entity2StartEndPair = new HashMap<>();
         for (GraphEntity e : pendingEntities) {
             Integer start = pendingTexts.size();
-            pendingTexts.addAll(ModelUtils.splitLongText(128,
+            pendingTexts.addAll(ModelUtils.splitLongText(
+                Constants.EMBEDDING_INDEX_STORE_SPLIT_TEXT_CHUNK_SIZE,
                     verbFunc.verbalize(e).toArray(new String[0])));
             Integer end = pendingTexts.size();
             entity2StartEndPair.put(e, Pair.of(start, end));
@@ -194,7 +200,7 @@ public class EmbeddingIndexStore implements IndexStore {
             int end = Math.min(i + batchSize, pendingTextsList.size());
             List<String> batch = pendingTextsList.subList(i, end);
             String[] textsArray = batch.toArray(new String[0]);
-            String embeddingResultStr = chatRobot.embedding(textsArray);
+            String embeddingResultStr = service.embedding(textsArray);
             List<String> splitResults = Arrays.asList(embeddingResultStr.trim().split("\n"));
             result.addAll(splitResults);
 
@@ -203,11 +209,11 @@ public class EmbeddingIndexStore implements IndexStore {
         List<String> formatResult = new ArrayList<>();
         for (Map.Entry<GraphEntity, Pair<Integer, Integer>> entry : entity2StartEndPair.entrySet()) {
             GraphEntity e = entry.getKey();
-            List<ChatRobot.EmbeddingResult> embeddings = new ArrayList<>();
+            List<EmbeddingService.EmbeddingResult> embeddings = new ArrayList<>();
             for (int i = entry.getValue().getLeft(); i < entry.getValue().getRight(); i++) {
                 if (StringUtils.isNotBlank(result.get(i))) {
-                    ChatRobot.EmbeddingResult res = gson.fromJson(result.get(i),
-                            ChatRobot.EmbeddingResult.class);
+                    EmbeddingService.EmbeddingResult res = gson.fromJson(result.get(i),
+                        EmbeddingService.EmbeddingResult.class);
                     res.input = ModelUtils.getGraphEntityKey(e);
                     formatResult.add(gson.toJson(res));
                     embeddings.add(res);
@@ -219,7 +225,7 @@ public class EmbeddingIndexStore implements IndexStore {
     }
 
     private void flushBatchIndex(List<String> newItemStrings, boolean force) {
-        final int WRITE_SIZE = 1024;
+        final int WRITE_SIZE = Constants.EMBEDDING_INDEX_STORE_FLUSH_WRITE_SIZE;
         if (force || newItemStrings.size() >= WRITE_SIZE) {
             try (FileWriter fw = new FileWriter(this.indexFilePath, true);
                  BufferedWriter writer = new BufferedWriter(fw);
@@ -227,7 +233,7 @@ public class EmbeddingIndexStore implements IndexStore {
                 for (String item : newItemStrings) {
                     out.println(item);
                 }
-                System.out.println("Success to append " + newItemStrings.size() + " new index items to file.");
+                LOGGER.info("Success to append " + newItemStrings.size() + " new index items to file.");
             } catch (IOException e) {
                 throw new RuntimeException("Failed to append to index file: " + this.indexFilePath, e);
             }
@@ -238,9 +244,9 @@ public class EmbeddingIndexStore implements IndexStore {
     @Override
     public List<IVector> getEntityIndex(GraphEntity entity) {
         if (entity != null && indexStoreMap.get(entity) != null) {
-            List<ChatRobot.EmbeddingResult> resultList = indexStoreMap.get(entity);
+            List<EmbeddingService.EmbeddingResult> resultList = indexStoreMap.get(entity);
             List<IVector> result = new ArrayList<>();
-            for (ChatRobot.EmbeddingResult res : resultList) {
+            for (EmbeddingService.EmbeddingResult res : resultList) {
                 double[] embedding = res.embedding;
                 result.add(new EmbeddingVector(embedding));
             }

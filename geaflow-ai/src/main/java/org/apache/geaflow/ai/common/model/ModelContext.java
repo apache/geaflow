@@ -19,13 +19,15 @@
 
 package org.apache.geaflow.ai.common.model;
 
+import org.apache.geaflow.ai.common.config.Constants;
+
 public class ModelContext {
 
     public String model;
     public ModelMessage[] messages;
-    private ModelInfo modelInfo;
+    private ModelConfig modelInfo;
 
-    public ModelContext(ModelInfo modelInfo, ModelMessage[] messages) {
+    public ModelContext(ModelConfig modelInfo, ModelMessage[] messages) {
         this.modelInfo = modelInfo;
         this.messages = messages;
         if (this.modelInfo != null) {
@@ -37,11 +39,11 @@ public class ModelContext {
         return new ModelContext(null, new ModelMessage[0]);
     }
 
-    public ModelInfo getModelInfo() {
+    public ModelConfig getModelInfo() {
         return modelInfo;
     }
 
-    public void setModelInfo(ModelInfo modelInfo) {
+    public void setModelInfo(ModelConfig modelInfo) {
         this.modelInfo = modelInfo;
         if (this.modelInfo != null) {
             this.model = this.modelInfo.getModel();
@@ -49,7 +51,7 @@ public class ModelContext {
     }
 
     public ModelContext userSay(String sentence) {
-        ModelMessage msg = new ModelMessage("user", sentence);
+        ModelMessage msg = new ModelMessage(Constants.MODEL_CONTEXT_ROLE_USER, sentence);
         ModelMessage[] newMessages = new ModelMessage[messages.length + 1];
         for (int i = 0; i < messages.length; i++) {
             newMessages[i] = messages[i];

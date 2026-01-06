@@ -22,7 +22,6 @@ package org.apache.geaflow.ai.graph;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
-import java.util.NoSuchElementException;
 import java.util.function.Function;
 import org.apache.geaflow.ai.graph.io.*;
 
@@ -52,12 +51,20 @@ public class LocalFileGraphAccessor implements GraphAccessor {
 
     @Override
     public GraphVertex getVertex(String label, String id) {
-        return new GraphVertex(graph.getVertex(label, id));
+        Vertex innerVertex = graph.getVertex(label, id);
+        if (innerVertex == null) {
+            return null;
+        }
+        return new GraphVertex(innerVertex);
     }
 
     @Override
     public GraphEdge getEdge(String label, String src, String dst) {
-        return new GraphEdge(graph.getEdge(label, src, dst));
+        Edge innerEdge = graph.getEdge(label, src, dst);
+        if (innerEdge == null) {
+            return null;
+        }
+        return new GraphEdge(innerEdge);
     }
 
     @Override
@@ -112,16 +119,8 @@ public class LocalFileGraphAccessor implements GraphAccessor {
 
         @Override
         public GraphVertex next() {
-            if (!hasNext()) {
-                throw new NoSuchElementException();
-            }
             Vertex nextVertex = vertexIterator.next();
             return new GraphVertex(nextVertex);
-        }
-
-        @Override
-        public void remove() {
-            vertexIterator.remove();
         }
     }
 
@@ -141,11 +140,6 @@ public class LocalFileGraphAccessor implements GraphAccessor {
         public GraphEdge next() {
             Edge edge = delegate.next();
             return new GraphEdge(edge);
-        }
-
-        @Override
-        public void remove() {
-            delegate.remove();
         }
     }
 

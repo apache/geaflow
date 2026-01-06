@@ -17,7 +17,24 @@
  * under the License.
  */
 
-package org.apache.geaflow.ai.engine;
+package org.apache.geaflow.ai.common.model;
 
-public interface GASInterface {
+public class ChatService extends AbstractModelService {
+
+    public ChatService() {
+        super(new ModelConfig());
+    }
+
+    public ChatService(String model) {
+        super(new ModelConfig());
+        getModelConfig().setModel(model);
+    }
+
+    public String chat(String sentence) {
+        RemoteModelClient model = new RemoteModelClient();
+        ModelContext context = ModelContext.emptyContext();
+        context.setModelInfo(getModelConfig());
+        context.userSay(sentence);
+        return model.chat(context);
+    }
 }

@@ -27,5 +27,6 @@ public class SearchConstants {
     public static String DST = "dst";
     public static String CONTENT = "content";
     public static String OPERATOR = "operator";
+    public static String DELIMITER = "  ";
 
 }

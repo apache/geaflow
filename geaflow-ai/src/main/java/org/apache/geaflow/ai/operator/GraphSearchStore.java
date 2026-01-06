@@ -49,14 +49,14 @@ public class GraphSearchStore {
     public boolean indexVertex(GraphVertex graphVertex, List<IVector> indexVectors) {
         Map<String, String> kv = new HashMap<>();
         Vertex vertex = graphVertex.getVertex();
-        kv.put("id", vertex.getId());
-        kv.put("label", vertex.getLabel());
+        kv.put(SearchConstants.ID, vertex.getId());
+        kv.put(SearchConstants.LABEL, vertex.getLabel());
         List<String> contents = new ArrayList<>(indexVectors.size());
         for (IVector v : indexVectors) {
             contents.add(v.toString());
         }
-        String content = String.join("  ", contents);
-        kv.put("content", content);
+        String content = String.join(SearchConstants.DELIMITER, contents);
+        kv.put(SearchConstants.CONTENT, content);
 
         try {
             store.addDoc(kv);
@@ -70,15 +70,15 @@ public class GraphSearchStore {
     public boolean indexEdge(GraphEdge graphEdge, List<IVector> indexVectors) {
         Map<String, String> kv = new HashMap<>();
         Edge edge = graphEdge.getEdge();
-        kv.put("src", edge.getSrcId());
-        kv.put("dst", edge.getDstId());
-        kv.put("label", edge.getLabel());
+        kv.put(SearchConstants.SRC, edge.getSrcId());
+        kv.put(SearchConstants.DST, edge.getDstId());
+        kv.put(SearchConstants.LABEL, edge.getLabel());
         List<String> contents = new ArrayList<>(indexVectors.size());
         for (IVector v : indexVectors) {
             contents.add(v.toString());
         }
-        String content = String.join("  ", contents);
-        kv.put("content", content);
+        String content = String.join(SearchConstants.DELIMITER, contents);
+        kv.put(SearchConstants.CONTENT, content);
         try {
             store.addDoc(kv);
         } catch (Throwable e) {
@@ -91,7 +91,7 @@ public class GraphSearchStore {
     public List<GraphEntity> search(String key1, GraphAccessor graphAccessor) {
         try {
             String query = SearchUtils.formatQuery(key1);
-            TopDocs docs = store.searchDoc("content", query);
+            TopDocs docs = store.searchDoc(SearchConstants.CONTENT, query);
             ScoreDoc[] scoreDocArray = docs.scoreDocs;
             Set<String> vertexLabels = graphAccessor.getGraphSchema().getVertexSchemaList()
                     .stream().map(VertexSchema::getLabel).collect(Collectors.toSet());
@@ -104,11 +104,17 @@ public class GraphSearchStore {
                 String label = document.get(SearchConstants.LABEL);
                 if (vertexLabels.contains(label)) {
                     String id = document.get(SearchConstants.ID);
-                    result.add(graphAccessor.getVertex(label, id));
+                    GraphVertex graphVertex = graphAccessor.getVertex(label, id);
+                    if (graphVertex != null) {
+                        result.add(graphVertex);
+                    }
                 } else if (edgeLabels.contains(label)) {
                     String src = document.get(SearchConstants.SRC);
                     String dst = document.get(SearchConstants.DST);
-                    result.add(graphAccessor.getEdge(label, src, dst));
+                    GraphEdge graphEdge = graphAccessor.getEdge(label, src, dst);
+                    if (graphEdge != null) {
+                        result.add(graphEdge);
+                    }
                 }
             }
             return result;

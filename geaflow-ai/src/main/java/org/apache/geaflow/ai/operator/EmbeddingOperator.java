@@ -21,6 +21,7 @@ package org.apache.geaflow.ai.operator;
 
 import java.util.*;
 import java.util.stream.Collectors;
+import org.apache.geaflow.ai.common.config.Constants;
 import org.apache.geaflow.ai.graph.GraphAccessor;
 import org.apache.geaflow.ai.graph.GraphEntity;
 import org.apache.geaflow.ai.graph.GraphVertex;
@@ -41,8 +42,8 @@ public class EmbeddingOperator implements SearchOperator {
     public EmbeddingOperator(GraphAccessor accessor, IndexStore store) {
         this.graphAccessor = Objects.requireNonNull(accessor);
         this.indexStore = Objects.requireNonNull(store);
-        this.threshold = 0.50;
-        this.topN = 50;
+        this.threshold = Constants.EMBEDDING_OPERATE_DEFAULT_THRESHOLD;
+        this.topN = Constants.EMBEDDING_OPERATE_DEFAULT_TOPN;
     }
 
     @Override

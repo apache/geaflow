@@ -22,30 +22,20 @@ package org.apache.geaflow.ai.common.model;
 import com.google.gson.Gson;
 import java.util.List;
 
-public class ChatRobot {
+public class EmbeddingService extends AbstractModelService {
 
-    private ModelInfo modelInfo;
-
-    public ChatRobot() {
-        this.modelInfo = new ModelInfo();
+    public EmbeddingService() {
+        super(new ModelConfig());
     }
 
-    public ChatRobot(String model) {
-        this.modelInfo = new ModelInfo();
-        this.modelInfo.setModel(model);
-    }
-
-    public String singleSentence(String sentence) {
-        OfflineModelDirect model = new OfflineModelDirect();
-        ModelContext context = ModelContext.emptyContext();
-        context.setModelInfo(modelInfo);
-        context.userSay(sentence);
-        return model.chat(context);
+    public EmbeddingService(String model) {
+        super(new ModelConfig());
+        getModelConfig().setModel(model);
     }
 
     public String embedding(String... inputs) {
-        OfflineModelDirect model = new OfflineModelDirect();
-        ModelEmbedding context = ModelEmbedding.embedding(modelInfo, inputs);
+        RemoteModelClient model = new RemoteModelClient();
+        ModelEmbedding context = ModelEmbedding.embedding(getModelConfig(), inputs);
         List<EmbeddingResult> embeddingResults = model.embedding(context);
         Gson gson = new Gson();
         StringBuilder builder = new StringBuilder();
@@ -55,21 +45,6 @@ public class ChatRobot {
             builder.append(json);
         }
         return builder.toString();
-    }
-
-    public EmbeddingResult embeddingSingle(String input) {
-        OfflineModelDirect model = new OfflineModelDirect();
-        ModelEmbedding context = ModelEmbedding.embedding(modelInfo, input);
-        List<EmbeddingResult> embeddingResults = model.embedding(context);
-        return embeddingResults.get(0);
-    }
-
-    public ModelInfo getModelInfo() {
-        return modelInfo;
-    }
-
-    public void setModelInfo(ModelInfo modelInfo) {
-        this.modelInfo = modelInfo;
     }
 
     public static class EmbeddingResult {

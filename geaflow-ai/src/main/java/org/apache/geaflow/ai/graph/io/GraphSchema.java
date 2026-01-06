@@ -21,6 +21,7 @@ package org.apache.geaflow.ai.graph.io;
 
 import java.util.ArrayList;
 import java.util.List;
+import org.apache.geaflow.ai.common.config.Constants;
 import org.apache.geaflow.ai.graph.GraphEdge;
 import org.apache.geaflow.ai.graph.GraphVertex;
 import org.apache.geaflow.ai.verbalization.PromptFormatter;
@@ -78,7 +79,7 @@ public class GraphSchema implements Schema {
 
     @Override
     public String getName() {
-        return "GRAPH";
+        return Constants.PREFIX_GRAPH;
     }
 
     public void setPromptFormatter(PromptFormatter promptFormatter) {

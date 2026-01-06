@@ -25,7 +25,7 @@ public class TraversalVector implements IVector {
 
     public TraversalVector(String... vec) {
         if (vec.length % 3 != 0) {
-            throw new RuntimeException("Traversal vector shold be src-edge-dst pairs");
+            throw new RuntimeException("Traversal vector should be src-edge-dst triple");
         }
         this.vec = vec;
     }
@@ -42,24 +42,16 @@ public class TraversalVector implements IVector {
 
     @Override
     public String toString() {
-
-        StringBuilder builder = new StringBuilder();
-
+        StringBuilder sb = new StringBuilder("TraversalVector{vec=");
         for (int i = 0; i < vec.length; i++) {
-            if (i > 0 && i % 3 == 0) {
-                builder.append("; ");
+            if (i > 0) {
+                sb.append(i % 3 == 0 ? "; " : "-");
             }
-            if (i % 3 != 0) {
-                builder.append("-");
-            }
+            sb.append(vec[i]);
             if (i % 3 == 2) {
-                builder.append(">");
+                sb.append(">");
             }
-            String value = vec[i];
-            builder.append(value);
         }
-        return "TraversalVector{"
-                + "vec=" + builder.toString()
-                + '}';
+        return sb.append('}').toString();
     }
 }

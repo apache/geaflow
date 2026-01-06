@@ -54,7 +54,7 @@ public class SessionOperator implements SearchOperator {
         for (IVector v : keyWordVectors) {
             contents.add(v.toString());
         }
-        String query = String.join("  ", contents);
+        String query = String.join(SearchConstants.DELIMITER, contents);
         List<GraphEntity> globalResults = searchWithGlobalGraph(query);
         if (subGraphList == null || subGraphList.isEmpty()) {
             List<GraphVertex> startVertices = new ArrayList<>();

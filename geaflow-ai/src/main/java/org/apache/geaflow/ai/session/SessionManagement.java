@@ -23,6 +23,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.apache.geaflow.ai.common.config.Constants;
 import org.apache.geaflow.ai.subgraph.SubGraph;
 
 public class SessionManagement {
@@ -43,7 +44,7 @@ public class SessionManagement {
     }
 
     public String createSession() {
-        String sessionId = "TmpSession-" + System.nanoTime()
+        String sessionId = Constants.PREFIX_TMP_SESSION + System.nanoTime()
                 + UUID.randomUUID().toString().replace("-", "").substring(0, 8);
         if (createSession(sessionId)) {
             return sessionId;

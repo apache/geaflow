@@ -23,9 +23,9 @@ public class ModelEmbedding {
 
     public String model;
     public String[] input;
-    private ModelInfo modelInfo;
+    private ModelConfig modelInfo;
 
-    public ModelEmbedding(ModelInfo modelInfo, String[] inputs) {
+    public ModelEmbedding(ModelConfig modelInfo, String[] inputs) {
         this.modelInfo = modelInfo;
         this.input = inputs;
         if (this.modelInfo != null) {
@@ -33,15 +33,15 @@ public class ModelEmbedding {
         }
     }
 
-    public static ModelEmbedding embedding(ModelInfo modelInfo, String... strings) {
+    public static ModelEmbedding embedding(ModelConfig modelInfo, String... strings) {
         return new ModelEmbedding(modelInfo, strings);
     }
 
-    public ModelInfo getModelInfo() {
+    public ModelConfig getModelInfo() {
         return modelInfo;
     }
 
-    public void setModelInfo(ModelInfo modelInfo) {
+    public void setModelInfo(ModelConfig modelInfo) {
         this.modelInfo = modelInfo;
         if (this.modelInfo != null) {
             this.model = this.modelInfo.getModel();

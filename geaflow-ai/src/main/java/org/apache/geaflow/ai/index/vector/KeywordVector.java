@@ -20,6 +20,8 @@
 package org.apache.geaflow.ai.index.vector;
 
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
 
 public class KeywordVector implements IVector {
 
@@ -35,17 +37,20 @@ public class KeywordVector implements IVector {
 
     @Override
     public double match(IVector other) {
-        if (other.getType() != this.getType()) {
+        if (!(other instanceof KeywordVector)) {
             return 0.0;
         }
         KeywordVector otherKeyword = (KeywordVector) other;
+        String[] small = this.vec.length <= otherKeyword.vec.length ? this.vec : otherKeyword.vec;
+        String[] large = this.vec.length <= otherKeyword.vec.length ? otherKeyword.vec : this.vec;
+        Map<String, Long> keyword2TimesMap = new HashMap<>();
+        for (String word : small) {
+            keyword2TimesMap.put(word, keyword2TimesMap.getOrDefault(word, 0L) + 1);
+        }
         int count = 0;
-        for (String keyword1 : this.vec) {
-            for (String keyword2 : otherKeyword.vec) {
-                if (keyword1.equals(keyword2)) {
-                    count++;
-                    break;
-                }
+        for (String keyword : large) {
+            if (keyword2TimesMap.containsKey(keyword)) {
+                count+=keyword2TimesMap.get(keyword);
             }
         }
         return count;

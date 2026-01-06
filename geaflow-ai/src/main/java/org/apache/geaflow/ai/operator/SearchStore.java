@@ -21,6 +21,7 @@ package org.apache.geaflow.ai.operator;
 
 import java.io.IOException;
 import java.util.Map;
+import org.apache.geaflow.ai.common.config.Constants;
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.standard.StandardAnalyzer;
 import org.apache.lucene.document.Document;
@@ -67,7 +68,7 @@ public class SearchStore {
             readStats = true;
         }
         QueryParser parser = new QueryParser(field, analyzer);
-        return searcher.search(parser.parse(content), 30);
+        return searcher.search(parser.parse(content), Constants.GRAPH_SEARCH_STORE_DEFAULT_TOPN);
     }
 
     public Document getDoc(int docId) {

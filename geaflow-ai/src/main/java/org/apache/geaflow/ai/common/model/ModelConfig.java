@@ -19,17 +19,17 @@
 
 package org.apache.geaflow.ai.common.model;
 
-public class ModelInfo {
+public class ModelConfig {
 
     private String model;
     private String url;
     private String api;
     private String userToken;
 
-    public ModelInfo() {
+    public ModelConfig() {
     }
 
-    public ModelInfo(String model, String url, String api, String userToken) {
+    public ModelConfig(String model, String url, String api, String userToken) {
         this.model = model;
         this.url = url;
         this.api = api;

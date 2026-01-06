@@ -24,7 +24,7 @@ import org.apache.geaflow.ai.graph.io.Edge;
 
 public class GraphEdge implements GraphEntity {
 
-    public final Edge edge;
+    private final Edge edge;
 
     public GraphEdge(Edge edge) {
         this.edge = edge;

@@ -22,17 +22,19 @@ package org.apache.geaflow.ai.common.model;
 import com.google.gson.Gson;
 import java.util.ArrayList;
 import java.util.List;
+import org.apache.geaflow.ai.common.config.Constants;
 import org.apache.geaflow.common.utils.RetryCommand;
 
-public class OfflineModelDirect {
-
+public class RemoteModelClient {
 
     public String chat(ModelContext context) {
-        ModelInfo info = context.getModelInfo();
+        ModelConfig info = context.getModelInfo();
         OkHttpDirectConnector connector = new OkHttpDirectConnector(
                 info.getUrl(), info.getApi(), info.getUserToken());
         String request = new Gson().toJson(context);
-        org.apache.geaflow.ai.common.model.Response response = connector.post(request);
+        org.apache.geaflow.ai.common.model.Response response = RetryCommand.run(() -> {
+            return connector.post(request);
+        }, Constants.MODEL_CLIENT_RETRY_TIMES, Constants.MODEL_CLIENT_RETRY_INTERVAL_MS);
         if (response.choices != null && !response.choices.isEmpty()) {
             for (Response.Choice choice : response.choices) {
                 if (choice.message != null) {
@@ -44,8 +46,8 @@ public class OfflineModelDirect {
         return null;
     }
 
-    public List<ChatRobot.EmbeddingResult> embedding(ModelEmbedding context) {
-        ModelInfo info = context.getModelInfo();
+    public List<EmbeddingService.EmbeddingResult> embedding(ModelEmbedding context) {
+        ModelConfig info = context.getModelInfo();
         OkHttpDirectConnector connector = new OkHttpDirectConnector(
                 info.getUrl(), info.getApi(), info.getUserToken());
         ModelEmbedding requestContext = new ModelEmbedding(null, context.input);
@@ -53,16 +55,22 @@ public class OfflineModelDirect {
         String request = new Gson().toJson(requestContext);
         final EmbeddingResponse response = RetryCommand.run(() -> {
             return connector.embeddingPost(request);
-        }, 10, 3000);
+        }, Constants.MODEL_CLIENT_RETRY_TIMES, Constants.MODEL_CLIENT_RETRY_INTERVAL_MS);
         if (response == null) {
             return new ArrayList<>();
         }
-        List<ChatRobot.EmbeddingResult> embeddingResults = new ArrayList<>();
+        List<EmbeddingService.EmbeddingResult> embeddingResults = new ArrayList<>();
+        if (response.data == null) {
+            throw new RuntimeException("Embedding model response is null");
+        }
         for (EmbeddingResponse.EmbeddingVector v : response.data) {
             int index = v.index;
+            if (index >= context.input.length) {
+                throw new RuntimeException("Embedding model response contains invalid index");
+            }
             String input = context.input[index];
             double[] vector = v.embedding;
-            ChatRobot.EmbeddingResult result = new ChatRobot.EmbeddingResult(input, vector);
+            EmbeddingService.EmbeddingResult result = new EmbeddingService.EmbeddingResult(input, vector);
             embeddingResults.add(result);
         }
         return embeddingResults;

@@ -26,6 +26,7 @@ import org.apache.geaflow.ai.graph.GraphEdge;
 import org.apache.geaflow.ai.graph.GraphEntity;
 import org.apache.geaflow.ai.graph.GraphVertex;
 import org.apache.geaflow.ai.graph.io.GraphSchema;
+import org.apache.geaflow.ai.operator.SearchConstants;
 import org.apache.geaflow.ai.operator.SearchUtils;
 import org.apache.geaflow.ai.subgraph.SubGraph;
 
@@ -57,20 +58,20 @@ public class SubgraphSemanticPromptFunction implements VerbalizationFunction {
                 GraphVertex start = graphAccessor.getVertex(null, graphEdge.getEdge().getSrcId());
                 GraphVertex end = graphAccessor.getVertex(null, graphEdge.getEdge().getDstId());
                 sentences.add(schema.getPrompt(graphEdge,
-                        existsEntities.contains(start) ? new GraphVertex(null) : start,
-                        existsEntities.contains(end) ? new GraphVertex(null) : end));
+                        existsEntities.contains(start) ? null : start,
+                        existsEntities.contains(end) ? null : end));
                 existsEntities.add(start);
                 existsEntities.add(end);
             }
         }
-        return String.join("  ", sentences);
+        return String.join(SearchConstants.DELIMITER, sentences);
     }
 
     @Override
     public List<String> verbalize(GraphEntity entity) {
         if (entity instanceof GraphVertex) {
             GraphVertex graphVertex = (GraphVertex) entity;
-            return graphVertex.vertex.getValues().stream()
+            return graphVertex.getVertex().getValues().stream()
                     .filter(str -> !SearchUtils.isAllAllowedChars(str))
                     .map(SearchUtils::formatQuery).collect(Collectors.toList());
         } else if (entity instanceof GraphEdge) {

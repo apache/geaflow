@@ -17,33 +17,21 @@
  * under the License.
  */
 
-package org.apache.geaflow.ai;
+package org.apache.geaflow.ai.common.model;
 
-import org.apache.geaflow.ai.common.model.EmbeddingService;
-import org.apache.geaflow.ai.common.model.ModelConfig;
+public abstract class AbstractModelService {
 
-public class MockChatRobot {
-
-    private ModelConfig modelInfo;
-
-    public MockChatRobot() {
-        this.modelInfo = new ModelConfig();
+    public ModelConfig getModelConfig() {
+        return modelConfig;
     }
 
-    public MockChatRobot(String model) {
-        this.modelInfo = new ModelConfig();
-        this.modelInfo.setModel(model);
+    public void setModelConfig(ModelConfig modelConfig) {
+        this.modelConfig = modelConfig;
     }
 
-    public EmbeddingService.EmbeddingResult embeddingSingle(String input) {
-        return new EmbeddingService.EmbeddingResult(input, new double[0]);
-    }
+    private ModelConfig modelConfig;
 
-    public ModelConfig getModelInfo() {
-        return modelInfo;
-    }
-
-    public void setModelInfo(ModelConfig modelInfo) {
-        this.modelInfo = modelInfo;
+    public AbstractModelService(ModelConfig modelConfig) {
+        this.modelConfig = modelConfig;
     }
 }

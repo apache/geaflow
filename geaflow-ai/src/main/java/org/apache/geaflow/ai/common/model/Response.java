@@ -39,15 +39,11 @@ public class Response {
         public int index;
         public Message message;
         public Object logprobs;
-
-        // Getters and Setters...
     }
 
     public static class Message {
         public String role;
         public String content;
-
-        // Getters and Setters...
     }
 
     public static class Usage {
@@ -57,9 +53,5 @@ public class Response {
         public int promptTokens;
         @SerializedName("total_tokens")
         public int totalTokens;
-
-        // Getters and Setters...
     }
-
-    // Getters and Setters for all fields...
 }

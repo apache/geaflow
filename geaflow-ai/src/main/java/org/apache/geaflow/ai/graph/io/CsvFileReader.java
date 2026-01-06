@@ -27,8 +27,12 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class CsvFileReader {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(CsvFileReader.class);
 
     List<String> colSchema;
     Map<String, List<String>> fileContent;
@@ -139,11 +143,11 @@ public class CsvFileReader {
     }
 
     public void printContent() {
-        System.out.println("ColName: " + colSchema);
-        System.out.println("Data content:");
+        LOGGER.info("ColName: " + colSchema);
+        LOGGER.info("Data content:");
         for (Map.Entry<String, List<String>> entry : fileContent.entrySet()) {
-            System.out.println(entry.getKey() + ": " + entry.getValue());
+            LOGGER.info(entry.getKey() + ": " + entry.getValue());
         }
-        System.out.println("Total row count: " + getRowCount());
+        LOGGER.info("Total row count: " + getRowCount());
     }
 }
