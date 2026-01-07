@@ -24,7 +24,8 @@ import org.apache.calcite.sql.SqlNode;
 
 public class StringLiteralUtil {
 
-    private static final int[] multiplier = new int[]{1000, 100, 10, 1};
+    // Unicode escape sequence hex weights: 16^3, 16^2, 16^1, 16^0 = 4096, 256, 16, 1
+    private static final int[] UNICODE_HEX_MULTIPLIER = new int[]{4096, 256, 16, 1};
 
     public static String unescapeSQLString(String b) {
 
@@ -51,17 +52,33 @@ public class StringLiteralUtil {
             }
 
 
-            if (currentChar == '\\' && (i + 6 < b.length()) && b.charAt(i + 1) == 'u') {
+            // Process Unicode escape sequence (backslash-u followed by 4 hex digits)
+            // Need at least 6 characters: backslash-u + 4 hex digits
+            if (currentChar == '\\' && (i + 6 <= b.length()) && b.charAt(i + 1) == 'u') {
                 int code = 0;
                 int base = i + 2;
+                boolean validHex = true;
+                
+                // Parse 4 hexadecimal digits with correct weights (16^3, 16^2, 16^1, 16^0)
                 for (int j = 0; j < 4; j++) {
                     int digit = Character.digit(b.charAt(j + base), 16);
-                    code += digit * multiplier[j];
+                    if (digit < 0) {
+                        // Invalid hex character encountered
+                        validHex = false;
+                        break;
+                    }
+                    code += digit * UNICODE_HEX_MULTIPLIER[j];
                 }
-                sb.append((char) code);
-                i += 5;
-                continue;
-            } else if (currentChar == '\\') { // process case for '\001'
+                
+                if (validHex) {
+                    sb.append((char) code);
+                    i += 5; // Skip backslash-u-XXXX (5 characters total)
+                    continue;
+                }
+                // If invalid hex, fall through to handle as regular backslash escape
+            }
+            
+            if (currentChar == '\\') { // process case for '\001'
                 int code = 0;
                 int base = i + 1;
                 int j;
