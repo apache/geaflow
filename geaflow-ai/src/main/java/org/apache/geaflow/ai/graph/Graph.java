@@ -19,45 +19,31 @@
 
 package org.apache.geaflow.ai.graph;
 
-import java.util.Objects;
+import java.util.Collection;
+import java.util.Iterator;
 import org.apache.geaflow.ai.graph.io.Edge;
+import org.apache.geaflow.ai.graph.io.GraphSchema;
+import org.apache.geaflow.ai.graph.io.Vertex;
 
-public class GraphEdge implements GraphEntity {
+public interface Graph {
 
-    private final Edge edge;
+    GraphSchema getGraphSchema();
 
-    public GraphEdge(Edge edge) {
-        this.edge = Objects.requireNonNull(edge);
-    }
+    Vertex getVertex(String label, String id);
 
-    public Edge getEdge() {
-        return edge;
-    }
+    int removeVertex(String label, String id);
 
-    @Override
-    public String getLabel() {
-        return edge.getLabel();
-    }
+    int updateVertex(Vertex newVertex);
 
-    @Override
-    public String toString() {
-        return edge.toString();
-    }
+    int addVertex(Vertex newVertex);
 
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) {
-            return true;
-        }
-        if (o == null || getClass() != o.getClass()) {
-            return false;
-        }
-        GraphEdge graphEdge = (GraphEdge) o;
-        return Objects.equals(edge, graphEdge.edge);
-    }
+    Collection<Edge> getEdge(String label, String src, String dst);
 
-    @Override
-    public int hashCode() {
-        return Objects.hash(edge);
-    }
+    int removeEdge(Edge edge);
+
+    int addEdge(Edge newEdge);
+
+    Iterator<Edge> scanEdge(Vertex vertex);
+
+    Iterator<Vertex> scanVertex();
 }

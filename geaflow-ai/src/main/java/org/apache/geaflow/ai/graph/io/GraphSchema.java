@@ -28,6 +28,7 @@ import org.apache.geaflow.ai.verbalization.PromptFormatter;
 
 public class GraphSchema implements Schema {
 
+    private String graphName = Constants.PREFIX_GRAPH;
     private final List<VertexSchema> vertexSchemaList;
     private final List<EdgeSchema> edgeSchemaList;
     private PromptFormatter promptFormatter;
@@ -77,9 +78,13 @@ public class GraphSchema implements Schema {
         return edgeSchemaList;
     }
 
+    public void setName(String graphName) {
+        this.graphName = graphName;
+    }
+
     @Override
     public String getName() {
-        return Constants.PREFIX_GRAPH;
+        return graphName;
     }
 
     public void setPromptFormatter(PromptFormatter promptFormatter) {

@@ -19,17 +19,15 @@
 
 package org.apache.geaflow.ai.graph.io;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
+import org.apache.geaflow.ai.common.ErrorCode;
 
 public class EdgeGroup implements EntityGroup {
 
     public final EdgeSchema edgeSchema;
     private final List<Edge> edges;
-    private final Map<String, Integer> index;
+    private final Map<String, List<Integer>> index;
     private final Map<String, List<Integer>> pointIndices;
 
     public EdgeGroup(EdgeSchema edgeSchema, List<Edge> edges) {
@@ -44,7 +42,7 @@ public class EdgeGroup implements EntityGroup {
         int index = 0;
         for (Edge e : edges) {
             String key = makeKey(e.getSrcId(), e.getDstId());
-            this.index.put(key, index);
+            this.index.computeIfAbsent(key, k -> new ArrayList<>()).add(index);
             this.pointIndices.computeIfAbsent(e.getSrcId(), k -> new ArrayList<>()).add(index);
             this.pointIndices.computeIfAbsent(e.getDstId(), k -> new ArrayList<>()).add(index);
             index++;
@@ -77,12 +75,55 @@ public class EdgeGroup implements EntityGroup {
                 .collect(Collectors.toList());
     }
 
-    public Edge getEdge(String src, String dst) {
-        if (index.get(makeKey(src, dst)) != null) {
-            return edges.get(index.get(makeKey(src, dst)));
-        } else {
-            return null;
+    public List<Edge> getEdge(String src, String dst) {
+        List<Integer> edgeIndices = index.get(makeKey(src, dst));
+        if (edgeIndices == null) {
+            return Collections.emptyList();
         }
+        List<Edge> edges = new ArrayList<>(edgeIndices.size());
+        for (int i : edgeIndices) {
+            edges.add(this.edges.get(i));
+        }
+        return edges;
+    }
+
+    public int addEdge(Edge newEdge) {
+        if (newEdge == null) {
+            return ErrorCode.GRAPH_ENTITY_GROUP_INSERT_FAILED;
+        }
+        this.edges.add(newEdge);
+        int index = this.edges.size() - 1;
+        String key = makeKey(newEdge.getSrcId(), newEdge.getDstId());
+        this.index.computeIfAbsent(key, k -> new ArrayList<>()).add(index);
+        this.pointIndices.computeIfAbsent(newEdge.getSrcId(), k -> new ArrayList<>()).add(index);
+        this.pointIndices.computeIfAbsent(newEdge.getDstId(), k -> new ArrayList<>()).add(index);
+        return ErrorCode.SUCCESS;
+    }
+
+    public int removeEdge(Edge edge) {
+        if (edge == null) {
+            return ErrorCode.GRAPH_ENTITY_GROUP_REMOVE_FAILED;
+        }
+        String key = makeKey(edge.getSrcId(), edge.getDstId());
+        if (!index.containsKey(key)) {
+            return ErrorCode.GRAPH_ENTITY_GROUP_REMOVE_FAILED;
+        }
+        List<Integer> indices = index.get(key);
+        List<Integer> deleteOffset = new ArrayList<>();
+        for (int offset : indices) {
+            Edge existsEdge = this.edges.get(offset);
+            boolean needDelete = existsEdge.equals(edge);
+            if (needDelete) {
+                edges.set(offset, null);
+                deleteOffset.add(offset);
+            }
+        }
+        for (int del : deleteOffset) {
+            this.index.get(key).remove(del);
+            this.pointIndices.get(edge.getSrcId()).remove(del);
+            this.pointIndices.get(edge.getDstId()).remove(del);
+        }
+        return ErrorCode.SUCCESS;
     }
 
     private String makeKey(String src, String dst) {

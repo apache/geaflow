@@ -19,45 +19,18 @@
 
 package org.apache.geaflow.ai.graph;
 
-import java.util.Objects;
 import org.apache.geaflow.ai.graph.io.Edge;
+import org.apache.geaflow.ai.graph.io.Vertex;
 
-public class GraphEdge implements GraphEntity {
+public interface MutableGraph {
 
-    private final Edge edge;
+    int removeVertex(String label, String id);
 
-    public GraphEdge(Edge edge) {
-        this.edge = Objects.requireNonNull(edge);
-    }
+    int updateVertex(Vertex newVertex);
 
-    public Edge getEdge() {
-        return edge;
-    }
+    int addVertex(Vertex newVertex);
 
-    @Override
-    public String getLabel() {
-        return edge.getLabel();
-    }
+    int removeEdge(Edge edge);
 
-    @Override
-    public String toString() {
-        return edge.toString();
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) {
-            return true;
-        }
-        if (o == null || getClass() != o.getClass()) {
-            return false;
-        }
-        GraphEdge graphEdge = (GraphEdge) o;
-        return Objects.equals(edge, graphEdge.edge);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(edge);
-    }
+    int addEdge(Edge newEdge);
 }

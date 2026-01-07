@@ -28,9 +28,9 @@ import java.util.function.Function;
 
 public class GraphFileReader {
 
-    public static Graph getGraph(ClassLoader classLoader, String path, long limit,
-                                 Function<Vertex, Vertex> vertexMapper,
-                                 Function<Edge, Edge> edgeMapper) throws IOException {
+    public static MemoryGraph getGraph(ClassLoader classLoader, String path, long limit,
+                                       Function<Vertex, Vertex> vertexMapper,
+                                       Function<Edge, Edge> edgeMapper) throws IOException {
         Map<String, List<String>> result = ResourceFileScanner.scanGraphLdbcSfFolder(classLoader, path);
         GraphSchema graphSchema = new GraphSchema();
         Map<String, EntityGroup> entities = new HashMap<>();
@@ -74,7 +74,7 @@ public class GraphFileReader {
                 }
             }
         }
-        return new Graph(graphSchema, entities);
+        return new MemoryGraph(graphSchema, entities);
     }
 
 }

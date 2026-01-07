@@ -20,28 +20,30 @@
 package org.apache.geaflow.ai.graph;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 import org.apache.geaflow.ai.graph.io.*;
 
-public class LocalFileGraphAccessor implements GraphAccessor {
+public class LocalMemoryGraphAccessor implements GraphAccessor {
 
-    private final String resourcePath;
-    private final ClassLoader resourceClassLoader;
-    private final Graph graph;
+    private final MemoryGraph graph;
 
-    public LocalFileGraphAccessor(ClassLoader classLoader, String resourcePath, Long limit,
-                                  Function<Vertex, Vertex> vertexMapper,
-                                  Function<Edge, Edge> edgeMapper) {
-        this.resourcePath = resourcePath;
-        this.resourceClassLoader = classLoader;
+    public LocalMemoryGraphAccessor(ClassLoader classLoader, String resourcePath, Long limit,
+                                    Function<Vertex, Vertex> vertexMapper,
+                                    Function<Edge, Edge> edgeMapper) {
         try {
-            this.graph = GraphFileReader.getGraph(resourceClassLoader, resourcePath, limit,
+            this.graph = GraphFileReader.getGraph(classLoader, resourcePath, limit,
                     vertexMapper, edgeMapper);
         } catch (Throwable e) {
             throw new RuntimeException("Init local graph error", e);
         }
+    }
+
+    public LocalMemoryGraphAccessor(MemoryGraph memoryGraph) {
+        this.graph = memoryGraph;
     }
 
     @Override
@@ -59,12 +61,12 @@ public class LocalFileGraphAccessor implements GraphAccessor {
     }
 
     @Override
-    public GraphEdge getEdge(String label, String src, String dst) {
-        Edge innerEdge = graph.getEdge(label, src, dst);
-        if (innerEdge == null) {
-            return null;
+    public List<GraphEdge> getEdge(String label, String src, String dst) {
+        List<Edge> innerEdges = graph.getEdge(label, src, dst);
+        if (innerEdges == null) {
+            return Collections.emptyList();
         }
-        return new GraphEdge(innerEdge);
+        return innerEdges.stream().map(GraphEdge::new).collect(Collectors.toList());
     }
 
     @Override
@@ -74,23 +76,33 @@ public class LocalFileGraphAccessor implements GraphAccessor {
 
     @Override
     public Iterator<GraphEdge> scanEdge(GraphVertex vertex) {
-        return new GraphEdgeIterator(graph.scanEdge(vertex));
+        return new GraphEdgeIterator(graph.scanEdge(vertex.getVertex()));
     }
 
     @Override
     public List<GraphEntity> expand(GraphEntity entity) {
         List<GraphEntity> results = new ArrayList<>();
         if (entity instanceof GraphVertex) {
-            Iterator<Edge> iterator = graph.scanEdge((GraphVertex) entity);
+            Iterator<Edge> iterator = graph.scanEdge(((GraphVertex) entity).getVertex());
             while (iterator.hasNext()) {
                 results.add(new GraphEdge(iterator.next()));
             }
         } else if (entity instanceof GraphEdge) {
             GraphEdge graphEdge = (GraphEdge) entity;
-            results.add(new GraphVertex(graph.getVertex(null, graphEdge.getEdge().getSrcId())));
-            results.add(new GraphVertex(graph.getVertex(null, graphEdge.getEdge().getDstId())));
+            Vertex srcVertex = graph.getVertex(null, graphEdge.getEdge().getSrcId());
+            Vertex dstVertex = graph.getVertex(null, graphEdge.getEdge().getDstId());
+            if (srcVertex != null) {
+                results.add(new GraphVertex(srcVertex));
+            }
+            if (dstVertex != null) {
+                results.add(new GraphVertex(dstVertex));
+            }
         }
         return results;
+    }
+
+    public MemoryMutableGraph getMutableGraph() {
+        return new MemoryMutableGraph(graph);
     }
 
     @Override

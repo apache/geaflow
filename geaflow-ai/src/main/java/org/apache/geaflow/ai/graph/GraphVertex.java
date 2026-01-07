@@ -27,7 +27,7 @@ public class GraphVertex implements GraphEntity {
     private final Vertex vertex;
 
     public GraphVertex(Vertex vertex) {
-        this.vertex = vertex;
+        this.vertex = Objects.requireNonNull(vertex);
     }
 
     public Vertex getVertex() {

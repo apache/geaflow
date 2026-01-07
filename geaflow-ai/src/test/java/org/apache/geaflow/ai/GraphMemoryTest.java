@@ -22,7 +22,7 @@ package org.apache.geaflow.ai;
 import org.apache.geaflow.ai.common.model.ModelConfig;
 import org.apache.geaflow.ai.graph.EmptyGraphAccessor;
 import org.apache.geaflow.ai.graph.GraphAccessor;
-import org.apache.geaflow.ai.graph.LocalFileGraphAccessor;
+import org.apache.geaflow.ai.graph.LocalMemoryGraphAccessor;
 import org.apache.geaflow.ai.index.EmbeddingIndexStore;
 import org.apache.geaflow.ai.index.EntityAttributeIndexStore;
 import org.apache.geaflow.ai.index.IndexStore;
@@ -86,8 +86,8 @@ public class GraphMemoryTest {
     @Test
     public void testLdbcMainPipeline() {
         LdbcPromptFormatter ldbcPromptFormatter = new LdbcPromptFormatter();
-        LocalFileGraphAccessor graphAccessor =
-                new LocalFileGraphAccessor(this.getClass().getClassLoader(),
+        LocalMemoryGraphAccessor graphAccessor =
+                new LocalMemoryGraphAccessor(this.getClass().getClassLoader(),
                         "graph_ldbc_sf", 7500L,
                         ldbcPromptFormatter::vertexMapper, ldbcPromptFormatter::edgeMapper);
         graphAccessor.getGraphSchema().setPromptFormatter(ldbcPromptFormatter);

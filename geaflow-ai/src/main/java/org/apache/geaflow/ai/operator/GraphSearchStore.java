@@ -111,9 +111,9 @@ public class GraphSearchStore {
                 } else if (edgeLabels.contains(label)) {
                     String src = document.get(SearchConstants.SRC);
                     String dst = document.get(SearchConstants.DST);
-                    GraphEdge graphEdge = graphAccessor.getEdge(label, src, dst);
+                    List<GraphEdge> graphEdge = graphAccessor.getEdge(label, src, dst);
                     if (graphEdge != null) {
-                        result.add(graphEdge);
+                        result.addAll(graphEdge);
                     }
                 }
             }

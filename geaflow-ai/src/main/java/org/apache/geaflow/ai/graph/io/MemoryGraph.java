@@ -20,18 +20,20 @@
 package org.apache.geaflow.ai.graph.io;
 
 import java.util.*;
-import org.apache.geaflow.ai.graph.GraphVertex;
+import org.apache.geaflow.ai.common.ErrorCode;
+import org.apache.geaflow.ai.graph.Graph;
 
-public class Graph {
+public class MemoryGraph implements Graph {
 
     public GraphSchema graphSchema;
     public Map<String, EntityGroup> entities;
 
-    public Graph(GraphSchema graphSchema, Map<String, EntityGroup> entities) {
+    public MemoryGraph(GraphSchema graphSchema, Map<String, EntityGroup> entities) {
         this.graphSchema = graphSchema;
         this.entities = entities;
     }
 
+    @Override
     public GraphSchema getGraphSchema() {
         return graphSchema;
     }
@@ -40,10 +42,11 @@ public class Graph {
         this.graphSchema = graphSchema;
     }
 
-    public EntityGroup getEntity(String entityName) {
+    private EntityGroup getEntity(String entityName) {
         return entities.get(entityName);
     }
 
+    @Override
     public Vertex getVertex(String label, String id) {
         if (label == null) {
             for (VertexSchema schema : getGraphSchema().getVertexSchemaList()) {
@@ -59,22 +62,94 @@ public class Graph {
         return null;
     }
 
-    public Edge getEdge(String label, String src, String dst) {
+    @Override
+    public int removeVertex(String label, String id) {
+        EntityGroup vg = entities.get(label);
+        if (vg == null) {
+            return ErrorCode.GRAPH_ENTITY_GROUP_NOT_EXISTS;
+        }
+        if (!(vg instanceof VertexGroup)) {
+            return ErrorCode.GRAPH_ENTITY_GROUP_NOT_MATCH;
+        }
+        VertexGroup vertexGroup = (VertexGroup) vg;
+        return vertexGroup.removeVertex(id);
+    }
+
+    @Override
+    public int updateVertex(Vertex newVertex) {
+        String label = newVertex.getLabel();
+        EntityGroup vg = entities.get(label);
+        if (vg == null) {
+            return ErrorCode.GRAPH_ENTITY_GROUP_NOT_EXISTS;
+        }
+        if (!(vg instanceof VertexGroup)) {
+            return ErrorCode.GRAPH_ENTITY_GROUP_NOT_MATCH;
+        }
+        VertexGroup vertexGroup = (VertexGroup) vg;
+        return vertexGroup.updateVertex(newVertex);
+    }
+
+    @Override
+    public int addVertex(Vertex newVertex) {
+        String label = newVertex.getLabel();
+        EntityGroup vg = entities.get(label);
+        if (vg == null) {
+            return ErrorCode.GRAPH_ENTITY_GROUP_NOT_EXISTS;
+        }
+        if (!(vg instanceof VertexGroup)) {
+            return ErrorCode.GRAPH_ENTITY_GROUP_NOT_MATCH;
+        }
+        VertexGroup vertexGroup = (VertexGroup) vg;
+        return vertexGroup.addVertex(newVertex);
+    }
+
+    @Override
+    public List<Edge> getEdge(String label, String src, String dst) {
         EdgeGroup eg = (EdgeGroup) getEntity(label);
         return eg.getEdge(src, dst);
     }
 
-    public Iterator<Edge> scanEdge(GraphVertex vertex) {
+    @Override
+    public int removeEdge(Edge edge) {
+        String label = edge.getLabel();
+        EntityGroup vg = entities.get(label);
+        if (vg == null) {
+            return ErrorCode.GRAPH_ENTITY_GROUP_NOT_EXISTS;
+        }
+        if (!(vg instanceof EdgeGroup)) {
+            return ErrorCode.GRAPH_ENTITY_GROUP_NOT_MATCH;
+        }
+        EdgeGroup edgeGroup = (EdgeGroup) vg;
+        return edgeGroup.removeEdge(edge);
+    }
+
+    @Override
+    public int addEdge(Edge newEdge) {
+        String label = newEdge.getLabel();
+        EntityGroup vg = entities.get(label);
+        if (vg == null) {
+            return ErrorCode.GRAPH_ENTITY_GROUP_NOT_EXISTS;
+        }
+        if (!(vg instanceof EdgeGroup)) {
+            return ErrorCode.GRAPH_ENTITY_GROUP_NOT_MATCH;
+        }
+        EdgeGroup edgeGroup = (EdgeGroup) vg;
+        return edgeGroup.addEdge(newEdge);
+    }
+
+    @Override
+    public Iterator<Edge> scanEdge(Vertex vertex) {
         List<Iterator<Edge>> iterators = new ArrayList<>();
         for (EntityGroup entityGroup : this.entities.values()) {
             if (entityGroup instanceof EdgeGroup) {
-                iterators.add(((EdgeGroup) entityGroup).getOutEdges(vertex.getVertex().getId()).iterator());
-                iterators.add(((EdgeGroup) entityGroup).getInEdges(vertex.getVertex().getId()).iterator());
+                iterators.add(((EdgeGroup) entityGroup).getOutEdges(vertex.getId()).iterator());
+                iterators.add(((EdgeGroup) entityGroup).getInEdges(vertex.getId()).iterator());
             }
         }
         return new CompositeIterator<>(iterators);
     }
 
+    @Override
     public Iterator<Vertex> scanVertex() {
         List<Iterator<Vertex>> iterators = new ArrayList<>();
         for (EntityGroup entityGroup : this.entities.values()) {

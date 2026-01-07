@@ -19,45 +19,40 @@
 
 package org.apache.geaflow.ai.graph;
 
-import java.util.Objects;
 import org.apache.geaflow.ai.graph.io.Edge;
+import org.apache.geaflow.ai.graph.io.MemoryGraph;
+import org.apache.geaflow.ai.graph.io.Vertex;
 
-public class GraphEdge implements GraphEntity {
+public class MemoryMutableGraph implements MutableGraph {
 
-    private final Edge edge;
+    private final MemoryGraph graph;
 
-    public GraphEdge(Edge edge) {
-        this.edge = Objects.requireNonNull(edge);
-    }
-
-    public Edge getEdge() {
-        return edge;
-    }
-
-    @Override
-    public String getLabel() {
-        return edge.getLabel();
+    public MemoryMutableGraph(MemoryGraph graph) {
+        this.graph = graph;
     }
 
     @Override
-    public String toString() {
-        return edge.toString();
+    public int removeVertex(String label, String id) {
+        return this.graph.removeVertex(label, id);
     }
 
     @Override
-    public boolean equals(Object o) {
-        if (this == o) {
-            return true;
-        }
-        if (o == null || getClass() != o.getClass()) {
-            return false;
-        }
-        GraphEdge graphEdge = (GraphEdge) o;
-        return Objects.equals(edge, graphEdge.edge);
+    public int updateVertex(Vertex newVertex) {
+        return this.graph.updateVertex(newVertex);
     }
 
     @Override
-    public int hashCode() {
-        return Objects.hash(edge);
+    public int addVertex(Vertex newVertex) {
+        return this.graph.addVertex(newVertex);
+    }
+
+    @Override
+    public int removeEdge(Edge edge) {
+        return this.graph.removeEdge(edge);
+    }
+
+    @Override
+    public int addEdge(Edge newEdge) {
+        return this.graph.addEdge(newEdge);
     }
 }

@@ -83,7 +83,7 @@ public class GraphMemoryServer {
         return sessionId;
     }
 
-    public void applySearch(String sessionId, SearchOperator operator, VectorSearch search) {
+    private void applySearch(String sessionId, SearchOperator operator, VectorSearch search) {
         SessionManagement manager = SessionManagement.INSTANCE;
         if (!manager.sessionExists(sessionId)) {
             return;

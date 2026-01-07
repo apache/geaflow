@@ -38,7 +38,7 @@ public class EmptyGraphAccessor implements GraphAccessor {
     }
 
     @Override
-    public GraphEdge getEdge(String label, String src, String dst) {
+    public List<GraphEdge> getEdge(String label, String src, String dst) {
         return null;
     }
 

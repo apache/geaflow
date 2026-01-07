@@ -17,27 +17,14 @@
  * under the License.
  */
 
-package org.apache.geaflow.ai.graph;
+package org.apache.geaflow.ai.common;
 
-import java.util.Iterator;
-import java.util.List;
-import org.apache.geaflow.ai.graph.io.GraphSchema;
+public class ErrorCode {
 
-public interface GraphAccessor {
-
-    GraphSchema getGraphSchema();
-
-    GraphVertex getVertex(String label, String id);
-
-    List<GraphEdge> getEdge(String label, String src, String dst);
-
-    Iterator<GraphVertex> scanVertex();
-
-    Iterator<GraphEdge> scanEdge(GraphVertex vertex);
-
-    List<GraphEntity> expand(GraphEntity entity);
-
-    GraphAccessor copy();
-
-    String getType();
+    public static final int SUCCESS = 0;
+    public static final int GRAPH_ENTITY_GROUP_NOT_EXISTS = 100001;
+    public static final int GRAPH_ENTITY_GROUP_NOT_MATCH = 100002;
+    public static final int GRAPH_ENTITY_GROUP_INSERT_FAILED = 100003;
+    public static final int GRAPH_ENTITY_GROUP_UPDATE_FAILED = 100004;
+    public static final int GRAPH_ENTITY_GROUP_REMOVE_FAILED = 100005;
 }
