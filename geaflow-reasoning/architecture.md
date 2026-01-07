@@ -6,7 +6,7 @@ The CASTS (Context-Aware Strategy Cache System) project is designed with a clean
 
 ## Architecture Structure
 
-```
+```text
 casts/
 ├── __init__.py                      # Main package entry point
 ├── core/                            # Core models, services, and configuration
@@ -110,16 +110,14 @@ The architecture cleanly separates graph structural knowledge and traversal obje
 The `RealDataSource` class is responsible for loading graph data from CSV files and preparing it for simulation. Given that real-world datasets can be massive and suffer from poor connectivity (isolated nodes, fragmented components), `RealDataSource` implements a sophisticated multi-stage process to produce a high-quality, dense, and connected subgraph.
 
 1. **Full Graph Loading**: It begins by loading all nodes and edges from the specified CSV files into an in-memory `networkx` `DiGraph`.
-
 2. **Connectivity Enhancement**: Before any sampling occurs, it enhances the graph's connectivity by adding new, logically-derived edges:
-    - **Owner Links (`_add_owner_links`)**: If two distinct owners (e.g., `Person` or `Company`) have accounts that transacted with each other, a `related_to` edge is added between the owners. This directly connects entities involved in financial flows.
-    - **Shared Medium Links (`_add_shared_medium_links`)**: If multiple owners log in using the same device (`Medium`), bidirectional `shared_medium` edges are added between them, flagging a potential real-world connection.
-
+   - **Owner Links (`_add_owner_links`)**: If two distinct owners (e.g., `Person` or `Company`) have accounts that transacted with each other, a `related_to` edge is added between the owners. This directly connects entities involved in financial flows.
+   - **Shared Medium Links (`_add_shared_medium_links`)**: If multiple owners log in using the same device (`Medium`), bidirectional `shared_medium` edges are added between them, flagging a potential real-world connection.
 3. **Connected Subgraph Sampling (`_sample_subgraph`)**: If a `max_nodes` limit is configured, the class avoids naive random sampling, which would destroy graph structure. Instead, it performs a neighborhood-preserving sampling strategy:
-    - **Find Largest Component**: It first identifies the largest weakly connected component in the full graph, immediately discarding all isolated subgraphs.
-    - **BFS Expansion**: It then selects a random seed node from within this largest component and performs a breadth-first search (BFS) style expansion, collecting nodes until the `max_nodes` limit is reached.
-    - **Type-Aware Expansion**: The BFS is not standard; it prioritizes expanding to nodes of a type not yet seen in the sample. This ensures the subgraph has a diverse mix of entities (e.g., `Person`, `Company`, `Loan`) even with a small size limit.
-    - **Final Filtering**: Finally, the master node and edge lists are filtered to contain only the nodes collected during the BFS expansion and the edges between them.
+   - **Find Largest Component**: It first identifies the largest weakly connected component in the full graph, immediately discarding all isolated subgraphs.
+   - **BFS Expansion**: It then selects a random seed node from within this largest component and performs a breadth-first search (BFS) style expansion, collecting nodes until the `max_nodes` limit is reached.
+   - **Type-Aware Expansion**: The BFS is not standard; it prioritizes expanding to nodes of a type not yet seen in the sample. This ensures the subgraph has a diverse mix of entities (e.g., `Person`, `Company`, `Loan`) even with a small size limit.
+   - **Final Filtering**: Finally, the master node and edge lists are filtered to contain only the nodes collected during the BFS expansion and the edges between them.
 
 This process guarantees that the graph used by the `SimulationEngine` is a single, densely connected component, which is crucial for learning meaningful multi-hop traversal strategies and avoiding the "dead end" and "isolated island" problems observed in raw data.
 
@@ -306,4 +304,37 @@ The mathematical analysis introduces three additional mechanisms: the dynamic co
     $$
     up to engineering choices of constants and exact functional form.
 
-Together, these mechanisms ensure that the qualitative properties proven in the mathematical document (correctness under a given $\epsilon$, efficiency, and high effective hit rate $h_{\text{eff}}$ under Zipf-like workloads) are reflected in the concrete system behavior of the refactored code.
+#### 4.1 Dynamic Similarity Threshold $\delta_{\text{sim}}(v)$
+
+The similarity threshold $\delta_{\text{sim}}(v)$ is the core of Tier 2 (similarity) matching. It is an adaptive threshold that determines how closely a runtime context's property vector must match a SKU's prototype vector to be considered a valid candidate. Its behavior is defined by the formula from `数学建模.md` (Section 4.6.2):
+
+$$
+\delta_{\text{sim}}(v) = 1 - \frac{\kappa}{\sigma_{\text{logic}}(v) \cdot (1 + \beta \log \eta(v))}
+$$
+
+- **Implementation**: `casts.utils.helpers.calculate_dynamic_similarity_threshold()`
+- **Configuration**: `casts.core.config.py` (see `CACHE_SIMILARITY_KAPPA`, `CACHE_SIMILARITY_BETA`)
+
+**Key Mathematical Properties**:
+
+1. **Monotonicity with Confidence (η)**: The threshold `δ` is monotonically non-decreasing with `η`. As a SKU is used more successfully and its confidence `η` grows, the threshold `δ` approaches 1, demanding stricter similarity for future matches. This ensures that high-frequency, proven strategies are not easily misused in slightly different contexts.
+
+2. **Monotonicity with Complexity (σ)**: The threshold `δ` is also monotonically non-decreasing with `σ_logic`. More complex SKU logic (higher `σ`) results in a higher, more conservative threshold, reducing the risk of over-generalization from a highly specific rule.
+
+3. **Counter-intuitive κ Behavior**: The `κ` (kappa) parameter controls the base permissiveness. **Critically**, a **higher κ** leads to a **lower threshold**, making matching **easier** and more permissive. This is because `δ = 1 - κ/(...)`, so a larger `κ` subtracts a larger value from 1.
+    - `Higher κ` → `LOWER δ` → **More Permissive** (easier to match)
+    - `Lower κ` → `HIGHER δ` → **More Strict** (harder to match)
+
+**Recommended Configuration Values**:
+
+The optimal values for `κ` and `β` depend on the maturity of the system and the quality of the property embeddings. Here are recommended starting points for different phases:
+
+| Phase | Goal | `CACHE_SIMILARITY_KAPPA` (κ) | `CACHE_SIMILARITY_BETA` (β) | Resulting Threshold (approx.) | Rationale |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **1. Exploration** | Maximize SKU reuse and learning, even with noisy embeddings. | **0.30 - 0.40** | **0.05** | `0.65 - 0.85` | **High κ** produces a low, permissive threshold. This allows the system to find matches even when embeddings are not perfectly aligned, accelerating the learning of new strategies. The low `β` reduces the penalty for high-frequency SKUs, encouraging broad reuse. |
+| **2. Tuning** | Balance between reuse and accuracy; begin reducing false positives. | **0.20 - 0.30** | **0.05 - 0.10** | `0.80 - 0.90` | As embedding quality improves, **decrease κ** to moderately raise the threshold. A slightly higher `β` can be introduced to start making the system more conservative about reusing very high-frequency SKUs. |
+| **3. Production** | Minimize false positives, prioritize correctness over coverage. | **0.01 - 0.10** | **0.10 - 0.20** | `> 0.95` | **Low κ** produces very high, strict thresholds, demanding near-perfect similarity. This aligns with the mathematical model's goal of ensuring correctness. A higher `β` strongly penalizes high-frequency SKUs, forcing them to be extremely precise. |
+
+**Current Setting**: The system defaults to `κ=0.30` and `β=0.05`, placing it in the **Exploration Phase**. This is suitable for initial deployment to maximize learning but should be tuned as the system stabilizes.
+
+Together, these mechanisms ensure that the qualitative properties proven in the mathematical document (correctness under a given `\epsilon`, efficiency, and high effective hit rate $h_{\text{eff}}$ under Zipf-like workloads) are reflected in the concrete system behavior of the refactored code.

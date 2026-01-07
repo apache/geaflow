@@ -95,6 +95,14 @@ class MockDataSource(DataSource):
     def get_goal_generator(self):
         return None
 
+    def get_starting_nodes(
+        self, goal: str, recommended_node_types, count: int, min_degree: int = 2
+    ):
+        """Mock implementation of get_starting_nodes."""
+        # Unused parameters for mock implementation
+        _ = goal, recommended_node_types, min_degree
+        return list(self._nodes.keys())[:count]
+
 
 class TestTraversalExecutorCanonicalSignature(unittest.IsolatedAsyncioTestCase):
     """测试 TraversalExecutor 始终生成 Level 2（规范）签名"""

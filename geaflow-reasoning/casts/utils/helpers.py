@@ -35,15 +35,34 @@ def calculate_dynamic_similarity_threshold(
     """
     Calculate dynamic similarity threshold based on manifold density.
 
-    Formula: threshold = 1 - kappa / (logic_complexity * (1 + beta * log(confidence_score)))
+    Mathematical formula (see 数学建模.md Section 4.6.2, line 952):
+        δ_sim(v) = 1 - κ / (σ_logic(v) · (1 + β · log(η(v))))
+
+    Design properties:
+        1. δ_sim(v) ∈ (0,1) and monotonically non-decreasing with η(v)
+        2. Higher confidence η → higher threshold → stricter matching
+        3. Higher logic_complexity σ → higher threshold → stricter matching
+
+    **CRITICAL: Counter-intuitive κ behavior!**
+        - Higher κ → LOWER threshold → MORE permissive (easier to match)
+        - Lower κ → HIGHER threshold → MORE strict (harder to match)
+        This is because: κ↑ → κ/(...)↑ → 1-(large)↓
+
+    Behavior examples (from 数学建模.md line 983-985):
+        - Head scenario (η=1000, σ=1, β=0.1, κ=0.01): δ_sim ≈ 0.998 (very strict)
+        - Tail scenario (η=0.5, σ=1, β=0.1, κ=0.01): δ_sim ≈ 0.99 (relaxed)
+        - Complex logic (η=1000, σ=5, β=0.1, κ=0.01): δ_sim ≈ 0.99 (strict)
 
     Args:
-        sku: Strategy knowledge unit
-        kappa: Base threshold parameter
-        beta: Confidence scaling parameter
+        sku: Strategy knowledge unit containing η (confidence_score) and
+             σ_logic (logic_complexity)
+        kappa: Base threshold parameter (κ).
+               Counter-intuitively: Higher κ → easier matching!
+        beta: Frequency sensitivity parameter (β). Higher → high-frequency SKUs
+              require stricter matching.
 
     Returns:
-        Dynamic similarity threshold value
+        Dynamic similarity threshold value in (0, 1)
     """
 
     # Ensure log domain is valid (confidence_score >= 1)

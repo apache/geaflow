@@ -86,7 +86,8 @@ class GremlinStateMachine:
         structural_signature: str, graph_schema: GraphSchema, node_id: str
     ) -> Tuple[str, List[str]]:
         """
-        Parse traversal signature to determine current state (V, E, or P) and return valid next steps.
+        Parse traversal signature to determine current state (V, E, or P) and return
+        valid next steps.
 
         Args:
             structural_signature: Current traversal path (e.g., "V().out().in()").
@@ -149,7 +150,7 @@ class GremlinStateMachine:
                         [option.replace("'label'", f"'{label}'") for label in in_labels]
                     )
                 elif any(step in option for step in ["both", "bothE"]):
-                    all_labels = sorted(list(set(out_labels + in_labels)))
+                    all_labels = sorted(set(out_labels + in_labels))
                     final_options.extend(
                         [option.replace("'label'", f"'{label}'") for label in all_labels]
                     )

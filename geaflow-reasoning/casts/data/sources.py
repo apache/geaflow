@@ -114,32 +114,32 @@ class RealBusinessGraphGoalGenerator(GoalGenerator):
         # Construct a set of risk / AML / relationship-analysis oriented goals
         self._goals = [
             (
-                f"""Given a {person}, walk along {invest} / {guarantee} / {own} / {apply} edges to analyse multi-hop connections to high-risk {company} and {loan} nodes for credit-risk QA.""",
-                f"""Score is based on identifying paths connecting a {person} to a high-risk {company} or {loan}. The shorter the path, the higher the score. Paths that fail to reach a risky entity receive 0 points.""",
+                f"""Given a {person}, walk along {invest} / {guarantee} / {own} / {apply} edges to analyse multi-hop connections to high-risk {company} and {loan} nodes for credit-risk QA.""",  # noqa: E501
+                f"""Score is based on identifying paths connecting a {person} to a high-risk {company} or {loan}. The shorter the path, the higher the score. Paths that fail to reach a risky entity receive 0 points.""",  # noqa: E501
             ),
             (
-                f"""Starting from an {account}, follow {transfer} / {withdraw} / {repay} / {deposit} transaction edges to trace money flows to suspicious {loan} nodes or unusually active {person} nodes, producing evidence paths for risk QA.""",
-                f"""Score is based on following transaction-related edges ({transfer}, {repay}, etc.) to a suspicious node. The path must follow the flow of money. Paths that use non-financial links are penalized.""",
+                f"""Starting from an {account}, follow {transfer} / {withdraw} / {repay} / {deposit} transaction edges to trace money flows to suspicious {loan} nodes or unusually active {person} nodes, producing evidence paths for risk QA.""",  # noqa: E501
+                f"""Score is based on following transaction-related edges ({transfer}, {repay}, etc.) to a suspicious node. The path must follow the flow of money. Paths that use non-financial links are penalized.""",  # noqa: E501
             ),
             (
-                f"""For a single {company}, combine its {own} {account} nodes, {apply} loans, and roles as a {guarantee} provider to build explanatory QA that evaluates risk concentration in the overall guarantee network.""",
-                f"""Score is based on identifying how many distinct risk-related paths (ownership, loans, guarantees) originate from a single {company}. Higher scores for paths that show high concentration.""",
+                f"""For a single {company}, combine its {own} {account} nodes, {apply} loans, and roles as a {guarantee} provider to build explanatory QA that evaluates risk concentration in the overall guarantee network.""",  # noqa: E501
+                f"""Score is based on identifying how many distinct risk-related paths (ownership, loans, guarantees) originate from a single {company}. Higher scores for paths that show high concentration.""",  # noqa: E501
             ),
             (
-                f"""Between {person} and {company} nodes, explore chained {invest} / {own} / {apply} / {guarantee} relations to discover potential related parties and benefit-transfer paths, and generate audit-style QA in natural language.""",
-                f"""Score is based on finding a chain of at least 3 steps connecting a {person} to a {company} through investment, ownership, or guarantee links. The more varied the links, the better.""",
+                f"""Between {person} and {company} nodes, explore chained {invest} / {own} / {apply} / {guarantee} relations to discover potential related parties and benefit-transfer paths, and generate audit-style QA in natural language.""",  # noqa: E501
+                f"""Score is based on finding a chain of at least 3 steps connecting a {person} to a {company} through investment, ownership, or guarantee links. The more varied the links, the better.""",  # noqa: E501
             ),
             (
-                f"""Pick a high-risk {loan} node and expand along {repay} / {deposit} / {transfer} edges to find abnormal money cycles and key {account} nodes, providing evidence for AML-style QA.""",
-                """Score is highest for paths that form a cycle (e.g., A->B->C->A) representing potential money laundering. The closer the path is to a closed loop, the higher the score.""",
+                f"""Pick a high-risk {loan} node and expand along {repay} / {deposit} / {transfer} edges to find abnormal money cycles and key {account} nodes, providing evidence for AML-style QA.""",  # noqa: E501
+                """Score is highest for paths that form a cycle (e.g., A->B->C->A) representing potential money laundering. The closer the path is to a closed loop, the higher the score.""",  # noqa: E501
             ),
             (
-                f"""Between {company} nodes, walk multi-hop {invest} and {guarantee} relations to identify tightly cross-invested or mutually guaranteed company clusters and explain their structural patterns in QA form.""",
-                """Score is based on identifying reciprocal relationships (e.g., Company A invests in B, and B invests in A) or short cycles of investment/guarantee between companies. Simple one-way paths are less valuable.""",
+                f"""Between {company} nodes, walk multi-hop {invest} and {guarantee} relations to identify tightly cross-invested or mutually guaranteed company clusters and explain their structural patterns in QA form.""",  # noqa: E501
+                """Score is based on identifying reciprocal relationships (e.g., Company A invests in B, and B invests in A) or short cycles of investment/guarantee between companies. Simple one-way paths are less valuable.""",  # noqa: E501
             ),
             (
-                f"""For a given {person}, answer through how many {apply} / {own} / {guarantee} / {invest} chains they are indirectly exposed to high-risk {loan} or high-risk {company} nodes, and return representative paths.""",
-                f"""Score is based on the path length connecting a {person} to a high-risk entity. Longer, more indirect paths that successfully connect to the target are valuable. Paths that don't terminate at a risky entity are penalized.""",
+                f"""For a given {person}, answer through how many {apply} / {own} / {guarantee} / {invest} chains they are indirectly exposed to high-risk {loan} or high-risk {company} nodes, and return representative paths.""",  # noqa: E501
+                f"""Score is based on the path length connecting a {person} to a high-risk entity. Longer, more indirect paths that successfully connect to the target are valuable. Paths that don't terminate at a risky entity are penalized.""",  # noqa: E501
             ),
         ]
 
@@ -163,7 +163,7 @@ class RealBusinessGraphGoalGenerator(GoalGenerator):
         """
 
         # Simple heuristic: filter a small candidate subset by node_type
-        candidates: List[tuple[str, str]] = self._goals
+        candidates: List[Tuple[str, str]] = self._goals
         weights: List[int] = self._goal_weights
 
         if node_type is not None:
@@ -178,8 +178,8 @@ class RealBusinessGraphGoalGenerator(GoalGenerator):
 
             if filtered:
                 c_tuple, w_tuple = zip(*filtered, strict=False)
-                candidates = List(c_tuple)
-                weights = List(w_tuple)
+                candidates = list(c_tuple)
+                weights = list(w_tuple)
 
         selected_goal, selected_rubric = random.choices(
             candidates, weights=weights, k=1
@@ -245,6 +245,63 @@ class SyntheticDataSource(DataSource):
         if self._goal_generator is None:
             self._goal_generator = SyntheticBusinessGraphGoalGenerator()
         return self._goal_generator
+
+    def get_starting_nodes(
+        self,
+        goal: str,
+        recommended_node_types: List[str],
+        count: int,
+        min_degree: int = 2,
+    ) -> List[str]:
+        """Select starting nodes using LLM-recommended node types.
+
+        For synthetic data, this is straightforward because all nodes
+        are guaranteed to have at least 1 outgoing edge by construction.
+
+        Args:
+            goal: The traversal goal text (for logging)
+            recommended_node_types: Node types recommended by LLM
+            count: Number of starting nodes to return
+            min_degree: Minimum outgoing degree for fallback selection
+
+        Returns:
+            List of node IDs suitable for starting traversal
+        """
+        # Tier 1: LLM-recommended node types
+        if recommended_node_types:
+            candidates = [
+                node_id
+                for node_id, node in self._nodes.items()
+                if node.get("type") in recommended_node_types
+            ]
+
+            if len(candidates) >= count:
+                return random.sample(candidates, k=count)
+
+        # Tier 2: Degree-based fallback
+        candidates = [
+            node_id
+            for node_id in self._nodes.keys()
+            if len(self._edges.get(node_id, [])) >= min_degree
+        ]
+
+        if len(candidates) >= count:
+            return random.sample(candidates, k=count)
+
+        # Tier 3: Emergency fallback - any nodes with at least 1 edge
+        candidates = [
+            node_id for node_id in self._nodes.keys() if len(self._edges.get(node_id, [])) >= 1
+        ]
+
+        if len(candidates) >= count:
+            return random.sample(candidates, k=count)
+
+        # Last resort: take any nodes
+        all_nodes = list(self._nodes.keys())
+        if len(all_nodes) >= count:
+            return random.sample(all_nodes, k=count)
+
+        return all_nodes
 
     def _generate_zipf_data(self, size: int):
         """Generate synthetic data following Zipf distribution."""
@@ -358,6 +415,11 @@ class RealDataSource(DataSource):
         self._schema: Optional[GraphSchema] = None
         self._schema_dirty = True  # Start with a dirty schema
         self._goal_generator: Optional[GoalGenerator] = None
+
+        # Caches for starting node selection
+        self._node_out_edges: Optional[Dict[str, List[str]]] = None
+        self._nodes_by_type: Optional[Dict[str, List[str]]] = None
+
         self._load_real_graph()
 
         # Defer goal generator creation until schema is accessed
@@ -394,6 +456,9 @@ class RealDataSource(DataSource):
         self._load_real_graph()
         self._schema_dirty = True
         self._goal_generator = None
+        # Invalidate caches
+        self._node_out_edges = None
+        self._nodes_by_type = None
 
     def get_schema(self) -> GraphSchema:
         """Get the graph schema for this data source.
@@ -415,6 +480,84 @@ class RealDataSource(DataSource):
                 node_types=schema.node_types, edge_labels=schema.edge_labels
             )
         return self._goal_generator
+
+    def get_starting_nodes(
+        self,
+        goal: str,
+        recommended_node_types: List[str],
+        count: int,
+        min_degree: int = 2,
+    ) -> List[str]:
+        """Select starting nodes using LLM-recommended node types.
+
+        For real data, connectivity varies, so we rely on caches and fallbacks.
+
+        Args:
+            goal: The traversal goal text (for logging)
+            recommended_node_types: Node types recommended by LLM
+            count: Number of starting nodes to return
+            min_degree: Minimum outgoing degree for fallback selection
+
+        Returns:
+            List of node IDs suitable for starting traversal
+        """
+        # Ensure caches are built
+        if self._nodes_by_type is None:
+            self._build_nodes_by_type_cache()
+        if self._node_out_edges is None:
+            self._build_node_out_edges_cache()
+
+        # Add assertions for type checker to know caches are not None
+        assert self._nodes_by_type is not None
+        assert self._node_out_edges is not None
+
+        # Tier 1: LLM-recommended node types
+        if recommended_node_types:
+            candidates = []
+            for node_type in recommended_node_types:
+                if node_type in self._nodes_by_type:
+                    candidates.extend(self._nodes_by_type[node_type])
+
+            if len(candidates) >= count:
+                return random.sample(candidates, k=count)
+
+        # Tier 2: Degree-based fallback
+        candidates = [
+            node_id for node_id, edges in self._node_out_edges.items() if len(edges) >= min_degree
+        ]
+
+        if len(candidates) >= count:
+            return random.sample(candidates, k=count)
+
+        # Tier 3: Emergency fallback - any nodes with at least 1 edge
+        candidates = [node_id for node_id, edges in self._node_out_edges.items() if len(edges) >= 1]
+
+        if len(candidates) >= count:
+            return random.sample(candidates, k=count)
+
+        # Last resort: take any nodes
+        all_nodes = list(self._nodes.keys())
+        if len(all_nodes) >= count:
+            return random.sample(all_nodes, k=count)
+
+        return all_nodes
+
+    def _build_node_out_edges_cache(self):
+        """Build cache mapping node_id -> list of outgoing edge labels."""
+        self._node_out_edges = {}
+        for node_id in self._nodes.keys():
+            edge_labels = [edge["label"] for edge in self._edges.get(node_id, [])]
+            self._node_out_edges[node_id] = edge_labels
+
+    def _build_nodes_by_type_cache(self):
+        """Build cache mapping node_type -> list of node IDs."""
+        self._nodes_by_type = {}
+        for node_id, node in self._nodes.items():
+            node_type = node.get("type")
+            if node_type:
+                if node_type not in self._nodes_by_type:
+                    self._nodes_by_type[node_type] = []
+                self._nodes_by_type[node_type].append(node_id)
 
     def _load_real_graph(self):
         """Load graph data from CSV files."""
@@ -466,11 +609,17 @@ class RealDataSource(DataSource):
         self._add_owner_links()
         self._add_shared_medium_links()
 
+        # Build caches for starting node selection
+        self._build_node_out_edges_cache()
+        self._build_nodes_by_type_cache()
+
     def _add_shared_medium_links(self):
         """Add edges between account owners who share a login medium."""
         medium_to_accounts = {}
-        signin_edges: List[tuple[str, str]] = self._find_edges_by_label(
-            "signin", "Medium", "Account"
+        signin_edges: List[Tuple[str, str]] = self._find_edges_by_label(
+            "signin",
+            "Medium",
+            "Account",
         )
 
         for medium_id, account_id in signin_edges:
@@ -480,8 +629,16 @@ class RealDataSource(DataSource):
 
         # Build owner map
         owner_map = {}
-        person_owns: List[tuple[str, str]] = self._find_edges_by_label("own", "Person", "Account")
-        company_owns: List[tuple[str, str]] = self._find_edges_by_label("own", "Company", "Account")
+        person_owns: List[Tuple[str, str]] = self._find_edges_by_label(
+            "own",
+            "Person",
+            "Account",
+        )
+        company_owns: List[Tuple[str, str]] = self._find_edges_by_label(
+            "own",
+            "Company",
+            "Account",
+        )
         for src, tgt in person_owns:
             owner_map[tgt] = src
         for src, tgt in company_owns:
@@ -494,7 +651,7 @@ class RealDataSource(DataSource):
                 owners = {owner_map.get(acc_id) for acc_id in accounts if owner_map.get(acc_id)}
 
                 if len(owners) > 1:
-                    owner_List = List(owners)
+                    owner_List = list(owners)
                     # Add edges between all pairs of owners
                     for i in range(len(owner_List)):
                         for j in range(i + 1, len(owner_List)):
@@ -505,18 +662,21 @@ class RealDataSource(DataSource):
                             new_edges += 2
 
         if new_edges > 0:
-            print(f"Connectivity enhancement: Added {new_edges} 'shared_medium' edges based on login data.")
+            print(
+                f"Connectivity enhancement: Added {new_edges} "
+                "'shared_medium' edges based on login data."
+            )
 
     def _add_owner_links(self):
         """Add edges between owners of accounts that have transactions."""
         # Build an owner map: account_id -> owner_id
         owner_map = {}
-        person_owns: List[tuple[str, str]] = self._find_edges_by_label(
+        person_owns: List[Tuple[str, str]] = self._find_edges_by_label(
             "own",
             "Person",
             "Account",
         )
-        company_owns: List[tuple[str, str]] = self._find_edges_by_label(
+        company_owns: List[Tuple[str, str]] = self._find_edges_by_label(
             "own",
             "Company",
             "Account",
@@ -528,7 +688,7 @@ class RealDataSource(DataSource):
             owner_map[tgt] = src
 
         # Find all transfer edges
-        transfer_edges: List[tuple[str, str]] = self._find_edges_by_label(
+        transfer_edges: List[Tuple[str, str]] = self._find_edges_by_label(
             "transfer",
             "Account",
             "Account",
@@ -546,11 +706,14 @@ class RealDataSource(DataSource):
                 new_edges += 2
 
         if new_edges > 0:
-            print(f"Connectivity enhancement: Added {new_edges} 'related_to' edges based on ownership.")
+            print(
+                f"Connectivity enhancement: Added {new_edges} "
+                "'related_to' edges based on ownership."
+            )
 
     def _find_edges_by_label(
         self, label: str, from_type: str, to_type: str
-    ) -> List[tuple[str, str]]:
+    ) -> List[Tuple[str, str]]:
         """Helper to find all edges of a certain type."""
         edges = []
 
@@ -699,7 +862,7 @@ class RealDataSource(DataSource):
             for node_id in largest_cc:
                 node_type = G.nodes[node_id].get("type", "Unknown")
                 nodes_by_type.setdefault(node_type, []).append(node_id)
-            seed_type = random.choice(List(nodes_by_type.keys()))
+            seed_type = random.choice(list(nodes_by_type.keys()))
             seed = random.choice(nodes_by_type[seed_type])
             visited: set[str] = {seed}
             queue: deque[str] = deque([seed])

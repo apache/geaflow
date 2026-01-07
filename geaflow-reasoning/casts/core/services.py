@@ -14,15 +14,22 @@ from casts.utils.helpers import (
 class StrategyCache:
     """CASTS Strategy Cache for storing and matching traversal strategies (SKUs).
 
-    Hyperparameters are aligned with the mathematical model described in
-    `architecture.md` / `数学建模.md` and are configurable so that
-    experiments can sweep over:
+    Implements the two-tier matching system described in 数学建模.md Section 4:
+        - Tier 1 (Strict Logic): Exact structural + goal match with predicate Φ(p)
+        - Tier 2 (Similarity): Embedding-based fallback with adaptive threshold
 
-    - min_confidence_threshold (η_min): Tier 1 baseline confidence.
-    - tier2_gamma (γ): Tier 2 confidence scaling factor,
-        η_tier2(η_min) = γ · η_min.
-    - similarity_kappa, similarity_beta: parameters of the dynamic
-        similarity threshold δ_sim(v).
+    Mathematical model alignment:
+        - Tier 1 candidates: C_strict(c) where η ≥ η_min
+        - Tier 2 candidates: C_sim(c) where η ≥ η_tier2(η_min) = γ · η_min
+        - Similarity threshold: δ_sim(v) = 1 - κ / (σ_logic · (1 + β · log(η)))
+
+    Hyperparameters (configurable for experiments):
+        - min_confidence_threshold (η_min): Tier 1 baseline confidence
+        - tier2_gamma (γ): Tier 2 confidence scaling factor (γ > 1)
+        - similarity_kappa (κ): Base threshold sensitivity
+        - similarity_beta (β): Frequency sensitivity (热度敏感性)
+
+    Note: Higher η (confidence) → higher δ_sim → stricter matching requirement
     """
 
     def __init__(self, embed_service: Any, config: Any):
@@ -30,9 +37,11 @@ class StrategyCache:
         self.embed_service = embed_service
 
         # Get all hyperparameters from the configuration object
+        # Default values balance exploration and safety (see config.py for detailed rationale)
+        # Note: Higher κ → lower threshold → more permissive (counter-intuitive!)
         self.min_confidence_threshold = config.get_float("CACHE_MIN_CONFIDENCE_THRESHOLD", 2.0)
         self.current_schema_fingerprint = config.get_str("CACHE_SCHEMA_FINGERPRINT", "schema_v1")
-        self.similarity_kappa = config.get_float("CACHE_SIMILARITY_KAPPA", 0.25)
+        self.similarity_kappa = config.get_float("CACHE_SIMILARITY_KAPPA", 0.30)
         self.similarity_beta = config.get_float("CACHE_SIMILARITY_BETA", 0.05)
         self.tier2_gamma = config.get_float("CACHE_TIER2_GAMMA", 1.2)
         self.signature_level = config.get_int("SIGNATURE_LEVEL", 1)
@@ -59,19 +68,21 @@ class StrategyCache:
         if not skip_tier1:  # Can bypass Tier1 for testing
             for sku in self.knowledge_base:
                 # Exact matching on structural signature, goal, and schema
-                    if self._signatures_match(
-                        context.structural_signature, sku.structural_signature
-                    ) and sku.goal_template == context.goal and sku.schema_fingerprint == self.current_schema_fingerprint:
-                        # Predicate only uses safe properties (no identity fields)
-                        try:
-                            if sku.confidence_score >= self.min_confidence_threshold and sku.predicate(
-                                context.safe_properties
-                            ):
-                                tier1_candidates.append(sku)
-                        except (KeyError, TypeError, ValueError, AttributeError) as e:
-                            # Defensive: some predicates may error on missing fields
-                            print(f"[warn] Tier1 predicate error on SKU {sku.id}: {e}")
-                            continue
+                if (
+                    self._signatures_match(context.structural_signature, sku.structural_signature)
+                    and sku.goal_template == context.goal
+                    and sku.schema_fingerprint == self.current_schema_fingerprint
+                ):
+                    # Predicate only uses safe properties (no identity fields)
+                    try:
+                        if sku.confidence_score >= self.min_confidence_threshold and sku.predicate(
+                            context.safe_properties
+                        ):
+                            tier1_candidates.append(sku)
+                    except (KeyError, TypeError, ValueError, AttributeError) as e:
+                        # Defensive: some predicates may error on missing fields
+                        print(f"[warn] Tier1 predicate error on SKU {sku.id}: {e}")
+                        continue
 
         if tier1_candidates:
             # Pick best by confidence score
@@ -89,9 +100,11 @@ class StrategyCache:
 
         for sku in self.knowledge_base:
             # Require exact match on structural signature, goal, and schema
-            if self._signatures_match(
-                context.structural_signature, sku.structural_signature
-            ) and sku.goal_template == context.goal and sku.schema_fingerprint == self.current_schema_fingerprint:
+            if (
+                self._signatures_match(context.structural_signature, sku.structural_signature)
+                and sku.goal_template == context.goal
+                and sku.schema_fingerprint == self.current_schema_fingerprint
+            ):
                 if sku.confidence_score >= tier2_confidence_threshold:  # Higher bar for Tier 2
                     similarity = cosine_similarity(property_vector, sku.property_vector)
                     threshold = calculate_dynamic_similarity_threshold(

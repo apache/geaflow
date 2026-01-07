@@ -9,6 +9,9 @@ __pycache__/
 .venv/
 uv.lock
 
+# Logs
+/logs/
+
 # IDE / OS specific
 .vscode/
 .DS_Store

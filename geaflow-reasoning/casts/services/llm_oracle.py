@@ -27,6 +27,7 @@ class LLMOracle:
             config: Configuration object containing API settings
         """
         self.embed_service = embed_service
+        self.config = config
         self.sku_counter = 0
 
         # Setup debug log file
@@ -291,3 +292,112 @@ Return ONLY valid JSON inside <output> tags. Example:
             confidence_score=1.0,
             logic_complexity=1,
         )
+
+    async def recommend_starting_node_types(
+        self,
+        goal: str,
+        available_node_types: set[str],
+        max_recommendations: int = 3,
+    ) -> List[str]:
+        """Recommend suitable starting node types for a given goal.
+
+        Uses LLM to analyze the goal text and recommend 1-3 node types
+        that would be most appropriate as starting points for traversal.
+
+        Args:
+            goal: The traversal goal text
+            available_node_types: Set of available node types from the schema
+            max_recommendations: Maximum number of node types to recommend (default: 3)
+
+        Returns:
+            List of recommended node type strings (1-3 types).
+            Returns empty list if LLM fails or no suitable types found.
+        """
+        if not available_node_types:
+            self._write_debug("No available node types, returning empty list")
+            return []
+
+        # Convert set to sorted list for consistent ordering
+        node_types_list = sorted(available_node_types)
+        node_types_str = ", ".join(f'"{nt}"' for nt in node_types_list)
+
+        prompt = f"""You are analyzing a graph traversal goal to recommend starting node types.
+
+Goal: "{goal}"
+
+Available node types: [{node_types_str}]
+
+Recommend 1-{max_recommendations} node types that would be most suitable as starting points for this traversal goal.
+Consider which node types are most likely to:
+1. Have connections relevant to the goal
+2. Be central to the graph topology
+3. Enable meaningful exploration toward the goal's objective
+
+Return ONLY a JSON array of node type strings (no explanations).
+
+Example outputs:
+["Person", "Company"]
+["Account"]
+["Person", "Company", "Loan"]
+
+Your response (JSON array only):
+```json
+"""  # noqa: E501
+
+        try:
+            self._write_debug(
+                f"Node Type Recommendation Prompt:\n{prompt}\n--- End of Prompt ---\n"
+            )
+
+            if not self.client:
+                self._write_debug(
+                    "LLM client not available, falling back to all node types"
+                )
+                # Fallback: return all types if LLM unavailable
+                return node_types_list[:max_recommendations]
+
+            response = await self.client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.3,  # Moderate creativity
+                max_tokens=100,
+            )
+
+            content = response.choices[0].message.content
+            if not content:
+                self._write_debug("LLM response content is empty, falling back")
+                return []
+
+            self._write_debug(f"LLM Raw Response:\n{content}\n--- End of Response ---\n")
+
+            # Use parse_jsons to robustly extract JSON from response
+            results = parse_jsons(content.strip())
+
+            if not results:
+                self._write_debug("No valid JSON found in response")
+                return []
+
+            result = results[0]
+            if isinstance(result, JSONDecodeError):
+                self._write_debug(f"JSON decoding failed: {result}")
+                return []
+
+            # Result should be a list of strings
+            if isinstance(result, list):
+                # Filter to only valid node types and limit to max
+                recommended = [
+                    nt for nt in result
+                    if isinstance(nt, str) and nt in available_node_types
+                ][:max_recommendations]
+
+                self._write_debug(
+                    f"Successfully extracted {len(recommended)} node types: {recommended}"
+                )
+                return recommended
+            else:
+                self._write_debug(f"Unexpected result type: {type(result)}")
+                return []
+
+        except Exception as e:
+            self._write_debug(f"Error in recommend_starting_node_types: {e}")
+            return []

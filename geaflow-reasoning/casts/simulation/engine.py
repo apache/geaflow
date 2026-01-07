@@ -42,33 +42,39 @@ class SimulationEngine:
         if self.verbose:
             print(f"\n--- Epoch {epoch} ---")
 
-        # Take a sample of starting nodes
-        num_starters = min(
-            self.nodes_per_epoch,
-            len(self.graph.nodes),
-        )
-        sample_nodes = (
-            # Use random.sample to avoid repeating nodes in an epoch
-            random.sample(sorted(self.graph.nodes.keys()), k=num_starters)
-            if num_starters > 0
-            else []
+        # 1. Select a single goal for the entire epoch
+        goal_text = "Explore the graph"  # Default fallback
+        rubric = ""
+        if self.goal_generator:
+            goal_text, rubric = self.goal_generator.select_goal()
+
+        # 2. Use LLM to recommend starting node types based on the goal
+        schema = self.graph.get_schema()
+        recommended_types = await self.llm_oracle.recommend_starting_node_types(
+            goal=goal_text,
+            available_node_types=schema.node_types,
+            max_recommendations=self.llm_oracle.config.get_int(
+                "SIMULATION_MAX_RECOMMENDED_NODE_TYPES", 3
+            ),
         )
 
+        # 3. Get starting nodes from the data source using the recommendation
+        num_starters = min(self.nodes_per_epoch, len(self.graph.nodes))
+        min_degree = self.llm_oracle.config.get_int("SIMULATION_MIN_STARTING_DEGREE", 2)
+
+        if num_starters > 0:
+            sample_nodes = self.graph.get_starting_nodes(
+                goal=goal_text,
+                recommended_node_types=recommended_types,
+                count=num_starters,
+                min_degree=min_degree,
+            )
+        else:
+            sample_nodes = []
+
+        # 4. Initialize traversers for the starting nodes
         current_layer: List[Tuple[str, str, str, int, int | None, str | None, str | None]] = []
         for node_id in sample_nodes:
-            # Infer goal from node type if possible
-            goal_text = "Explore the graph"
-            rubric = ""
-            node_type = self.graph.nodes[node_id].get("type")
-            if self.goal_generator:
-                # Check if the generator has goal inference logic
-                inferred = getattr(self.goal_generator, "INFER_GOALS_FROM_TYPES", None)
-                while True:
-                    if (not inferred) or (node_type in inferred):
-                        break
-                    goal_text, rubric = self.goal_generator.select_goal(node_type=node_type)
-
-            # Initialize path tracking
             request_id = metrics_collector.initialize_path(
                 epoch, node_id, self.graph.nodes[node_id], goal_text, rubric
             )

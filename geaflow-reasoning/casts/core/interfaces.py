@@ -116,6 +116,32 @@ class DataSource(ABC):
         """Get the goal generator for this data source."""
         pass
 
+    @abstractmethod
+    def get_starting_nodes(
+        self,
+        goal: str,
+        recommended_node_types: List[str],
+        count: int,
+        min_degree: int = 2,
+    ) -> List[str]:
+        """Select appropriate starting nodes for traversal.
+
+        Implements a multi-tier selection strategy:
+        1. Tier 1: Prefer nodes matching recommended_node_types
+        2. Tier 2: Fallback to nodes with at least min_degree outgoing edges
+        3. Tier 3: Emergency fallback to any available nodes
+
+        Args:
+            goal: The traversal goal text (for logging/debugging)
+            recommended_node_types: List of node types recommended by LLM
+            count: Number of starting nodes to return
+            min_degree: Minimum outgoing degree for fallback selection
+
+        Returns:
+            List of node IDs suitable for starting traversal
+        """
+        pass
+
 
 class EmbeddingServiceProtocol(Protocol):
     """Protocol for embedding services (structural typing)."""
