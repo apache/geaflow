@@ -17,25 +17,15 @@
  * under the License.
  */
 
-package org.apache.geaflow.ai.graph;
+package org.apache.geaflow.ai.consolidate.function;
 
-import org.apache.geaflow.ai.graph.io.*;
+import org.apache.geaflow.ai.graph.GraphAccessor;
+import org.apache.geaflow.ai.graph.MutableGraph;
 
-public interface MutableGraph {
+public class EmbeddingRelationFunction implements ConsolidateFunction {
 
-    int removeVertex(String label, String id);
+    @Override
+    public void eval(GraphAccessor graphAccessor, MutableGraph graph) {
 
-    int updateVertex(Vertex newVertex);
-
-    int addVertex(Vertex newVertex);
-
-    int removeEdge(Edge edge);
-
-    int addEdge(Edge newEdge);
-
-    GraphSchema getSchema();
-
-    int addVertexSchema(VertexSchema vertexSchema);
-
-    int addEdgeSchema(EdgeSchema edgeSchema);
+    }
 }

@@ -32,6 +32,7 @@ import org.apache.geaflow.ai.graph.io.VertexSchema;
 import org.apache.geaflow.ai.index.vector.IVector;
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.document.Document;
+import org.apache.lucene.index.IndexNotFoundException;
 import org.apache.lucene.index.IndexWriterConfig;
 import org.apache.lucene.search.ScoreDoc;
 import org.apache.lucene.search.TopDocs;
@@ -118,6 +119,8 @@ public class GraphSearchStore {
                 }
             }
             return result;
+        } catch (IndexNotFoundException notFoundException) {
+            return new ArrayList<>();
         } catch (Throwable e) {
             throw new RuntimeException("Cannot read search store", e);
         }

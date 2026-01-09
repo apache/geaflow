@@ -27,4 +27,6 @@ public class ErrorCode {
     public static final int GRAPH_ENTITY_GROUP_INSERT_FAILED = 100003;
     public static final int GRAPH_ENTITY_GROUP_UPDATE_FAILED = 100004;
     public static final int GRAPH_ENTITY_GROUP_REMOVE_FAILED = 100005;
+    public static final int GRAPH_ADD_VERTEX_SCHEMA_FAILED = 100006;
+    public static final int GRAPH_ADD_EDGE_SCHEMA_FAILED = 100007;
 }

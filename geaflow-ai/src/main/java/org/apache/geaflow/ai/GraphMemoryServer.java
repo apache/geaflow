@@ -20,9 +20,12 @@
 package org.apache.geaflow.ai;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 import org.apache.geaflow.ai.graph.GraphAccessor;
+import org.apache.geaflow.ai.graph.GraphEntity;
 import org.apache.geaflow.ai.index.EmbeddingIndexStore;
 import org.apache.geaflow.ai.index.EntityAttributeIndexStore;
 import org.apache.geaflow.ai.index.IndexStore;
@@ -105,6 +108,17 @@ public class GraphMemoryServer {
         }
         stringBuilder.append(verbalizationFunction.verbalizeGraphSchema());
         return new Context(stringBuilder.toString());
+    }
+
+    public List<GraphEntity> getSessionEntities(String sessionId) {
+        List<SubGraph> subGraphList = sessionManagement.getSubGraph(sessionId);
+        List<String> subGraphStringList = new ArrayList<>(subGraphList.size());
+        Set<GraphEntity> entitySet = new HashSet<>();
+        for (SubGraph subGraph : subGraphList) {
+            entitySet.addAll(subGraph.getGraphEntityList());
+        }
+        List<GraphEntity> results = new ArrayList<>(entitySet);
+        return results;
     }
 
 }

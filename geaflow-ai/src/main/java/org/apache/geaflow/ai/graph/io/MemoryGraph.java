@@ -57,6 +57,9 @@ public class MemoryGraph implements Graph {
             }
         } else {
             VertexGroup vg = (VertexGroup) getEntity(label);
+            if (vg == null) {
+                return null;
+            }
             return vg.getVertex(id);
         }
         return null;
@@ -106,6 +109,9 @@ public class MemoryGraph implements Graph {
     @Override
     public List<Edge> getEdge(String label, String src, String dst) {
         EdgeGroup eg = (EdgeGroup) getEntity(label);
+        if (eg == null) {
+            return Collections.emptyList();
+        }
         return eg.getEdge(src, dst);
     }
 

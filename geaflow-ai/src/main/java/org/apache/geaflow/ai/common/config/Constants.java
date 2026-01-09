@@ -26,6 +26,8 @@ public class Constants {
     public static String PREFIX_E = "E";
     public static String PREFIX_GRAPH = "GRAPH";
     public static String PREFIX_TMP_SESSION = "TmpSession-";
+    public static String PREFIX_SRC_ID = "srcId";
+    public static String PREFIX_DST_ID = "dstId";
 
     public static int HTTP_CALL_TIMEOUT_SECONDS = 300;
     public static int HTTP_CONNECT_TIMEOUT_SECONDS = 300;
@@ -43,4 +45,7 @@ public class Constants {
     public static double EMBEDDING_OPERATE_DEFAULT_THRESHOLD = 0.5;
     public static int EMBEDDING_OPERATE_DEFAULT_TOPN = 50;
     public static int GRAPH_SEARCH_STORE_DEFAULT_TOPN = 30;
+
+    public static String CONSOLIDATE_KEYWORD_RELATION_LABEL = "consolidate_keyword_edge";
+    public static String PREFIX_COMMON_KEYWORDS = "common_keywords";
 }

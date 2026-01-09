@@ -19,9 +19,10 @@
 
 package org.apache.geaflow.ai.graph;
 
-import org.apache.geaflow.ai.graph.io.Edge;
-import org.apache.geaflow.ai.graph.io.MemoryGraph;
-import org.apache.geaflow.ai.graph.io.Vertex;
+import java.util.ArrayList;
+import org.apache.commons.lang3.StringUtils;
+import org.apache.geaflow.ai.common.ErrorCode;
+import org.apache.geaflow.ai.graph.io.*;
 
 public class MemoryMutableGraph implements MutableGraph {
 
@@ -54,5 +55,56 @@ public class MemoryMutableGraph implements MutableGraph {
     @Override
     public int addEdge(Edge newEdge) {
         return this.graph.addEdge(newEdge);
+    }
+
+    @Override
+    public GraphSchema getSchema() {
+        return this.graph.getGraphSchema();
+    }
+
+    @Override
+    public int addVertexSchema(VertexSchema vertexSchema) {
+        if (vertexSchema == null || StringUtils.isBlank(vertexSchema.getLabel())) {
+            return ErrorCode.GRAPH_ADD_VERTEX_SCHEMA_FAILED;
+        }
+        for (VertexSchema existSchema : this.getSchema().getVertexSchemaList()) {
+            if (existSchema.getLabel().equals(vertexSchema.getLabel())) {
+                return ErrorCode.GRAPH_ADD_VERTEX_SCHEMA_FAILED;
+            }
+        }
+        for (EdgeSchema existSchema : this.getSchema().getEdgeSchemaList()) {
+            if (existSchema.getLabel().equals(vertexSchema.getLabel())) {
+                return ErrorCode.GRAPH_ADD_VERTEX_SCHEMA_FAILED;
+            }
+        }
+        if (this.graph.entities.get(vertexSchema.getLabel()) != null) {
+            return ErrorCode.GRAPH_ADD_VERTEX_SCHEMA_FAILED;
+        }
+        this.graph.getGraphSchema().addVertex(vertexSchema);
+        this.graph.entities.put(vertexSchema.getLabel(), new VertexGroup(vertexSchema, new ArrayList<>()));
+        return ErrorCode.SUCCESS;
+    }
+
+    @Override
+    public int addEdgeSchema(EdgeSchema edgeSchema) {
+        if (edgeSchema == null || StringUtils.isBlank(edgeSchema.getLabel())) {
+            return ErrorCode.GRAPH_ADD_EDGE_SCHEMA_FAILED;
+        }
+        for (VertexSchema existSchema : this.getSchema().getVertexSchemaList()) {
+            if (existSchema.getLabel().equals(edgeSchema.getLabel())) {
+                return ErrorCode.GRAPH_ADD_EDGE_SCHEMA_FAILED;
+            }
+        }
+        for (EdgeSchema existSchema : this.getSchema().getEdgeSchemaList()) {
+            if (existSchema.getLabel().equals(edgeSchema.getLabel())) {
+                return ErrorCode.GRAPH_ADD_EDGE_SCHEMA_FAILED;
+            }
+        }
+        if (this.graph.entities.get(edgeSchema.getLabel()) != null) {
+            return ErrorCode.GRAPH_ADD_EDGE_SCHEMA_FAILED;
+        }
+        this.graph.getGraphSchema().addEdge(edgeSchema);
+        this.graph.entities.put(edgeSchema.getLabel(), new EdgeGroup(edgeSchema, new ArrayList<>()));
+        return ErrorCode.SUCCESS;
     }
 }
