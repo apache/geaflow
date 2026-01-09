@@ -321,9 +321,29 @@ $$
 
 2. **Monotonicity with Complexity (σ)**: The threshold `δ` is also monotonically non-decreasing with `σ_logic`. More complex SKU logic (higher `σ`) results in a higher, more conservative threshold, reducing the risk of over-generalization from a highly specific rule.
 
-3. **Counter-intuitive κ Behavior**: The `κ` (kappa) parameter controls the base permissiveness. **Critically**, a **higher κ** leads to a **lower threshold**, making matching **easier** and more permissive. This is because `δ = 1 - κ/(...)`, so a larger `κ` subtracts a larger value from 1.
-    - `Higher κ` → `LOWER δ` → **More Permissive** (easier to match)
-    - `Lower κ` → `HIGHER δ` → **More Strict** (harder to match)
+3. **Counter-intuitive κ Behavior**: ### Path Quality Control: Cycle Prevention
+
+This section details the system's approach to handling pathological loops and ensuring high-quality traversal paths, guided by the principle of LLM-driven learning rather than hard-coded restrictions.
+
+#### Feature: Gremlin-Native Cycle Prevention
+
+To combat wasteful, pathological cycles (e.g., A→B→A oscillations), the system now supports the Gremlin `simplePath()` step.
+
+- **LLM-Driven Tool**: `simplePath()` is exposed as a valid decision to the LLM. It is not automatically applied. The LLM is guided via prompt engineering to use `simplePath()` for exploratory goals where path uniqueness is desirable. This empowers the LLM to make intelligent decisions about path structure.
+- **Internal Feedback Loop**: If a path without `simplePath()` has a high node revisit ratio (configurable via `CYCLE_DETECTION_THRESHOLD`), it is treated as a low-quality execution. The system then penalizes the confidence score of the responsible SKU by calling `update_confidence(..., success=False)`. This allows the cache to naturally learn to avoid generating cyclic patterns over time.
+
+#### Pitfalls (`坑`)
+
+1. **Stateful History**: The `simplePath()` implementation relies on a per-request `path_history` stored in the `TraversalExecutor`. It is **critical** that `executor.clear_path_history(request_id)` is called after each request is completed to prevent memory leaks and state bleeding between separate traversals.
+2. **`simplePath()` is a Global Filter**: Once `simplePath()` is added to a traversal signature, it filters all subsequent steps in that path. The LLM must be aware that it cannot "undo" this step. It's a one-way decision for the life of the traversal.
+
+#### Rejected Designs (What we say "No" to)
+
+To maintain the system's core philosophy, we explicitly **rejected** the following approaches:
+
+- **No Hard-coded Rule Engine**: We did not build a separate, complex engine to detect and block cyclic paths. Such a "policeman" approach is rigid and contradicts the goal of a learning LLM. The system should guide, not block.
+- **No External Feedback for Core Learning**: The cycle penalty feedback loop is integrated directly into the `SimulationEngine`. We avoided using the external `PathEvaluator` for this, as core SKU learning should be self-contained within the simulation loop, leveraging the existing AIMD confidence mechanism.
+- **No `both()` Operator Magic**: We rejected the idea of secretly filtering the parent node from `both()` results. The `simplePath()` solution is more transparent, powerful, and standards-compliant. It provides the LLM with an explicit tool (`simplePath()`) rather than hiding logic inside another operator.
 
 **Recommended Configuration Values**:
 

@@ -1,7 +1,7 @@
 """Traversal executor for simulating graph traversal decisions."""
 
 import re
-from typing import Any, List, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from casts.core.interfaces import DataSource, GraphSchema
 
@@ -12,9 +12,12 @@ class TraversalExecutor:
     def __init__(self, graph: DataSource, schema: GraphSchema):
         self.graph = graph
         self.schema = schema
+        # Track visited nodes for each request to support simplePath()
+        self.path_history: Dict[int, Set[str]] = {}
 
     async def execute_decision(
-        self, current_node_id: str, decision: str, current_signature: str
+        self, current_node_id: str, decision: str, current_signature: str,
+        request_id: Optional[int] = None
     ) -> List[Tuple[str, str, Tuple[Any, ...] | None]]:
         """
         Execute a traversal decision and return next nodes with updated signatures.
@@ -23,12 +26,16 @@ class TraversalExecutor:
             current_node_id: Current node ID
             decision: Traversal decision string (e.g., "out('friend')")
             current_signature: Current traversal signature
+            request_id: Request ID for tracking simplePath history
 
         Returns:
             List of (next_node_id, next_signature, traversed_edge) tuples
             where traversed_edge is (source_node_id, edge_label) or None
         """
         next_nodes: List[Tuple[str, str | None, Tuple[str, str] | None]] = []
+
+        # Check if simplePath is enabled for this traversal
+        has_simple_path = "simplePath()" in current_signature
 
         try:
             # 1) Vertex out/in traversal (follow edges to adjacent nodes)
@@ -93,7 +100,13 @@ class TraversalExecutor:
                     if matched:
                         next_nodes.append((current_node_id, None, None))
 
-            # 4) dedup(): At single-node granularity, this is a no-op
+            # 4) simplePath(): Filter step that enables path uniqueness
+            elif decision == "simplePath()":
+                # simplePath is a filter that passes through the current node
+                # but marks the path for deduplication in the final step
+                next_nodes.append((current_node_id, None, None))
+
+            # 5) dedup(): At single-node granularity, this is a no-op
             elif decision.startswith("dedup"):
                 next_nodes.append((current_node_id, None, None))
 
@@ -126,6 +139,33 @@ class TraversalExecutor:
             # Always append the full decision to create a canonical, Level-2 signature.
             # The abstraction logic is now handled by the StrategyCache during matching.
             next_signature = f"{current_signature}.{decision}"
+
+            # If simplePath is enabled, filter out already-visited nodes
+            if has_simple_path and request_id is not None:
+                # Initialize history for this request if needed
+                if request_id not in self.path_history:
+                    self.path_history[request_id] = set()
+                    # Mark the starting node (current node before first traversal)
+                    self.path_history[request_id].add(current_node_id)
+
+                # Skip this node if it was already visited
+                if next_node_id in self.path_history[request_id]:
+                    continue
+
+                # Mark this node as visited
+                self.path_history[request_id].add(next_node_id)
+
             final_nodes.append((next_node_id, next_signature, traversed_edge))
 
         return final_nodes
+
+    def clear_path_history(self, request_id: int):
+        """Clear the path history for a completed request.
+
+        This should be called when a traversal request completes to free memory.
+
+        Args:
+            request_id: The ID of the completed request
+        """
+        if request_id in self.path_history:
+            del self.path_history[request_id]

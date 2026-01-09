@@ -130,6 +130,12 @@ class DefaultConfiguration(Configuration):
     # Only applicable if SIGNATURE_LEVEL >= 1.
     SIGNATURE_EDGE_WHITELIST = None
 
+    # ============================================
+    # CYCLE DETECTION & PENALTY CONFIGURATION
+    # ============================================
+    CYCLE_PENALTY = "punish"
+    CYCLE_DETECTION_THRESHOLD = 0.3
+
     def get(self, key: str, default: Any = None) -> Any:
         """Get configuration value by key."""
         # Map key names to class attributes
@@ -180,6 +186,7 @@ class DefaultConfiguration(Configuration):
             "CACHE_TIER2_GAMMA": self.CACHE_TIER2_GAMMA,
             "CACHE_SIMILARITY_KAPPA": self.CACHE_SIMILARITY_KAPPA,
             "CACHE_SIMILARITY_BETA": self.CACHE_SIMILARITY_BETA,
+            "CYCLE_DETECTION_THRESHOLD": self.CYCLE_DETECTION_THRESHOLD,
         }
         return key_map.get(key, default)
 
@@ -206,6 +213,7 @@ class DefaultConfiguration(Configuration):
             "LLM_MODEL_NAME": self.LLM_MODEL,
             "SIMULATION_REAL_DATA_DIR": self.SIMULATION_REAL_DATA_DIR,
             "CACHE_SCHEMA_FINGERPRINT": self.CACHE_SCHEMA_FINGERPRINT,
+            "CYCLE_PENALTY": self.CYCLE_PENALTY,
         }
         return key_map.get(key, default)
 

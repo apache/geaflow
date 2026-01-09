@@ -31,7 +31,8 @@ class LLMOracle:
         self.sku_counter = 0
 
         # Setup debug log file
-        log_dir = Path("logs")
+        # Use path relative to geaflow-reasoning directory
+        log_dir = Path(__file__).parent.parent.parent / "logs"
         log_dir.mkdir(exist_ok=True)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.debug_log_file = log_dir / f"llm_oracle_debug_{timestamp}.txt"
@@ -68,6 +69,38 @@ class LLMOracle:
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         with open(self.debug_log_file, "a", encoding="utf-8") as f:
             f.write(f"[{timestamp}] {message}\n")
+
+    @staticmethod
+    def _extract_recent_decisions(signature: str, depth: int = 3) -> List[str]:
+        """Extract the most recent N decisions from a traversal signature.
+
+        Args:
+            signature: The traversal signature (e.g., "V().out('friend').has('type','Person')")
+            depth: Number of recent decisions to extract (default: 3)
+
+        Returns:
+            List of recent decision strings (e.g., ["out('friend')", "has('type','Person')"])
+        """
+        if not signature or signature == "V()":
+            return []
+
+        # Remove the V() prefix
+        sig = signature[3:] if signature.startswith("V()") else signature
+
+        # Extract all steps using regex: .step(args)
+        pattern = r"\.([a-zA-Z_]+)\(([^\)]*)\)"
+        matches = re.findall(pattern, sig)
+
+        # Reconstruct decision strings
+        decisions = []
+        for step, args in matches:
+            if args:
+                decisions.append(f"{step}({args})")
+            else:
+                decisions.append(f"{step}()")
+
+        # Return the last 'depth' decisions
+        return decisions[-depth:] if len(decisions) > depth else decisions
 
     @staticmethod
     def _parse_and_validate_decision(
@@ -150,6 +183,25 @@ class LLMOracle:
         elif current_state == "P":
             state_desc = "Property/Value"
 
+        # Extract recent decision history for context
+        recent_decisions = self._extract_recent_decisions(context.structural_signature, depth=3)
+        if recent_decisions:
+            history_str = "\n".join([f"  {i + 1}. {dec}" for i, dec in enumerate(recent_decisions)])
+            history_section = f"""
+Recent decision history (last {len(recent_decisions)} steps):
+{history_str}
+"""
+        else:
+            history_section = "Recent decision history: (no previous steps, starting fresh)\n"
+
+        # Check if simplePath is already in use
+        has_simple_path = "simplePath()" in context.structural_signature
+        simple_path_status = (
+            "✓ Already using simplePath()"
+            if has_simple_path
+            else "⚠️ Not yet using simplePath() - consider adding it if goal requires unique path"
+        )
+
         prompt = f"""You are implementing a CASTS strategy inside a graph traversal engine.
 
 Mathematical model (do NOT change it):
@@ -157,6 +209,15 @@ Mathematical model (do NOT change it):
   * s : structural pattern signature (current traversal path), a string
   * p : current node properties, a dict WITHOUT id/uuid (pure state)
   * g : goal text, describes the user's intent
+
+{history_section}
+🔍 Avoiding Cycles with simplePath():
+- If your goal requires exploring without revisiting nodes, consider using `simplePath()`
+  after initial steps to ensure path uniqueness.
+- Common pattern: V().out('edge1').simplePath().out('edge2')...
+- simplePath() filters out any paths that revisit already-visited nodes.
+- Current path signature: {context.structural_signature}
+  {simple_path_status}
 
 Your task in THIS CALL:
 - Given current c = (s, p, g) below, you must propose ONE new SKU:
@@ -177,15 +238,17 @@ You must also define a `predicate` (a Python lambda on properties `p`) and a `si
 High-level requirements:
 1) The `predicate` Φ should be general yet meaningful (e.g., check type, category, status, or ranges). NEVER use `id` or `uuid`.
 2) The `d_template` should reflect the goal `g` when possible.
-3) `sigma_logic`: 1 for a simple check, 2 for 2-3 conditions, 3 for more complex logic.
+3) For exploration goals that need to discover new nodes, consider adding simplePath() early in the traversal.
+4) `sigma_logic`: 1 for a simple check, 2 for 2-3 conditions, 3 for more complex logic.
+5) Prefer meaningful forward progress over backtracking unless goal requires it.
 
 Return ONLY valid JSON inside <output> tags. Example:
 <output>
 {{
-  "reasoning": "...",
-  "decision": "out('related')",
-  "predicate": "lambda x: x.get('type') == 'TypeA' and x.get('status') == 'active'",
-  "sigma_logic": 2
+  "reasoning": "Goal requires finding suppliers without revisiting nodes, so using simplePath()",
+  "decision": "simplePath()",
+  "predicate": "lambda x: x.get('type') == 'TypeA'",
+  "sigma_logic": 1
 }}
 </output>
 """  # noqa: E501
@@ -327,7 +390,9 @@ Goal: "{goal}"
 
 Available node types: [{node_types_str}]
 
-Recommend 1-{max_recommendations} node types that would be most suitable as starting points for this traversal goal.
+Recommend 1-{
+            max_recommendations
+        } node types that would be most suitable as starting points for this traversal goal.
 Consider which node types are most likely to:
 1. Have connections relevant to the goal
 2. Be central to the graph topology
@@ -340,8 +405,10 @@ Example outputs:
 ["Account"]
 ["Person", "Company", "Loan"]
 
-Your response (JSON array only):
+Your response (JSON array only, using ```json), for example:
 ```json
+["Company"]
+```
 """  # noqa: E501
 
         try:

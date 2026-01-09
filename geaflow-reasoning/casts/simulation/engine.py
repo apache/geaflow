@@ -179,6 +179,51 @@ class SimulationEngine:
                     if self.verbose:
                         print("      [!] Execution failed, confidence penalty applied")
 
+                # Check for node revisit patterns (cycle detection)
+                # This provides automatic feedback to penalize cyclic SKUs
+                cycle_penalty_mode = self.llm_oracle.config.get_str("CYCLE_PENALTY", "punish")
+                cycle_threshold = self.llm_oracle.config.get_float("CYCLE_DETECTION_THRESHOLD", 0.3)
+
+                should_continue = True
+
+                if (
+                    cycle_penalty_mode != "none"
+                    and sku is not None
+                    and request_id in metrics_collector.paths
+                ):
+                    path_steps = metrics_collector.paths[request_id]["steps"]
+                    if len(path_steps) >= 2:  # Need at least 2 steps to detect cycles
+                        # Extract node IDs from the path
+                        node_ids = [step.get("node_id") for step in path_steps]
+                        unique_nodes = len(set(node_ids))
+                        total_nodes = len(node_ids)
+
+                        # Calculate revisit ratio
+                        revisit_ratio = (
+                            1.0 - (unique_nodes / total_nodes) if total_nodes > 0 else 0.0
+                        )
+
+                        # Check if simplePath is being used
+                        current_sig = path_steps[-1].get("structural_signature", "")
+                        has_simple_path = "simplePath()" in current_sig
+
+                        # If high revisit ratio without simplePath protection, penalize
+                        if revisit_ratio > cycle_threshold and not has_simple_path:
+                            # Treat high revisit as execution quality issue
+                            execution_success = False
+                            if cycle_penalty_mode == "stop":
+                                should_continue = False
+                                if self.verbose:
+                                    print(
+                                        f"      [!] High node revisit detected "
+                                        f"({revisit_ratio:.1%}), applying cycle penalty AND terminating path"
+                                    )
+                            elif self.verbose:
+                                print(
+                                    f"      [!] High node revisit detected "
+                                    f"({revisit_ratio:.1%}), applying cycle penalty"
+                                )
+
                 if sku is not None:
                     self.strategy_cache.update_confidence(sku, execution_success)
             else:
@@ -222,7 +267,7 @@ class SimulationEngine:
             # Execute the decision
             if final_decision:
                 next_nodes = await self.executor.execute_decision(
-                    current_node_id, final_decision, current_signature
+                    current_node_id, final_decision, current_signature, request_id=request_id
                 )
 
                 if self.verbose:
@@ -309,6 +354,8 @@ class SimulationEngine:
                 if completed_requests and on_request_completed:
                     for request_id in completed_requests:
                         on_request_completed(request_id, metrics_collector)
+                        # Clean up simplePath history for completed requests
+                        self.executor.clear_path_history(request_id)
 
                 if tick > self.max_depth:
                     print(
