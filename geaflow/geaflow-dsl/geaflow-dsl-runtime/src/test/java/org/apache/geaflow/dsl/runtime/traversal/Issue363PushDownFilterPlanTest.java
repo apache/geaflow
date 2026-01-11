@@ -20,11 +20,7 @@
 package org.apache.geaflow.dsl.runtime.traversal;
 
 import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
-import java.util.stream.Collectors;
-import org.apache.calcite.plan.RelOptUtil;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.sql.SqlNode;
@@ -36,7 +32,6 @@ import org.apache.geaflow.dsl.optimize.RuleGroup;
 import org.apache.geaflow.dsl.parser.GeaFlowDSLParser;
 import org.apache.geaflow.dsl.planner.GQLContext;
 import org.apache.geaflow.dsl.rel.logical.LogicalGraphMatch;
-import org.apache.geaflow.dsl.rel.match.MatchFilter;
 import org.apache.geaflow.dsl.rel.match.VertexMatch;
 import org.apache.geaflow.dsl.schema.GeaFlowGraph;
 import org.apache.geaflow.dsl.sqlnode.SqlCreateGraph;
@@ -45,6 +40,13 @@ import org.apache.geaflow.dsl.util.GQLRexUtil;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 
+/**
+ * Tests for ID filter push-down behavior in the optimizer.
+ *
+ * <p>This test verifies that MatchIdFilterSimplifyRule correctly extracts ID equality
+ * filters to VertexMatch.idSet for efficient O(1) vertex lookup. The rule order in
+ * OptimizeRules ensures MatchIdFilterSimplifyRule runs before IdFilterPushdownRule.
+ */
 public class Issue363PushDownFilterPlanTest {
 
     private static final String GRAPH_DDL = "create graph g_issue363_simple("
@@ -92,23 +94,17 @@ public class Issue363PushDownFilterPlanTest {
 
         boolean hasIdSet = aMatch.getIdSet() != null && !aMatch.getIdSet().isEmpty();
         boolean hasIdsFromFilter = !idsFromFilter.isEmpty();
-        if (hasIdSet || hasIdsFromFilter) {
-            return;
-        }
 
-        List<MatchFilter> matchFilters = findMatchFilters(graphMatch.getPathPattern());
-        Set<RexNode> idsFromMatchFilters = new HashSet<>();
-        for (MatchFilter matchFilter : matchFilters) {
-            idsFromMatchFilters.addAll(
-                GQLRexUtil.findVertexIds(matchFilter.getCondition(), (VertexRecordType) aMatch.getNodeType()));
+        // Assert that ID filter was successfully extracted to either idSet or pushDownFilter
+        Assert.assertTrue(hasIdSet || hasIdsFromFilter,
+            "ID filter should be extracted to idSet or pushDownFilter. "
+            + "idSet=" + aMatch.getIdSet() + ", pushDownFilter=" + pushDownFilter);
+
+        // Verify idSet contains the expected ID value
+        if (hasIdSet) {
+            Assert.assertTrue(aMatch.getIdSet().contains(1L),
+                "idSet should contain ID value 1, but got: " + aMatch.getIdSet());
         }
-        Assert.assertFalse(idsFromMatchFilters.isEmpty(),
-            "Expected id filter to exist for VertexMatch(a) but none found. idSet=" + aMatch.getIdSet()
-                + ", pushDownFilter=" + pushDownFilter
-                + ", matchFilters="
-                + matchFilters.stream().map(f -> String.valueOf(f.getCondition())).collect(Collectors.joining("; "))
-                + "\nOriginal plan:\n" + RelOptUtil.toString(relNode)
-                + "\nOptimized plan:\n" + RelOptUtil.toString(optimized));
     }
 
     private static LogicalGraphMatch findGraphMatch(RelNode root) {
@@ -146,20 +142,5 @@ public class Issue363PushDownFilterPlanTest {
             }
         }
         return null;
-    }
-
-    private static List<MatchFilter> findMatchFilters(RelNode root) {
-        if (root == null) {
-            return Collections.emptyList();
-        }
-        RelNode node = GQLRelUtil.toRel(root);
-        List<MatchFilter> result = new java.util.ArrayList<>();
-        if (node instanceof MatchFilter) {
-            result.add((MatchFilter) node);
-        }
-        for (RelNode input : node.getInputs()) {
-            result.addAll(findMatchFilters(input));
-        }
-        return result;
     }
 }

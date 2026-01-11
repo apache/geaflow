@@ -85,12 +85,16 @@ public class OptimizeRules {
         TableJoinMatchToGraphMatchRule.INSTANCE,
         MatchJoinMatchMergeRule.INSTANCE,
         FilterToMatchRule.INSTANCE,
-        // Issue #363: Optimization rules for ID filter pushdown and join reordering
+        // Issue #363: Optimization rules for ID filter extraction and pushdown
+        // MatchIdFilterSimplifyRule must run FIRST to extract ID equality filters to idSet.
+        // This enables O(1) vertex lookup instead of full scan.
+        // IdFilterPushdownRule runs after to push ID filters to pushDownFilter for start vertices
+        // (skipped if idSet already populated by MatchIdFilterSimplifyRule).
+        MatchIdFilterSimplifyRule.INSTANCE,
         IdFilterPushdownRule.INSTANCE,
         FilterMatchNodeTransposeRule.INSTANCE,
         MatchFilterMergeRule.INSTANCE,
         TableScanToGraphRule.INSTANCE,
-        MatchIdFilterSimplifyRule.INSTANCE,
         AnchorNodePriorityRule.INSTANCE,
         GraphJoinReorderRule.INSTANCE,
         MatchEdgeLabelFilterRemoveRule.INSTANCE,

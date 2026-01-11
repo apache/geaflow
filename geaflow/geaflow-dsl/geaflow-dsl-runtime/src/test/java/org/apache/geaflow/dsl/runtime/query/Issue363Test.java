@@ -39,6 +39,10 @@ import org.testng.annotations.Test;
  * 2. Optimized query (with improved query structure)
  *
  * Expected performance improvement: ≥20% (Phase 1: Query Rewriting)
+ *
+ * The optimization uses MatchIdFilterSimplifyRule to extract ID equality filters
+ * into VertexMatch.idSet for efficient vertex lookup. The rule order in OptimizeRules
+ * ensures MatchIdFilterSimplifyRule runs before IdFilterPushdownRule.
  */
 public class Issue363Test {
 

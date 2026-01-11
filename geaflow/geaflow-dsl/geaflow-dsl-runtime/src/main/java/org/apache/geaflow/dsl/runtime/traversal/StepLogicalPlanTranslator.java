@@ -172,17 +172,23 @@ public class StepLogicalPlanTranslator {
         public StepLogicalPlan visitVertexMatch(VertexMatch vertexMatch) {
             String label = vertexMatch.getLabel();
             RexNode filter = nodePushDownFilters.get(vertexMatch);
-            // TODO use optimizer rule to push the filter to the vertex-match.
+            // Filter push-down is primarily handled by optimizer rules:
+            // - MatchIdFilterSimplifyRule: extracts ID filters to idSet for all vertices
+            // - IdFilterPushdownRule: pushes ID filters to pushDownFilter for start vertices
+            // Runtime push-down via nodePushDownFilters serves as fallback for edge cases.
             if (vertexMatch.getPushDownFilter() != null) {
                 filter = vertexMatch.getPushDownFilter();
             }
             Set<StartId> startIds = new HashSet<>();
-            if (vertexMatch.getInput() == null && filter != null) {
-                Set<RexNode> ids = GQLRexUtil.findVertexIds(filter, (VertexRecordType) vertexMatch.getNodeType());
-                startIds = toStartIds(ids);
-            } else if (!vertexMatch.getIdSet().isEmpty()) {
+            // Prefer idSet if available (already extracted and optimized by MatchIdFilterSimplifyRule)
+            // This is more efficient than parsing filter expressions at runtime
+            if (!vertexMatch.getIdSet().isEmpty()) {
                 startIds = vertexMatch.getIdSet().stream().map(id -> new ConstantStartId(id)).collect(
                     Collectors.toSet());
+            } else if (vertexMatch.getInput() == null && filter != null) {
+                // Fallback: extract IDs from filter expression
+                Set<RexNode> ids = GQLRexUtil.findVertexIds(filter, (VertexRecordType) vertexMatch.getNodeType());
+                startIds = toStartIds(ids);
             }
             Set<BinaryString> nodeTypes = vertexMatch.getTypes().stream()
                 .map(s -> (BinaryString) BinaryUtil.toBinaryForString(s))

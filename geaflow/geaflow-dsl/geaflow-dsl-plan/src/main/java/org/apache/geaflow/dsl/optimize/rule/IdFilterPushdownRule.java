@@ -39,8 +39,8 @@ import org.apache.geaflow.dsl.rel.match.MatchFilter;
 import org.apache.geaflow.dsl.rel.match.SubQueryStart;
 import org.apache.geaflow.dsl.rel.match.VertexMatch;
 import org.apache.geaflow.dsl.rex.PathInputRef;
-import org.apache.geaflow.dsl.util.GQLRexUtil;
 import org.apache.geaflow.dsl.util.GQLRelUtil;
+import org.apache.geaflow.dsl.util.GQLRexUtil;
 
 /**
  * Rule for Issue #363: Aggressively pushes ID equality filters to VertexMatch nodes.
