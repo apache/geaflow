@@ -111,6 +111,7 @@ import org.apache.geaflow.dsl.runtime.traversal.operator.StepSourceOperator.Cons
 import org.apache.geaflow.dsl.runtime.traversal.operator.StepSourceOperator.ParameterStartId;
 import org.apache.geaflow.dsl.runtime.traversal.operator.StepSourceOperator.StartId;
 import org.apache.geaflow.dsl.runtime.util.FilterPushDownUtil;
+import org.apache.geaflow.dsl.util.GQLRelUtil;
 import org.apache.geaflow.dsl.util.GQLRexUtil;
 import org.apache.geaflow.dsl.util.SqlTypeUtil;
 import org.apache.geaflow.state.data.TimeRange;
@@ -205,7 +206,7 @@ public class StepLogicalPlanTranslator {
             // generate input plan.
             StepLogicalPlan input;
             if (vertexMatch.getInput() != null) {
-                input = this.visit(vertexMatch.getInput());
+                input = this.visit(GQLRelUtil.toRel(vertexMatch.getInput()));
             } else {
                 if (logicalPlanHead == null) { // create start plan for the first time
                     input = StepLogicalPlan.start(startIds)
@@ -247,7 +248,7 @@ public class StepLogicalPlanTranslator {
             if (edgeMatch.getInput() == null) {
                 throw new GeaFlowDSLException("Graph match should start from a vertex");
             }
-            StepLogicalPlan input = this.visit(edgeMatch.getInput());
+            StepLogicalPlan input = this.visit(GQLRelUtil.toRel(edgeMatch.getInput()));
 
             IType<?> nodeType = SqlTypeUtil.convertType(edgeMatch.getNodeType());
             PathType outputPath = (PathType) SqlTypeUtil.convertType(edgeMatch.getPathSchema());
@@ -294,8 +295,9 @@ public class StepLogicalPlanTranslator {
 
         @Override
         public StepLogicalPlan visitVirtualEdgeMatch(VirtualEdgeMatch virtualEdgeMatch) {
-            StepLogicalPlan input = this.visit(virtualEdgeMatch.getInput());
-            PathRecordType inputPath = ((IMatchNode) virtualEdgeMatch.getInput()).getPathSchema();
+            RelNode inputRel = GQLRelUtil.toRel(virtualEdgeMatch.getInput());
+            StepLogicalPlan input = this.visit(inputRel);
+            PathRecordType inputPath = ((IMatchNode) inputRel).getPathSchema();
             Expression targetId = ExpressionTranslator.of(inputPath, logicalPlanSet)
                 .translate(virtualEdgeMatch.getTargetId());
             PathType outputPath = (PathType) SqlTypeUtil.convertType(virtualEdgeMatch.getPathSchema());
@@ -308,11 +310,12 @@ public class StepLogicalPlanTranslator {
 
         @Override
         public StepLogicalPlan visitFilter(MatchFilter filter) {
+            RelNode filterInput = GQLRelUtil.toRel(filter.getInput());
             // push down filter condition
-            nodePushDownFilters.put(filter.getInput(), filter.getCondition());
-            StepLogicalPlan input = this.visit(filter.getInput());
+            nodePushDownFilters.put(filterInput, filter.getCondition());
+            StepLogicalPlan input = this.visit(filterInput);
             PathType outputPath = (PathType) SqlTypeUtil.convertType(filter.getPathSchema());
-            PathRecordType inputPath = ((IMatchNode) filter.getInput()).getPathSchema();
+            PathRecordType inputPath = ((IMatchNode) filterInput).getPathSchema();
 
             Expression condition =
                 ExpressionTranslator.of(inputPath, logicalPlanSet).translate(filter.getCondition());
@@ -324,8 +327,10 @@ public class StepLogicalPlanTranslator {
         @Override
         public StepLogicalPlan visitJoin(MatchJoin join) {
             JoinInfo joinInfo = join.analyzeCondition();
-            PathRecordType leftPathType = ((IMatchNode) join.getLeft()).getPathSchema();
-            PathRecordType rightPathType = ((IMatchNode) join.getRight()).getPathSchema();
+            RelNode leftRel = GQLRelUtil.toRel(join.getLeft());
+            RelNode rightRel = GQLRelUtil.toRel(join.getRight());
+            PathRecordType leftPathType = ((IMatchNode) leftRel).getPathSchema();
+            PathRecordType rightPathType = ((IMatchNode) rightRel).getPathSchema();
 
             IType<?>[] leftKeyTypes = joinInfo.leftKeys.stream()
                 .map(index ->
@@ -342,8 +347,8 @@ public class StepLogicalPlanTranslator {
             StepKeyFunction leftKeyFn = new StepKeyFunctionImpl(toIntArray(joinInfo.leftKeys), leftKeyTypes);
             StepKeyFunction rightKeyFn = new StepKeyFunctionImpl(toIntArray(joinInfo.rightKeys), rightKeyTypes);
 
-            StepLogicalPlan leftPlan = visit(join.getLeft());
-            StepLogicalPlan rightPlan = visit(join.getRight());
+            StepLogicalPlan leftPlan = visit(leftRel);
+            StepLogicalPlan rightPlan = visit(rightRel);
             IType<?>[] leftPathTypes = leftPlan.getOutputPathSchema().getTypes();
             IType<?>[] rightPathTypes = rightPlan.getOutputPathSchema().getTypes();
 
@@ -378,7 +383,7 @@ public class StepLogicalPlanTranslator {
 
         @Override
         public StepLogicalPlan visitDistinct(MatchDistinct distinct) {
-            RelNode input = distinct.getInput(0);
+            RelNode input = GQLRelUtil.toRel(distinct.getInput(0));
             IType<?>[] types = ((IMatchNode) input).getPathSchema().getFieldList().stream()
                 .map(field -> SqlTypeUtil.convertType(field.getType()))
                 .collect(Collectors.toList()).toArray(new IType[]{});
@@ -403,7 +408,7 @@ public class StepLogicalPlanTranslator {
                 // So we create a new plan cache for each input.
                 Map<String, StepLogicalPlan> prePlanCache = planCache;
                 planCache = new HashMap<>(planCache);
-                inputPlans.add(visit(union.getInput(i)));
+                inputPlans.add(visit(GQLRelUtil.toRel(union.getInput(i))));
                 // recover pre-plan cache.
                 planCache = prePlanCache;
             }
@@ -436,8 +441,8 @@ public class StepLogicalPlanTranslator {
 
         @Override
         public StepLogicalPlan visitLoopMatch(LoopUntilMatch loopMatch) {
-            StepLogicalPlan loopStart = visit(loopMatch.getInput());
-            StepLogicalPlan loopBody = visit(loopMatch.getLoopBody());
+            StepLogicalPlan loopStart = visit(GQLRelUtil.toRel(loopMatch.getInput()));
+            StepLogicalPlan loopBody = visit(GQLRelUtil.toRel(loopMatch.getLoopBody()));
             for (StepLogicalPlan plan : loopBody.getFinalPlans()) {
                 plan.withModifyGraphSchema(loopStart.getModifyGraphSchema());
             }
@@ -470,12 +475,13 @@ public class StepLogicalPlanTranslator {
 
         @Override
         public StepLogicalPlan visitPathModify(MatchPathModify pathModify) {
-            StepLogicalPlan input = visit(pathModify.getInput());
+            RelNode inputRel = GQLRelUtil.toRel(pathModify.getInput());
+            StepLogicalPlan input = visit(inputRel);
             List<PathModifyExpression> modifyExpressions = pathModify.getExpressions();
             int[] updatePathIndices = new int[modifyExpressions.size()];
             Expression[] updateExpressions = new Expression[modifyExpressions.size()];
 
-            ExpressionTranslator translator = ExpressionTranslator.of(pathModify.getInput().getRowType(),
+            ExpressionTranslator translator = ExpressionTranslator.of(inputRel.getRowType(),
                 logicalPlanSet);
             for (int i = 0; i < modifyExpressions.size(); i++) {
                 PathModifyExpression modifyExpression = modifyExpressions.get(i);
@@ -503,13 +509,14 @@ public class StepLogicalPlanTranslator {
 
         @Override
         public StepLogicalPlan visitExtend(MatchExtend matchExtend) {
-            StepLogicalPlan input = visit(matchExtend.getInput());
+            RelNode inputRel = GQLRelUtil.toRel(matchExtend.getInput());
+            StepLogicalPlan input = visit(inputRel);
             List<PathModifyExpression> modifyExpressions = matchExtend.getExpressions();
             int[] updatePathIndices = new int[modifyExpressions.size()];
             Expression[] updateExpressions = new Expression[modifyExpressions.size()];
 
             ExpressionTranslator translator = ExpressionTranslator.of(
-                matchExtend.getInput().getRowType(), logicalPlanSet);
+                inputRel.getRowType(), logicalPlanSet);
             int offset = 0;
             for (int i = 0; i < modifyExpressions.size(); i++) {
                 PathModifyExpression modifyExpression = modifyExpressions.get(i);
@@ -539,7 +546,7 @@ public class StepLogicalPlanTranslator {
 
         @Override
         public StepLogicalPlan visitSort(MatchPathSort pathSort) {
-            StepLogicalPlan input = visit(pathSort.getInput());
+            StepLogicalPlan input = visit(GQLRelUtil.toRel(pathSort.getInput()));
             SortInfo sortInfo = buildSortInfo(pathSort);
             StepSortFunction orderByFunction = new StepSortFunctionImpl(sortInfo);
             PathType inputPath = input.getOutputPathSchema();
@@ -551,9 +558,10 @@ public class StepLogicalPlanTranslator {
 
         @Override
         public StepLogicalPlan visitAggregate(MatchAggregate matchAggregate) {
-            StepLogicalPlan input = visit(matchAggregate.getInput());
+            RelNode inputRel = GQLRelUtil.toRel(matchAggregate.getInput());
+            StepLogicalPlan input = visit(inputRel);
             List<RexNode> groupList = matchAggregate.getGroupSet();
-            RelDataType inputRelDataType = matchAggregate.getInput().getRowType();
+            RelDataType inputRelDataType = inputRel.getRowType();
             List<Expression> groupListExpressions = groupList.stream().map(rex ->
                 ExpressionTranslator.of(inputRelDataType, logicalPlanSet).translate(rex)).collect(
                 Collectors.toList());

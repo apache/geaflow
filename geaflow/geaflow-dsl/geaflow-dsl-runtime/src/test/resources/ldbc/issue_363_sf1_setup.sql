@@ -17,35 +17,23 @@
  * under the License.
  */
 
--- Issue #363: Optimized Query
--- This query improves performance by:
--- 1. Eliminating redundant variable declaration (a declared only once)
--- 2. Clear join path: a <- c -> d
--- 3. Consolidated WHERE clause for better optimization
+-- Issue #363: SF1 dataset setup query
+--
+-- This query is used to trigger graph creation + ingestion in test @BeforeClass,
+-- so later benchmark iterations can measure query execution without ingestion time.
 
 USE GRAPH bi;
 
-CREATE TABLE issue_363_optimized_result (
-  a_id bigint,
-  b_id bigint,
-  c_id bigint,
-  d_id bigint
+CREATE TABLE issue_363_sf1_setup_result (
+  a_id bigint
 ) WITH (
   type='file',
   geaflow.dsl.file.path='${target}'
 );
 
--- Optimized query for Issue #363
-INSERT INTO issue_363_optimized_result
-SELECT
-  a_id,
-  b_id,
-  c_id,
-  d_id
+INSERT INTO issue_363_sf1_setup_result
+SELECT a_id
 FROM (
-  MATCH
-    (a:Person where a.id = ${issue363_a_id})<-[e:hasCreator]-(b),
-    (a)<-[knows1:knows]-(c:Person)-[knows2:knows]->(d:Person where d.id = ${issue363_d_id})
-  RETURN a.id as a_id, b.id as b_id, c.id as c_id, d.id as d_id
-  ORDER BY a_id, b_id, c_id, d_id
+  MATCH (a:Person where a.id = ${issue363_a_id})
+  RETURN a.id as a_id
 );

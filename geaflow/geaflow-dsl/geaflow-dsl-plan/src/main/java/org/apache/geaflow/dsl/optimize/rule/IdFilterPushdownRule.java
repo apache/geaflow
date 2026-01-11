@@ -36,9 +36,11 @@ import org.apache.geaflow.dsl.calcite.MetaFieldType;
 import org.apache.geaflow.dsl.calcite.MetaFieldType.MetaField;
 import org.apache.geaflow.dsl.rel.match.IMatchNode;
 import org.apache.geaflow.dsl.rel.match.MatchFilter;
+import org.apache.geaflow.dsl.rel.match.SubQueryStart;
 import org.apache.geaflow.dsl.rel.match.VertexMatch;
 import org.apache.geaflow.dsl.rex.PathInputRef;
 import org.apache.geaflow.dsl.util.GQLRexUtil;
+import org.apache.geaflow.dsl.util.GQLRelUtil;
 
 /**
  * Rule for Issue #363: Aggressively pushes ID equality filters to VertexMatch nodes.
@@ -67,6 +69,13 @@ public class IdFilterPushdownRule extends RelOptRule {
     public void onMatch(RelOptRuleCall call) {
         MatchFilter filter = call.rel(0);
         VertexMatch vertexMatch = call.rel(1);
+
+        // pushDownFilter is expected to be evaluated at the start vertex of a pattern. For non-start
+        // vertices, keep the MatchFilter so later rules (e.g. MatchIdFilterSimplifyRule) can safely
+        // extract idSet without introducing path-reference/index issues.
+        if (!isStartVertex(vertexMatch)) {
+            return;
+        }
 
         // If vertex already has ID set, this has been optimized
         if (vertexMatch.getIdSet() != null && !vertexMatch.getIdSet().isEmpty()) {
@@ -128,6 +137,13 @@ public class IdFilterPushdownRule extends RelOptRule {
             // All filters pushed down
             call.transformTo(newVertexMatch);
         }
+    }
+
+    private boolean isStartVertex(VertexMatch vertexMatch) {
+        if (vertexMatch.getInput() == null) {
+            return true;
+        }
+        return GQLRelUtil.toRel(vertexMatch.getInput()) instanceof SubQueryStart;
     }
 
     /**

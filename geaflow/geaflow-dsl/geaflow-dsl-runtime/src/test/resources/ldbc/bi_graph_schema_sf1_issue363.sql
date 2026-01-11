@@ -17,12 +17,17 @@
  * under the License.
  */
 
--- LDBC BI Graph Schema with SF1 Dataset (660x scale)
--- 9,892 Person vertices, 180,623 knows edges
--- 2.05M Comments, 1.00M Posts, 90K Forums
+-- LDBC BI Graph Schema for Issue #363 (SF1 dataset)
+--
+-- This schema intentionally loads only the data needed by Issue #363 queries:
+-- - Person vertices
+-- - knows edges
+-- - hasCreator edges (+ minimal Post/Comment vertices derived from edge files)
+--
+-- This avoids loading the full Post/Comment vertex files (which are large) and
+-- keeps the benchmark focused on query optimization rather than full graph ingestion.
 
 CREATE GRAPH bi (
-  --dynamic
   Vertex Person (
     id bigint ID,
     creationDate varchar,
@@ -32,12 +37,6 @@ CREATE GRAPH bi (
     browserUsed varchar,
     locationIP varchar
   ),
-  Vertex Forum (
-    id bigint ID,
-    creationDate varchar,
-    title varchar
-  ),
-  --Message
   Vertex Post (
     id bigint ID,
     creationDate varchar,
@@ -57,7 +56,6 @@ CREATE GRAPH bi (
     length bigint
   ),
 
-  --relations
   Edge knows (
     srcId bigint SOURCE ID,
     targetId bigint DESTINATION ID,
@@ -68,10 +66,11 @@ CREATE GRAPH bi (
     targetId bigint DESTINATION ID
   )
 ) WITH (
-	storeType='rocksdb'
+  storeType='rocksdb',
+  shardCount=${issue363_sf1_shard_count}
 );
 
--- Load data from SF1 dataset
+-- Person vertices
 Create Table tbl_Person (
     creationDate varchar,
     id bigint,
@@ -91,61 +90,11 @@ Create Table tbl_Person (
   geaflow.dsl.column.separator='|',
   geaflow.dsl.file.name.regex='^part-.*csv$'
 );
+
 INSERT INTO bi.Person
 SELECT id, creationDate, firstName, lastName, gender, browserUsed, locationIP FROM tbl_Person;
 
-Create Table tbl_Forum (
-    creationDate varchar,
-    id bigint,
-    title varchar
-) WITH (
-  type='file',
-  geaflow.dsl.file.path='${sf1_data_root}/bi_forum',
-  geaflow.dsl.file.format='csv',
-  `geaflow.dsl.skip.header`='true',
-  geaflow.dsl.column.separator='|',
-  geaflow.dsl.file.name.regex='^part-.*csv$'
-);
-INSERT INTO bi.Forum SELECT id, creationDate, title FROM tbl_Forum;
-
-Create Table tbl_Post (
-    creationDate varchar,
-    id bigint,
-    imageFile varchar,
-    locationIP varchar,
-    browserUsed varchar,
-    `language` varchar,
-    content varchar,
-    length bigint
-) WITH (
-  type='file',
-  geaflow.dsl.file.path='${sf1_data_root}/bi_post',
-  geaflow.dsl.file.format='csv',
-  `geaflow.dsl.skip.header`='true',
-  geaflow.dsl.column.separator='|',
-  geaflow.dsl.file.name.regex='^part-.*csv$'
-);
-INSERT INTO bi.Post
-SELECT id, creationDate, browserUsed, locationIP, content, length, `language`, imageFile FROM tbl_Post;
-
-Create Table tbl_Comment (
-    creationDate varchar,
-    id bigint,
-    locationIP varchar,
-    browserUsed varchar,
-    content varchar,
-    length bigint
-) WITH (
-  type='file',
-  geaflow.dsl.file.path='${sf1_data_root}/bi_comment',
-  geaflow.dsl.file.format='csv',
-  `geaflow.dsl.skip.header`='true',
-  geaflow.dsl.column.separator='|',
-  geaflow.dsl.file.name.regex='^part-.*csv$'
-);
-INSERT INTO bi.Comment
-SELECT id, creationDate, browserUsed, locationIP, content, length FROM tbl_Comment;
-
+-- knows edges
 Create Table tbl_knows (
     creationDate varchar,
     Person1Id bigint,
@@ -163,7 +112,7 @@ INSERT INTO bi.knows
 SELECT Person1Id, Person2Id, creationDate
 FROM tbl_knows;
 
--- Load hasCreator edges from Comment
+-- hasCreator edges + minimal Comment vertices (from edge files)
 Create Table tbl_comment_hasCreator (
     creationDate varchar,
     CommentId bigint,
@@ -177,11 +126,21 @@ Create Table tbl_comment_hasCreator (
   geaflow.dsl.file.name.regex='^part-.*csv$'
 );
 
+INSERT INTO bi.Comment
+SELECT
+  CommentId,
+  creationDate,
+  cast(null as varchar),
+  cast(null as varchar),
+  cast(null as varchar),
+  cast(null as bigint)
+FROM tbl_comment_hasCreator;
+
 INSERT INTO bi.hasCreator
 SELECT CommentId, PersonId
 FROM tbl_comment_hasCreator;
 
--- Load hasCreator edges from Post
+-- hasCreator edges + minimal Post vertices (from edge files)
 Create Table tbl_post_hasCreator (
     creationDate varchar,
     PostId bigint,
@@ -194,6 +153,18 @@ Create Table tbl_post_hasCreator (
   geaflow.dsl.column.separator='|',
   geaflow.dsl.file.name.regex='^part-.*csv$'
 );
+
+INSERT INTO bi.Post
+SELECT
+  PostId,
+  creationDate,
+  cast(null as varchar),
+  cast(null as varchar),
+  cast(null as varchar),
+  cast(null as bigint),
+  cast(null as varchar),
+  cast(null as varchar)
+FROM tbl_post_hasCreator;
 
 INSERT INTO bi.hasCreator
 SELECT PostId, PersonId

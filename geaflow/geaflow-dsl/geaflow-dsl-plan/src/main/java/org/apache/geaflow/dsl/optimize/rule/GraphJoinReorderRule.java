@@ -76,9 +76,10 @@ public class GraphJoinReorderRule extends RelOptRule {
         }
 
         // Get all three operands: A, B, C from (A JOIN B) JOIN C
-        IMatchNode a = (IMatchNode) leftJoin.getLeft();
-        IMatchNode b = (IMatchNode) leftJoin.getRight();
-        IMatchNode c = (IMatchNode) topJoin.getRight();
+        // Use GQLRelUtil.toRel() to unwrap HepRelVertex wrappers from Calcite optimizer
+        IMatchNode a = (IMatchNode) GQLRelUtil.toRel(leftJoin.getLeft());
+        IMatchNode b = (IMatchNode) GQLRelUtil.toRel(leftJoin.getRight());
+        IMatchNode c = (IMatchNode) GQLRelUtil.toRel(topJoin.getRight());
 
         // Calculate selectivity scores
         SelectivityInfo aInfo = calculateSelectivity(a);
@@ -115,31 +116,46 @@ public class GraphJoinReorderRule extends RelOptRule {
         // Rebuild join tree with new order
         RexBuilder rexBuilder = call.builder().getRexBuilder();
 
-        // Create condition for first join (newLeft JOIN newMid)
-        RexNode firstCondition = buildJoinCondition(newLeft, newMid,
-            leftJoin.getCondition(), topJoin.getCondition(), rexBuilder);
+        // Use the proven utility to build join conditions based on common labels between nodes.
+        // This ensures correct equi-join conditions when reordering.
+        // caseSensitive is typically false for GQL, matching standard SQL behavior.
+        RexNode firstCondition = GQLRelUtil.createPathJoinCondition(newLeft, newMid, false, rexBuilder);
+        if (firstCondition == null || firstCondition.isAlwaysTrue()) {
+            // No common labels between newLeft and newMid means we cannot safely reorder
+            // without losing the original join semantics.
+            return;
+        }
 
         MatchJoin firstJoin = MatchJoin.create(
             topJoin.getCluster(),
             topJoin.getTraitSet(),
             newLeft,
             newMid,
-            firstCondition != null ? firstCondition : rexBuilder.makeLiteral(true),
+            firstCondition,
             JoinRelType.INNER
         );
 
-        // Create condition for second join (firstJoin JOIN newRight)
-        RexNode secondCondition = buildJoinCondition(firstJoin, newRight,
-            leftJoin.getCondition(), topJoin.getCondition(), rexBuilder);
+        RexNode secondCondition = GQLRelUtil.createPathJoinCondition(firstJoin, newRight, false, rexBuilder);
+        if (secondCondition == null || secondCondition.isAlwaysTrue()) {
+            // No common labels between firstJoin and newRight means we cannot safely reorder.
+            return;
+        }
 
         MatchJoin secondJoin = MatchJoin.create(
             topJoin.getCluster(),
             topJoin.getTraitSet(),
             firstJoin,
             newRight,
-            secondCondition != null ? secondCondition : rexBuilder.makeLiteral(true),
+            secondCondition,
             JoinRelType.INNER
         );
+
+        // Calcite requires the transformed node to keep an identical output row type.
+        // Reordering join operands changes field order, so skip the rewrite unless the
+        // result schema matches the original join schema.
+        if (!secondJoin.getRowType().equals(topJoin.getRowType())) {
+            return;
+        }
 
         call.transformTo(secondJoin);
     }
@@ -196,14 +212,16 @@ public class GraphJoinReorderRule extends RelOptRule {
         } else if (node instanceof MatchFilter) {
             MatchFilter filter = (MatchFilter) node;
             score += analyzeFilterSelectivity(filter.getCondition());
-            score += calculateSelectivityScore((IMatchNode) filter.getInput());
+            // Use GQLRelUtil.toRel() to unwrap HepRelVertex wrappers
+            score += calculateSelectivityScore((IMatchNode) GQLRelUtil.toRel(filter.getInput()));
 
         } else if (node instanceof MatchJoin) {
             MatchJoin join = (MatchJoin) node;
             // For joins, use max selectivity of children (best anchor point)
+            // Use GQLRelUtil.toRel() to unwrap HepRelVertex wrappers
             score = Math.max(
-                calculateSelectivityScore((IMatchNode) join.getLeft()),
-                calculateSelectivityScore((IMatchNode) join.getRight())
+                calculateSelectivityScore((IMatchNode) GQLRelUtil.toRel(join.getLeft())),
+                calculateSelectivityScore((IMatchNode) GQLRelUtil.toRel(join.getRight()))
             );
         }
 
@@ -279,20 +297,6 @@ public class GraphJoinReorderRule extends RelOptRule {
             }
         }
         return false;
-    }
-
-    /**
-     * Build join condition between two patterns based on common labels.
-     * Uses GQLRelUtil.createPathJoinCondition() to build proper equi-join conditions
-     * based on shared labels (variables) between the left and right patterns.
-     */
-    private RexNode buildJoinCondition(IMatchNode left, IMatchNode right,
-                                       RexNode originalLeftCondition,
-                                       RexNode originalTopCondition,
-                                       RexBuilder rexBuilder) {
-        // Use the proven utility to build join conditions based on common labels
-        // caseSensitive is typically false for GQL, matching standard SQL behavior
-        return GQLRelUtil.createPathJoinCondition(left, right, false, rexBuilder);
     }
 
     /**

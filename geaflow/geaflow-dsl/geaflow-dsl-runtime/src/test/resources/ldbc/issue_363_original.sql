@@ -45,9 +45,9 @@ SELECT
   d_id
 FROM (
   MATCH
-    (a:Person where a.id = 1100001)<-[e:hasCreator]-(b),
-    (c:Person) -[knows1:knows]-> (d:Person where d.id = 1100005),
-    (a) <-[knows2:knows]- (c)
+    (a:Person where a.id = ${issue363_a_id})<-[e:hasCreator]-(b),
+    (c:Person) -[knows1:knows]-> (d:Person where d.id = ${issue363_d_id}),
+    (a:Person where a.id = ${issue363_a_id}) <-[knows2:knows]- (c)
   RETURN a.id as a_id, b.id as b_id, c.id as c_id, d.id as d_id
   ORDER BY a_id, b_id, c_id, d_id
 );

@@ -41,6 +41,7 @@ import org.apache.geaflow.dsl.rel.match.MatchJoin;
 import org.apache.geaflow.dsl.rel.match.SingleMatchNode;
 import org.apache.geaflow.dsl.rel.match.VertexMatch;
 import org.apache.geaflow.dsl.rex.PathInputRef;
+import org.apache.geaflow.dsl.util.GQLRelUtil;
 
 /**
  * Rule for Issue #363: Identifies anchor nodes (vertices with ID equality filters)
@@ -70,8 +71,9 @@ public class AnchorNodePriorityRule extends RelOptRule {
             return;
         }
 
-        IMatchNode left = (IMatchNode) join.getLeft();
-        IMatchNode right = (IMatchNode) join.getRight();
+        // Use GQLRelUtil.toRel() to unwrap HepRelVertex wrappers from Calcite optimizer
+        IMatchNode left = (IMatchNode) GQLRelUtil.toRel(join.getLeft());
+        IMatchNode right = (IMatchNode) GQLRelUtil.toRel(join.getRight());
 
         // Calculate anchor scores for left and right patterns
         double leftScore = calculateAnchorScore(left);
@@ -94,6 +96,13 @@ public class AnchorNodePriorityRule extends RelOptRule {
                 join.getJoinType()
             );
 
+            // Calcite requires the transformed node to keep an identical output row type.
+            // Swapping join operands changes field order, so skip the rewrite unless the
+            // result schema matches the original join schema.
+            if (!newJoin.getRowType().equals(join.getRowType())) {
+                return;
+            }
+
             call.transformTo(newJoin);
         }
     }
@@ -112,13 +121,15 @@ public class AnchorNodePriorityRule extends RelOptRule {
         } else if (node instanceof MatchJoin) {
             MatchJoin join = (MatchJoin) node;
             // For joins, return max score of children (best anchor in subtree)
+            // Use GQLRelUtil.toRel() to unwrap HepRelVertex wrappers
             return Math.max(
-                calculateAnchorScore((IMatchNode) join.getLeft()),
-                calculateAnchorScore((IMatchNode) join.getRight())
+                calculateAnchorScore((IMatchNode) GQLRelUtil.toRel(join.getLeft())),
+                calculateAnchorScore((IMatchNode) GQLRelUtil.toRel(join.getRight()))
             );
         } else if (node instanceof MatchFilter) {
             MatchFilter filter = (MatchFilter) node;
-            double baseScore = calculateAnchorScore((IMatchNode) filter.getInput());
+            // Use GQLRelUtil.toRel() to unwrap HepRelVertex wrappers
+            double baseScore = calculateAnchorScore((IMatchNode) GQLRelUtil.toRel(filter.getInput()));
             // Add bonus for filter presence
             return baseScore + 1.0;
         }
@@ -159,7 +170,8 @@ public class AnchorNodePriorityRule extends RelOptRule {
 
         // Recursively check input
         if (node.getInput() != null) {
-            score += calculateAnchorScore((IMatchNode) node.getInput());
+            // Use GQLRelUtil.toRel() to unwrap HepRelVertex wrappers
+            score += calculateAnchorScore((IMatchNode) GQLRelUtil.toRel(node.getInput()));
         }
 
         return score;

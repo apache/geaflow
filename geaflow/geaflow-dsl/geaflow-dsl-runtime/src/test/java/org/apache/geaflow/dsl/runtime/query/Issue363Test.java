@@ -44,11 +44,20 @@ public class Issue363Test {
 
     private final String TEST_GRAPH_PATH = "/tmp/geaflow/dsl/issue363/test/graph";
 
+    private static final String ISSUE363_A_ID_KEY = "issue363_a_id";
+    private static final String ISSUE363_D_ID_KEY = "issue363_d_id";
+    // Defaults align with src/test/resources/expect/issue_363_*.txt
+    private static final String ISSUE363_A_ID_DEFAULT = "1100001";
+    private static final String ISSUE363_D_ID_DEFAULT = "1100005";
+
     private final Map<String, String> testConfig = new HashMap<String, String>() {
         {
             put(FileConfigKeys.PERSISTENT_TYPE.getKey(), "DFS");
             put(FileConfigKeys.ROOT.getKey(), TEST_GRAPH_PATH);
             put(FileConfigKeys.JSON_CONFIG.getKey(), "{\"fs.defaultFS\":\"local\"}");
+            // Provide ids for placeholder substitution in issue_363_*.sql.
+            put(ISSUE363_A_ID_KEY, ISSUE363_A_ID_DEFAULT);
+            put(ISSUE363_D_ID_KEY, ISSUE363_D_ID_DEFAULT);
         }
     };
 

@@ -280,9 +280,15 @@ public abstract class GraphMatch extends SingleRel {
             }
 
             for (RelNode inputNode : currentNode.getInputs()) {
-                if (inputNode != null && !visitedNodes.contains((IMatchNode) inputNode)) {
-                    nodeQueue.offer((IMatchNode) inputNode);
-                    visitedNodes.add((IMatchNode) inputNode);
+                if (inputNode == null) {
+                    continue;
+                }
+                RelNode input = GQLRelUtil.toRel(inputNode);
+                if (input instanceof IMatchNode) {
+                    IMatchNode matchInput = (IMatchNode) input;
+                    if (visitedNodes.add(matchInput)) {
+                        nodeQueue.offer(matchInput);
+                    }
                 }
             }
         }
