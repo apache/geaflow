@@ -147,14 +147,12 @@ public class GeaFlowMemoryClientCLI {
     private void createGraph(String graphName) throws IOException {
         System.out.println("Creating graph: " + graphName);
 
-        // 1. 创建图
         GraphSchema testGraph = new GraphSchema();
         testGraph.setName(graphName);
         String graphJson = gson.toJson(testGraph);
         String response = sendPostRequest(CREATE_URL, graphJson);
         System.out.println("✓ Graph created: " + response);
 
-        // 2. 添加chunk顶点模式
         Map<String, String> params = new HashMap<>();
         params.put("graphName", graphName);
         VertexSchema vertexSchema = new VertexSchema(VERTEX_LABEL, Constants.PREFIX_ID,
@@ -178,10 +176,7 @@ public class GeaFlowMemoryClientCLI {
 
         System.out.println("Remembering content...");
 
-        // 生成唯一的顶点ID
         String vertexId = "chunk_" + System.currentTimeMillis() + "_" + Math.abs(content.hashCode());
-
-        // 创建chunk顶点
         Vertex chunkVertex = new Vertex("chunk", vertexId, Collections.singletonList(content));
         String vertexJson = gson.toJson(chunkVertex);
 
@@ -245,7 +240,6 @@ public class GeaFlowMemoryClientCLI {
     }
 
     private String sendPostRequest(String urlStr, String body, Map<String, String> queryParams) throws IOException {
-        // 构建带参数的URL
         if (!queryParams.isEmpty()) {
             StringBuilder urlBuilder = new StringBuilder(urlStr);
             urlBuilder.append("?");
@@ -303,14 +297,6 @@ public class GeaFlowMemoryClientCLI {
         } catch (Exception e) {
             return "No error message available";
         }
-    }
-
-    private String escapeJson(String text) {
-        return text.replace("\\", "\\\\")
-            .replace("\"", "\\\"")
-            .replace("\n", "\\n")
-            .replace("\r", "\\r")
-            .replace("\t", "\\t");
     }
 
     private void printWelcome() {
