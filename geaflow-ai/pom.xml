@@ -31,7 +31,7 @@
     <artifactId>geaflow-ai</artifactId>
 
     <properties>
-        <solon-mcp.version>3.5.1</solon-mcp.version>
+        <solon.version>3.5.1</solon.version>
         <junit.version>5.10.1</junit.version>
         <slf4j.version>1.7.15</slf4j.version>
         <log4j.version>1.2.17</log4j.version>
@@ -95,6 +95,19 @@
             <artifactId>disruptor</artifactId>
             <version>${lmax.disrupter.veresion}</version>
         </dependency>
+
+      <dependency>
+        <groupId>org.noear</groupId>
+        <artifactId>solon-web</artifactId>
+        <version>${solon.version}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>org.noear</groupId>
+        <artifactId>solon-test</artifactId>
+        <version>${solon.version}</version>
+        <scope>test</scope>
+      </dependency>
 
       <dependency>
         <groupId>org.apache.geaflow</groupId>

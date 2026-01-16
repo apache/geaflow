@@ -28,6 +28,7 @@ public class Constants {
     public static String PREFIX_TMP_SESSION = "TmpSession-";
     public static String PREFIX_SRC_ID = "srcId";
     public static String PREFIX_DST_ID = "dstId";
+    public static String PREFIX_ID = "id";
 
     public static int HTTP_CALL_TIMEOUT_SECONDS = 300;
     public static int HTTP_CONNECT_TIMEOUT_SECONDS = 300;

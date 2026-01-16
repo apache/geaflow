@@ -28,11 +28,10 @@ import org.apache.geaflow.ai.subgraph.SubGraph;
 
 public class SessionManagement {
 
-    public static final SessionManagement INSTANCE = new SessionManagement();
     private final Map<String, Long> session2ActiveTime = new HashMap<>();
     private final Map<String, List<SubGraph>> session2Graphs = new HashMap<>();
 
-    private SessionManagement() {
+    public SessionManagement() {
     }
 
     public boolean createSession(String sessionId) {

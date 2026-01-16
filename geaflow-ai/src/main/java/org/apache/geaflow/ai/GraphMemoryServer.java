@@ -40,7 +40,7 @@ import org.apache.geaflow.ai.verbalization.VerbalizationFunction;
 
 public class GraphMemoryServer {
 
-    private final SessionManagement sessionManagement = SessionManagement.INSTANCE;
+    private final SessionManagement sessionManagement = new SessionManagement();
     private final List<GraphAccessor> graphAccessors = new ArrayList<>();
     private final List<IndexStore> indexStores = new ArrayList<>();
 
@@ -50,10 +50,18 @@ public class GraphMemoryServer {
         }
     }
 
+    public List<GraphAccessor> getGraphAccessors() {
+        return graphAccessors;
+    }
+
     public void addIndexStore(IndexStore indexStore) {
         if (indexStore != null) {
             indexStores.add(indexStore);
         }
+    }
+
+    public List<IndexStore> getIndexStores() {
+        return indexStores;
     }
 
     public String createSession() {
@@ -87,7 +95,7 @@ public class GraphMemoryServer {
     }
 
     private void applySearch(String sessionId, SearchOperator operator, VectorSearch search) {
-        SessionManagement manager = SessionManagement.INSTANCE;
+        SessionManagement manager = sessionManagement;
         if (!manager.sessionExists(sessionId)) {
             return;
         }
@@ -112,13 +120,11 @@ public class GraphMemoryServer {
 
     public List<GraphEntity> getSessionEntities(String sessionId) {
         List<SubGraph> subGraphList = sessionManagement.getSubGraph(sessionId);
-        List<String> subGraphStringList = new ArrayList<>(subGraphList.size());
         Set<GraphEntity> entitySet = new HashSet<>();
         for (SubGraph subGraph : subGraphList) {
             entitySet.addAll(subGraph.getGraphEntityList());
         }
-        List<GraphEntity> results = new ArrayList<>(entitySet);
-        return results;
+        return new ArrayList<>(entitySet);
     }
 
 }
