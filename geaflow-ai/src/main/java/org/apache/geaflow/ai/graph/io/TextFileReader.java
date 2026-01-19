@@ -19,10 +19,7 @@
 
 package org.apache.geaflow.ai.graph.io;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
+import java.io.*;
 import java.util.ArrayList;
 import java.util.List;
 import org.apache.commons.lang3.StringUtils;
@@ -44,7 +41,22 @@ public class TextFileReader {
     public void readFile(String fileName) throws IOException {
         InputStream inputStream = getClass().getClassLoader().getResourceAsStream(fileName);
         if (inputStream == null) {
-            throw new IOException("Cannot find the file: " + fileName);
+            LOGGER.error("Cannot find the file: {} (tried as resource)", fileName);
+            File file = new File(fileName);
+            if (file.exists() && file.isFile()) {
+                try {
+                    inputStream = new FileInputStream(file);
+                } catch (FileNotFoundException e) {
+                    throw new IOException("Cannot find the file: " + fileName
+                        + " (tried both as resource and as absolute path)", e);
+                } catch (Throwable e2) {
+                    throw new IOException("Cannot open the file: " + fileName
+                        + " (tried both as resource and as absolute path)", e2);
+                }
+            } else {
+                throw new IOException("Cannot find the file: " + fileName
+                    + " (tried both as resource and as absolute path)");
+            }
         }
 
         long count = 0;

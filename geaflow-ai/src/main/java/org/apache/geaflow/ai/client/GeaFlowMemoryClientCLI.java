@@ -28,15 +28,11 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Scanner;
+import java.util.*;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import org.apache.geaflow.ai.common.config.Constants;
-import org.apache.geaflow.ai.graph.io.EdgeSchema;
-import org.apache.geaflow.ai.graph.io.GraphSchema;
-import org.apache.geaflow.ai.graph.io.Vertex;
-import org.apache.geaflow.ai.graph.io.VertexSchema;
+import org.apache.geaflow.ai.graph.io.*;
 
 public class GeaFlowMemoryClientCLI {
 
@@ -174,8 +170,28 @@ public class GeaFlowMemoryClientCLI {
             return;
         }
 
-        System.out.println("Remembering content...");
+        if (content.trim().toLowerCase(Locale.ROOT).startsWith("doc")) {
+            String path = content.trim().substring(3).trim();
 
+            TextFileReader textFileReader = new TextFileReader(10000);
+            textFileReader.readFile(path);
+            List<String> chunks = IntStream.range(0, textFileReader.getRowCount())
+                .mapToObj(textFileReader::getRow)
+                .map(String::trim).collect(Collectors.toList());
+            for (String chunk : chunks) {
+                String response = rememberChunk(chunk);
+                System.out.println("✓ Content remembered: " + response);
+            }
+        }
+
+        System.out.println("Remembering content...");
+        String response = rememberChunk(content);
+        System.out.println("✓ Content remembered: " + response);
+
+    }
+
+
+    private String rememberChunk(String content) throws IOException {
         String vertexId = "chunk_" + System.currentTimeMillis() + "_" + Math.abs(content.hashCode());
         Vertex chunkVertex = new Vertex("chunk", vertexId, Collections.singletonList(content));
         String vertexJson = gson.toJson(chunkVertex);
@@ -183,9 +199,7 @@ public class GeaFlowMemoryClientCLI {
         Map<String, String> params = new HashMap<>();
         params.put("graphName", currentGraphName);
 
-        String response = sendPostRequest(INSERT_URL, vertexJson, params);
-        System.out.println("✓ Content remembered: " + response);
-
+        return sendPostRequest(INSERT_URL, vertexJson, params);
     }
 
     private void executeQuery(String query) throws IOException {
