@@ -42,7 +42,7 @@ public class SearchUtils {
      * @return an unmodifiable set of ignored characters
      */
     private static Set<Character> buildIgnoredChars() {
-        Set<Character> ignored = new HashSet<>(EXCLUDED_CHARS);
+        Set<Character> ignored = new HashSet<>(32);
         // Add digits
         for (char c = '0'; c <= '9'; c++) {
             ignored.add(c);
@@ -98,7 +98,7 @@ public class SearchUtils {
             return false; // Consider empty/null invalid; adjust based on use case
         }
         for (char c : str.toCharArray()) {
-            if (!IGNORE_CHARS.contains(c)) {
+            if (IGNORE_CHARS.contains(c)) {
                 return false;
             }
         }
