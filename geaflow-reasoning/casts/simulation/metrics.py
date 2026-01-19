@@ -125,7 +125,37 @@ class MetricsCollector:
             "sku_id": sku_id,
             "decision": decision
         })
-    
+
+    def rollback_steps(self, request_id: int, count: int = 1) -> bool:
+        """
+        Remove the last N recorded steps from a path.
+
+        Used when a prechecker determines a path should terminate before execution,
+        or when multiple steps need to be rolled back due to validation failures.
+        Ensures metrics remain accurate by removing steps that were recorded but
+        never actually executed.
+
+        Args:
+            request_id: The request ID of the path to rollback
+            count: Number of steps to remove from the end of the path (default: 1)
+
+        Returns:
+            True if all requested steps were removed, False if path doesn't exist
+            or has fewer than `count` steps
+        """
+        if request_id not in self.paths:
+            return False
+
+        steps = self.paths[request_id]["steps"]
+        if len(steps) < count:
+            return False
+
+        # Remove last `count` steps
+        for _ in range(count):
+            steps.pop()
+
+        return True
+
     def get_summary(self) -> Dict[str, Any]:
         """Get a summary of all collected metrics."""
         return {

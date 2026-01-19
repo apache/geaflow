@@ -5,7 +5,7 @@ config files, etc.) to eliminate hard-coded values.
 """
 
 import os
-from typing import Any, Dict
+from typing import Any, Dict, Literal
 
 from dotenv import load_dotenv
 
@@ -133,8 +133,11 @@ class DefaultConfiguration(Configuration):
     # ============================================
     # CYCLE DETECTION & PENALTY CONFIGURATION
     # ============================================
-    CYCLE_PENALTY = "punish"
-    CYCLE_DETECTION_THRESHOLD = 0.3
+    # CYCLE_PENALTY modes: "NONE" (no validation), "PUNISH" (penalize but continue),
+    # "STOP" (terminate path)
+    CYCLE_PENALTY: Literal["NONE", "PUNISH", "STOP"] = "STOP"
+    CYCLE_DETECTION_THRESHOLD = 0.7
+    MIN_EXECUTION_CONFIDENCE = 0.1
 
     def get(self, key: str, default: Any = None) -> Any:
         """Get configuration value by key."""
@@ -161,61 +164,27 @@ class DefaultConfiguration(Configuration):
             "CACHE_SIMILARITY_BETA": self.CACHE_SIMILARITY_BETA,
             "CACHE_SCHEMA_FINGERPRINT": self.CACHE_SCHEMA_FINGERPRINT,
             "SIGNATURE_LEVEL": self.SIGNATURE_LEVEL,
+            "CYCLE_PENALTY": self.CYCLE_PENALTY,
+            "CYCLE_DETECTION_THRESHOLD": self.CYCLE_DETECTION_THRESHOLD,
+            "MIN_EXECUTION_CONFIDENCE": self.MIN_EXECUTION_CONFIDENCE,
         }
         return key_map.get(key, default)
 
     def get_int(self, key: str, default: int = 0) -> int:
         """Get integer configuration value."""
-        # Map key names to class attributes
-        key_map = {
-            "SIMULATION_GRAPH_SIZE": self.SIMULATION_GRAPH_SIZE,
-            "SIMULATION_NUM_EPOCHS": self.SIMULATION_NUM_EPOCHS,
-            "SIMULATION_MAX_DEPTH": self.SIMULATION_MAX_DEPTH,
-            "SIMULATION_REAL_SUBGRAPH_SIZE": self.SIMULATION_REAL_SUBGRAPH_SIZE,
-            "SIMULATION_MIN_STARTING_DEGREE": self.SIMULATION_MIN_STARTING_DEGREE,
-            "SIMULATION_MAX_RECOMMENDED_NODE_TYPES": self.SIMULATION_MAX_RECOMMENDED_NODE_TYPES,
-            "SIGNATURE_LEVEL": self.SIGNATURE_LEVEL,
-        }
-        return key_map.get(key, default)
+        return int(self.get(key, default))
 
     def get_float(self, key: str, default: float = 0.0) -> float:
         """Get float configuration value."""
-        # Map key names to class attributes
-        key_map = {
-            "CACHE_MIN_CONFIDENCE_THRESHOLD": self.CACHE_MIN_CONFIDENCE_THRESHOLD,
-            "CACHE_TIER2_GAMMA": self.CACHE_TIER2_GAMMA,
-            "CACHE_SIMILARITY_KAPPA": self.CACHE_SIMILARITY_KAPPA,
-            "CACHE_SIMILARITY_BETA": self.CACHE_SIMILARITY_BETA,
-            "CYCLE_DETECTION_THRESHOLD": self.CYCLE_DETECTION_THRESHOLD,
-        }
-        return key_map.get(key, default)
+        return float(self.get(key, default))
 
     def get_bool(self, key: str, default: bool = False) -> bool:
         """Get boolean configuration value."""
-        # Map key names to class attributes
-        key_map = {
-            "SIMULATION_USE_REAL_DATA": self.SIMULATION_USE_REAL_DATA,
-            "SIMULATION_ENABLE_VERIFIER": self.SIMULATION_ENABLE_VERIFIER,
-            "SIMULATION_ENABLE_VISUALIZER": self.SIMULATION_ENABLE_VISUALIZER,
-            "SIMULATION_VERBOSE_LOGGING": self.SIMULATION_VERBOSE_LOGGING,
-        }
-        return key_map.get(key, default)
+        return bool(self.get(key, default))
 
     def get_str(self, key: str, default: str = "") -> str:
         """Get string configuration value."""
-        # Map key names to class attributes
-        key_map = {
-            "EMBEDDING_ENDPOINT": self.EMBEDDING_ENDPOINT,
-            "EMBEDDING_APIKEY": self.EMBEDDING_APIKEY,
-            "EMBEDDING_MODEL_NAME": self.EMBEDDING_MODEL,
-            "LLM_ENDPOINT": self.LLM_ENDPOINT,
-            "LLM_APIKEY": self.LLM_APIKEY,
-            "LLM_MODEL_NAME": self.LLM_MODEL,
-            "SIMULATION_REAL_DATA_DIR": self.SIMULATION_REAL_DATA_DIR,
-            "CACHE_SCHEMA_FINGERPRINT": self.CACHE_SCHEMA_FINGERPRINT,
-            "CYCLE_PENALTY": self.CYCLE_PENALTY,
-        }
-        return key_map.get(key, default)
+        return str(self.get(key, default))
 
     def get_embedding_config(self) -> Dict[str, str]:
         """Get embedding service configuration."""

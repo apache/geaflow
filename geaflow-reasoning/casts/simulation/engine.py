@@ -83,6 +83,137 @@ class SimulationEngine:
 
         return current_layer
 
+    def execute_prechecker(
+        self,
+        sku: Any,
+        request_id: int,
+        metrics_collector: MetricsCollector,
+    ) -> tuple[bool, bool]:
+        """
+        Pre-execution validation to determine if a decision should be executed.
+
+        Validates multiple conditions including cycle detection and confidence
+        thresholds. Part of the Precheck -> Execute -> Postcheck lifecycle
+        introduced for path quality control and extensible validation.
+
+        Args:
+            sku: The Strategy Knowledge Unit being evaluated (None for new SKUs)
+            request_id: The request ID for path tracking
+            metrics_collector: Metrics collector for path history access
+
+        Returns:
+            (should_execute, execution_success):
+                - should_execute: True if decision should be executed, False to
+                  terminate path
+                - execution_success: True if validation passed, False to apply
+                  confidence penalty
+        """
+        cycle_penalty_mode = self.llm_oracle.config.get_str(
+            "CYCLE_PENALTY", "STOP"
+        ).upper()
+
+        # Mode: NONE - skip all validation
+        if cycle_penalty_mode == "NONE":
+            return (True, True)
+
+        # If no SKU or no path tracking, allow execution
+        if sku is None or request_id not in metrics_collector.paths:
+            return (True, True)
+
+        # === VALIDATION 1: Cycle Detection (Simplified) ===
+        path_steps = metrics_collector.paths[request_id]["steps"]
+        if len(path_steps) >= 2:
+            # Extract node IDs from the path
+            node_ids = [step.get("node") for step in path_steps]
+            unique_nodes = len(set(node_ids))
+            total_nodes = len(node_ids)
+
+            # Calculate revisit ratio
+            revisit_ratio = (
+                1.0 - (unique_nodes / total_nodes) if total_nodes > 0 else 0.0
+            )
+
+            # Get threshold
+            cycle_threshold = self.llm_oracle.config.get_float(
+                "CYCLE_DETECTION_THRESHOLD", 0.3
+            )
+
+            # If high revisit ratio, apply penalty (no simplePath exemption)
+            if revisit_ratio > cycle_threshold:
+                if cycle_penalty_mode == "STOP":
+                    if self.verbose:
+                        print(
+                            f"      [!] High node revisit detected "
+                            f"({revisit_ratio:.1%}), "
+                            f"terminating path (mode=STOP)"
+                        )
+                    return (False, False)  # Terminate and penalize
+                else:  # PUNISH mode
+                    if self.verbose:
+                        print(
+                            f"      [!] High node revisit detected "
+                            f"({revisit_ratio:.1%}), "
+                            f"applying penalty (mode=PUNISH)"
+                        )
+                    return (True, False)  # Continue but penalize
+
+        # === VALIDATION 2: Confidence Threshold ===
+        # Check if SKU confidence has fallen too low
+        min_confidence = self.llm_oracle.config.get_float(
+            "MIN_EXECUTION_CONFIDENCE"
+        )
+        if sku.confidence_score < min_confidence:
+            if self.verbose:
+                print(
+                    f"      [!] SKU confidence too low "
+                    f"({sku.confidence_score:.2f} < {min_confidence}), "
+                    f"mode={cycle_penalty_mode}"
+                )
+            if cycle_penalty_mode == "STOP":
+                return (False, False)
+            else:  # PUNISH mode
+                return (True, False)
+
+        # === VALIDATION 3: Execution History (Future Extension) ===
+        # Placeholder for future validation logic:
+        # - Repeated execution failures
+        # - Deadlock detection
+        # - Resource exhaustion checks
+        # For now, this section is intentionally empty
+
+        # All validations passed
+        return (True, True)
+
+    def execute_postchecker(
+        self,
+        sku: Any,
+        request_id: int,
+        metrics_collector: MetricsCollector,
+        execution_result: Any,
+    ) -> bool:
+        """
+        Post-execution validation and cleanup hook.
+
+        Part of the Precheck -> Execute -> Postcheck lifecycle. Currently a
+        placeholder for architectural symmetry. Future use cases include:
+        - Post-execution quality validation
+        - Deferred rollback decisions based on execution results
+        - Execution result sanity checks
+        - Cleanup operations
+
+        Args:
+            sku: The Strategy Knowledge Unit that was executed (None for new
+                SKUs)
+            request_id: The request ID for path tracking
+            metrics_collector: Metrics collector for path history access
+            execution_result: The result returned from decision execution
+
+        Returns:
+            True if post-execution validation passed, False otherwise
+        """
+        # Currently empty - reserved for future post-execution logic
+        return True
+
     async def execute_tick(
         self,
         tick: int,
@@ -179,51 +310,23 @@ class SimulationEngine:
                     if self.verbose:
                         print("      [!] Execution failed, confidence penalty applied")
 
-                # Check for node revisit patterns (cycle detection)
-                # This provides automatic feedback to penalize cyclic SKUs
-                cycle_penalty_mode = self.llm_oracle.config.get_str("CYCLE_PENALTY", "punish")
-                cycle_threshold = self.llm_oracle.config.get_float("CYCLE_DETECTION_THRESHOLD", 0.3)
+                # === PRECHECK PHASE ===
+                # Run pre-execution validation checks
+                should_execute, precheck_success = self.execute_prechecker(
+                    sku, request_id, metrics_collector
+                )
 
-                should_continue = True
+                # Combine random execution failure with precheck result
+                execution_success = execution_success and precheck_success
 
-                if (
-                    cycle_penalty_mode != "none"
-                    and sku is not None
-                    and request_id in metrics_collector.paths
-                ):
-                    path_steps = metrics_collector.paths[request_id]["steps"]
-                    if len(path_steps) >= 2:  # Need at least 2 steps to detect cycles
-                        # Extract node IDs from the path
-                        node_ids = [step.get("node_id") for step in path_steps]
-                        unique_nodes = len(set(node_ids))
-                        total_nodes = len(node_ids)
+                # If prechecker says to terminate, rollback the recorded step
+                if not should_execute:
+                    metrics_collector.rollback_steps(request_id, count=1)
+                    if sku is not None:
+                        self.strategy_cache.update_confidence(sku, execution_success)
+                    continue  # Skip to next traverser, don't add to next_layer
 
-                        # Calculate revisit ratio
-                        revisit_ratio = (
-                            1.0 - (unique_nodes / total_nodes) if total_nodes > 0 else 0.0
-                        )
-
-                        # Check if simplePath is being used
-                        current_sig = path_steps[-1].get("structural_signature", "")
-                        has_simple_path = "simplePath()" in current_sig
-
-                        # If high revisit ratio without simplePath protection, penalize
-                        if revisit_ratio > cycle_threshold and not has_simple_path:
-                            # Treat high revisit as execution quality issue
-                            execution_success = False
-                            if cycle_penalty_mode == "stop":
-                                should_continue = False
-                                if self.verbose:
-                                    print(
-                                        f"      [!] High node revisit detected "
-                                        f"({revisit_ratio:.1%}), applying cycle penalty AND terminating path"
-                                    )
-                            elif self.verbose:
-                                print(
-                                    f"      [!] High node revisit detected "
-                                    f"({revisit_ratio:.1%}), applying cycle penalty"
-                                )
-
+                # Update confidence for successful precheck
                 if sku is not None:
                     self.strategy_cache.update_confidence(sku, execution_success)
             else:
@@ -268,6 +371,12 @@ class SimulationEngine:
             if final_decision:
                 next_nodes = await self.executor.execute_decision(
                     current_node_id, final_decision, current_signature, request_id=request_id
+                )
+
+                # === POSTCHECK PHASE ===
+                # Run post-execution validation (currently placeholder)
+                self.execute_postchecker(
+                    sku, request_id, metrics_collector, next_nodes
                 )
 
                 if self.verbose:

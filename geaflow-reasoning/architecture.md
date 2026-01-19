@@ -358,3 +358,146 @@ The optimal values for `κ` and `β` depend on the maturity of the system and th
 **Current Setting**: The system defaults to `κ=0.30` and `β=0.05`, placing it in the **Exploration Phase**. This is suitable for initial deployment to maximize learning but should be tuned as the system stabilizes.
 
 Together, these mechanisms ensure that the qualitative properties proven in the mathematical document (correctness under a given `\epsilon`, efficiency, and high effective hit rate $h_{\text{eff}}$ under Zipf-like workloads) are reflected in the concrete system behavior of the refactored code.
+
+### Execution Lifecycle: Precheck → Execute → Postcheck
+
+The `SimulationEngine.execute_tick()` method now implements a three-phase execution lifecycle for extensible validation and quality control.
+
+#### Phase 1: Precheck (`execute_prechecker`)
+
+**Purpose**: Validate whether a decision should be executed before incurring execution cost.
+
+**Location**: `casts/simulation/engine.py` - `SimulationEngine.execute_prechecker()`
+
+**Validation Steps**:
+1. **Cycle Detection**: Calculates node revisit ratio and compares against `CYCLE_DETECTION_THRESHOLD` (default: 0.3)
+2. **Confidence Threshold**: Checks if SKU confidence is above `MIN_EXECUTION_CONFIDENCE` (default: 0.1)
+3. **Execution History** (placeholder): Reserved for future repeated failure detection
+
+**Return Value**: `(should_execute: bool, execution_success: bool)`
+- `should_execute`: If False, execution is skipped and the recorded step is rolled back
+- `execution_success`: If False, confidence penalty is applied via AIMD
+
+**Mode Configuration** (`CYCLE_PENALTY`):
+- `"NONE"`: Skip all validation, always return `(True, True)`
+- `"PUNISH"`: Run checks, return `(True, False)` on failure (continue but penalize)
+- `"STOP"`: Run checks, return `(False, False)` on failure (terminate and penalize)
+
+**Design Decision**: The prechecker treats all paths uniformly. Unlike earlier implementations, there is no special exemption for paths using `simplePath()`. This simplifies the logic and maintains code cleanliness.
+
+#### Phase 2: Execute
+
+**Purpose**: Execute the decision and generate next layer nodes.
+
+**Location**: `casts/simulation/engine.py` - `SimulationEngine.execute_tick()` (around line 370)
+
+Standard decision execution via `TraversalExecutor.execute_decision()`.
+
+#### Phase 3: Postcheck (`execute_postchecker`)
+
+**Purpose**: Post-execution validation, cleanup, or result sanity checks.
+
+**Location**: `casts/simulation/engine.py` - `SimulationEngine.execute_postchecker()`
+
+**Current Implementation**: Empty placeholder for architectural symmetry.
+
+**Future Use Cases**:
+- Post-execution quality validation
+- Deferred rollback decisions based on execution results
+- Execution result sanity checks (e.g., unreasonable fan-out)
+- Cleanup operations or state management
+
+**Return Value**: `bool` - whether post-execution validation passed
+
+#### Rollback Mechanism
+
+**API**: `MetricsCollector.rollback_steps(request_id: int, count: int = 1) -> bool`
+
+**Location**: `casts/simulation/metrics.py`
+
+**Purpose**: Remove the last N recorded steps from a path when prechecker determines execution should not proceed.
+
+**Rationale**:
+- Steps are recorded BEFORE validation to maintain correct parent_step_index linkage
+- If prechecker rejects execution, recorded step becomes orphaned
+- Rollback ensures `metrics_collector.paths` contains only actually executed steps
+- Multi-step capability (`count` parameter) provides future-proof robustness
+
+**Implementation**:
+```python
+def rollback_steps(self, request_id: int, count: int = 1) -> bool:
+    """Remove last N steps from path. Returns False if insufficient steps."""
+    if request_id not in self.paths:
+        return False
+    steps = self.paths[request_id]["steps"]
+    if len(steps) < count:
+        return False
+    for _ in range(count):
+        steps.pop()
+    return True
+```
+
+#### Execution Flow Diagram
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ 1. Record Step (metrics_collector.record_path_step)    │
+└─────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────┐
+│ 2. PRECHECK (execute_prechecker)                        │
+│    - Cycle detection (revisit ratio check)              │
+│    - Confidence threshold check                         │
+│    - Execution history validation (placeholder)         │
+│    → Returns: (should_execute, execution_success)       │
+└─────────────────────────────────────────────────────────┘
+                          ↓
+                 should_execute?
+                   ↙         ↘
+                 NO           YES
+                 ↓             ↓
+    ┌──────────────────┐   ┌──────────────────────────────┐
+    │ Rollback Step    │   │ 3. EXECUTE                   │
+    │ Update Confidence│   │    - Execute decision        │
+    │ Continue to next │   │    - Generate next_nodes     │
+    │ traverser        │   │    - Update confidence       │
+    └──────────────────┘   └──────────────────────────────┘
+                                      ↓
+                           ┌──────────────────────────────┐
+                           │ 4. POSTCHECK                 │
+                           │    (execute_postchecker)     │
+                           │    - Currently no-op         │
+                           │    - Reserved for future use │
+                           └──────────────────────────────┘
+                                      ↓
+                           ┌──────────────────────────────┐
+                           │ 5. Populate next_layer       │
+                           └──────────────────────────────┘
+```
+
+#### Configuration Parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `CYCLE_PENALTY` | `"STOP"` | Cycle handling mode: `"NONE"`, `"PUNISH"`, `"STOP"` |
+| `CYCLE_DETECTION_THRESHOLD` | `0.3` | Node revisit ratio threshold (30%) |
+| `MIN_EXECUTION_CONFIDENCE` | `0.1` | Minimum SKU confidence for execution |
+
+#### Design Rationale
+
+**Why Three Phases?**
+- **Extensibility**: Easy to add new validation rules without cluttering `execute_tick()`
+- **Symmetry**: Prechecker and postchecker provide balanced validation points
+- **Testability**: Can unit test validation logic independently
+- **Clarity**: Single responsibility - validation logic separated from execution flow
+
+**Why Rollback Mechanism?**
+- **Accurate Metrics**: Ensures `metrics_collector.paths` only contains actually executed steps
+- **Clean State**: Prevents orphaned step records for terminated paths
+- **Analysis Quality**: Post-simulation analysis sees true execution history
+
+**Why Remove `simplePath()` Exemption?**
+- **Code Cleanliness**: Simpler, more uniform cycle detection logic
+- **Consistency**: All paths judged by the same criteria
+- **Maintainability**: Fewer special cases to reason about
+
