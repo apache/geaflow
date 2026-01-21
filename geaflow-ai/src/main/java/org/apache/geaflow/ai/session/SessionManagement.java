@@ -19,10 +19,7 @@
 
 package org.apache.geaflow.ai.session;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 import org.apache.geaflow.ai.common.config.Constants;
 import org.apache.geaflow.ai.subgraph.SubGraph;
 
@@ -39,6 +36,7 @@ public class SessionManagement {
             return false;
         }
         session2ActiveTime.put(sessionId, System.nanoTime());
+        session2Graphs.putIfAbsent(sessionId, new ArrayList<>());
         return true;
     }
 
@@ -57,7 +55,8 @@ public class SessionManagement {
     }
 
     public List<SubGraph> getSubGraph(String sessionId) {
-        return this.session2Graphs.get(sessionId);
+        List<SubGraph> l = this.session2Graphs.get(sessionId);
+        return l == null ? new ArrayList<>() : l;
     }
 
     public void setSubGraph(String sessionId, List<SubGraph> subGraphs) {

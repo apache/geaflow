@@ -81,6 +81,7 @@ public class SessionOperator implements SearchOperator {
             }
             //recall compute
             GraphSearchStore searchStore = initSearchStore(extendEntityIndexMap);
+            searchStore.close();
             List<GraphEntity> matchEntities = searchStore.search(query, graphAccessor);
             Set<GraphEntity> matchEntitiesSet = new HashSet<>(matchEntities);
 
@@ -122,6 +123,7 @@ public class SessionOperator implements SearchOperator {
         }
         //recall compute
         GraphSearchStore searchStore = initSearchStore(entityIndexMap);
+        searchStore.close();
         return searchStore.search(query, graphAccessor);
     }
 
@@ -136,7 +138,6 @@ public class SessionOperator implements SearchOperator {
                 }
             }
         }
-        searchStore.close();
         return searchStore;
     }
 }
