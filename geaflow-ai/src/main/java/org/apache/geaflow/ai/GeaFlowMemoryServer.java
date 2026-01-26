@@ -160,6 +160,8 @@ public class GeaFlowMemoryServer {
                 memoryMutableGraph.addEdge(((GraphEdge) entity).getEdge());
             }
         }
+        CACHE.getConsolidateServer().executeConsolidateTask(
+            CACHE.getServerByName(graphName).getGraphAccessors().get(0), memoryMutableGraph);
         return "Success to add entities, num: " + graphEntities.size();
     }
 

@@ -23,6 +23,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.apache.geaflow.ai.GraphMemoryServer;
+import org.apache.geaflow.ai.consolidate.ConsolidateServer;
 import org.apache.geaflow.ai.graph.Graph;
 
 public class ServerMemoryCache {
@@ -30,6 +31,7 @@ public class ServerMemoryCache {
     private final Map<String, Graph> name2Graph = new LinkedHashMap<>();
     private final Map<String, GraphMemoryServer> name2Server = new LinkedHashMap<>();
     private final Map<String, String> session2GraphName = new HashMap<>();
+    private final ConsolidateServer consolidateServer = new ConsolidateServer();
 
     public void putGraph(Graph g) {
         name2Graph.put(g.getGraphSchema().getName(), g);
@@ -55,5 +57,9 @@ public class ServerMemoryCache {
 
     public String getGraphNameBySession(String sessionId) {
         return session2GraphName.get(sessionId);
+    }
+
+    public ConsolidateServer getConsolidateServer() {
+        return consolidateServer;
     }
 }
