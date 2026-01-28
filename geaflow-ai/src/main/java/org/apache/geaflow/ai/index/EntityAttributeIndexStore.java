@@ -20,6 +20,7 @@
 package org.apache.geaflow.ai.index;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import org.apache.geaflow.ai.graph.GraphEdge;
 import org.apache.geaflow.ai.graph.GraphEntity;
@@ -58,5 +59,14 @@ public class EntityAttributeIndexStore implements IndexStore {
             results.add(keywordVector);
             return results;
         }
+    }
+
+    @Override
+    public List<IVector> getStringIndex(String str) {
+        KeywordVector keywordVector =
+            new KeywordVector(Collections.singletonList(str).toArray(new String[0]));
+        List<IVector> results = new ArrayList<>();
+        results.add(keywordVector);
+        return results;
     }
 }

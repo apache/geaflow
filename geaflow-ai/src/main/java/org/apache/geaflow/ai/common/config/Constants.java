@@ -21,14 +21,14 @@ package org.apache.geaflow.ai.common.config;
 
 public class Constants {
 
-    public static String MODEL_CONTEXT_ROLE_USER = "user";
-    public static String PREFIX_V = "V";
-    public static String PREFIX_E = "E";
-    public static String PREFIX_GRAPH = "GRAPH";
-    public static String PREFIX_TMP_SESSION = "TmpSession-";
-    public static String PREFIX_SRC_ID = "srcId";
-    public static String PREFIX_DST_ID = "dstId";
-    public static String PREFIX_ID = "id";
+    public static final String MODEL_CONTEXT_ROLE_USER = "user";
+    public static final String PREFIX_V = "V";
+    public static final String PREFIX_E = "E";
+    public static final String PREFIX_GRAPH = "GRAPH";
+    public static final String PREFIX_TMP_SESSION = "TmpSession-";
+    public static final String PREFIX_SRC_ID = "srcId";
+    public static final String PREFIX_DST_ID = "dstId";
+    public static final String PREFIX_ID = "id";
 
     public static int HTTP_CALL_TIMEOUT_SECONDS = 300;
     public static int HTTP_CONNECT_TIMEOUT_SECONDS = 300;
@@ -43,10 +43,12 @@ public class Constants {
     public static int EMBEDDING_INDEX_STORE_FLUSH_WRITE_SIZE = 1024;
     public static int EMBEDDING_INDEX_STORE_SPLIT_TEXT_CHUNK_SIZE = 128;
 
-    public static double EMBEDDING_OPERATE_DEFAULT_THRESHOLD = 0.5;
-    public static int EMBEDDING_OPERATE_DEFAULT_TOPN = 50;
+    public static double EMBEDDING_OPERATE_DEFAULT_THRESHOLD = 0.6;
+    public static int EMBEDDING_OPERATE_DEFAULT_TOPN = 10;
     public static int GRAPH_SEARCH_STORE_DEFAULT_TOPN = 30;
 
-    public static String CONSOLIDATE_KEYWORD_RELATION_LABEL = "consolidate_keyword_edge";
-    public static String PREFIX_COMMON_KEYWORDS = "common_keywords";
+    public static final String CONSOLIDATE_KEYWORD_RELATION_LABEL = "consolidate_keyword_edge";
+    public static final String CONSOLIDATE_EMBEDDING_RELATION_LABEL = "consolidate_embedding_edge";
+    public static final String PREFIX_COMMON_KEYWORDS = "common_keywords";
+    public static final String PREFIX_EMBEDDING_KEYWORDS = "embedding_relation";
 }

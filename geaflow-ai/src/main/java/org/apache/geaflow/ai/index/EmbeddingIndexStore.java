@@ -48,6 +48,9 @@ public class EmbeddingIndexStore implements IndexStore {
     private String indexFilePath;
     private ModelConfig modelConfig;
     private Map<GraphEntity, List<EmbeddingService.EmbeddingResult>> indexStoreMap;
+    private Map<String, EmbeddingService.EmbeddingResult> embeddingResultCache;
+    private List<String> flushBuffer = new ArrayList<>();
+    private EmbeddingService service = new EmbeddingService();
 
     public void initStore(GraphAccessor graphAccessor, VerbalizationFunction func,
                           String indexFilePath, ModelConfig modelInfo) {
@@ -56,6 +59,7 @@ public class EmbeddingIndexStore implements IndexStore {
         this.indexFilePath = indexFilePath;
         this.modelConfig = modelInfo;
         this.indexStoreMap = new HashMap<>();
+        this.embeddingResultCache = new HashMap<>();
 
         //Read index items from indexFilePath
         Map<String, GraphEntity> key2EntityMap = new HashMap<>();
@@ -93,7 +97,7 @@ public class EmbeddingIndexStore implements IndexStore {
             String line;
             while ((line = reader.readLine()) != null) {
                 line = line.trim();
-                if (line.isEmpty()) {
+                if (StringUtils.isBlank(line)) {
                     continue;
                 }
                 try {
@@ -103,6 +107,8 @@ public class EmbeddingIndexStore implements IndexStore {
                     GraphEntity entity = key2EntityMap.get(key);
                     if (entity != null) {
                         this.indexStoreMap.computeIfAbsent(entity, k -> new ArrayList<>()).add(embedding);
+                    } else {
+                        this.embeddingResultCache.put(key, embedding);
                     }
                     count++;
                 } catch (Throwable e) {
@@ -115,16 +121,15 @@ public class EmbeddingIndexStore implements IndexStore {
 
         LOGGER.info("Success to read index store file. items num: " + count);
         LOGGER.info("Success to rebuild index with file. index num: " + this.indexStoreMap.size());
+        LOGGER.info("Success to rebuild embedding cache with file. index num: " + this.embeddingResultCache.size());
 
 
         //Scan entities in the graph, make new index items
-        EmbeddingService embeddingService = new EmbeddingService();
-        embeddingService.setModelConfig(modelInfo);
+        service.setModelConfig(this.modelConfig);
 
         final int BATCH_SIZE = Constants.EMBEDDING_INDEX_STORE_BATCH_SIZE;
         List<GraphEntity> pendingEntities = new ArrayList<>(BATCH_SIZE);
         Set<GraphEntity> batchEntitiesBuffer = new HashSet<>(BATCH_SIZE);
-        List<String> result = new ArrayList<>();
         final int REPORT_SIZE = Constants.EMBEDDING_INDEX_STORE_REPORT_SIZE;
         long reportedCount = this.indexStoreMap.size();
         long addedCount = this.indexStoreMap.size();
@@ -133,12 +138,18 @@ public class EmbeddingIndexStore implements IndexStore {
 
             // Scan vertices or edges, skip already indexed data,
             // add un-indexed data to batch processing collection
-            if (!indexStoreMap.containsKey(vertex) && !batchEntitiesBuffer.contains(vertex)) {
+            List<String> verVertex = verbFunc.verbalize(vertex);
+            if (verVertex.stream().allMatch(s -> embeddingResultCache.containsKey(s))) {
+                for (String str : verVertex) {
+                    this.indexStoreMap.computeIfAbsent(vertex, k -> new ArrayList<>())
+                        .add(embeddingResultCache.get(str));
+                }
+            } else if (!indexStoreMap.containsKey(vertex) && !batchEntitiesBuffer.contains(vertex)) {
                 batchEntitiesBuffer.add(vertex);
                 pendingEntities.add(vertex);
                 if (pendingEntities.size() >= BATCH_SIZE) {
-                    result.addAll(indexBatch(embeddingService, pendingEntities));
-                    flushBatchIndex(result, false);
+                    flushBuffer.addAll(indexBatch(pendingEntities));
+                    flushBatchIndex(false);
                     pendingEntities.clear();
                     batchEntitiesBuffer.clear();
                     addedCount += BATCH_SIZE;
@@ -147,12 +158,18 @@ public class EmbeddingIndexStore implements IndexStore {
 
             for (Iterator<GraphEdge> itE = graphAccessor.scanEdge(vertex); itE.hasNext(); ) {
                 GraphEdge edge = itE.next();
-                if (!indexStoreMap.containsKey(edge) && !batchEntitiesBuffer.contains(edge)) {
+                List<String> verEdge = verbFunc.verbalize(edge);
+                if (verEdge.stream().allMatch(s -> embeddingResultCache.containsKey(s))) {
+                    for (String str : verEdge) {
+                        this.indexStoreMap.computeIfAbsent(edge, k -> new ArrayList<>())
+                            .add(embeddingResultCache.get(str));
+                    }
+                } else if (!indexStoreMap.containsKey(edge) && !batchEntitiesBuffer.contains(edge)) {
                     batchEntitiesBuffer.add(edge);
                     pendingEntities.add(edge);
                     if (pendingEntities.size() >= BATCH_SIZE) {
-                        result.addAll(indexBatch(embeddingService, pendingEntities));
-                        flushBatchIndex(result, false);
+                        flushBuffer.addAll(indexBatch(pendingEntities));
+                        flushBatchIndex(false);
                         pendingEntities.clear();
                         batchEntitiesBuffer.clear();
                         addedCount += BATCH_SIZE;
@@ -165,8 +182,8 @@ public class EmbeddingIndexStore implements IndexStore {
             }
         }
         if (pendingEntities.size() > 0) {
-            result.addAll(indexBatch(embeddingService, pendingEntities));
-            flushBatchIndex(result, true);
+            flushBuffer.addAll(indexBatch(pendingEntities));
+            flushBatchIndex(true);
             addedCount += pendingEntities.size();
             pendingEntities.clear();
             batchEntitiesBuffer.clear();
@@ -176,7 +193,7 @@ public class EmbeddingIndexStore implements IndexStore {
                 addedCount, indexStoreMap.size());
     }
 
-    private List<String> indexBatch(EmbeddingService service, List<GraphEntity> pendingEntities) {
+    private List<String> indexBatch(List<GraphEntity> pendingEntities) {
         if (pendingEntities == null || service == null || pendingEntities.isEmpty()) {
             return new ArrayList<>();
         }
@@ -224,20 +241,20 @@ public class EmbeddingIndexStore implements IndexStore {
         return formatResult;
     }
 
-    private void flushBatchIndex(List<String> newItemStrings, boolean force) {
+    private void flushBatchIndex(boolean force) {
         final int WRITE_SIZE = Constants.EMBEDDING_INDEX_STORE_FLUSH_WRITE_SIZE;
-        if (force || newItemStrings.size() >= WRITE_SIZE) {
+        if (force || flushBuffer.size() >= WRITE_SIZE) {
             try (FileWriter fw = new FileWriter(this.indexFilePath, true);
                  BufferedWriter writer = new BufferedWriter(fw);
                  PrintWriter out = new PrintWriter(writer)) {
-                for (String item : newItemStrings) {
+                for (String item : flushBuffer) {
                     out.println(item);
                 }
-                LOGGER.info("Success to append " + newItemStrings.size() + " new index items to file.");
+                LOGGER.info("Success to append " + flushBuffer.size() + " new index items to file.");
             } catch (IOException e) {
                 throw new RuntimeException("Failed to append to index file: " + this.indexFilePath, e);
             }
-            newItemStrings.clear();
+            flushBuffer.clear();
         }
     }
 
@@ -253,5 +270,24 @@ public class EmbeddingIndexStore implements IndexStore {
             return result;
         }
         return Collections.emptyList();
+    }
+
+    @Override
+    public List<IVector> getStringIndex(String str) {
+        if (embeddingResultCache.containsKey(str)) {
+            EmbeddingService.EmbeddingResult embedding = embeddingResultCache.get(str);
+            List<IVector> result = new ArrayList<>();
+            result.add(new EmbeddingVector(embedding.embedding));
+            return result;
+        }
+        String embeddingResultStr = service.embedding(str);
+        EmbeddingService.EmbeddingResult embedding =
+            new Gson().fromJson(embeddingResultStr, EmbeddingService.EmbeddingResult.class);
+        embeddingResultCache.put(str, embedding);
+        flushBuffer.add(embeddingResultStr);
+        flushBatchIndex(true);
+        List<IVector> result = new ArrayList<>();
+        result.add(new EmbeddingVector(embedding.embedding));
+        return result;
     }
 }

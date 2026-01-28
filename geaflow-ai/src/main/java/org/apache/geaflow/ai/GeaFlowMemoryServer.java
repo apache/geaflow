@@ -161,7 +161,8 @@ public class GeaFlowMemoryServer {
             }
         }
         CACHE.getConsolidateServer().executeConsolidateTask(
-            CACHE.getServerByName(graphName).getGraphAccessors().get(0), memoryMutableGraph);
+            CACHE.getServerByName(graphName).getGraphAccessors().get(0), memoryMutableGraph,
+            CACHE.getServerByName(graphName).getIndexStores());
         return "Success to add entities, num: " + graphEntities.size();
     }
 

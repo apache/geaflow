@@ -23,12 +23,14 @@ import java.util.*;
 import java.util.stream.Collectors;
 import org.apache.geaflow.ai.common.config.Constants;
 import org.apache.geaflow.ai.graph.GraphAccessor;
+import org.apache.geaflow.ai.graph.GraphEdge;
 import org.apache.geaflow.ai.graph.GraphEntity;
 import org.apache.geaflow.ai.graph.GraphVertex;
 import org.apache.geaflow.ai.index.IndexStore;
 import org.apache.geaflow.ai.index.vector.EmbeddingVector;
 import org.apache.geaflow.ai.index.vector.IVector;
 import org.apache.geaflow.ai.index.vector.VectorType;
+import org.apache.geaflow.ai.index.vector.VectorUtils;
 import org.apache.geaflow.ai.search.VectorSearch;
 import org.apache.geaflow.ai.subgraph.SubGraph;
 
@@ -36,13 +38,19 @@ public class EmbeddingOperator implements SearchOperator {
 
     private final GraphAccessor graphAccessor;
     private final IndexStore indexStore;
-    private double threshold;
-    private int topN;
+    private final double entityCosThreshold;
+    private final double commonCosThreshold;
+    private final double diffCosThreshold;
+    private final double uniqueCosThreshold;
+    private final int topN;
 
     public EmbeddingOperator(GraphAccessor accessor, IndexStore store) {
         this.graphAccessor = Objects.requireNonNull(accessor);
         this.indexStore = Objects.requireNonNull(store);
-        this.threshold = Constants.EMBEDDING_OPERATE_DEFAULT_THRESHOLD;
+        this.entityCosThreshold = Constants.EMBEDDING_OPERATE_DEFAULT_THRESHOLD;
+        this.commonCosThreshold = this.entityCosThreshold + 0.25;
+        this.diffCosThreshold = this.entityCosThreshold - 0.1;
+        this.uniqueCosThreshold = this.entityCosThreshold + 0.2;
         this.topN = Constants.EMBEDDING_OPERATE_DEFAULT_TOPN;
     }
 
@@ -55,7 +63,7 @@ public class EmbeddingOperator implements SearchOperator {
             }
             return new ArrayList<>(subGraphList);
         }
-        List<GraphEntity> globalResults = searchWithGlobalGraph(queryEmbeddingVectors);
+        List<GraphEntity> globalResults = searchWithGlobalGraph(queryEmbeddingVectors, graphAccessor.scanVertex());
         if (subGraphList == null || subGraphList.isEmpty()) {
             List<GraphVertex> startVertices = new ArrayList<>();
             for (GraphEntity resEntity : globalResults) {
@@ -70,17 +78,19 @@ public class EmbeddingOperator implements SearchOperator {
                 return subGraph;
             }).collect(Collectors.toList());
         } else {
-            Map<GraphEntity, List<IVector>> extendEntityIndexMap = new HashMap<>();
             //Traverse all extension points of the subgraph and search within the extension area
+            List<GraphVertex> activeVertices = new ArrayList<>();
             for (SubGraph subGraph : subGraphList) {
-                List<GraphEntity> extendEntities = getSubgraphExpand(subGraph);
-                for (GraphEntity extendEntity : extendEntities) {
-                    List<IVector> entityIndex = indexStore.getEntityIndex(extendEntity);
-                    extendEntityIndexMap.put(extendEntity, entityIndex);
+                List<GraphEntity> entityList = subGraph.getGraphEntityList();
+                for (GraphEntity entity : entityList) {
+                    if (entity instanceof GraphVertex) {
+                        activeVertices.add((GraphVertex)entity);
+                    }
                 }
             }
             //recall compute
-            List<GraphEntity> matchEntities = searchEmbeddings(queryEmbeddingVectors, extendEntityIndexMap);
+            List<GraphEntity> matchEntities = searchWithGlobalGraph(
+                queryEmbeddingVectors, activeVertices.iterator());
             Set<GraphEntity> matchEntitiesSet = new HashSet<>(matchEntities);
 
             //Apply to subgraph
@@ -110,21 +120,60 @@ public class EmbeddingOperator implements SearchOperator {
         return expandEntities;
     }
 
-    private List<GraphEntity> searchWithGlobalGraph(List<IVector> queryEmbeddingVectors) {
+    private List<GraphEntity> searchWithGlobalGraph(List<IVector> queryEmbeddingVectors,
+                                                    Iterator<GraphVertex> vertexIterator) {
         Map<GraphEntity, List<IVector>> entityIndexMap = new HashMap<>();
-        Iterator<GraphVertex> vertexIterator = graphAccessor.scanVertex();
+        Map<GraphEntity, List<IVector>> commonRelIndexMap = new HashMap<>();
+        Map<GraphEntity, List<IVector>> diffRelIndexMap = new HashMap<>();
+        Map<GraphEntity, List<IVector>> uniqueRelIndexMap = new HashMap<>();
         while (vertexIterator.hasNext()) {
             GraphVertex vertex = vertexIterator.next();
             //Read all vertices indices from the index and add them to the candidate set.
             List<IVector> vertexIndex = indexStore.getEntityIndex(vertex);
-            entityIndexMap.put(vertex, vertexIndex);
+            entityIndexMap.computeIfAbsent(vertex, k -> new ArrayList<>()).addAll(vertexIndex);
+            Iterator<GraphEdge> neighborIterator = graphAccessor.scanEdge(vertex);
+            while (neighborIterator.hasNext()) {
+                GraphEdge relEdge = neighborIterator.next();
+                String targetVertexId = vertex.getVertex().getId()
+                    .equals(relEdge.getEdge().getSrcId()) ? relEdge.getEdge().getDstId() : relEdge.getEdge().getSrcId();
+                if (vertex.getVertex().getId().equals(targetVertexId)) {
+                    continue;
+                }
+                GraphVertex target = graphAccessor.getVertex(null, targetVertexId);
+                List<IVector> targetIndex = indexStore.getEntityIndex(target);
+                List<IVector> common = VectorUtils.common(vertexIndex, targetIndex);
+                commonRelIndexMap.computeIfAbsent(vertex, k -> new ArrayList<>()).addAll(common);
+                commonRelIndexMap.computeIfAbsent(target, k -> new ArrayList<>()).addAll(common);
+                List<IVector> diffAB = VectorUtils.diff(vertexIndex, targetIndex);
+                List<IVector> diffBA = VectorUtils.diff(targetIndex, vertexIndex);
+                diffRelIndexMap.computeIfAbsent(vertex, k -> new ArrayList<>()).addAll(diffAB);
+                diffRelIndexMap.computeIfAbsent(target, k -> new ArrayList<>()).addAll(diffAB);
+                diffRelIndexMap.computeIfAbsent(vertex, k -> new ArrayList<>()).addAll(diffBA);
+                diffRelIndexMap.computeIfAbsent(target, k -> new ArrayList<>()).addAll(diffBA);
+                List<IVector> uniqueAB = VectorUtils.unique(vertexIndex, targetIndex);
+                List<IVector> uniqueBA = VectorUtils.unique(targetIndex, vertexIndex);
+                uniqueRelIndexMap.computeIfAbsent(vertex, k -> new ArrayList<>()).addAll(uniqueAB);
+                uniqueRelIndexMap.computeIfAbsent(target, k -> new ArrayList<>()).addAll(uniqueAB);
+                uniqueRelIndexMap.computeIfAbsent(vertex, k -> new ArrayList<>()).addAll(uniqueBA);
+                uniqueRelIndexMap.computeIfAbsent(target, k -> new ArrayList<>()).addAll(uniqueBA);
+            }
         }
         //recall compute
-        return searchEmbeddings(queryEmbeddingVectors, entityIndexMap);
+        Set<GraphEntity> resultsEntities = new LinkedHashSet<>();
+        List<GraphEntity> entityRes = searchEmbeddings(queryEmbeddingVectors, entityIndexMap, entityCosThreshold, topN);
+        List<GraphEntity> commonRes = searchEmbeddings(queryEmbeddingVectors, commonRelIndexMap, commonCosThreshold, topN);
+        List<GraphEntity> diffRes = searchEmbeddings(queryEmbeddingVectors, diffRelIndexMap, diffCosThreshold, topN);
+        List<GraphEntity> uniqueRes = searchEmbeddings(queryEmbeddingVectors, uniqueRelIndexMap, uniqueCosThreshold, topN);
+        resultsEntities.addAll(entityRes);
+        resultsEntities.addAll(commonRes);
+        resultsEntities.addAll(diffRes);
+        resultsEntities.addAll(uniqueRes);
+        return new ArrayList<>(resultsEntities);
     }
 
     private List<GraphEntity> searchEmbeddings(List<IVector> queryEmbeddingVectors,
-                                               Map<GraphEntity, List<IVector>> entityIndexMap) {
+                                               Map<GraphEntity, List<IVector>> entityIndexMap,
+                                               double threshold, long topN) {
         // Extract valid query EmbeddingVectors from input
         List<EmbeddingVector> queryVectors = queryEmbeddingVectors.stream()
                 .filter(EmbeddingVector.class::isInstance)
