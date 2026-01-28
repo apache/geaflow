@@ -25,11 +25,10 @@ import org.apache.geaflow.ai.subgraph.SubGraph;
 
 public class SessionManagement {
 
-    public static final SessionManagement INSTANCE = new SessionManagement();
     private final Map<String, Long> session2ActiveTime = new HashMap<>();
     private final Map<String, List<SubGraph>> session2Graphs = new HashMap<>();
 
-    private SessionManagement() {
+    public SessionManagement() {
     }
 
     public boolean createSession(String sessionId) {
@@ -44,7 +43,11 @@ public class SessionManagement {
     public String createSession() {
         String sessionId = Constants.PREFIX_TMP_SESSION + System.nanoTime()
                 + UUID.randomUUID().toString().replace("-", "").substring(0, 8);
-        return createSession(sessionId) ? sessionId : null;
+        if (createSession(sessionId)) {
+            return sessionId;
+        } else {
+            return null;
+        }
     }
 
     public boolean sessionExists(String session) {
