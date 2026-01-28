@@ -58,7 +58,7 @@
         <hadoop-common.version>2.7.4</hadoop-common.version>
         <lombok.version>1.18.26</lombok.version>
         <junit.version>4.13.2</junit.version>
-        <commons-lang3.version>3.12.0</commons-lang3.version>
+        <commons-lang3.version>3.18.0</commons-lang3.version>
         <testng.version>6.14.2</testng.version>
         <velocity.version>1.6.2</velocity.version>
     </properties>
