@@ -76,12 +76,12 @@ public class SubgraphSemanticPromptFunction implements VerbalizationFunction {
         if (entity instanceof GraphVertex) {
             GraphVertex graphVertex = (GraphVertex) entity;
             return graphVertex.getVertex().getValues().stream()
-                    .filter(SearchUtils::isAllAllowedChars)
+                    .filter(str -> !SearchUtils.isAllAllowedChars(str))
                     .map(SearchUtils::formatQuery).collect(Collectors.toList());
         } else if (entity instanceof GraphEdge) {
             GraphEdge graphEdge = (GraphEdge) entity;
             return graphEdge.getEdge().getValues().stream()
-                    .filter(SearchUtils::isAllAllowedChars)
+                    .filter(str -> !SearchUtils.isAllAllowedChars(str))
                     .map(SearchUtils::formatQuery).collect(Collectors.toList());
         }
         return new ArrayList<>();
