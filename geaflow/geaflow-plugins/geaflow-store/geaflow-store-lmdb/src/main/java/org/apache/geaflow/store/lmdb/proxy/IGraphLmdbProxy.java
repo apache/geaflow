@@ -17,45 +17,10 @@
  * under the License.
  */
 
-package org.apache.geaflow.state;
+package org.apache.geaflow.store.lmdb.proxy;
 
-public enum StoreType {
+import org.apache.geaflow.state.graph.StaticGraphTrait;
 
-    /**
-     * MEMORY.
-     */
-    MEMORY,
-    /**
-     * ROCKSDB.
-     */
-    ROCKSDB,
-    /**
-     * HBASE.
-     */
-    HBASE,
-    /**
-     * REDIS.
-     */
-    REDIS,
-    /**
-     * JDBC.
-     */
-    JDBC,
-    /**
-     * PAIMON (Experimental).
-     */
-    PAIMON,
-    /**
-     * LMDB.
-     */
-    LMDB;
+public interface IGraphLmdbProxy<K, VV, EV> extends StaticGraphTrait<K, VV, EV>, ILmdbProxy {
 
-    public static StoreType getEnum(String value) {
-        for (StoreType v : values()) {
-            if (v.name().equalsIgnoreCase(value)) {
-                return v;
-            }
-        }
-        return MEMORY;
-    }
 }
