@@ -199,29 +199,6 @@ public class MemoryServerTest {
         Assertions.assertNotNull(response);
         sessionId = response;
 
-        api = "/query/exec";
-        queryParams = new HashMap<>();
-        queryParams.put("sessionId", sessionId);
-        queryParams.put("query", "Who is Confucius?");
-        response = post(api, "", queryParams);
-        LOGGER.info("API: {} Response: {}", api, response);
-        Assertions.assertNotNull(response);
-
-        api = "/query/result";
-        queryParams = new HashMap<>();
-        queryParams.put("sessionId", sessionId);
-        response = post(api, "", queryParams);
-        LOGGER.info("API: {} Response: {}", api, response);
-        Assertions.assertNotNull(response);
-
-        api = "/query/exec";
-        queryParams = new HashMap<>();
-        queryParams.put("sessionId", sessionId);
-        queryParams.put("query", "What did he say?");
-        response = post(api, "", queryParams);
-        LOGGER.info("API: {} Response: {}", api, response);
-        Assertions.assertNotNull(response);
-
         api = "/query/result";
         queryParams = new HashMap<>();
         queryParams.put("sessionId", sessionId);

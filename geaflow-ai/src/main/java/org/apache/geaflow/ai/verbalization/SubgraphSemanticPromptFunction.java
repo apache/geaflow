@@ -21,6 +21,7 @@ package org.apache.geaflow.ai.verbalization;
 
 import java.util.*;
 import java.util.stream.Collectors;
+import org.apache.geaflow.ai.common.config.Constants;
 import org.apache.geaflow.ai.graph.GraphAccessor;
 import org.apache.geaflow.ai.graph.GraphEdge;
 import org.apache.geaflow.ai.graph.GraphEntity;
@@ -47,6 +48,9 @@ public class SubgraphSemanticPromptFunction implements VerbalizationFunction {
         GraphSchema schema = graphAccessor.getGraphSchema();
         Set<GraphEntity> existsEntities = new HashSet<>();
         for (GraphEntity entity : subGraph.getGraphEntityList()) {
+            if (Constants.SYSTEM_CONSOLIDATE_LABELS.contains(entity.getLabel())) {
+                continue;
+            }
             if (entity instanceof GraphVertex) {
                 GraphVertex graphVertex = (GraphVertex) entity;
                 if (!existsEntities.contains(graphVertex)) {

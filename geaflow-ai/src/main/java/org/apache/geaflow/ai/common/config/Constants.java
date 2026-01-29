@@ -19,6 +19,10 @@
 
 package org.apache.geaflow.ai.common.config;
 
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
+
 public class Constants {
 
     public static final String MODEL_CONTEXT_ROLE_USER = "user";
@@ -51,4 +55,7 @@ public class Constants {
     public static final String CONSOLIDATE_EMBEDDING_RELATION_LABEL = "consolidate_embedding_edge";
     public static final String PREFIX_COMMON_KEYWORDS = "common_keywords";
     public static final String PREFIX_EMBEDDING_KEYWORDS = "embedding_relation";
+    public static final Set<String> SYSTEM_CONSOLIDATE_LABELS = new HashSet<>(Arrays.asList(
+        CONSOLIDATE_KEYWORD_RELATION_LABEL, CONSOLIDATE_EMBEDDING_RELATION_LABEL
+    ));
 }

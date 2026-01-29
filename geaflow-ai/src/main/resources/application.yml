@@ -28,3 +28,6 @@ logging:
   level:
     root: INFO
     org.apache.geaflow.ai: DEBUG
+
+config:
+  path: /etc/geaflow_memory.yml

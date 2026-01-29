@@ -123,10 +123,12 @@ public class EmbeddingIndexStore implements IndexStore {
         LOGGER.info("Success to rebuild index with file. index num: " + this.indexStoreMap.size());
         LOGGER.info("Success to rebuild embedding cache with file. index num: " + this.embeddingResultCache.size());
 
-
         //Scan entities in the graph, make new index items
         service.setModelConfig(this.modelConfig);
+        indexNewVertices();
+    }
 
+    public void indexNewVertices() {
         final int BATCH_SIZE = Constants.EMBEDDING_INDEX_STORE_BATCH_SIZE;
         List<GraphEntity> pendingEntities = new ArrayList<>(BATCH_SIZE);
         Set<GraphEntity> batchEntitiesBuffer = new HashSet<>(BATCH_SIZE);
@@ -188,9 +190,8 @@ public class EmbeddingIndexStore implements IndexStore {
             pendingEntities.clear();
             batchEntitiesBuffer.clear();
         }
-
         LOGGER.info("Successfully added {} new index items. Total indexed: {}",
-                addedCount, indexStoreMap.size());
+            addedCount, indexStoreMap.size());
     }
 
     private List<String> indexBatch(List<GraphEntity> pendingEntities) {

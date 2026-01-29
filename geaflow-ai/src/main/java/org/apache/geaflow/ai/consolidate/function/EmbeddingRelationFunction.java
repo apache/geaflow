@@ -52,6 +52,9 @@ public class EmbeddingRelationFunction implements ConsolidateFunction {
         if (embeddingIndexStore == null) {
             return;
         }
+
+        embeddingIndexStore.indexNewVertices();
+
         if (null == mutableGraph.getSchema().getSchema(
             Constants.CONSOLIDATE_EMBEDDING_RELATION_LABEL)) {
             int code = mutableGraph.addEdgeSchema(new EdgeSchema(
