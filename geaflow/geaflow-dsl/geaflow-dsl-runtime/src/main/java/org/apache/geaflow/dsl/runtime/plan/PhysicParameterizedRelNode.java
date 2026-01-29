@@ -37,6 +37,7 @@ import org.apache.geaflow.dsl.rex.RexParameterRef;
 import org.apache.geaflow.dsl.runtime.QueryContext;
 import org.apache.geaflow.dsl.runtime.RDataView;
 import org.apache.geaflow.dsl.runtime.RuntimeTable;
+import org.apache.geaflow.dsl.util.GQLRelUtil;
 import org.apache.geaflow.dsl.util.GQLRexUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -86,55 +87,62 @@ public class PhysicParameterizedRelNode extends ParameterizedRelNode implements 
     }
 
     private RelNode isIdOnlyRequest(RelNode node, Set<RexNode> idReferences) {
+        if (node == null) {
+            return null;
+        }
+        node = GQLRelUtil.toRel(node);
         if (node instanceof GraphMatch) {
             GraphMatch match = (GraphMatch) node;
-            IMatchNode newPathPattern = (IMatchNode) isIdOnlyRequest(match.getPathPattern(), idReferences);
-            if (newPathPattern == null) {
+            RelNode newPathPatternRel = isIdOnlyRequest(match.getPathPattern(), idReferences);
+            if (newPathPatternRel == null) {
                 return null;
             }
+            IMatchNode newPathPattern = GQLRelUtil.match(newPathPatternRel);
             return match.copy(newPathPattern);
         }
         RelNode newNode = node;
         List<RelNode> newInputs = new ArrayList<>(node.getInputs().size());
 
-        if (node instanceof MatchFilter
-            && ((MatchFilter) node).getInput() instanceof VertexMatch
-            && ((MatchFilter) node).getInput().getInputs().isEmpty()) {
+        if (node instanceof MatchFilter) {
             MatchFilter filter = (MatchFilter) node;
-            VertexRecordType vertexRecordType = (VertexRecordType) ((VertexMatch) filter.getInput()).getNodeType();
-            RexNode conditionRemoveId = GQLRexUtil.removeIdCondition(filter.getCondition(), vertexRecordType);
+            RelNode filterInput = GQLRelUtil.toRel(filter.getInput());
+            if (filterInput instanceof VertexMatch && filterInput.getInputs().isEmpty()) {
+                VertexMatch vertexMatch = (VertexMatch) filterInput;
+                VertexRecordType vertexRecordType = (VertexRecordType) vertexMatch.getNodeType();
+                RexNode conditionRemoveId = GQLRexUtil.removeIdCondition(filter.getCondition(), vertexRecordType);
 
-            Set<RexNode> ids = GQLRexUtil.findVertexIds(filter.getCondition(), vertexRecordType);
-            idReferences.addAll(ids);
-            // It contains parameter reference except the id request.
-            boolean isIdOnlyRef = conditionRemoveId == null || !GQLRexUtil.contain(conditionRemoveId,
-                RexParameterRef.class);
-            VertexMatch vertexMatch = (VertexMatch) filter.getInput();
-            // push filter to vertex-match.
-            newInputs.add(vertexMatch.copy(filter.getCondition()));
+                Set<RexNode> ids = GQLRexUtil.findVertexIds(filter.getCondition(), vertexRecordType);
+                idReferences.addAll(ids);
+                // It contains parameter reference except the id request.
+                boolean isIdOnlyRef = conditionRemoveId == null || !GQLRexUtil.contain(conditionRemoveId,
+                    RexParameterRef.class);
+                // push filter to vertex-match.
+                newInputs.add(vertexMatch.copy(filter.getCondition()));
 
-            if (isIdOnlyRef) {
-                if (conditionRemoveId != null) {
-                    newNode = filter.copy(filter.getTraitSet(), filter.getInput(), conditionRemoveId);
-                } else { // remove current filter.
-                    return newInputs.get(0);
-                }
-            } else {
-                return null;
-            }
-        } else {
-            boolean containParameterRef =
-                !GQLRexUtil.collect(node, rexNode -> rexNode instanceof RexParameterRef).isEmpty();
-            if (containParameterRef) {
-                return null;
-            }
-            for (RelNode input : node.getInputs()) {
-                RelNode newInput = isIdOnlyRequest(input, idReferences);
-                if (newInput == null) {
+                if (isIdOnlyRef) {
+                    if (conditionRemoveId != null) {
+                        newNode = filter.copy(filter.getTraitSet(), filterInput, conditionRemoveId);
+                    } else { // remove current filter.
+                        return newInputs.get(0);
+                    }
+                } else {
                     return null;
                 }
-                newInputs.add(newInput);
+                return newNode.copy(node.getTraitSet(), newInputs);
             }
+        }
+
+        boolean containParameterRef =
+            !GQLRexUtil.collect(node, rexNode -> rexNode instanceof RexParameterRef).isEmpty();
+        if (containParameterRef) {
+            return null;
+        }
+        for (RelNode input : node.getInputs()) {
+            RelNode newInput = isIdOnlyRequest(input, idReferences);
+            if (newInput == null) {
+                return null;
+            }
+            newInputs.add(newInput);
         }
         return newNode.copy(node.getTraitSet(), newInputs);
     }

@@ -35,6 +35,7 @@ import org.apache.calcite.rex.RexShuttle;
 import org.apache.calcite.rex.RexSubQuery;
 import org.apache.geaflow.dsl.rel.GraphMatch;
 import org.apache.geaflow.dsl.rel.match.IMatchNode;
+import org.apache.geaflow.dsl.util.GQLRelUtil;
 
 public class GQLOptimizer {
 
@@ -94,6 +95,7 @@ public class GQLOptimizer {
     }
 
     private RelNode applyRulesOnChildren(RuleGroup rules, RelNode node) {
+        node = GQLRelUtil.toRel(node);
         List<RelNode> newInputs = node.getInputs()
             .stream()
             .map(input -> applyRulesOnChildren(rules, input))
@@ -101,7 +103,7 @@ public class GQLOptimizer {
 
         if (node instanceof GraphMatch) {
             GraphMatch match = (GraphMatch) node;
-            IMatchNode newPathPattern = (IMatchNode) applyRules(rules, match.getPathPattern());
+            IMatchNode newPathPattern = GQLRelUtil.match(applyRules(rules, match.getPathPattern()));
             assert newInputs.size() == 1;
             return match.copy(match.getTraitSet(), newInputs.get(0), newPathPattern, match.getRowType());
         }
