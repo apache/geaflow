@@ -325,6 +325,76 @@ public class GQLAlgorithmTest {
     }
 
     @Test
+    public void testAlgorithmJaccardSimilarityNoCommonNeighbors() throws Exception {
+        QueryTester
+            .build()
+            .withGraphDefine("/query/modern_graph.sql")
+            .withQueryPath("/query/gql_algorithm_jaccard_similarity_no_common.sql")
+            .execute()
+            .checkSinkResult();
+    }
+
+    @Test
+    public void testAlgorithmJaccardSimilarityIdenticalVertices() throws Exception {
+        QueryTester
+            .build()
+            .withGraphDefine("/query/modern_graph.sql")
+            .withQueryPath("/query/gql_algorithm_jaccard_similarity_identical.sql")
+            .execute()
+            .checkSinkResult();
+    }
+
+    @Test
+    public void testAlgorithmJaccardSimilarityHighSimilarity() throws Exception {
+        QueryTester
+            .build()
+            .withGraphDefine("/query/modern_graph.sql")
+            .withQueryPath("/query/gql_algorithm_jaccard_similarity_high.sql")
+            .execute()
+            .checkSinkResult();
+    }
+
+    @Test
+    public void testAlgorithmJaccardSimilarityCompleteOverlap() throws Exception {
+        QueryTester
+            .build()
+            .withGraphDefine("/query/jaccard_similarity_test_graph.sql")
+            .withQueryPath("/query/gql_algorithm_jaccard_similarity_complete_overlap.sql")
+            .execute()
+            .checkSinkResult();
+    }
+
+    @Test
+    public void testAlgorithmJaccardSimilarityDisjointSets() throws Exception {
+        QueryTester
+            .build()
+            .withGraphDefine("/query/jaccard_similarity_test_graph.sql")
+            .withQueryPath("/query/gql_algorithm_jaccard_similarity_disjoint.sql")
+            .execute()
+            .checkSinkResult();
+    }
+
+    @Test
+    public void testAlgorithmJaccardSimilaritySelfLoop() throws Exception {
+        QueryTester
+            .build()
+            .withGraphDefine("/query/jaccard_similarity_test_graph.sql")
+            .withQueryPath("/query/gql_algorithm_jaccard_similarity_selfloop.sql")
+            .execute()
+            .checkSinkResult();
+    }
+
+    @Test
+    public void testAlgorithmJaccardSimilarityIsolatedVertex() throws Exception {
+        QueryTester
+            .build()
+            .withGraphDefine("/query/jaccard_similarity_test_graph.sql")
+            .withQueryPath("/query/gql_algorithm_jaccard_similarity_isolated.sql")
+            .execute()
+            .checkSinkResult();
+    }
+
+    @Test
     public void testEdgeIterator() throws Exception {
         QueryTester
             .build()
