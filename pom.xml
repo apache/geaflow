@@ -334,6 +334,7 @@
                         <exclude>**/web-dashboard/**</exclude>
                         <exclude>**/codegen/**</exclude>
                         <exclude>**/template/*.vm</exclude>
+                        <exclude>**/agent/**</exclude>
                         <exclude>**/resources/graph_ldbc_sf/**/**</exclude>
                         <exclude>**/resources/index/**</exclude>
                         <exclude>**/resources/data/**</exclude>
