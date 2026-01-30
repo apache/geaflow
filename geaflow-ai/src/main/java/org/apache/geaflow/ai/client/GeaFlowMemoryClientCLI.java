@@ -21,12 +21,15 @@ package org.apache.geaflow.ai.client;
 
 import com.google.gson.Gson;
 import java.io.*;
+import java.math.BigInteger;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -60,6 +63,21 @@ public class GeaFlowMemoryClientCLI {
     private String currentSessionId = null;
     private static ModelConfig chatModelConfig = new ModelConfig();
     private ChatService chatService = null;
+
+    public static String calculateMD5(String text) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("MD5");
+            byte[] messageDigest = md.digest(text.getBytes(StandardCharsets.UTF_8));
+            BigInteger no = new BigInteger(1, messageDigest);
+            StringBuilder hashText = new StringBuilder(no.toString(16));
+            while (hashText.length() < 32) {
+                hashText.insert(0, "0");
+            }
+            return hashText.toString();
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException(e);
+        }
+    }
 
     public static void main(String[] args) {
         GeaFlowMemoryClientCLI client = new GeaFlowMemoryClientCLI();
@@ -235,7 +253,7 @@ public class GeaFlowMemoryClientCLI {
     }
 
     private String rememberChunk(String content) throws IOException {
-        String vertexId = String.valueOf(content.hashCode());
+        String vertexId = calculateMD5(content);
         Vertex chunkVertex = new Vertex("chunk", vertexId, Collections.singletonList(content));
         String vertexJson = gson.toJson(chunkVertex);
 

@@ -14,7 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-
+import hashlib
 import json
 import requests
 from typing import List, Dict, Optional
@@ -100,6 +100,8 @@ class TextFileReader:
             return self.rows[index]
         raise IndexError(f"Row index {index} out of range")
 
+def generate_paragraph_id(paragraph_text: str) -> str:
+    return hashlib.md5(paragraph_text.encode('utf-8')).hexdigest()
 
 class GeaFlowMemoryClientCLI:
     def __init__(self):
@@ -277,7 +279,7 @@ class GeaFlowMemoryClientCLI:
             print(f"Failed to read document: {e}")
 
     def remember_chunk(self, content: str) -> str:
-        vertex_id = str(hash(content))
+        vertex_id = generate_paragraph_id(content)
         chunk_vertex = Vertex(
             id=vertex_id,
             label=self.vertex_label,
