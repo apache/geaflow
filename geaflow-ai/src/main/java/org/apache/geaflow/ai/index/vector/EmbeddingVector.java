@@ -72,6 +72,9 @@ public class EmbeddingVector implements IVector {
         return VectorType.EmbeddingVector;
     }
 
+    public double[] getVec() {
+        return vec;
+    }
 
     @Override
     public String toString() {

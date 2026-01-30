@@ -20,21 +20,31 @@
 package org.apache.geaflow.ai.client;
 
 import com.google.gson.Gson;
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
+import java.io.*;
+import java.math.BigInteger;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.geaflow.ai.common.config.Constants;
+import org.apache.geaflow.ai.common.model.ChatService;
+import org.apache.geaflow.ai.common.model.ModelConfig;
 import org.apache.geaflow.ai.graph.io.*;
+import org.noear.solon.core.PropsLoader;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class GeaFlowMemoryClientCLI {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(GeaFlowMemoryClientCLI.class);
 
     private static final String BASE_URL = "http://localhost:8080";
     private static final String SERVER_URL = BASE_URL + "/api/test";
@@ -51,9 +61,61 @@ public class GeaFlowMemoryClientCLI {
     private final Gson gson = new Gson();
     private String currentGraphName = DEFAULT_GRAPH_NAME;
     private String currentSessionId = null;
+    private static ModelConfig chatModelConfig = new ModelConfig();
+    private ChatService chatService = null;
+
+    public static String calculateMD5(String text) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("MD5");
+            byte[] messageDigest = md.digest(text.getBytes(StandardCharsets.UTF_8));
+            BigInteger no = new BigInteger(1, messageDigest);
+            StringBuilder hashText = new StringBuilder(no.toString(16));
+            while (hashText.length() < 32) {
+                hashText.insert(0, "0");
+            }
+            return hashText.toString();
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException(e);
+        }
+    }
 
     public static void main(String[] args) {
         GeaFlowMemoryClientCLI client = new GeaFlowMemoryClientCLI();
+        if (args != null) {
+            for (int i = 0; i < args.length; i++) {
+                System.out.printf("arg[%d]: %s\n", i, args[i]);
+            }
+        }
+        String externalConfigPath = args != null ? args[0] : "/etc/geaflow_memory.properties";
+        if (StringUtils.isNotBlank(externalConfigPath)) {
+            java.nio.file.Path configFile = Paths.get(externalConfigPath);
+            if (Files.exists(configFile)) {
+                try {
+                    System.out.print("Loading external config from: " + externalConfigPath);
+                    LOGGER.info("Loading external config from: {}", externalConfigPath);
+                    File file = configFile.toFile();
+                    URL configUrl = file.toURI().toURL();
+                    Properties props = new PropsLoader().load(configUrl);
+                    String model = props.getProperty("model.chat.name", null);
+                    String url = props.getProperty("model.chat.url", null);
+                    String api = props.getProperty("model.chat.api", null);
+                    String token = props.getProperty("model.chat.token", null);
+                    chatModelConfig = new ModelConfig(model, url, api, token);
+                } catch (Exception e) {
+                    System.out.print("Failed to load external config " + e.getMessage());
+                    LOGGER.warn("Failed to load external config '{}': {}. Proceeding with defaults.",
+                        externalConfigPath, e.getMessage());
+                }
+            } else {
+                System.out.print("External config file not found: '" + externalConfigPath + "'. Using default/internal configuration.");
+                LOGGER.warn("External config file not found: '{}'. Using default/internal configuration.",
+                    externalConfigPath);
+            }
+        } else {
+            System.out.print("No external config.path specified. Using embedded configuration.");
+            LOGGER.info("No external config.path specified. Using embedded configuration.");
+        }
+
         client.start();
     }
 
@@ -190,9 +252,8 @@ public class GeaFlowMemoryClientCLI {
 
     }
 
-
     private String rememberChunk(String content) throws IOException {
-        String vertexId = "chunk_" + System.currentTimeMillis() + "_" + Math.abs(content.hashCode());
+        String vertexId = calculateMD5(content);
         Vertex chunkVertex = new Vertex("chunk", vertexId, Collections.singletonList(content));
         String vertexJson = gson.toJson(chunkVertex);
 
@@ -221,10 +282,22 @@ public class GeaFlowMemoryClientCLI {
         params.put("sessionId", currentSessionId);
 
         response = sendPostRequest(EXEC_URL, query, params);
-        System.out.println("✓ Query result:");
+        System.out.println("✓ Search result:");
         System.out.println("========================");
         System.out.println(response);
         System.out.println("========================");
+        String modelResponseWithRag = getChatService().chat(query + "\n[\n" + response + "]");
+        System.out.println("✓ Query result:");
+        System.out.println("========================");
+        System.out.println(modelResponseWithRag);
+        System.out.println("========================");
+    }
+
+    public ChatService getChatService() {
+        if (chatService == null) {
+            chatService = new ChatService(chatModelConfig);
+        }
+        return chatService;
     }
 
     private String sendGetRequest(String urlStr) throws IOException {

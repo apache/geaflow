@@ -26,4 +26,6 @@ import org.apache.geaflow.ai.index.vector.IVector;
 public interface IndexStore {
 
     List<IVector> getEntityIndex(GraphEntity entity);
+
+    List<IVector> getStringIndex(String str);
 }

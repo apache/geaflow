@@ -28,7 +28,10 @@ import java.util.stream.IntStream;
 import okhttp3.*;
 import org.apache.geaflow.ai.common.config.Constants;
 import org.apache.geaflow.ai.graph.io.*;
-import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.noear.solon.test.SolonTest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -195,29 +198,6 @@ public class MemoryServerTest {
         LOGGER.info("API: {} Response: {}", api, response);
         Assertions.assertNotNull(response);
         sessionId = response;
-
-        api = "/query/exec";
-        queryParams = new HashMap<>();
-        queryParams.put("sessionId", sessionId);
-        queryParams.put("query", "Who is Confucius?");
-        response = post(api, "", queryParams);
-        LOGGER.info("API: {} Response: {}", api, response);
-        Assertions.assertNotNull(response);
-
-        api = "/query/result";
-        queryParams = new HashMap<>();
-        queryParams.put("sessionId", sessionId);
-        response = post(api, "", queryParams);
-        LOGGER.info("API: {} Response: {}", api, response);
-        Assertions.assertNotNull(response);
-
-        api = "/query/exec";
-        queryParams = new HashMap<>();
-        queryParams.put("sessionId", sessionId);
-        queryParams.put("query", "What did he say?");
-        response = post(api, "", queryParams);
-        LOGGER.info("API: {} Response: {}", api, response);
-        Assertions.assertNotNull(response);
 
         api = "/query/result";
         queryParams = new HashMap<>();

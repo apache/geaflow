@@ -29,9 +29,9 @@ import org.apache.geaflow.ai.graph.*;
 import org.apache.geaflow.ai.graph.io.Edge;
 import org.apache.geaflow.ai.graph.io.EdgeSchema;
 import org.apache.geaflow.ai.index.EntityAttributeIndexStore;
+import org.apache.geaflow.ai.index.IndexStore;
 import org.apache.geaflow.ai.index.vector.KeywordVector;
 import org.apache.geaflow.ai.search.VectorSearch;
-import org.apache.geaflow.ai.verbalization.SubgraphSemanticPromptFunction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,10 +40,17 @@ public class KeywordRelationFunction implements ConsolidateFunction {
     private static final Logger LOGGER = LoggerFactory.getLogger(KeywordRelationFunction.class);
 
     @Override
-    public void eval(GraphAccessor graphAccessor, MutableGraph mutableGraph) {
-        EntityAttributeIndexStore indexStore = new EntityAttributeIndexStore();
-        indexStore.initStore(new SubgraphSemanticPromptFunction(graphAccessor));
-        LOGGER.info("Success to init EntityAttributeIndexStore.");
+    public void eval(GraphAccessor graphAccessor, MutableGraph mutableGraph,
+                     List<IndexStore> indexStores) {
+        EntityAttributeIndexStore indexStore = null;
+        for (IndexStore store : indexStores) {
+            if (store instanceof EntityAttributeIndexStore) {
+                indexStore = (EntityAttributeIndexStore) store;
+            }
+        }
+        if (indexStore == null) {
+            return;
+        }
         GraphMemoryServer server = new GraphMemoryServer();
         server.addGraphAccessor(graphAccessor);
         server.addIndexStore(indexStore);

@@ -28,7 +28,7 @@ public class SearchUtils {
 
     // Set of excluded characters: these will be replaced with spaces in formatQuery
     private static final Set<Character> EXCLUDED_CHARS = new HashSet<>(Arrays.asList(
-            '*', '#', '-', '?', '`', '{', '}', '[', ']', '(', ')', '>', '<', ':', '/', '.'
+            '*', '#', '-', '?', '`', '{', '}', '[', ']', '(', ')', '>', '<', ':', '/', '.', '"', '\''
     ));
 
     // Set of allowed characters for validation in isAllAllowedChars

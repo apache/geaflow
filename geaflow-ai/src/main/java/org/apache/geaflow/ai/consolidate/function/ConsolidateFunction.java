@@ -19,10 +19,13 @@
 
 package org.apache.geaflow.ai.consolidate.function;
 
+import java.util.List;
 import org.apache.geaflow.ai.graph.GraphAccessor;
 import org.apache.geaflow.ai.graph.MutableGraph;
+import org.apache.geaflow.ai.index.IndexStore;
 
 public interface ConsolidateFunction {
 
-    void eval(GraphAccessor graphAccessor, MutableGraph graph);
+    void eval(GraphAccessor graphAccessor, MutableGraph graph,
+              List<IndexStore> indexStores);
 }

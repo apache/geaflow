@@ -24,6 +24,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.apache.geaflow.ai.common.config.Constants;
 import org.apache.geaflow.ai.graph.GraphAccessor;
 import org.apache.geaflow.ai.graph.GraphEntity;
 import org.apache.geaflow.ai.index.EmbeddingIndexStore;
@@ -122,7 +123,9 @@ public class GraphMemoryServer {
         List<SubGraph> subGraphList = sessionManagement.getSubGraph(sessionId);
         Set<GraphEntity> entitySet = new HashSet<>();
         for (SubGraph subGraph : subGraphList) {
-            entitySet.addAll(subGraph.getGraphEntityList());
+            entitySet.addAll(subGraph.getGraphEntityList().stream().filter(
+                entity -> !Constants.SYSTEM_CONSOLIDATE_LABELS.contains(entity.getLabel())
+            ).collect(Collectors.toList()));
         }
         return new ArrayList<>(entitySet);
     }
