@@ -248,6 +248,7 @@ class GeaFlowMemoryClientCLI:
             params
         )
         print(f"✓ Relation schema added: {response}")
+        self.current_graph_name = graph_name
         print(f"✓ Graph '{graph_name}' is ready for use!")
 
     def remember_content(self, content: str):
@@ -283,7 +284,7 @@ class GeaFlowMemoryClientCLI:
             values=[content]
         )
         vertex_json = json.dumps(chunk_vertex.__dict__)
-        print(f"✓ remember_vertex_json: {vertex_json}")
+        print(f"✓ graphName: {self.current_graph_name} remember_vertex_json: {vertex_json}")
         params = {"graphName": self.current_graph_name}
         return self.send_post_request(self.insert_url, vertex_json, params)
 
@@ -298,7 +299,7 @@ class GeaFlowMemoryClientCLI:
         self.current_session_id = response.strip()
         print(f"✓ Session created: {self.current_session_id}")
 
-        print(f"Executing query: {query}")
+        print(f"GraphName: {self.current_graph_name} Executing query: {query}")
         params = {"sessionId": self.current_session_id}
         response = self.send_post_request(self.exec_url, query, params)
 
@@ -312,6 +313,7 @@ class GeaFlowMemoryClientCLI:
         print("========================")
         print(model_response_with_rag)
         print("========================")
+        return response
 
     def get_chat_service(self) -> ChatService:
         if self.chat_service is None:

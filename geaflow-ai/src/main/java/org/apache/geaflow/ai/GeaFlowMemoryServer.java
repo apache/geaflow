@@ -109,8 +109,10 @@ public class GeaFlowMemoryServer {
     public String createGraph(@Body String input) {
         GraphSchema graphSchema = SeDeUtil.deserializeGraphSchema(input);
         String graphName = graphSchema.getName();
-        if (graphName == null || CACHE.getGraphByName(graphName) != null) {
+        if (graphName == null) {
             throw new RuntimeException("Cannot create graph name: " + graphName);
+        } else if (CACHE.getGraphByName(graphName) != null) {
+            return "Graph exists: " + graphName;
         }
         Map<String, EntityGroup> entities = new HashMap<>();
         for (VertexSchema vertexSchema : graphSchema.getVertexSchemaList()) {

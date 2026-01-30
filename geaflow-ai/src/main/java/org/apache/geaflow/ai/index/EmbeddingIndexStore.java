@@ -35,6 +35,7 @@ import org.apache.geaflow.ai.graph.GraphEntity;
 import org.apache.geaflow.ai.graph.GraphVertex;
 import org.apache.geaflow.ai.index.vector.EmbeddingVector;
 import org.apache.geaflow.ai.index.vector.IVector;
+import org.apache.geaflow.ai.operator.SearchUtils;
 import org.apache.geaflow.ai.verbalization.VerbalizationFunction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -218,10 +219,16 @@ public class EmbeddingIndexStore implements IndexStore {
             int end = Math.min(i + batchSize, pendingTextsList.size());
             List<String> batch = pendingTextsList.subList(i, end);
             String[] textsArray = batch.toArray(new String[0]);
+            for (int idx = 0; idx < textsArray.length; idx++) {
+                textsArray[idx] = SearchUtils.formatQuery(textsArray[idx]);
+                if (StringUtils.isBlank(textsArray[idx])) {
+                    textsArray[idx] = "_";
+                }
+            }
             String embeddingResultStr = service.embedding(textsArray);
             List<String> splitResults = Arrays.asList(embeddingResultStr.trim().split("\n"));
             result.addAll(splitResults);
-
+            assert splitResults.size() == textsArray.length;
         }
 
         List<String> formatResult = new ArrayList<>();

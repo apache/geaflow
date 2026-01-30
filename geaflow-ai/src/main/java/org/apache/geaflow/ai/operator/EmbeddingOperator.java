@@ -33,24 +33,24 @@ import org.apache.geaflow.ai.index.vector.VectorType;
 import org.apache.geaflow.ai.index.vector.VectorUtils;
 import org.apache.geaflow.ai.search.VectorSearch;
 import org.apache.geaflow.ai.subgraph.SubGraph;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class EmbeddingOperator implements SearchOperator {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(EmbeddingOperator.class);
 
     private final GraphAccessor graphAccessor;
     private final IndexStore indexStore;
     private final double entityCosThreshold;
-    private final double commonCosThreshold;
     private final double diffCosThreshold;
-    private final double uniqueCosThreshold;
     private final int topN;
 
     public EmbeddingOperator(GraphAccessor accessor, IndexStore store) {
         this.graphAccessor = Objects.requireNonNull(accessor);
         this.indexStore = Objects.requireNonNull(store);
         this.entityCosThreshold = Constants.EMBEDDING_OPERATE_DEFAULT_THRESHOLD;
-        this.commonCosThreshold = this.entityCosThreshold + 0.25;
         this.diffCosThreshold = this.entityCosThreshold - 0.1;
-        this.uniqueCosThreshold = this.entityCosThreshold + 0.2;
         this.topN = Constants.EMBEDDING_OPERATE_DEFAULT_TOPN;
     }
 
@@ -123,9 +123,7 @@ public class EmbeddingOperator implements SearchOperator {
     private List<GraphEntity> searchWithGlobalGraph(List<IVector> queryEmbeddingVectors,
                                                     Iterator<GraphVertex> vertexIterator) {
         Map<GraphEntity, List<IVector>> entityIndexMap = new HashMap<>();
-        Map<GraphEntity, List<IVector>> commonRelIndexMap = new HashMap<>();
         Map<GraphEntity, List<IVector>> diffRelIndexMap = new HashMap<>();
-        Map<GraphEntity, List<IVector>> uniqueRelIndexMap = new HashMap<>();
         while (vertexIterator.hasNext()) {
             GraphVertex vertex = vertexIterator.next();
             //Read all vertices indices from the index and add them to the candidate set.
@@ -141,33 +139,20 @@ public class EmbeddingOperator implements SearchOperator {
                 }
                 GraphVertex target = graphAccessor.getVertex(null, targetVertexId);
                 List<IVector> targetIndex = indexStore.getEntityIndex(target);
-                List<IVector> common = VectorUtils.common(vertexIndex, targetIndex);
-                commonRelIndexMap.computeIfAbsent(vertex, k -> new ArrayList<>()).addAll(common);
-                commonRelIndexMap.computeIfAbsent(target, k -> new ArrayList<>()).addAll(common);
                 List<IVector> diffAB = VectorUtils.diff(vertexIndex, targetIndex);
-                List<IVector> diffBA = VectorUtils.diff(targetIndex, vertexIndex);
                 diffRelIndexMap.computeIfAbsent(vertex, k -> new ArrayList<>()).addAll(diffAB);
-                diffRelIndexMap.computeIfAbsent(target, k -> new ArrayList<>()).addAll(diffAB);
-                diffRelIndexMap.computeIfAbsent(vertex, k -> new ArrayList<>()).addAll(diffBA);
+                List<IVector> diffBA = VectorUtils.diff(targetIndex, vertexIndex);
                 diffRelIndexMap.computeIfAbsent(target, k -> new ArrayList<>()).addAll(diffBA);
-                List<IVector> uniqueAB = VectorUtils.unique(vertexIndex, targetIndex);
-                List<IVector> uniqueBA = VectorUtils.unique(targetIndex, vertexIndex);
-                uniqueRelIndexMap.computeIfAbsent(vertex, k -> new ArrayList<>()).addAll(uniqueAB);
-                uniqueRelIndexMap.computeIfAbsent(target, k -> new ArrayList<>()).addAll(uniqueAB);
-                uniqueRelIndexMap.computeIfAbsent(vertex, k -> new ArrayList<>()).addAll(uniqueBA);
-                uniqueRelIndexMap.computeIfAbsent(target, k -> new ArrayList<>()).addAll(uniqueBA);
             }
         }
         //recall compute
         Set<GraphEntity> resultsEntities = new LinkedHashSet<>();
         List<GraphEntity> entityRes = searchEmbeddings(queryEmbeddingVectors, entityIndexMap, entityCosThreshold, topN);
-        List<GraphEntity> commonRes = searchEmbeddings(queryEmbeddingVectors, commonRelIndexMap, commonCosThreshold, topN);
         List<GraphEntity> diffRes = searchEmbeddings(queryEmbeddingVectors, diffRelIndexMap, diffCosThreshold, topN);
-        List<GraphEntity> uniqueRes = searchEmbeddings(queryEmbeddingVectors, uniqueRelIndexMap, uniqueCosThreshold, topN);
         resultsEntities.addAll(entityRes);
-        resultsEntities.addAll(commonRes);
         resultsEntities.addAll(diffRes);
-        resultsEntities.addAll(uniqueRes);
+        LOGGER.info("Retrieved relevant entities: {}/{} , differing relation entities: {}/{}",
+            entityRes.size(), entityIndexMap.size(), diffRes.size(), diffRelIndexMap.size());
         return new ArrayList<>(resultsEntities);
     }
 
