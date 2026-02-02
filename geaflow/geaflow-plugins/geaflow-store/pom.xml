@@ -38,6 +38,7 @@
         <module>geaflow-store-redis</module>
         <module>geaflow-store-jdbc</module>
         <module>geaflow-store-paimon</module>
+        <module>geaflow-store-vector</module>
     </modules>
 
     <dependencies>
