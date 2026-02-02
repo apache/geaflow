@@ -39,13 +39,13 @@ class StrategyCache:
         # Get all hyperparameters from the configuration object
         # Default values balance exploration and safety (see config.py for detailed rationale)
         # Note: Higher κ → lower threshold → more permissive (counter-intuitive!)
-        self.min_confidence_threshold = config.get_float("CACHE_MIN_CONFIDENCE_THRESHOLD", 2.0)
-        self.current_schema_fingerprint = config.get_str("CACHE_SCHEMA_FINGERPRINT", "schema_v1")
-        self.similarity_kappa = config.get_float("CACHE_SIMILARITY_KAPPA", 0.30)
-        self.similarity_beta = config.get_float("CACHE_SIMILARITY_BETA", 0.05)
-        self.tier2_gamma = config.get_float("CACHE_TIER2_GAMMA", 1.2)
-        self.signature_level = config.get_int("SIGNATURE_LEVEL", 1)
-        self.edge_whitelist = config.get("SIGNATURE_EDGE_WHITELIST", None)
+        self.min_confidence_threshold = config.get_float("CACHE_MIN_CONFIDENCE_THRESHOLD")
+        self.current_schema_fingerprint = config.get_str("CACHE_SCHEMA_FINGERPRINT")
+        self.similarity_kappa = config.get_float("CACHE_SIMILARITY_KAPPA")
+        self.similarity_beta = config.get_float("CACHE_SIMILARITY_BETA")
+        self.tier2_gamma = config.get_float("CACHE_TIER2_GAMMA")
+        self.signature_level = config.get_int("SIGNATURE_LEVEL")
+        self.edge_whitelist = config.get("SIGNATURE_EDGE_WHITELIST")
 
     async def find_strategy(
         self,

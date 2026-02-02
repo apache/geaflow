@@ -183,9 +183,11 @@ class TestSignatureAbstraction(unittest.TestCase):
     def _create_cache_with_level(self, level: int, edge_whitelist=None):
         """创建指定抽象级别的 StrategyCache"""
         config = MagicMock()
-        config.get_float = MagicMock(side_effect=lambda k, d: 2.0 if "THRESHOLD" in k else d)
+        config.get_float = MagicMock(side_effect=lambda k, d=0.0: 2.0 if "THRESHOLD" in k else d)
         config.get_str = MagicMock(return_value="schema_v2_canonical")
-        config.get_int = MagicMock(side_effect=lambda k, d: level if k == "SIGNATURE_LEVEL" else d)
+        config.get_int = MagicMock(
+            side_effect=lambda k, d=0: level if k == "SIGNATURE_LEVEL" else d
+        )
         config.get = MagicMock(return_value=edge_whitelist)
 
         return StrategyCache(self.mock_embed_service, config)
@@ -289,14 +291,16 @@ class TestSignatureMatching(unittest.IsolatedAsyncioTestCase):
     def _create_cache_with_level(self, level: int):
         """创建指定抽象级别的 StrategyCache"""
         config = MagicMock()
-        config.get_float = MagicMock(side_effect=lambda k, d: {
+        config.get_float = MagicMock(side_effect=lambda k, d=0.0: {
             "CACHE_MIN_CONFIDENCE_THRESHOLD": 2.0,
             "CACHE_TIER2_GAMMA": 1.2,
             "CACHE_SIMILARITY_KAPPA": 0.25,
             "CACHE_SIMILARITY_BETA": 0.05,
         }.get(k, d))
         config.get_str = MagicMock(return_value="schema_v2_canonical")
-        config.get_int = MagicMock(side_effect=lambda k, d: level if k == "SIGNATURE_LEVEL" else d)
+        config.get_int = MagicMock(
+            side_effect=lambda k, d=0: level if k == "SIGNATURE_LEVEL" else d
+        )
         config.get = MagicMock(return_value=None)
 
         return StrategyCache(self.mock_embed_service, config)

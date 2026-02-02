@@ -46,9 +46,9 @@ class LLMOracle:
             model = llm_cfg["model"]
         else:
             # Fallback for other configuration types
-            api_key = config.get_str("LLM_APIKEY", "")
-            endpoint = config.get_str("LLM_ENDPOINT", "")
-            model = config.get_str("LLM_MODEL_NAME", "")
+            api_key = config.get_str("LLM_APIKEY")
+            endpoint = config.get_str("LLM_ENDPOINT")
+            model = config.get_str("LLM_MODEL_NAME")
 
         if not api_key or not endpoint:
             self._write_debug(
@@ -81,25 +81,7 @@ class LLMOracle:
         Returns:
             List of recent decision strings (e.g., ["out('friend')", "has('type','Person')"])
         """
-        if not signature or signature == "V()":
-            return []
-
-        # Remove the V() prefix
-        sig = signature[3:] if signature.startswith("V()") else signature
-
-        # Extract all steps using regex: .step(args)
-        pattern = r"\.([a-zA-Z_]+)\(([^\)]*)\)"
-        matches = re.findall(pattern, sig)
-
-        # Reconstruct decision strings
-        decisions = []
-        for step, args in matches:
-            if args:
-                decisions.append(f"{step}({args})")
-            else:
-                decisions.append(f"{step}()")
-
-        # Return the last 'depth' decisions
+        decisions = GremlinStateMachine.parse_traversal_signature(signature)
         return decisions[-depth:] if len(decisions) > depth else decisions
 
     @staticmethod
@@ -194,12 +176,35 @@ Recent decision history (last {len(recent_decisions)} steps):
         else:
             history_section = "Recent decision history: (no previous steps, starting fresh)\n"
 
-        # Check if simplePath is already in use
+        def _format_list(values: List[str], max_items: int = 12) -> str:
+            if len(values) <= max_items:
+                return ", ".join(values) if values else "none"
+            head = ", ".join(values[:max_items])
+            return f"{head}, ... (+{len(values) - max_items} more)"
+
+        node_type = safe_properties.get("type") or context.properties.get("type")
+        node_schema = schema.get_node_schema(str(node_type)) if node_type else {}
+        outgoing_labels = schema.get_valid_outgoing_edge_labels(node_id)
+        incoming_labels = schema.get_valid_incoming_edge_labels(node_id)
+
+        max_depth = self.config.get_int("SIMULATION_MAX_DEPTH")
+        current_depth = len(
+            GremlinStateMachine.parse_traversal_signature(context.structural_signature)
+        )
+        remaining_steps = max(0, max_depth - current_depth)
+
+        schema_summary = f"""Schema summary (context only):
+- Node types: {_format_list(sorted(schema.node_types))}
+- Edge labels: {_format_list(sorted(schema.edge_labels))}
+- Current node type: {node_type if node_type else "unknown"}
+- Current node outgoing labels: {_format_list(sorted(outgoing_labels))}
+- Current node incoming labels: {_format_list(sorted(incoming_labels))}
+- Current node type properties: {node_schema.get("properties", {})}
+"""
+
         has_simple_path = "simplePath()" in context.structural_signature
         simple_path_status = (
-            "✓ Already using simplePath()"
-            if has_simple_path
-            else "⚠️ Not yet using simplePath() - consider adding it if goal requires unique path"
+            "Already using simplePath()" if has_simple_path else "Not using simplePath()"
         )
 
         prompt = f"""You are implementing a CASTS strategy inside a graph traversal engine.
@@ -211,13 +216,22 @@ Mathematical model (do NOT change it):
   * g : goal text, describes the user's intent
 
 {history_section}
-🔍 Avoiding Cycles with simplePath():
-- If your goal requires exploring without revisiting nodes, consider using `simplePath()`
-  after initial steps to ensure path uniqueness.
-- Common pattern: V().out('edge1').simplePath().out('edge2')...
-- simplePath() filters out any paths that revisit already-visited nodes.
+Iteration model (important):
+- This is a multi-step, iterative process: you will be called repeatedly until a depth budget is reached.
+- You are NOT expected to solve the goal in one step; choose a step that moves toward the goal over 2-4 hops.
+- Current depth: {current_depth} / max depth: {max_depth} (remaining steps: {remaining_steps})
+- Avoid "safe but useless" choices (e.g. stopping too early) when meaningful progress is available.
+
+About simplePath():
+- `simplePath()` is a FILTER, not a movement. It helps avoid cycles, but it does not expand to new nodes.
+- Prefer expanding along goal-aligned edges first; add `simplePath()` after you have at least one traversal edge
+  when cycles become a concern.
 - Current path signature: {context.structural_signature}
-  {simple_path_status}
+- simplePath status: {simple_path_status}
+
+{schema_summary}
+Reminder: Schema is provided for context only. You MUST choose from the valid next steps list
+below. Schema does not expand the allowed actions.
 
 Your task in THIS CALL:
 - Given current c = (s, p, g) below, you must propose ONE new SKU:
@@ -238,9 +252,10 @@ You must also define a `predicate` (a Python lambda on properties `p`) and a `si
 High-level requirements:
 1) The `predicate` Φ should be general yet meaningful (e.g., check type, category, status, or ranges). NEVER use `id` or `uuid`.
 2) The `d_template` should reflect the goal `g` when possible.
-3) For exploration goals that need to discover new nodes, consider adding simplePath() early in the traversal.
+3) This is iterative: prefer actions that unlock goal-relevant node types and relations within the remaining depth.
 4) `sigma_logic`: 1 for a simple check, 2 for 2-3 conditions, 3 for more complex logic.
-5) Prefer meaningful forward progress over backtracking unless goal requires it.
+5) Choose `stop` ONLY if there is no useful progress you can make with the remaining depth.
+6) To stay general across schemas, do not hardcode domain assumptions; choose steps based on the goal text and the provided valid options.
 
 Return ONLY valid JSON inside <output> tags. Example:
 <output>
@@ -296,10 +311,6 @@ Return ONLY valid JSON inside <output> tags. Example:
                     "--- End of Response ---\n"
                 )
 
-                if isinstance(result, JSONDecodeError):
-                    raise ValueError(f"JSON decoding failed on attempt {attempt + 1}: {result}")
-                if isinstance(result, JSONDecodeError):
-                    raise ValueError(f"JSON decoding failed on attempt {attempt + 1}: {result}")
                 raw_decision = result.get("decision", "stop")
                 decision = LLMOracle._parse_and_validate_decision(
                     raw_decision, valid_options=next_step_options, safe_properties=safe_properties
@@ -307,14 +318,17 @@ Return ONLY valid JSON inside <output> tags. Example:
 
                 # --- Success Path ---
                 # If validation succeeds, construct and return the SKU immediately
+                def _default_predicate(_: Dict[str, Any]) -> bool:
+                    return True
+
                 try:
                     predicate_code = result.get("predicate", "lambda x: True")
                     predicate = eval(predicate_code)
                     if not callable(predicate):
-                        predicate = lambda x: True
+                        predicate = _default_predicate
                     _ = predicate(safe_properties)  # Test call
                 except Exception:
-                    predicate = lambda x: True
+                    predicate = _default_predicate
 
                 property_vector = await self.embed_service.embed_properties(safe_properties)
                 sigma_val = result.get("sigma_logic", 1)

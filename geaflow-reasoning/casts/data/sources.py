@@ -111,40 +111,36 @@ class RealBusinessGraphGoalGenerator(GoalGenerator):
         apply = "apply" if "apply" in edge_labels else "apply relation"
         own = "own" if "own" in edge_labels else "ownership relation"
 
-        # Construct a set of risk / AML / relationship-analysis oriented goals
+        # Construct goals aligned to observable relations in the real graph.
         self._goals = [
             (
-                f"""Given a {person}, walk along {invest} / {guarantee} / {own} / {apply} edges to analyse multi-hop connections to high-risk {company} and {loan} nodes for credit-risk QA.""",  # noqa: E501
-                f"""Score is based on identifying paths connecting a {person} to a high-risk {company} or {loan}. The shorter the path, the higher the score. Paths that fail to reach a risky entity receive 0 points.""",  # noqa: E501
+                f"""Given a {person}, walk along {invest} / {own} / {guarantee} / {apply} edges to reach related {company} or {loan} nodes and return representative paths.""",  # noqa: E501
+                f"""Score is based on whether a path connects a {person} to a {company} or {loan}. Bonus for using multiple relation types and 2-4 hop paths. Single-hop paths score lower.""",  # noqa: E501
             ),
             (
-                f"""Starting from an {account}, follow {transfer} / {withdraw} / {repay} / {deposit} transaction edges to trace money flows to suspicious {loan} nodes or unusually active {person} nodes, producing evidence paths for risk QA.""",  # noqa: E501
-                f"""Score is based on following transaction-related edges ({transfer}, {repay}, etc.) to a suspicious node. The path must follow the flow of money. Paths that use non-financial links are penalized.""",  # noqa: E501
+                f"""Starting from an {account}, follow {transfer} / {withdraw} / {repay} / {deposit} edges to trace money flows and reach a {loan} or another {account} within 2-4 hops.""",  # noqa: E501
+                f"""Score is based on staying on transaction edges and reaching a {loan} or a multi-hop {account} chain. Paths that stop immediately or use unrelated links score lower.""",  # noqa: E501
             ),
             (
-                f"""For a single {company}, combine its {own} {account} nodes, {apply} loans, and roles as a {guarantee} provider to build explanatory QA that evaluates risk concentration in the overall guarantee network.""",  # noqa: E501
-                f"""Score is based on identifying how many distinct risk-related paths (ownership, loans, guarantees) originate from a single {company}. Higher scores for paths that show high concentration.""",  # noqa: E501
+                f"""For a single {company}, traverse {own} and {apply} relations to reach both {account} and {loan} nodes, and include {guarantee} if available.""",  # noqa: E501
+                f"""Score is based on covering ownership and loan-related steps in the same path. Higher scores for paths that include both {account} and {loan} and use {guarantee}.""",  # noqa: E501
             ),
             (
-                f"""Between {person} and {company} nodes, explore chained {invest} / {own} / {apply} / {guarantee} relations to discover potential related parties and benefit-transfer paths, and generate audit-style QA in natural language.""",  # noqa: E501
-                f"""Score is based on finding a chain of at least 3 steps connecting a {person} to a {company} through investment, ownership, or guarantee links. The more varied the links, the better.""",  # noqa: E501
+                f"""Between {person} and {company} nodes, find short chains using {invest} / {own} / {guarantee} relations to explain related-party links.""",  # noqa: E501
+                f"""Score is based on discovering paths that include both {person} and {company} within 2-3 steps. Using more than one relation type increases the score.""",  # noqa: E501
             ),
             (
-                f"""Pick a high-risk {loan} node and expand along {repay} / {deposit} / {transfer} edges to find abnormal money cycles and key {account} nodes, providing evidence for AML-style QA.""",  # noqa: E501
-                """Score is highest for paths that form a cycle (e.g., A->B->C->A) representing potential money laundering. The closer the path is to a closed loop, the higher the score.""",  # noqa: E501
+                f"""From a {company}, explore multi-hop {invest} or {guarantee} relations to reach multiple other {company} nodes and summarize the cluster.""",  # noqa: E501
+                f"""Score increases with the number of distinct {company} nodes reached within 2-4 hops. Simple single-edge paths score lower.""",  # noqa: E501
             ),
             (
-                f"""Between {company} nodes, walk multi-hop {invest} and {guarantee} relations to identify tightly cross-invested or mutually guaranteed company clusters and explain their structural patterns in QA form.""",  # noqa: E501
-                """Score is based on identifying reciprocal relationships (e.g., Company A invests in B, and B invests in A) or short cycles of investment/guarantee between companies. Simple one-way paths are less valuable.""",  # noqa: E501
-            ),
-            (
-                f"""For a given {person}, answer through how many {apply} / {own} / {guarantee} / {invest} chains they are indirectly exposed to high-risk {loan} or high-risk {company} nodes, and return representative paths.""",  # noqa: E501
-                f"""Score is based on the path length connecting a {person} to a high-risk entity. Longer, more indirect paths that successfully connect to the target are valuable. Paths that don't terminate at a risky entity are penalized.""",  # noqa: E501
+                f"""Starting at a {loan}, follow incoming {repay} links to {account} nodes, then use incoming {own} links to reach related {person} or {company} owners.""",  # noqa: E501
+                f"""Score is based on reaching at least one owner ({person} or {company}) via {repay} -> {own} within 2-3 hops. Paths that end at {account} score lower.""",  # noqa: E501
             ),
         ]
 
         # Heuristic weight distribution; can be tuned by future statistics
-        self._goal_weights = [100, 90, 80, 70, 60, 50, 40]
+        self._goal_weights = [100, 90, 80, 70, 60, 50]
 
     @property
     def goal_texts(self) -> List[str]:
@@ -645,20 +641,20 @@ class RealDataSource(DataSource):
             owner_map[tgt] = src
 
         new_edges = 0
-        for medium_id, accounts in medium_to_accounts.items():
+        for _, accounts in medium_to_accounts.items():
             if len(accounts) > 1:
                 # Get all unique owners for these accounts
                 owners = {owner_map.get(acc_id) for acc_id in accounts if owner_map.get(acc_id)}
 
                 if len(owners) > 1:
-                    owner_List = list(owners)
+                    owner_list = list(owners)
                     # Add edges between all pairs of owners
-                    for i in range(len(owner_List)):
-                        for j in range(i + 1, len(owner_List)):
-                            owner1_id = owner_List[i]
-                            owner2_id = owner_List[j]
-                            self._add_edge_if_not_exists(owner1_id, owner2_id, 'shared_medium')
-                            self._add_edge_if_not_exists(owner2_id, owner1_id, 'shared_medium')
+                    for i in range(len(owner_list)):
+                        for j in range(i + 1, len(owner_list)):
+                            owner1_id = owner_list[i]
+                            owner2_id = owner_list[j]
+                            self._add_edge_if_not_exists(owner1_id, owner2_id, "shared_medium")
+                            self._add_edge_if_not_exists(owner2_id, owner1_id, "shared_medium")
                             new_edges += 2
 
         if new_edges > 0:
@@ -701,8 +697,8 @@ class RealDataSource(DataSource):
 
             if owner1_id and owner2_id and owner1_id != owner2_id:
                 # Add a 'related_to' edge in both directions
-                self._add_edge_if_not_exists(owner1_id, owner2_id, 'related_to')
-                self._add_edge_if_not_exists(owner2_id, owner1_id, 'related_to')
+                self._add_edge_if_not_exists(owner1_id, owner2_id, "related_to")
+                self._add_edge_if_not_exists(owner2_id, owner1_id, "related_to")
                 new_edges += 2
 
         if new_edges > 0:
@@ -718,10 +714,10 @@ class RealDataSource(DataSource):
         edges = []
 
         # Check for special cases in the config first.
-        special_cases = self._config.get("EDGE_FILENAME_MAPPING_SPECIAL_CASES", {})
+        special_cases = self._config.get("EDGE_FILENAME_MAPPING_SPECIAL_CASES")
         key = label
         if from_type:
-            key = f"{label.lower()}_{from_type.lower()}" # e.g., "own_person"
+            key = f"{label.lower()}_{from_type.lower()}"  # e.g., "own_person"
 
         filename = special_cases.get(key, special_cases.get(label))
 
@@ -732,8 +728,8 @@ class RealDataSource(DataSource):
         filepath = self._data_dir / filename
 
         try:
-            with open(filepath, encoding='utf-8') as f:
-                reader = csv.reader(f, delimiter='|')
+            with open(filepath, encoding="utf-8") as f:
+                reader = csv.reader(f, delimiter="|")
                 for row in reader:
                     if len(row) >= 2:
                         src_id = f"{from_type}_{row[0]}"
@@ -938,9 +934,9 @@ class DataSourceFactory:
             Configured DataSource instance
         """
         if config.get_bool("SIMULATION_USE_REAL_DATA"):
-            data_dir = config.get_str('SIMULATION_REAL_DATA_DIR')
-            max_nodes = config.get_int('SIMULATION_REAL_SUBGRAPH_SIZE')
+            data_dir = config.get_str("SIMULATION_REAL_DATA_DIR")
+            max_nodes = config.get_int("SIMULATION_REAL_SUBGRAPH_SIZE")
             return RealDataSource(data_dir=data_dir, max_nodes=max_nodes)
         else:
-            size = config.get_int('SIMULATION_GRAPH_SIZE', 30)
+            size = config.get_int("SIMULATION_GRAPH_SIZE")
             return SyntheticDataSource(size=size)

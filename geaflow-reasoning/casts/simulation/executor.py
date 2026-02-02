@@ -13,12 +13,18 @@ class TraversalExecutor:
         self.graph = graph
         self.schema = schema
         # Track visited nodes for each request to support simplePath()
-        self.path_history: Dict[int, Set[str]] = {}
+        self._path_history: Dict[int, Set[str]] = {}
+
+    def _ensure_path_history(self, request_id: int, current_node_id: str) -> Set[str]:
+        """Ensure path history is initialized for a request and seed current node."""
+        if request_id not in self._path_history:
+            self._path_history[request_id] = {current_node_id}
+        return self._path_history[request_id]
 
     async def execute_decision(
         self, current_node_id: str, decision: str, current_signature: str,
         request_id: Optional[int] = None
-    ) -> List[Tuple[str, str, Tuple[Any, ...] | None]]:
+    ) -> List[Tuple[str, str, Optional[Tuple[Any, ...]]]]:
         """
         Execute a traversal decision and return next nodes with updated signatures.
 
@@ -32,10 +38,13 @@ class TraversalExecutor:
             List of (next_node_id, next_signature, traversed_edge) tuples
             where traversed_edge is (source_node_id, edge_label) or None
         """
-        next_nodes: List[Tuple[str, str | None, Tuple[str, str] | None]] = []
+        next_nodes: List[Tuple[str, Optional[str], Optional[Tuple[str, str]]]] = []
 
         # Check if simplePath is enabled for this traversal
         has_simple_path = "simplePath()" in current_signature
+
+        if request_id is not None:
+            self._ensure_path_history(request_id, current_node_id)
 
         try:
             # 1) Vertex out/in traversal (follow edges to adjacent nodes)
@@ -134,7 +143,7 @@ class TraversalExecutor:
             pass
 
         # Build final signatures for all nodes
-        final_nodes: List[Tuple[str, str, Tuple[Any, ...] | None]] = []
+        final_nodes: List[Tuple[str, str, Optional[Tuple[Any, ...]]]] = []
         for next_node_id, _, traversed_edge in next_nodes:
             # Always append the full decision to create a canonical, Level-2 signature.
             # The abstraction logic is now handled by the StrategyCache during matching.
@@ -142,18 +151,14 @@ class TraversalExecutor:
 
             # If simplePath is enabled, filter out already-visited nodes
             if has_simple_path and request_id is not None:
-                # Initialize history for this request if needed
-                if request_id not in self.path_history:
-                    self.path_history[request_id] = set()
-                    # Mark the starting node (current node before first traversal)
-                    self.path_history[request_id].add(current_node_id)
-
-                # Skip this node if it was already visited
-                if next_node_id in self.path_history[request_id]:
+                history = self._ensure_path_history(request_id, current_node_id)
+                # Only enforce simplePath on traversal steps that move along an edge.
+                if traversed_edge is not None and next_node_id in history:
                     continue
+                history.add(next_node_id)
 
-                # Mark this node as visited
-                self.path_history[request_id].add(next_node_id)
+            if request_id is not None and not has_simple_path:
+                self._ensure_path_history(request_id, current_node_id).add(next_node_id)
 
             final_nodes.append((next_node_id, next_signature, traversed_edge))
 
@@ -167,5 +172,5 @@ class TraversalExecutor:
         Args:
             request_id: The ID of the completed request
         """
-        if request_id in self.path_history:
-            del self.path_history[request_id]
+        if request_id in self._path_history:
+            del self._path_history[request_id]

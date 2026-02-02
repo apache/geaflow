@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from casts.core.config import DefaultConfiguration
+from casts.data.sources import SyntheticDataSource
 from casts.services.embedding import EmbeddingService
 from casts.services.llm_oracle import LLMOracle
 
@@ -123,9 +124,6 @@ async def test_recommend_starting_node_types_filters_invalid_types(
 
     # Assert
     assert recommended == ["Person"]
-
-
-from casts.data.sources import SyntheticDataSource
 
 
 @pytest.fixture

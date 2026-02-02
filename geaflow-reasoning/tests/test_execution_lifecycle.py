@@ -43,8 +43,18 @@ class TestExecutePrechecker:
         # Add steps that would normally fail cycle detection
         for i in range(10):
             metrics.record_path_step(
-                request_id, i, "node1", None, None, None, f"sig{i}",
-                "goal", {}, "Tier1", f"sku{i}", f"d{i}"
+                request_id,
+                i,
+                "node1",
+                None,
+                None,
+                None,
+                f"sig{i}",
+                "goal",
+                {},
+                "Tier1",
+                f"sku{i}",
+                "out('friend')",
             )
 
         sku = MockSKU(confidence_score=0.5)
@@ -67,8 +77,18 @@ class TestExecutePrechecker:
         for i in range(10):
             node_id = "node1" if i % 2 == 0 else "node2"
             metrics.record_path_step(
-                request_id, i, node_id, None, None, None, f"sig{i}",
-                "goal", {}, "Tier1", f"sku{i}", f"d{i}"
+                request_id,
+                i,
+                node_id,
+                None,
+                None,
+                None,
+                f"sig{i}",
+                "goal",
+                {},
+                "Tier1",
+                f"sku{i}",
+                "out('friend')",
             )
 
         sku = MockSKU(confidence_score=0.5)
@@ -91,8 +111,18 @@ class TestExecutePrechecker:
         for i in range(10):
             node_id = "node1" if i % 2 == 0 else "node2"
             metrics.record_path_step(
-                request_id, i, node_id, None, None, None, f"sig{i}",
-                "goal", {}, "Tier1", f"sku{i}", f"d{i}"
+                request_id,
+                i,
+                node_id,
+                None,
+                None,
+                None,
+                f"sig{i}",
+                "goal",
+                {},
+                "Tier1",
+                f"sku{i}",
+                "out('friend')",
             )
 
         sku = MockSKU(confidence_score=0.5)
@@ -114,8 +144,18 @@ class TestExecutePrechecker:
         # Create low revisit ratio: 5 unique nodes out of 5 steps = 0% revisit
         for i in range(5):
             metrics.record_path_step(
-                request_id, i, f"node{i}", None, None, None, f"sig{i}",
-                "goal", {}, "Tier1", f"sku{i}", f"d{i}"
+                request_id,
+                i,
+                f"node{i}",
+                None,
+                None,
+                None,
+                f"sig{i}",
+                "goal",
+                {},
+                "Tier1",
+                f"sku{i}",
+                "out('friend')",
             )
 
         sku = MockSKU(confidence_score=0.5)
@@ -124,6 +164,37 @@ class TestExecutePrechecker:
         )
 
         # Should pass all checks (0% revisit < 50% threshold)
+        assert should_execute is True
+        assert success is True
+
+    def test_simple_path_skips_cycle_detection(self):
+        """Test simplePath() skips cycle detection penalty."""
+        self.config.CYCLE_PENALTY = "STOP"
+        self.config.CYCLE_DETECTION_THRESHOLD = 0.1
+        metrics = MetricsCollector()
+        request_id = metrics.initialize_path(0, "node1", {}, "goal", "rubric")
+
+        for i in range(5):
+            metrics.record_path_step(
+                request_id,
+                i,
+                "node1",
+                None,
+                None,
+                None,
+                "V().simplePath()",
+                "goal",
+                {},
+                "Tier1",
+                f"sku{i}",
+                "out('friend')",
+            )
+
+        sku = MockSKU(confidence_score=0.5)
+        should_execute, success = self.engine.execute_prechecker(
+            sku, request_id, metrics
+        )
+
         assert should_execute is True
         assert success is True
 
@@ -136,8 +207,18 @@ class TestExecutePrechecker:
 
         # Add a single step to avoid cycle detection
         metrics.record_path_step(
-            request_id, 0, "node1", None, None, None, "sig", "goal", {},
-            "Tier1", "sku1", "d1"
+            request_id,
+            0,
+            "node1",
+            None,
+            None,
+            None,
+            "sig",
+            "goal",
+            {},
+            "Tier1",
+            "sku1",
+            "out('friend')",
         )
 
         # SKU with confidence below threshold
@@ -159,8 +240,18 @@ class TestExecutePrechecker:
 
         # Add a single step to avoid cycle detection
         metrics.record_path_step(
-            request_id, 0, "node1", None, None, None, "sig", "goal", {},
-            "Tier1", "sku1", "d1"
+            request_id,
+            0,
+            "node1",
+            None,
+            None,
+            None,
+            "sig",
+            "goal",
+            {},
+            "Tier1",
+            "sku1",
+            "out('friend')",
         )
 
         # SKU with confidence below threshold
@@ -210,12 +301,32 @@ class TestExecutePrechecker:
 
         # Create exactly 50% revisit: 2 steps, 1 unique node
         metrics.record_path_step(
-            request_id, 0, "node1", None, None, None, "sig1", "goal", {},
-            "Tier1", "sku1", "d1"
+            request_id,
+            0,
+            "node1",
+            None,
+            None,
+            None,
+            "sig1",
+            "goal",
+            {},
+            "Tier1",
+            "sku1",
+            "out('friend')",
         )
         metrics.record_path_step(
-            request_id, 1, "node1", None, None, None, "sig2", "goal", {},
-            "Tier1", "sku2", "d2"
+            request_id,
+            1,
+            "node1",
+            None,
+            None,
+            None,
+            "sig2",
+            "goal",
+            {},
+            "Tier1",
+            "sku2",
+            "out('friend')",
         )
 
         sku = MockSKU(confidence_score=0.5)
@@ -239,8 +350,18 @@ class TestExecutePrechecker:
         for i in range(5):
             node_id = f"node{i % 3}"  # Cycles through 3 nodes
             metrics.record_path_step(
-                request_id, i, node_id, None, None, None, f"sig{i}",
-                "goal", {}, "Tier1", f"sku{i}", f"d{i}"
+                request_id,
+                i,
+                node_id,
+                None,
+                None,
+                None,
+                f"sig{i}",
+                "goal",
+                {},
+                "Tier1",
+                f"sku{i}",
+                "out('friend')",
             )
 
         sku = MockSKU(confidence_score=0.5)
@@ -366,8 +487,18 @@ class TestCyclePenaltyModes:
             # Create high revisit
             for i in range(10):
                 metrics.record_path_step(
-                    request_id, i, "node1", None, None, None, f"sig{i}",
-                    "goal", {}, "Tier1", f"sku{i}", f"d{i}"
+                    request_id,
+                    i,
+                    "node1",
+                    None,
+                    None,
+                    None,
+                    f"sig{i}",
+                    "goal",
+                    {},
+                    "Tier1",
+                    f"sku{i}",
+                    "out('friend')",
                 )
 
             sku = MockSKU(confidence_score=0.5)
@@ -425,8 +556,18 @@ class TestConfigurationParameters:
         for i in range(20):
             node_id = f"node{i % 3}"
             metrics.record_path_step(
-                request_id, i, node_id, None, None, None, f"sig{i}",
-                "goal", {}, "Tier1", f"sku{i}", f"d{i}"
+                request_id,
+                i,
+                node_id,
+                None,
+                None,
+                None,
+                f"sig{i}",
+                "goal",
+                {},
+                "Tier1",
+                f"sku{i}",
+                "out('friend')",
             )
 
         sku = MockSKU(confidence_score=0.6)  # Above 0.5 min confidence

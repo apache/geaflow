@@ -14,6 +14,13 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from casts.services.path_judge import PathJudge
 from casts.utils.helpers import parse_jsons
 
+QUERY_MAX_SCORE = 35.0
+STRATEGY_MAX_SCORE = 25.0
+CACHE_MAX_SCORE = 20.0
+CONSISTENCY_MAX_SCORE = 15.0
+INFO_MAX_SCORE = 5.0
+COVERAGE_BONUS = 5.0
+
 
 @dataclass
 class PathEvaluationScore:
@@ -37,16 +44,20 @@ class PathEvaluationScore:
             + self.decision_consistency_score
             + self.information_utility_score
         )
-        if self.total_score >= 90:
-            self.grade = "A"
-        elif self.total_score >= 80:
-            self.grade = "B"
-        elif self.total_score >= 70:
-            self.grade = "C"
-        elif self.total_score >= 60:
-            self.grade = "D"
-        else:
-            self.grade = "F"
+        self.grade = self._grade_from_score(self.total_score)
+
+    @staticmethod
+    def _grade_from_score(score: float) -> str:
+        """Map a numeric score to a letter grade."""
+        if score >= 90:
+            return "A"
+        if score >= 80:
+            return "B"
+        if score >= 70:
+            return "C"
+        if score >= 60:
+            return "D"
+        return "F"
 
 
 class PathEvaluator:
@@ -95,9 +106,7 @@ class PathEvaluator:
 
         # Collect data from the entire subgraph for scoring
         all_props = [start_node_props] + [step.get("p", {}) for step in path_steps]
-        all_match_types = [
-            str(step.get("match_type")) for step in path_steps if step.get("match_type")
-        ]
+        all_match_types = [step.get("match_type") for step in path_steps]
         all_sku_ids = [str(step.get("sku_id")) for step in path_steps if step.get("sku_id")]
         all_decisions = [
             str(step.get("decision", "")) for step in path_steps if step.get("decision")
@@ -144,7 +153,11 @@ class PathEvaluator:
         )
 
     def _render_subgraph_ascii(
-        self, nodes: Dict, root_idx: int, prefix: str = "", is_last: bool = True
+        self,
+        nodes: Dict[int, Dict[str, Any]],
+        root_idx: int,
+        prefix: str = "",
+        is_last: bool = True,
     ) -> str:
         """Render the subgraph as an ASCII tree."""
 
@@ -184,7 +197,7 @@ class PathEvaluator:
 
         detail: Dict[str, Any] = {}
 
-        coverage_bonus = 5.0 if len(subgraph) > 1 else 0.0
+        coverage_bonus = COVERAGE_BONUS if len(subgraph) > 1 else 0.0
         detail["coverage_bonus"] = coverage_bonus
 
         subgraph_ascii = self._render_subgraph_ascii(subgraph, -1)
@@ -248,7 +261,7 @@ Output requirements (IMPORTANT):
         detail["llm_score"] = llm_score
         detail["llm_reasoning"] = reasoning
 
-        score = min(35.0, max(0.0, llm_score) + coverage_bonus)
+        score = min(QUERY_MAX_SCORE, max(0.0, llm_score) + coverage_bonus)
         return score, detail
 
     def _score_strategy_reusability(
@@ -269,19 +282,21 @@ Output requirements (IMPORTANT):
             score += pattern_score
         detail["decision_pattern_score"] = pattern_score
 
-        avg_depth = sum(len(step.get("s", "")) for step in steps) / len(steps)
-        if avg_depth <= 30:
+        avg_signature_length = sum(len(step.get("s", "")) for step in steps) / len(steps)
+        if avg_signature_length <= 30:
             depth_score = 5.0
-        elif avg_depth <= 60:
+        elif avg_signature_length <= 60:
             depth_score = 3.0
         else:
             depth_score = 1.0
         score += depth_score
         detail["depth_score"] = depth_score
 
-        return min(25.0, score), detail
+        return min(STRATEGY_MAX_SCORE, score), detail
 
-    def _score_cache_efficiency(self, match_types: List[str]) -> Tuple[float, Dict[str, Any]]:
+    def _score_cache_efficiency(
+        self, match_types: List[Optional[str]]
+    ) -> Tuple[float, Dict[str, Any]]:
         detail: Dict[str, Any] = {}
         total = len(match_types)
         if total == 0:
@@ -289,14 +304,14 @@ Output requirements (IMPORTANT):
 
         tier1 = sum(1 for m in match_types if m == "Tier1")
         tier2 = sum(1 for m in match_types if m == "Tier2")
-        misses = sum(1 for m in match_types if m is None)
+        misses = sum(1 for m in match_types if m not in ("Tier1", "Tier2"))
 
         tier1_score = (tier1 / total) * 12.0
         tier2_score = (tier2 / total) * 6.0
         miss_penalty = (misses / total) * 8.0
 
         score = tier1_score + tier2_score - miss_penalty
-        score = max(0.0, min(20.0, score))
+        score = max(0.0, min(CACHE_MAX_SCORE, score))
 
         detail.update(
             {
@@ -355,7 +370,7 @@ Output requirements (IMPORTANT):
             score += variety_score
         detail["variety_score"] = variety_score
 
-        return min(15.0, score), detail
+        return min(CONSISTENCY_MAX_SCORE, score), detail
 
     def _score_information_utility(
         self, props: List[Dict[str, Any]]
@@ -379,7 +394,7 @@ Output requirements (IMPORTANT):
         score = key_score + density_score
         detail["key_count"] = len(keys)
         detail["density"] = density
-        return min(5.0, score), detail
+        return min(INFO_MAX_SCORE, score), detail
 
     def _build_explanation(
         self,

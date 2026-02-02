@@ -96,9 +96,14 @@ class TestDynamicSimilarityThreshold(unittest.TestCase):
 
         # 验证单调性: 每个阈值都应该 >= 前一个
         for i in range(1, len(thresholds)):
+            msg = (
+                "阈值必须单调非减: "
+                f"η={confidence_values[i]} 的阈值应 >= η={confidence_values[i-1]}"
+            )
             self.assertGreaterEqual(
-                thresholds[i], thresholds[i-1],
-                msg=f"阈值必须单调非减: η={confidence_values[i]} 的阈值应 >= η={confidence_values[i-1]}"
+                thresholds[i],
+                thresholds[i - 1],
+                msg=msg,
             )
 
     def test_monotonicity_with_complexity(self):
@@ -122,9 +127,14 @@ class TestDynamicSimilarityThreshold(unittest.TestCase):
 
         # 验证单调性
         for i in range(1, len(thresholds)):
+            msg = (
+                "阈值必须随复杂度增加: "
+                f"σ={complexity_values[i]} 的阈值应 >= σ={complexity_values[i-1]}"
+            )
             self.assertGreaterEqual(
-                thresholds[i], thresholds[i-1],
-                msg=f"阈值必须随复杂度增加: σ={complexity_values[i]} 的阈值应 >= σ={complexity_values[i-1]}"
+                thresholds[i],
+                thresholds[i - 1],
+                msg=msg,
             )
 
     def test_boundary_conditions(self):

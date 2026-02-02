@@ -80,6 +80,9 @@ The architecture cleanly separates graph structural knowledge and traversal obje
 
 - `GraphSchema` ABC defines the contract for schema introspection: node types, edge labels, validation
 - `InMemoryGraphSchema` provides a concrete implementation built from runtime node/edge data
+- `InMemoryGraphSchema` uses a small lifecycle (`DIRTY` / `READY`) to manage cached schema state:
+  - `mark_dirty()` marks caches invalid when underlying graph data changes
+  - `_ensure_ready()` lazily rebuilds caches on read access
 - Schema instances are provided by `DataSource.get_schema()`, enabling each data source to expose its own structural constraints
 - The LLM oracle uses schema information to constrain generated decisions to valid edge labels
 
@@ -261,6 +264,11 @@ In the architecture, these constructions are realized by `StrategyCache` in `cas
 - `LLMOracle` is an OpenAI-compatible client that calls external LLM APIs (e.g., Kimi, GPT).
 - When $\hat f_{\text{cache}}(c) = \bot$, the system calls `LLMOracle` to obtain $f(c)$, to extract or confirm a decision template $d_{\text{template}}$, and to synthesize new SKUs (including $\Phi$, $\sigma_{\text{logic}}$ and initial $\eta$), which are then stored in `StrategyCache`.
 - The LLM oracle uses the embedding service to generate property embeddings for new SKUs.
+- The LLM oracle prompt is designed to improve multi-step behavior without schema-specific shortcuts:
+  - It frames decision-making as an iterative, depth-bounded process (the oracle is called repeatedly).
+  - It includes a schema summary for context, but explicitly reminds the model that it must choose from the valid next steps list.
+  - It treats `simplePath()` as a filter (not a movement step) to avoid "safe but useless" decisions.
+  - It performs strict post-validation: the returned decision must be one of the valid options; `has(...)` values are validated against current safe properties.
 - A separate `PathJudge` service in `casts/services/path_judge.py` is used *only* for scoring complete traversal paths under a task-specific rubric (e.g., query effectiveness in the verifier). It is intentionally generic: callers construct the full prompt (rubric + context) and are responsible for parsing JSON output.
 
 #### 2.6 Configuration management
@@ -321,7 +329,9 @@ $$
 
 2. **Monotonicity with Complexity (σ)**: The threshold `δ` is also monotonically non-decreasing with `σ_logic`. More complex SKU logic (higher `σ`) results in a higher, more conservative threshold, reducing the risk of over-generalization from a highly specific rule.
 
-3. **Counter-intuitive κ Behavior**: ### Path Quality Control: Cycle Prevention
+3. **Counter-intuitive κ Behavior**: Higher `κ` produces a lower (more permissive) threshold, while lower `κ` produces a higher (more strict) threshold.
+
+### Path Quality Control: Cycle Prevention
 
 This section details the system's approach to handling pathological loops and ensuring high-quality traversal paths, guided by the principle of LLM-driven learning rather than hard-coded restrictions.
 
@@ -329,12 +339,13 @@ This section details the system's approach to handling pathological loops and en
 
 To combat wasteful, pathological cycles (e.g., A→B→A oscillations), the system now supports the Gremlin `simplePath()` step.
 
-- **LLM-Driven Tool**: `simplePath()` is exposed as a valid decision to the LLM. It is not automatically applied. The LLM is guided via prompt engineering to use `simplePath()` for exploratory goals where path uniqueness is desirable. This empowers the LLM to make intelligent decisions about path structure.
+- **LLM-Driven Tool**: `simplePath()` is exposed as a valid decision to the LLM. It is not automatically applied. The prompt explains that `simplePath()` is a filter (not movement) and is best used to prevent revisiting nodes once the traversal has started to expand.
 - **Internal Feedback Loop**: If a path without `simplePath()` has a high node revisit ratio (configurable via `CYCLE_DETECTION_THRESHOLD`), it is treated as a low-quality execution. The system then penalizes the confidence score of the responsible SKU by calling `update_confidence(..., success=False)`. This allows the cache to naturally learn to avoid generating cyclic patterns over time.
+- **Exemption Once Active**: Once `simplePath()` appears in the current traversal signature, the precheck cycle detector is skipped because the uniqueness filter already enforces the intended constraint.
 
 #### Pitfalls (`坑`)
 
-1. **Stateful History**: The `simplePath()` implementation relies on a per-request `path_history` stored in the `TraversalExecutor`. It is **critical** that `executor.clear_path_history(request_id)` is called after each request is completed to prevent memory leaks and state bleeding between separate traversals.
+1. **Stateful History**: The `simplePath()` implementation relies on a per-request `_path_history` stored in the `TraversalExecutor`. It is **critical** that `executor.clear_path_history(request_id)` is called after each request is completed to prevent memory leaks and state bleeding between separate traversals.
 2. **`simplePath()` is a Global Filter**: Once `simplePath()` is added to a traversal signature, it filters all subsequent steps in that path. The LLM must be aware that it cannot "undo" this step. It's a one-way decision for the life of the traversal.
 
 #### Rejected Designs (What we say "No" to)
@@ -370,20 +381,24 @@ The `SimulationEngine.execute_tick()` method now implements a three-phase execut
 **Location**: `casts/simulation/engine.py` - `SimulationEngine.execute_prechecker()`
 
 **Validation Steps**:
-1. **Cycle Detection**: Calculates node revisit ratio and compares against `CYCLE_DETECTION_THRESHOLD` (default: 0.3)
+
+1. **Cycle Detection**: Calculates node revisit ratio and compares against `CYCLE_DETECTION_THRESHOLD` (default: 0.7)
+   - Cycle detection is skipped once `simplePath()` is active in the current traversal signature.
 2. **Confidence Threshold**: Checks if SKU confidence is above `MIN_EXECUTION_CONFIDENCE` (default: 0.1)
 3. **Execution History** (placeholder): Reserved for future repeated failure detection
 
 **Return Value**: `(should_execute: bool, execution_success: bool)`
+
 - `should_execute`: If False, execution is skipped and the recorded step is rolled back
-- `execution_success`: If False, confidence penalty is applied via AIMD
+- `execution_success`: If False, the step is considered a validation failure signal and will contribute to a confidence penalty (η AIMD update).
 
 **Mode Configuration** (`CYCLE_PENALTY`):
+
 - `"NONE"`: Skip all validation, always return `(True, True)`
 - `"PUNISH"`: Run checks, return `(True, False)` on failure (continue but penalize)
 - `"STOP"`: Run checks, return `(False, False)` on failure (terminate and penalize)
 
-**Design Decision**: The prechecker treats all paths uniformly. Unlike earlier implementations, there is no special exemption for paths using `simplePath()`. This simplifies the logic and maintains code cleanliness.
+**Design Decision**: Cycle detection is intentionally skipped for paths that already include `simplePath()`, because the uniqueness constraint makes the revisit-ratio heuristic redundant and sometimes misleading.
 
 #### Phase 2: Execute
 
@@ -399,13 +414,27 @@ Standard decision execution via `TraversalExecutor.execute_decision()`.
 
 **Location**: `casts/simulation/engine.py` - `SimulationEngine.execute_postchecker()`
 
-**Current Implementation**: Empty placeholder for architectural symmetry.
+**Current Implementation**: A lightweight, schema-agnostic “progress sanity” check that produces a boolean success signal.
+
+Postcheck rules (generic, non-domain):
+- If the decision is a traversal (`out/in/both/...`) and produces **0 targets**, it is treated as a failure signal.
+- If the decision is `stop`, it is treated as a failure signal **unless** the current context has no other valid next steps.
+- These failure signals are **evidence-gated**: they only apply after the same SKU has been executed at least `POSTCHECK_MIN_EVIDENCE` times. This prevents over-penalizing early exploration due to small-sample noise.
 
 **Future Use Cases**:
+
 - Post-execution quality validation
 - Deferred rollback decisions based on execution results
 - Execution result sanity checks (e.g., unreasonable fan-out)
 - Cleanup operations or state management
+
+#### Confidence Update (η)
+
+Confidence updates are applied after the full lifecycle (Precheck → Execute → Postcheck):
+- The engine computes a combined success signal and updates the executed SKU using AIMD:
+  - success: `η ← η + 1`
+  - failure: `η ← η · 0.5` (bounded below)
+- Importantly, η is updated based on execution feedback, not by “how many times the same context appeared”.
 
 **Return Value**: `bool` - whether post-execution validation passed
 
@@ -418,12 +447,14 @@ Standard decision execution via `TraversalExecutor.execute_decision()`.
 **Purpose**: Remove the last N recorded steps from a path when prechecker determines execution should not proceed.
 
 **Rationale**:
+
 - Steps are recorded BEFORE validation to maintain correct parent_step_index linkage
 - If prechecker rejects execution, recorded step becomes orphaned
 - Rollback ensures `metrics_collector.paths` contains only actually executed steps
 - Multi-step capability (`count` parameter) provides future-proof robustness
 
 **Implementation**:
+
 ```python
 def rollback_steps(self, request_id: int, count: int = 1) -> bool:
     """Remove last N steps from path. Returns False if insufficient steps."""
@@ -463,12 +494,13 @@ def rollback_steps(self, request_id: int, count: int = 1) -> bool:
     │ traverser        │   │    - Update confidence       │
     └──────────────────┘   └──────────────────────────────┘
                                       ↓
-                           ┌──────────────────────────────┐
-                           │ 4. POSTCHECK                 │
-                           │    (execute_postchecker)     │
-                           │    - Currently no-op         │
-                           │    - Reserved for future use │
-                           └──────────────────────────────┘
+┌──────────────────────────────┐
+│ 4. POSTCHECK                 │
+│    (execute_postchecker)     │
+│    - Progress sanity (generic│
+│      + evidence-gated)       │
+│    - Reserved for future use │
+└──────────────────────────────┘
                                       ↓
                            ┌──────────────────────────────┐
                            │ 5. Populate next_layer       │
@@ -480,24 +512,27 @@ def rollback_steps(self, request_id: int, count: int = 1) -> bool:
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `CYCLE_PENALTY` | `"STOP"` | Cycle handling mode: `"NONE"`, `"PUNISH"`, `"STOP"` |
-| `CYCLE_DETECTION_THRESHOLD` | `0.3` | Node revisit ratio threshold (30%) |
+| `CYCLE_DETECTION_THRESHOLD` | `0.7` | Node revisit ratio threshold (70%) |
 | `MIN_EXECUTION_CONFIDENCE` | `0.1` | Minimum SKU confidence for execution |
+| `POSTCHECK_MIN_EVIDENCE` | `3` | Minimum SKU executions before postcheck failure signals apply |
 
 #### Design Rationale
 
 **Why Three Phases?**
+
 - **Extensibility**: Easy to add new validation rules without cluttering `execute_tick()`
 - **Symmetry**: Prechecker and postchecker provide balanced validation points
 - **Testability**: Can unit test validation logic independently
 - **Clarity**: Single responsibility - validation logic separated from execution flow
 
 **Why Rollback Mechanism?**
+
 - **Accurate Metrics**: Ensures `metrics_collector.paths` only contains actually executed steps
 - **Clean State**: Prevents orphaned step records for terminated paths
 - **Analysis Quality**: Post-simulation analysis sees true execution history
 
-**Why Remove `simplePath()` Exemption?**
-- **Code Cleanliness**: Simpler, more uniform cycle detection logic
-- **Consistency**: All paths judged by the same criteria
-- **Maintainability**: Fewer special cases to reason about
+**Why Skip Cycle Detection When `simplePath()` Is Active?**
 
+- **Redundancy**: `simplePath()` is an explicit uniqueness constraint; revisit-ratio becomes unnecessary.
+- **Signal Quality**: Once `simplePath()` is active, penalizing based on revisit ratio can be misleading and can punish otherwise-correct exploration.
+- **Intent Preservation**: Cycle prevention should be driven by an explicit Gremlin tool (`simplePath()`), not by hidden heuristics fighting the chosen traversal structure.

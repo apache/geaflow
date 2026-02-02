@@ -3,6 +3,7 @@
 import random
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from casts.core.gremlin_state import GremlinStateMachine
 from casts.core.interfaces import DataSource
 from casts.core.models import Context
 from casts.core.services import StrategyCache
@@ -37,7 +38,7 @@ class SimulationEngine:
 
     async def run_epoch(
         self, epoch: int, metrics_collector: MetricsCollector
-    ) -> List[Tuple[str, str, str, int, int | None, str | None, str | None]]:
+    ) -> List[Tuple[str, str, str, int, Optional[int], Optional[str], Optional[str]]]:
         """Run a single epoch, initializing a layer of traversers."""
         if self.verbose:
             print(f"\n--- Epoch {epoch} ---")
@@ -54,13 +55,13 @@ class SimulationEngine:
             goal=goal_text,
             available_node_types=schema.node_types,
             max_recommendations=self.llm_oracle.config.get_int(
-                "SIMULATION_MAX_RECOMMENDED_NODE_TYPES", 3
+                "SIMULATION_MAX_RECOMMENDED_NODE_TYPES"
             ),
         )
 
         # 3. Get starting nodes from the data source using the recommendation
         num_starters = min(self.nodes_per_epoch, len(self.graph.nodes))
-        min_degree = self.llm_oracle.config.get_int("SIMULATION_MIN_STARTING_DEGREE", 2)
+        min_degree = self.llm_oracle.config.get_int("SIMULATION_MIN_STARTING_DEGREE")
 
         if num_starters > 0:
             sample_nodes = self.graph.get_starting_nodes(
@@ -73,7 +74,9 @@ class SimulationEngine:
             sample_nodes = []
 
         # 4. Initialize traversers for the starting nodes
-        current_layer: List[Tuple[str, str, str, int, int | None, str | None, str | None]] = []
+        current_layer: List[
+            Tuple[str, str, str, int, Optional[int], Optional[str], Optional[str]]
+        ] = []
         for node_id in sample_nodes:
             request_id = metrics_collector.initialize_path(
                 epoch, node_id, self.graph.nodes[node_id], goal_text, rubric
@@ -82,6 +85,37 @@ class SimulationEngine:
             current_layer.append((node_id, "V()", goal_text, request_id, None, None, None))
 
         return current_layer
+
+    def _is_traversal_decision(self, decision: str) -> bool:
+        """Check whether a decision represents a traversal that moves along an edge."""
+        traversal_prefixes = (
+            "out(",
+            "in(",
+            "both(",
+            "outE(",
+            "inE(",
+            "bothE(",
+        )
+        return decision.startswith(traversal_prefixes)
+
+    def _calculate_revisit_ratio(self, path_steps: List[Dict[str, Any]]) -> float:
+        """Calculate node revisit ratio based on traversal steps."""
+        traversal_nodes: List[str] = []
+        for step in path_steps:
+            decision = step.get("decision")
+            if not decision:
+                continue
+            if self._is_traversal_decision(decision):
+                node_id = step.get("node")
+                if node_id is not None:
+                    traversal_nodes.append(node_id)
+
+        if len(traversal_nodes) < 2:
+            return 0.0
+
+        unique_nodes = len(set(traversal_nodes))
+        total_nodes = len(traversal_nodes)
+        return 1.0 - (unique_nodes / total_nodes) if total_nodes > 0 else 0.0
 
     def execute_prechecker(
         self,
@@ -93,8 +127,10 @@ class SimulationEngine:
         Pre-execution validation to determine if a decision should be executed.
 
         Validates multiple conditions including cycle detection and confidence
-        thresholds. Part of the Precheck -> Execute -> Postcheck lifecycle
-        introduced for path quality control and extensible validation.
+        thresholds. Cycle detection is skipped once simplePath() is active in
+        the current traversal signature. Part of the Precheck -> Execute ->
+        Postcheck lifecycle introduced for path quality control and extensible
+        validation.
 
         Args:
             sku: The Strategy Knowledge Unit being evaluated (None for new SKUs)
@@ -108,9 +144,7 @@ class SimulationEngine:
                 - execution_success: True if validation passed, False to apply
                   confidence penalty
         """
-        cycle_penalty_mode = self.llm_oracle.config.get_str(
-            "CYCLE_PENALTY", "STOP"
-        ).upper()
+        cycle_penalty_mode = self.llm_oracle.config.get_str("CYCLE_PENALTY").upper()
 
         # Mode: NONE - skip all validation
         if cycle_penalty_mode == "NONE":
@@ -122,40 +156,29 @@ class SimulationEngine:
 
         # === VALIDATION 1: Cycle Detection (Simplified) ===
         path_steps = metrics_collector.paths[request_id]["steps"]
-        if len(path_steps) >= 2:
-            # Extract node IDs from the path
-            node_ids = [step.get("node") for step in path_steps]
-            unique_nodes = len(set(node_ids))
-            total_nodes = len(node_ids)
+        if path_steps:
+            current_signature = path_steps[-1].get("s", "")
+            if "simplePath()" not in current_signature:
+                revisit_ratio = self._calculate_revisit_ratio(path_steps)
+                cycle_threshold = self.llm_oracle.config.get_float("CYCLE_DETECTION_THRESHOLD")
 
-            # Calculate revisit ratio
-            revisit_ratio = (
-                1.0 - (unique_nodes / total_nodes) if total_nodes > 0 else 0.0
-            )
-
-            # Get threshold
-            cycle_threshold = self.llm_oracle.config.get_float(
-                "CYCLE_DETECTION_THRESHOLD", 0.3
-            )
-
-            # If high revisit ratio, apply penalty (no simplePath exemption)
-            if revisit_ratio > cycle_threshold:
-                if cycle_penalty_mode == "STOP":
-                    if self.verbose:
-                        print(
-                            f"      [!] High node revisit detected "
-                            f"({revisit_ratio:.1%}), "
-                            f"terminating path (mode=STOP)"
-                        )
-                    return (False, False)  # Terminate and penalize
-                else:  # PUNISH mode
-                    if self.verbose:
-                        print(
-                            f"      [!] High node revisit detected "
-                            f"({revisit_ratio:.1%}), "
-                            f"applying penalty (mode=PUNISH)"
-                        )
-                    return (True, False)  # Continue but penalize
+                if revisit_ratio > cycle_threshold:
+                    if cycle_penalty_mode == "STOP":
+                        if self.verbose:
+                            print(
+                                f"      [!] High node revisit detected "
+                                f"({revisit_ratio:.1%}), "
+                                f"terminating path (mode=STOP)"
+                            )
+                        return (False, False)  # Terminate and penalize
+                    else:  # PUNISH mode
+                        if self.verbose:
+                            print(
+                                f"      [!] High node revisit detected "
+                                f"({revisit_ratio:.1%}), "
+                                f"applying penalty (mode=PUNISH)"
+                            )
+                        return (True, False)  # Continue but penalize
 
         # === VALIDATION 2: Confidence Threshold ===
         # Check if SKU confidence has fallen too low
@@ -211,24 +234,59 @@ class SimulationEngine:
         Returns:
             True if post-execution validation passed, False otherwise
         """
-        # Currently empty - reserved for future post-execution logic
+        if sku is None:
+            return True
+
+        min_evidence = self.llm_oracle.config.get_int("POSTCHECK_MIN_EVIDENCE")
+        execution_count = getattr(sku, "execution_count", 0)
+        if execution_count < min_evidence:
+            return True
+
+        if request_id not in metrics_collector.paths:
+            return True
+
+        steps = metrics_collector.paths[request_id].get("steps", [])
+        if not steps:
+            return True
+
+        last_step = steps[-1]
+        decision = str(last_step.get("decision") or "")
+        if not decision:
+            return True
+
+        if decision == "stop":
+            node_id = str(last_step.get("node") or "")
+            signature = str(last_step.get("s") or "")
+            current_state, options = GremlinStateMachine.get_state_and_options(
+                signature, self.schema, node_id
+            )
+            if current_state == "END" or not options:
+                return True
+            traversal_options = [opt for opt in options if self._is_traversal_decision(opt)]
+            return not traversal_options
+
+        if self._is_traversal_decision(decision):
+            return bool(execution_result)
+
         return True
 
     async def execute_tick(
         self,
         tick: int,
-        current_layer: List[Tuple[str, str, str, int, int | None, str | None, str | None]],
+        current_layer: List[Tuple[str, str, str, int, Optional[int], Optional[str], Optional[str]]],
         metrics_collector: MetricsCollector,
         edge_history: Dict[Tuple[str, str], int],
     ) -> Tuple[
-        List[Tuple[str, str, str, int, int | None, str | None, str | None]],
+        List[Tuple[str, str, str, int, Optional[int], Optional[str], Optional[str]]],
         Dict[Tuple[str, str], int],
     ]:
         """Execute a single simulation tick for all active traversers."""
         if self.verbose:
             print(f"\n[Tick {tick}] Processing {len(current_layer)} active traversers")
 
-        next_layer: List[Tuple[str, str, str, int, int | None, str | None, str | None]] = []
+        next_layer: List[
+            Tuple[str, str, str, int, Optional[int], Optional[str], Optional[str]]
+        ] = []
 
         for idx, traversal_state in enumerate(current_layer):
             (
@@ -263,7 +321,7 @@ class SimulationEngine:
             # Use match_type (Tier1/Tier2) to determine cache hit vs miss,
             # rather than truthiness of the decision string.
             is_cache_hit = match_type in ("Tier1", "Tier2")
-            final_decision = decision
+            final_decision = decision or ""
 
             # Record step in path
             # parent_step_index is for visualization only, passed from current_layer
@@ -303,59 +361,31 @@ class SimulationEngine:
                                 f"complexity={sku.logic_complexity})"
                             )
 
-                # Simulate execution success/failure
-                execution_success = random.random() > 0.05
-                if not execution_success:
-                    metrics_collector.record_execution_failure()
-                    if self.verbose:
-                        print("      [!] Execution failed, confidence penalty applied")
-
-                # === PRECHECK PHASE ===
-                # Run pre-execution validation checks
-                should_execute, precheck_success = self.execute_prechecker(
-                    sku, request_id, metrics_collector
-                )
-
-                # Combine random execution failure with precheck result
-                execution_success = execution_success and precheck_success
-
-                # If prechecker says to terminate, rollback the recorded step
-                if not should_execute:
-                    metrics_collector.rollback_steps(request_id, count=1)
-                    if sku is not None:
-                        self.strategy_cache.update_confidence(sku, execution_success)
-                    continue  # Skip to next traverser, don't add to next_layer
-
-                # Update confidence for successful precheck
-                if sku is not None:
-                    self.strategy_cache.update_confidence(sku, execution_success)
             else:
                 # Cache miss - generate new SKU via LLM
                 new_sku = await self.llm_oracle.generate_sku(context, self.schema)
-                final_decision = new_sku.decision_template
-
-                # Check for duplicate and merge or add
-                exists = False
+                duplicate = None
                 for existing in self.strategy_cache.knowledge_base:
                     if (
                         existing.structural_signature == new_sku.structural_signature
                         and existing.goal_template == new_sku.goal_template
+                        and existing.decision_template == new_sku.decision_template
                     ):
-                        existing.confidence_score += 1
-                        exists = True
-                        if self.verbose:
-                            print(
-                                f"    → [LLM] Merge into SKU {existing.id} "
-                                f"(confidence={existing.confidence_score:.1f})"
-                            )
-                        sku = existing
-                        match_type = "Tier1"
+                        duplicate = existing
                         break
 
-                if not exists:
+                if duplicate is not None:
+                    sku = duplicate
+                    final_decision = duplicate.decision_template
+                    if self.verbose:
+                        print(
+                            f"    → [LLM] Merge into SKU {duplicate.id} "
+                            f"(confidence={duplicate.confidence_score:.1f})"
+                        )
+                else:
                     self.strategy_cache.add_sku(new_sku)
                     sku = new_sku
-                    match_type = "Tier1"
+                    final_decision = new_sku.decision_template
                     if self.verbose:
                         print(
                             f"    → [LLM] New SKU {new_sku.id} | {final_decision} "
@@ -363,21 +393,51 @@ class SimulationEngine:
                             f"complexity={new_sku.logic_complexity})"
                         )
 
-            # Update the recorded step with final decision
+            # Update the recorded step with SKU metadata (decision is set after precheck)
             if metrics_collector.paths[request_id]["steps"]:
-                metrics_collector.paths[request_id]["steps"][-1]["decision"] = final_decision
+                metrics_collector.paths[request_id]["steps"][-1]["sku_id"] = (
+                    getattr(sku, "id", None) if sku else None
+                )
+                metrics_collector.paths[request_id]["steps"][-1]["match_type"] = match_type
 
             # Execute the decision
             if final_decision:
+                # === PRECHECK PHASE ===
+                should_execute, precheck_success = self.execute_prechecker(
+                    sku, request_id, metrics_collector
+                )
+                if not should_execute:
+                    metrics_collector.rollback_steps(request_id, count=1)
+                    if sku is not None:
+                        self.strategy_cache.update_confidence(sku, success=False)
+                    continue
+
+                # Simulate execution success/failure (applies to both cache hits and LLM proposals)
+                execution_success = random.random() > 0.05
+                if not execution_success:
+                    metrics_collector.record_execution_failure()
+                    if self.verbose:
+                        print("      [!] Execution failed, confidence penalty applied")
+
+                if metrics_collector.paths[request_id]["steps"]:
+                    metrics_collector.paths[request_id]["steps"][-1]["decision"] = final_decision
+
+                if sku is not None:
+                    if hasattr(sku, "execution_count"):
+                        sku.execution_count += 1
+
                 next_nodes = await self.executor.execute_decision(
                     current_node_id, final_decision, current_signature, request_id=request_id
                 )
 
                 # === POSTCHECK PHASE ===
-                # Run post-execution validation (currently placeholder)
-                self.execute_postchecker(
+                postcheck_success = self.execute_postchecker(
                     sku, request_id, metrics_collector, next_nodes
                 )
+
+                combined_success = execution_success and precheck_success and postcheck_success
+                if sku is not None:
+                    self.strategy_cache.update_confidence(sku, combined_success)
 
                 if self.verbose:
                     print(f"    → Execute: {final_decision} → {len(next_nodes)} targets")
@@ -460,9 +520,12 @@ class SimulationEngine:
                 requests_after_tick = {layer[3] for layer in current_layer}
                 completed_requests = requests_before_tick - requests_after_tick
 
-                if completed_requests and on_request_completed:
+                if completed_requests:
+                    if on_request_completed:
+                        for request_id in completed_requests:
+                            on_request_completed(request_id, metrics_collector)
+
                     for request_id in completed_requests:
-                        on_request_completed(request_id, metrics_collector)
                         # Clean up simplePath history for completed requests
                         self.executor.clear_path_history(request_id)
 

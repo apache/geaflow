@@ -30,9 +30,9 @@ class EmbeddingService:
             model = embedding_cfg["model"]
         else:
             # Fallback for other configuration types
-            api_key = config.get_str("EMBEDDING_APIKEY", "")
-            endpoint = config.get_str("EMBEDDING_ENDPOINT", "")
-            model = config.get_str("EMBEDDING_MODEL_NAME", self.DEFAULT_MODEL)
+            api_key = config.get_str("EMBEDDING_APIKEY")
+            endpoint = config.get_str("EMBEDDING_ENDPOINT")
+            model = config.get_str("EMBEDDING_MODEL_NAME")
         
         if not api_key or not endpoint:
             print("Warning: Embedding API credentials not configured, using deterministic fallback")

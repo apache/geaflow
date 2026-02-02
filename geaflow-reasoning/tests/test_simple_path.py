@@ -2,7 +2,7 @@
 
 import pytest
 
-from casts.core.gremlin_state import GREMLIN_STEP_STATE_MACHINE, GremlinStateMachine
+from casts.core.gremlin_state import GREMLIN_STEP_STATE_MACHINE
 from casts.services.llm_oracle import LLMOracle
 
 
@@ -211,6 +211,29 @@ class TestSimplePathExecution:
         assert len(result3) == 1
         assert result3[0][0] == "A"  # Cycle is allowed
 
+    async def test_simple_path_allows_filter_steps(self, mock_graph, mock_schema):
+        """Test that simplePath does not block non-traversal filter steps."""
+        from casts.simulation.executor import TraversalExecutor
+
+        executor = TraversalExecutor(mock_graph, mock_schema)
+
+        await executor.execute_decision(
+            current_node_id="A",
+            decision="simplePath()",
+            current_signature="V()",
+            request_id=4,
+        )
+
+        result = await executor.execute_decision(
+            current_node_id="A",
+            decision="has('type','Node')",
+            current_signature="V().simplePath()",
+            request_id=4,
+        )
+
+        assert len(result) == 1
+        assert result[0][0] == "A"
+
     async def test_clear_path_history(self, mock_graph, mock_schema):
         """Test that clear_path_history properly cleans up."""
         from casts.simulation.executor import TraversalExecutor
@@ -226,11 +249,11 @@ class TestSimplePathExecution:
         )
 
         # Verify history exists
-        assert 3 in executor.path_history
-        assert "A" in executor.path_history[3]
+        assert 3 in executor._path_history
+        assert "A" in executor._path_history[3]
 
         # Clear history
         executor.clear_path_history(3)
 
         # Verify history is cleared
-        assert 3 not in executor.path_history
+        assert 3 not in executor._path_history

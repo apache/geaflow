@@ -1,13 +1,21 @@
 """Gremlin traversal state machine for validating graph traversal steps."""
 
-import re
-from typing import Dict, List, Tuple
+from dataclasses import dataclass
+from typing import Dict, List, Optional, Sequence, Tuple, TypedDict
 
 from casts.core.interfaces import GraphSchema
 
+
+class GremlinStateDefinition(TypedDict):
+    """Typed representation of a Gremlin state definition."""
+
+    options: List[str]
+    transitions: Dict[str, str]
+
+
 # Gremlin Step State Machine
 # Defines valid transitions between step types (V: Vertex, E: Edge, P: Property)
-GREMLIN_STEP_STATE_MACHINE: Dict[str, Dict[str, list[str] | Dict[str, str]]] = {
+GREMLIN_STEP_STATE_MACHINE: Dict[str, GremlinStateDefinition] = {
     # State: current element is a Vertex
     "V": {
         "options": [
@@ -82,9 +90,97 @@ GREMLIN_STEP_STATE_MACHINE: Dict[str, Dict[str, list[str] | Dict[str, str]]] = {
     "END": {"options": [], "transitions": {}},
 }
 
+_MODIFIER_STEPS = {"by"}
+_MODIFIER_COMPATIBILITY = {"by": {"order"}}
+
+
+@dataclass(frozen=True)
+class ParsedStep:
+    """Parsed step representation for traversal signatures."""
+
+    raw: str
+    name: str
+
+
+def _normalize_signature(signature: str) -> str:
+    """Normalize a traversal signature by stripping the V() prefix and separators."""
+    normalized = signature.strip()
+    if not normalized or normalized == "V()":
+        return ""
+
+    if normalized.startswith("V()"):
+        normalized = normalized[3:]
+    elif normalized.startswith("V"):
+        normalized = normalized[1:]
+
+    return normalized.lstrip(".")
+
+
+def _split_steps(signature: str) -> List[str]:
+    """Split a traversal signature into raw step segments."""
+    if not signature:
+        return []
+
+    steps: List[str] = []
+    current: List[str] = []
+    depth = 0
+
+    for ch in signature:
+        if ch == "." and depth == 0:
+            if current:
+                steps.append("".join(current))
+                current = []
+            continue
+
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth = max(depth - 1, 0)
+
+        current.append(ch)
+
+    if current:
+        steps.append("".join(current))
+
+    return [step for step in steps if step]
+
+
+def _extract_step_name(step: str) -> str:
+    """Extract the primary step name from a step string."""
+    head = step.split("(", 1)[0]
+    if "." in head:
+        return head.split(".", 1)[0]
+    return head
+
+
+def _combine_modifiers(steps: Sequence[str]) -> List[str]:
+    """Combine modifier steps (e.g., order().by()) into a single step string."""
+    combined: List[str] = []
+    for step in steps:
+        step_name = _extract_step_name(step)
+        if step_name in _MODIFIER_STEPS and combined:
+            previous_name = _extract_step_name(combined[-1])
+            if previous_name in _MODIFIER_COMPATIBILITY.get(step_name, set()):
+                combined[-1] = f"{combined[-1]}.{step}"
+                continue
+        combined.append(step)
+    return combined
+
+
+def _parse_traversal_signature(signature: str) -> List[ParsedStep]:
+    """Parse traversal signature into steps with normalized names."""
+    normalized = _normalize_signature(signature)
+    raw_steps = _combine_modifiers(_split_steps(normalized))
+    return [ParsedStep(raw=step, name=_extract_step_name(step)) for step in raw_steps]
+
 
 class GremlinStateMachine:
     """State machine for validating Gremlin traversal steps and determining next valid options."""
+
+    @staticmethod
+    def parse_traversal_signature(structural_signature: str) -> List[str]:
+        """Parse traversal signature into decision steps for display or history."""
+        return [step.raw for step in _parse_traversal_signature(structural_signature)]
 
     @staticmethod
     def get_state_and_options(
@@ -108,31 +204,31 @@ class GremlinStateMachine:
         else:
             state = "V"  # Assume starting from a Vertex context
 
-            # Improved regex to handle nested parentheses and chained calls
-            steps_part = structural_signature
-            if steps_part.startswith("V()"):
-                steps_part = steps_part[3:]
-
-            # Regex to correctly parse steps like order().by('prop') and single steps
-            step_patterns = re.findall(r"\.([a-zA-Z_][a-zA-Z0-9_]*)\(.*?\)", steps_part)
-
-            for step in step_patterns:
+            last_primary_step: Optional[str] = None
+            for step in _parse_traversal_signature(structural_signature):
                 if state not in GREMLIN_STEP_STATE_MACHINE:
                     state = "END"
                     break
 
-                transitions = GREMLIN_STEP_STATE_MACHINE[state]["transitions"]
-                base_step = step.split("().")[0]  # Handle chained calls like order().by
-
-                if base_step in transitions:
-                    state = transitions[base_step]
-                else:
+                if step.name == "stop":
                     state = "END"
                     break
 
-            # 'stop' is a terminal step that can appear without parentheses
-            if ".stop" in structural_signature or structural_signature.endswith("stop"):
-                state = "END"
+                if step.name in _MODIFIER_STEPS:
+                    if last_primary_step and last_primary_step in _MODIFIER_COMPATIBILITY.get(
+                        step.name, set()
+                    ):
+                        continue
+                    state = "END"
+                    break
+
+                transitions = GREMLIN_STEP_STATE_MACHINE[state]["transitions"]
+                if step.name in transitions:
+                    state = transitions[step.name]
+                    last_primary_step = step.name
+                else:
+                    state = "END"
+                    break
 
         if state not in GREMLIN_STEP_STATE_MACHINE:
             return "END", []
@@ -141,8 +237,8 @@ class GremlinStateMachine:
         final_options = []
 
         # Get valid labels from the schema
-        out_labels = graph_schema.get_valid_outgoing_edge_labels(node_id)
-        in_labels = graph_schema.get_valid_incoming_edge_labels(node_id)
+        out_labels = sorted(graph_schema.get_valid_outgoing_edge_labels(node_id))
+        in_labels = sorted(graph_schema.get_valid_incoming_edge_labels(node_id))
 
         for option in options:
             if "('label')" in option:

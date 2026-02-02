@@ -27,7 +27,8 @@ class DefaultConfiguration(Configuration):
     # ============================================
     EMBEDDING_ENDPOINT = os.environ.get("EMBEDDING_ENDPOINT", "")
     EMBEDDING_APIKEY = os.environ.get("EMBEDDING_APIKEY", "YOUR_EMBEDDING_API_KEY_HERE")
-    EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "")
+    # Default to a known embedding model to avoid requiring call-site defaults.
+    EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "text-embedding-v3")
 
     # ============================================
     # LLM SERVICE CONFIGURATION
@@ -138,37 +139,20 @@ class DefaultConfiguration(Configuration):
     CYCLE_PENALTY: Literal["NONE", "PUNISH", "STOP"] = "STOP"
     CYCLE_DETECTION_THRESHOLD = 0.7
     MIN_EXECUTION_CONFIDENCE = 0.1
+    POSTCHECK_MIN_EVIDENCE = 3
 
     def get(self, key: str, default: Any = None) -> Any:
         """Get configuration value by key."""
-        # Map key names to class attributes
-        key_map = {
-            "EMBEDDING_ENDPOINT": self.EMBEDDING_ENDPOINT,
-            "EMBEDDING_APIKEY": self.EMBEDDING_APIKEY,
+        # Support legacy/alias key names used in the codebase.
+        alias_map = {
             "EMBEDDING_MODEL_NAME": self.EMBEDDING_MODEL,
-            "LLM_ENDPOINT": self.LLM_ENDPOINT,
-            "LLM_APIKEY": self.LLM_APIKEY,
             "LLM_MODEL_NAME": self.LLM_MODEL,
-            "SIMULATION_GRAPH_SIZE": self.SIMULATION_GRAPH_SIZE,
-            "SIMULATION_NUM_EPOCHS": self.SIMULATION_NUM_EPOCHS,
-            "SIMULATION_MAX_DEPTH": self.SIMULATION_MAX_DEPTH,
-            "SIMULATION_USE_REAL_DATA": self.SIMULATION_USE_REAL_DATA,
-            "SIMULATION_REAL_DATA_DIR": self.SIMULATION_REAL_DATA_DIR,
-            "SIMULATION_REAL_SUBGRAPH_SIZE": self.SIMULATION_REAL_SUBGRAPH_SIZE,
-            "SIMULATION_ENABLE_VERIFIER": self.SIMULATION_ENABLE_VERIFIER,
-            "SIMULATION_ENABLE_VISUALIZER": self.SIMULATION_ENABLE_VISUALIZER,
-            "SIMULATION_VERBOSE_LOGGING": self.SIMULATION_VERBOSE_LOGGING,
-            "CACHE_MIN_CONFIDENCE_THRESHOLD": self.CACHE_MIN_CONFIDENCE_THRESHOLD,
-            "CACHE_TIER2_GAMMA": self.CACHE_TIER2_GAMMA,
-            "CACHE_SIMILARITY_KAPPA": self.CACHE_SIMILARITY_KAPPA,
-            "CACHE_SIMILARITY_BETA": self.CACHE_SIMILARITY_BETA,
-            "CACHE_SCHEMA_FINGERPRINT": self.CACHE_SCHEMA_FINGERPRINT,
-            "SIGNATURE_LEVEL": self.SIGNATURE_LEVEL,
-            "CYCLE_PENALTY": self.CYCLE_PENALTY,
-            "CYCLE_DETECTION_THRESHOLD": self.CYCLE_DETECTION_THRESHOLD,
-            "MIN_EXECUTION_CONFIDENCE": self.MIN_EXECUTION_CONFIDENCE,
         }
-        return key_map.get(key, default)
+        if key in alias_map:
+            return alias_map[key]
+
+        # Prefer direct attribute access to avoid duplicated defaults at call sites.
+        return getattr(self, key, default)
 
     def get_int(self, key: str, default: int = 0) -> int:
         """Get integer configuration value."""

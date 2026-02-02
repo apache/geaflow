@@ -1,7 +1,7 @@
 """Metrics collection and analysis for CASTS simulations."""
 
 from dataclasses import dataclass
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 
 @dataclass
@@ -51,7 +51,7 @@ class MetricsCollector:
         self.paths: Dict[int, Dict[str, Any]] = {}
         self.next_request_id = 0
 
-    def record_step(self, match_type: str | None = None):
+    def record_step(self, match_type: Optional[str] = None):
         """Record a traversal step execution."""
         self.metrics.total_steps += 1
         if match_type == 'Tier1':
@@ -97,15 +97,15 @@ class MetricsCollector:
         request_id: int,
         tick: int,
         node_id: str,
-        parent_node: str | None,
-        parent_step_index: int | None,
-        edge_label: str | None,
+        parent_node: Optional[str],
+        parent_step_index: Optional[int],
+        edge_label: Optional[str],
         structural_signature: str,
         goal: str,
         properties: Dict[str, Any],
-        match_type: str | None,
-        sku_id: str | None,
-        decision: str | None,
+        match_type: Optional[str],
+        sku_id: Optional[str],
+        decision: Optional[str],
     ):
         """Record a step in a traversal path."""
         if request_id not in self.paths:

@@ -1,8 +1,6 @@
 """Integration tests for complete Precheck → Execute → Postcheck lifecycle."""
 
-from unittest.mock import MagicMock, Mock, patch
-
-import pytest
+from unittest.mock import Mock
 
 from casts.core.config import DefaultConfiguration
 from casts.simulation.engine import SimulationEngine
@@ -63,7 +61,7 @@ class TestLifecycleIntegration:
         # Add a step with low revisit
         metrics.record_path_step(
             request_id, 0, "node1", None, None, None, "sig1", "goal", {},
-            "Tier1", "sku1", "d1"
+            "Tier1", "sku1", "out('friend')"
         )
 
         sku = MockSKU(confidence_score=0.5)
@@ -100,7 +98,7 @@ class TestLifecycleIntegration:
         for i in range(10):
             metrics.record_path_step(
                 request_id, i, "node1", None, None, None, f"sig{i}",
-                "goal", {}, "Tier1", f"sku{i}", f"d{i}"
+                "goal", {}, "Tier1", f"sku{i}", "out('friend')"
             )
 
         sku = MockSKU(confidence_score=0.5)
@@ -126,7 +124,7 @@ class TestLifecycleIntegration:
         for i in range(10):
             metrics.record_path_step(
                 request_id, i, "node1", None, None, None, f"sig{i}",
-                "goal", {}, "Tier1", f"sku{i}", f"d{i}"
+                "goal", {}, "Tier1", f"sku{i}", "out('friend')"
             )
 
         sku = MockSKU(confidence_score=0.5)
@@ -160,7 +158,7 @@ class TestLifecycleIntegration:
         for i in range(10):
             metrics.record_path_step(
                 request_id, i, "node1", None, None, None, f"sig{i}",
-                "goal", {}, "Tier1", f"sku{i}", f"d{i}"
+                "goal", {}, "Tier1", f"sku{i}", "out('friend')"
             )
 
         initial_step_count = len(metrics.paths[request_id]["steps"])
@@ -214,7 +212,7 @@ class TestLifecycleIntegration:
         for i in range(5):
             metrics.record_path_step(
                 request_id, i, "node1", None, None, None, f"sig{i}",
-                "goal", {}, "Tier1", f"sku{i}", f"d{i}"
+                "goal", {}, "Tier1", f"sku{i}", "out('friend')"
             )
 
         sku = MockSKU(confidence_score=0.5)
@@ -247,7 +245,7 @@ class TestLifecycleIntegration:
         for i in range(10):
             metrics.record_path_step(
                 request_id, i, "node1", None, None, None, f"sig{i}",
-                "goal", {}, "Tier1", f"sku{i}", f"d{i}"
+                "goal", {}, "Tier1", f"sku{i}", "out('friend')"
             )
 
         sku = MockSKU(confidence_score=0.2)  # Below threshold
@@ -271,7 +269,7 @@ class TestLifecycleIntegration:
         for i in range(20):
             metrics.record_path_step(
                 request_id, i, "node1", None, None, None, f"sig{i}",
-                "goal", {}, "Tier1", f"sku{i}", f"d{i}"
+                "goal", {}, "Tier1", f"sku{i}", "out('friend')"
             )
 
         sku = MockSKU(confidence_score=0.01)  # Extremely low
@@ -312,7 +310,7 @@ class TestLifecycleIntegration:
         for i in range(5):
             metrics.record_path_step(
                 request_id, i, f"node{i}", None, None, None, f"sig{i}",
-                "goal", {}, "Tier1", f"sku{i}", f"d{i}"
+                "goal", {}, "Tier1", f"sku{i}", "out('friend')"
             )
 
         initial_steps = [
@@ -364,7 +362,7 @@ class TestEdgeCases:
         # Single step - cannot have cycle
         metrics.record_path_step(
             request_id, 0, "node1", None, None, None, "sig1", "goal", {},
-            "Tier1", "sku1", "d1"
+            "Tier1", "sku1", "out('friend')"
         )
 
         sku = MockSKU(confidence_score=0.5)
@@ -389,7 +387,7 @@ class TestEdgeCases:
         for i in range(3):
             metrics.record_path_step(
                 request_id, i, f"node{i}", None, None, None, f"sig{i}",
-                "goal", {}, "Tier1", f"sku{i}", f"d{i}"
+                "goal", {}, "Tier1", f"sku{i}", "out('friend')"
             )
 
         sku = MockSKU(confidence_score=0.5)
@@ -402,7 +400,7 @@ class TestEdgeCases:
         for i in range(7):
             metrics.record_path_step(
                 request_id, 3 + i, "node1", None, None, None, f"sig{3+i}",
-                "goal", {}, "Tier1", f"sku{3+i}", f"d{3+i}"
+                "goal", {}, "Tier1", f"sku{3+i}", "out('friend')"
             )
 
         should_execute, success = self.engine.execute_prechecker(
@@ -423,7 +421,7 @@ class TestEdgeCases:
 
         metrics.record_path_step(
             request_id, 0, "node1", None, None, None, "sig", "goal", {},
-            "Tier1", "sku1", "d1"
+            "Tier1", "sku1", "out('friend')"
         )
 
         sku = MockSKU(confidence_score=0.0)
@@ -444,7 +442,7 @@ class TestEdgeCases:
 
         metrics.record_path_step(
             request_id, 0, "node1", None, None, None, "sig", "goal", {},
-            "Tier1", "sku1", "d1"
+            "Tier1", "sku1", "out('friend')"
         )
 
         sku = MockSKU(confidence_score=1.0)

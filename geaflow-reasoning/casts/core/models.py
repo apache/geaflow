@@ -63,6 +63,7 @@ class StrategyKnowledgeUnit:
     property_vector: np.ndarray
     confidence_score: float = 1.0
     logic_complexity: int = 1
+    execution_count: int = 0
 
     def __hash__(self):
         return hash(self.id)

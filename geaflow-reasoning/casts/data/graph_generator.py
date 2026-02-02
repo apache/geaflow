@@ -11,7 +11,6 @@ engine and other components should treat it as read-only.
 
 import csv
 from dataclasses import dataclass
-import os
 from pathlib import Path
 import random
 from typing import Any, Dict, List, Optional, Set, Tuple
@@ -72,44 +71,44 @@ class GraphGenerator:
     # Synthetic data (existing behavior)
     # ------------------------------------------------------------------
 
-    def _generate_zipf_data(self, size: int):
+    def _generate_zipf_data(self, size: int) -> None:
         """Generate graph data following Zipf distribution for realistic entity distributions."""
         # Use concrete, realistic business roles instead of abstract types
         # Approximate Zipf: "Retail SME" is most common, "FinTech Startup" is rarest
         business_types = [
-            'Retail SME',           # Most common - small retail businesses
-            'Logistics Partner',    # Medium frequency - logistics providers
-            'Enterprise Vendor',    # Medium frequency - large vendors
-            'Regional Distributor', # Less common - regional distributors
-            'FinTech Startup',      # Rarest - fintech companies
+            "Retail SME",  # Most common - small retail businesses
+            "Logistics Partner",  # Medium frequency - logistics providers
+            "Enterprise Vendor",  # Medium frequency - large vendors
+            "Regional Distributor",  # Less common - regional distributors
+            "FinTech Startup",  # Rarest - fintech companies
         ]
         # Weights approximating 1/k distribution
         type_weights = [100, 50, 25, 12, 6]
         
-        business_categories = ['retail', 'wholesale', 'finance', 'manufacturing']
-        regions = ['NA', 'EU', 'APAC', 'LATAM']
-        risk_levels = ['low', 'medium', 'high']
+        business_categories = ["retail", "wholesale", "finance", "manufacturing"]
+        regions = ["NA", "EU", "APAC", "LATAM"]
+        risk_levels = ["low", "medium", "high"]
 
         # Generate nodes
         for i in range(size):
             node_type = random.choices(business_types, weights=type_weights, k=1)[0]
-            status = 'active' if random.random() < 0.8 else 'inactive'
+            status = "active" if random.random() < 0.8 else "inactive"
             age = random.randint(18, 60)
             
             node = {
-                'id': str(i),
-                'type': node_type,
-                'status': status,
-                'age': age,
-                'category': random.choice(business_categories),
-                'region': random.choice(regions),
-                'risk': random.choices(risk_levels, weights=[60, 30, 10])[0],
+                "id": str(i),
+                "type": node_type,
+                "status": status,
+                "age": age,
+                "category": random.choice(business_categories),
+                "region": random.choice(regions),
+                "risk": random.choices(risk_levels, weights=[60, 30, 10])[0],
             }
             self.nodes[str(i)] = node
             self.edges[str(i)] = []
 
         # Generate edges with realistic relationship labels
-        edge_labels = ['related', 'friend', 'knows', 'supplies', 'manages']
+        edge_labels = ["related", "friend", "knows", "supplies", "manages"]
         for i in range(size):
             num_edges = random.randint(1, 4)
             for _ in range(num_edges):
@@ -118,14 +117,15 @@ class GraphGenerator:
                     label = random.choice(edge_labels)
                     # Ensure common "Retail SME" has more 'related' edges
                     # and "Logistics Partner" has more 'friend' edges for interesting simulation
-                    if (self.nodes[str(i)]['type'] == 'Retail SME' and 
-                        random.random() < 0.7):
-                        label = 'related'
-                    elif (self.nodes[str(i)]['type'] == 'Logistics Partner' and 
-                          random.random() < 0.7):
-                        label = 'friend'
-                        
-                    self.edges[str(i)].append({'target': str(target), 'label': label})
+                    if self.nodes[str(i)]["type"] == "Retail SME" and random.random() < 0.7:
+                        label = "related"
+                    elif (
+                        self.nodes[str(i)]["type"] == "Logistics Partner"
+                        and random.random() < 0.7
+                    ):
+                        label = "friend"
+
+                    self.edges[str(i)].append({"target": str(target), "label": label})
 
     # ------------------------------------------------------------------
     # Real data loading and subgraph sampling
@@ -153,12 +153,12 @@ class GraphGenerator:
         node_attributes: Dict[Tuple[str, str], Dict[str, Any]] = {}
 
         for entity_type, filename in entity_files.items():
-            path = os.path.join(data_dir, filename)
-            if not os.path.exists(path):
+            path = data_dir / filename
+            if not path.exists():
                 continue
 
-            with open(path, newline="", encoding="utf-8") as f:
-                reader = csv.DictReader(f, delimiter="|")
+            with path.open(newline="", encoding="utf-8") as handle:
+                reader = csv.DictReader(handle, delimiter="|")
                 for row in reader:
                     # Assume there is an ``id`` column; if not, fall back to
                     # the first column name as primary key.
@@ -241,12 +241,12 @@ class GraphGenerator:
             return node_id
 
         for src_type, tgt_type, filename, src_field, tgt_field, label in relation_specs:
-            path = os.path.join(data_dir, filename)
-            if not os.path.exists(path):
+            path = data_dir / filename
+            if not path.exists():
                 continue
 
-            with open(path, newline="", encoding="utf-8") as f:
-                reader = csv.DictReader(f, delimiter="|")
+            with path.open(newline="", encoding="utf-8") as handle:
+                reader = csv.DictReader(handle, delimiter="|")
                 for row in reader:
                     src_raw = row.get(src_field)
                     tgt_raw = row.get(tgt_field)
@@ -343,7 +343,7 @@ class GraphGenerator:
 
         return visited, new_edges
 
-    def _resolve_data_dir(self) -> str:
+    def _resolve_data_dir(self) -> Path:
         """Resolve the directory that contains real graph CSV files."""
 
         project_root = Path(__file__).resolve().parents[2]
@@ -354,7 +354,7 @@ class GraphGenerator:
                 configured = project_root / configured
             if not configured.is_dir():
                 raise FileNotFoundError(f"Real data directory not found: {configured}")
-            return str(configured)
+            return configured
 
         default_candidates = [
             project_root / "data" / "real_graph_data",
@@ -362,7 +362,7 @@ class GraphGenerator:
         ]
         for candidate in default_candidates:
             if candidate.is_dir():
-                return str(candidate)
+                return candidate
 
         raise FileNotFoundError(
             "Unable to locate real graph data directory. "
