@@ -1,0 +1,549 @@
+"""Simulation engine for managing CASTS strategy cache experiments."""
+
+import random
+from typing import Any, Callable, Dict, List, Optional, Tuple
+
+from casts.core.gremlin_state import GremlinStateMachine
+from casts.core.interfaces import DataSource
+from casts.core.models import Context
+from casts.core.services import StrategyCache
+from casts.services.llm_oracle import LLMOracle
+from casts.simulation.executor import TraversalExecutor
+from casts.simulation.metrics import MetricsCollector
+
+
+class SimulationEngine:
+    """Main engine for running CASTS strategy cache simulations."""
+
+    def __init__(
+        self,
+        graph: DataSource,
+        strategy_cache: StrategyCache,
+        llm_oracle: LLMOracle,
+        max_depth: int = 10,
+        verbose: bool = True,
+        nodes_per_epoch: int = 2,
+    ):
+        self.graph = graph
+        self.strategy_cache = strategy_cache
+        self.llm_oracle = llm_oracle
+        self.max_depth = max_depth
+        self.verbose = verbose
+        self.nodes_per_epoch = nodes_per_epoch
+        self.schema = graph.get_schema()
+        self.executor = TraversalExecutor(graph, self.schema)
+
+        # Use goal generator provided by the data source instead of hardcoding goals here
+        self.goal_generator = graph.get_goal_generator()
+
+    async def run_epoch(
+        self, epoch: int, metrics_collector: MetricsCollector
+    ) -> List[Tuple[str, str, str, int, Optional[int], Optional[str], Optional[str]]]:
+        """Run a single epoch, initializing a layer of traversers."""
+        if self.verbose:
+            print(f"\n--- Epoch {epoch} ---")
+
+        # 1. Select a single goal for the entire epoch
+        goal_text = "Explore the graph"  # Default fallback
+        rubric = ""
+        if self.goal_generator:
+            goal_text, rubric = self.goal_generator.select_goal()
+
+        # 2. Use LLM to recommend starting node types based on the goal
+        schema = self.graph.get_schema()
+        recommended_types = await self.llm_oracle.recommend_starting_node_types(
+            goal=goal_text,
+            available_node_types=schema.node_types,
+            max_recommendations=self.llm_oracle.config.get_int(
+                "SIMULATION_MAX_RECOMMENDED_NODE_TYPES"
+            ),
+        )
+
+        # 3. Get starting nodes from the data source using the recommendation
+        num_starters = min(self.nodes_per_epoch, len(self.graph.nodes))
+        min_degree = self.llm_oracle.config.get_int("SIMULATION_MIN_STARTING_DEGREE")
+
+        if num_starters > 0:
+            sample_nodes = self.graph.get_starting_nodes(
+                goal=goal_text,
+                recommended_node_types=recommended_types,
+                count=num_starters,
+                min_degree=min_degree,
+            )
+        else:
+            sample_nodes = []
+
+        # 4. Initialize traversers for the starting nodes
+        current_layer: List[
+            Tuple[str, str, str, int, Optional[int], Optional[str], Optional[str]]
+        ] = []
+        for node_id in sample_nodes:
+            request_id = metrics_collector.initialize_path(
+                epoch, node_id, self.graph.nodes[node_id], goal_text, rubric
+            )
+            # Root nodes have no parent step, source_node, or edge_label (all None)
+            current_layer.append((node_id, "V()", goal_text, request_id, None, None, None))
+
+        return current_layer
+
+    def _is_traversal_decision(self, decision: str) -> bool:
+        """Check whether a decision represents a traversal that moves along an edge."""
+        traversal_prefixes = (
+            "out(",
+            "in(",
+            "both(",
+            "outE(",
+            "inE(",
+            "bothE(",
+        )
+        return decision.startswith(traversal_prefixes)
+
+    def _calculate_revisit_ratio(self, path_steps: List[Dict[str, Any]]) -> float:
+        """Calculate node revisit ratio based on traversal steps."""
+        traversal_nodes: List[str] = []
+        for step in path_steps:
+            decision = step.get("decision")
+            if not decision:
+                continue
+            if self._is_traversal_decision(decision):
+                node_id = step.get("node")
+                if node_id is not None:
+                    traversal_nodes.append(node_id)
+
+        if len(traversal_nodes) < 2:
+            return 0.0
+
+        unique_nodes = len(set(traversal_nodes))
+        total_nodes = len(traversal_nodes)
+        return 1.0 - (unique_nodes / total_nodes) if total_nodes > 0 else 0.0
+
+    def execute_prechecker(
+        self,
+        sku: Any,
+        request_id: int,
+        metrics_collector: MetricsCollector,
+    ) -> tuple[bool, bool]:
+        """
+        Pre-execution validation to determine if a decision should be executed.
+
+        Validates multiple conditions including cycle detection and confidence
+        thresholds. Cycle detection is skipped once simplePath() is active in
+        the current traversal signature. Part of the Precheck -> Execute ->
+        Postcheck lifecycle introduced for path quality control and extensible
+        validation.
+
+        Args:
+            sku: The Strategy Knowledge Unit being evaluated (None for new SKUs)
+            request_id: The request ID for path tracking
+            metrics_collector: Metrics collector for path history access
+
+        Returns:
+            (should_execute, execution_success):
+                - should_execute: True if decision should be executed, False to
+                  terminate path
+                - execution_success: True if validation passed, False to apply
+                  confidence penalty
+        """
+        cycle_penalty_mode = self.llm_oracle.config.get_str("CYCLE_PENALTY").upper()
+
+        # Mode: NONE - skip all validation
+        if cycle_penalty_mode == "NONE":
+            return (True, True)
+
+        # If no SKU or no path tracking, allow execution
+        if sku is None or request_id not in metrics_collector.paths:
+            return (True, True)
+
+        # === VALIDATION 1: Cycle Detection (Simplified) ===
+        path_steps = metrics_collector.paths[request_id]["steps"]
+        if path_steps:
+            current_signature = path_steps[-1].get("s", "")
+            if "simplePath()" not in current_signature:
+                revisit_ratio = self._calculate_revisit_ratio(path_steps)
+                cycle_threshold = self.llm_oracle.config.get_float("CYCLE_DETECTION_THRESHOLD")
+
+                if revisit_ratio > cycle_threshold:
+                    if cycle_penalty_mode == "STOP":
+                        if self.verbose:
+                            print(
+                                f"      [!] High node revisit detected "
+                                f"({revisit_ratio:.1%}), "
+                                f"terminating path (mode=STOP)"
+                            )
+                        return (False, False)  # Terminate and penalize
+                    else:  # PUNISH mode
+                        if self.verbose:
+                            print(
+                                f"      [!] High node revisit detected "
+                                f"({revisit_ratio:.1%}), "
+                                f"applying penalty (mode=PUNISH)"
+                            )
+                        return (True, False)  # Continue but penalize
+
+        # === VALIDATION 2: Confidence Threshold ===
+        # Check if SKU confidence has fallen too low
+        min_confidence = self.llm_oracle.config.get_float(
+            "MIN_EXECUTION_CONFIDENCE"
+        )
+        if sku.confidence_score < min_confidence:
+            if self.verbose:
+                print(
+                    f"      [!] SKU confidence too low "
+                    f"({sku.confidence_score:.2f} < {min_confidence}), "
+                    f"mode={cycle_penalty_mode}"
+                )
+            if cycle_penalty_mode == "STOP":
+                return (False, False)
+            else:  # PUNISH mode
+                return (True, False)
+
+        # === VALIDATION 3: Execution History (Future Extension) ===
+        # Placeholder for future validation logic:
+        # - Repeated execution failures
+        # - Deadlock detection
+        # - Resource exhaustion checks
+        # For now, this section is intentionally empty
+
+        # All validations passed
+        return (True, True)
+
+    def execute_postchecker(
+        self,
+        sku: Any,
+        request_id: int,
+        metrics_collector: MetricsCollector,
+        execution_result: Any,
+    ) -> bool:
+        """
+        Post-execution validation and cleanup hook.
+
+        Part of the Precheck -> Execute -> Postcheck lifecycle. Currently a
+        placeholder for architectural symmetry. Future use cases include:
+        - Post-execution quality validation
+        - Deferred rollback decisions based on execution results
+        - Execution result sanity checks
+        - Cleanup operations
+
+        Args:
+            sku: The Strategy Knowledge Unit that was executed (None for new
+                SKUs)
+            request_id: The request ID for path tracking
+            metrics_collector: Metrics collector for path history access
+            execution_result: The result returned from decision execution
+
+        Returns:
+            True if post-execution validation passed, False otherwise
+        """
+        if sku is None:
+            return True
+
+        min_evidence = self.llm_oracle.config.get_int("POSTCHECK_MIN_EVIDENCE")
+        execution_count = getattr(sku, "execution_count", 0)
+        if execution_count < min_evidence:
+            return True
+
+        if request_id not in metrics_collector.paths:
+            return True
+
+        steps = metrics_collector.paths[request_id].get("steps", [])
+        if not steps:
+            return True
+
+        last_step = steps[-1]
+        decision = str(last_step.get("decision") or "")
+        if not decision:
+            return True
+
+        if decision == "stop":
+            node_id = str(last_step.get("node") or "")
+            signature = str(last_step.get("s") or "")
+            current_state, options = GremlinStateMachine.get_state_and_options(
+                signature, self.schema, node_id
+            )
+            if current_state == "END" or not options:
+                return True
+            traversal_options = [opt for opt in options if self._is_traversal_decision(opt)]
+            return not traversal_options
+
+        if self._is_traversal_decision(decision):
+            return bool(execution_result)
+
+        return True
+
+    async def execute_tick(
+        self,
+        tick: int,
+        current_layer: List[Tuple[str, str, str, int, Optional[int], Optional[str], Optional[str]]],
+        metrics_collector: MetricsCollector,
+        edge_history: Dict[Tuple[str, str], int],
+    ) -> Tuple[
+        List[Tuple[str, str, str, int, Optional[int], Optional[str], Optional[str]]],
+        Dict[Tuple[str, str], int],
+    ]:
+        """Execute a single simulation tick for all active traversers."""
+        if self.verbose:
+            print(f"\n[Tick {tick}] Processing {len(current_layer)} active traversers")
+
+        next_layer: List[
+            Tuple[str, str, str, int, Optional[int], Optional[str], Optional[str]]
+        ] = []
+
+        for idx, traversal_state in enumerate(current_layer):
+            (
+                current_node_id,
+                current_signature,
+                current_goal,
+                request_id,
+                parent_step_index,
+                source_node,
+                edge_label,
+            ) = traversal_state
+            node = self.graph.nodes[current_node_id]
+
+            # Use stored provenance information instead of searching the graph
+            # This ensures we log the actual edge that was traversed, not a random one
+            if self.verbose:
+                print(
+                    f"  [{idx + 1}/{len(current_layer)}] Node {current_node_id}({node['type']}) | "
+                    f"s='{current_signature}' | g='{current_goal}'"
+                )
+            if source_node is not None and edge_label is not None and self.verbose:
+                print(f"    ↑ via {edge_label} from {source_node}")
+
+            # Create context and find strategy
+            context = Context(
+                structural_signature=current_signature,
+                properties=node,
+                goal=current_goal,
+            )
+
+            decision, sku, match_type = await self.strategy_cache.find_strategy(context)
+            # Use match_type (Tier1/Tier2) to determine cache hit vs miss,
+            # rather than truthiness of the decision string.
+            is_cache_hit = match_type in ("Tier1", "Tier2")
+            final_decision = decision or ""
+
+            # Record step in path
+            # parent_step_index is for visualization only, passed from current_layer
+            # Use stored provenance information (source_node, edge_label) instead of searching
+            metrics_collector.record_path_step(
+                request_id=request_id,
+                tick=tick,
+                node_id=current_node_id,
+                parent_node=source_node,
+                parent_step_index=parent_step_index,
+                edge_label=edge_label,
+                structural_signature=current_signature,
+                goal=current_goal,
+                properties=node,
+                match_type=match_type,
+                sku_id=getattr(sku, "id", None) if sku else None,
+                decision=None,  # Will be updated after execution
+            )
+
+            # Record metrics (hit type or miss)
+            metrics_collector.record_step(match_type)
+
+            if is_cache_hit:
+                if self.verbose:
+                    if match_type == "Tier1":
+                        if sku is not None:
+                            print(
+                                f"    → [Hit T1] SKU {sku.id} | {decision} "
+                                f"(confidence={sku.confidence_score:.1f}, "
+                                f"complexity={sku.logic_complexity})"
+                            )
+                    elif match_type == "Tier2":
+                        if sku is not None:
+                            print(
+                                f"    → [Hit T2] SKU {sku.id} | {decision} "
+                                f"(confidence={sku.confidence_score:.1f}, "
+                                f"complexity={sku.logic_complexity})"
+                            )
+
+            else:
+                # Cache miss - generate new SKU via LLM
+                new_sku = await self.llm_oracle.generate_sku(context, self.schema)
+                duplicate = None
+                for existing in self.strategy_cache.knowledge_base:
+                    if (
+                        existing.structural_signature == new_sku.structural_signature
+                        and existing.goal_template == new_sku.goal_template
+                        and existing.decision_template == new_sku.decision_template
+                    ):
+                        duplicate = existing
+                        break
+
+                if duplicate is not None:
+                    sku = duplicate
+                    final_decision = duplicate.decision_template
+                    if self.verbose:
+                        print(
+                            f"    → [LLM] Merge into SKU {duplicate.id} "
+                            f"(confidence={duplicate.confidence_score:.1f})"
+                        )
+                else:
+                    self.strategy_cache.add_sku(new_sku)
+                    sku = new_sku
+                    final_decision = new_sku.decision_template
+                    if self.verbose:
+                        print(
+                            f"    → [LLM] New SKU {new_sku.id} | {final_decision} "
+                            f"(confidence={new_sku.confidence_score:.1f}, "
+                            f"complexity={new_sku.logic_complexity})"
+                        )
+
+            # Update the recorded step with SKU metadata (decision is set after precheck)
+            if metrics_collector.paths[request_id]["steps"]:
+                metrics_collector.paths[request_id]["steps"][-1]["sku_id"] = (
+                    getattr(sku, "id", None) if sku else None
+                )
+                metrics_collector.paths[request_id]["steps"][-1]["match_type"] = match_type
+
+            # Execute the decision
+            if final_decision:
+                # === PRECHECK PHASE ===
+                should_execute, precheck_success = self.execute_prechecker(
+                    sku, request_id, metrics_collector
+                )
+                if not should_execute:
+                    metrics_collector.rollback_steps(request_id, count=1)
+                    if sku is not None:
+                        self.strategy_cache.update_confidence(sku, success=False)
+                    continue
+
+                # Simulate execution success/failure (applies to both cache hits and LLM proposals)
+                execution_success = random.random() > 0.05
+                if not execution_success:
+                    metrics_collector.record_execution_failure()
+                    if self.verbose:
+                        print("      [!] Execution failed, confidence penalty applied")
+
+                if metrics_collector.paths[request_id]["steps"]:
+                    metrics_collector.paths[request_id]["steps"][-1]["decision"] = final_decision
+
+                if sku is not None:
+                    if hasattr(sku, "execution_count"):
+                        sku.execution_count += 1
+
+                next_nodes = await self.executor.execute_decision(
+                    current_node_id, final_decision, current_signature, request_id=request_id
+                )
+
+                # === POSTCHECK PHASE ===
+                postcheck_success = self.execute_postchecker(
+                    sku, request_id, metrics_collector, next_nodes
+                )
+
+                combined_success = execution_success and precheck_success and postcheck_success
+                if sku is not None:
+                    self.strategy_cache.update_confidence(sku, combined_success)
+
+                if self.verbose:
+                    print(f"    → Execute: {final_decision} → {len(next_nodes)} targets")
+                    if not next_nodes:
+                        print(f"    → No valid targets for {final_decision}, path terminates")
+
+                for next_node_id, next_signature, traversed_edge in next_nodes:
+                    # For visualization: the parent step index for next layer
+                    # is the index of this step
+                    # Find the index of the step we just recorded
+                    steps = metrics_collector.paths[request_id]["steps"]
+                    this_step_index = len(steps) - 1
+
+                    # Extract source node and edge label from traversed edge info
+                    # traversed_edge is a tuple of (source_node_id, edge_label)
+                    next_source_node, next_edge_label = (
+                        traversed_edge if traversed_edge else (None, None)
+                    )
+
+                    next_layer.append(
+                        (
+                            next_node_id,
+                            next_signature,
+                            current_goal,
+                            request_id,
+                            this_step_index,
+                            next_source_node,
+                            next_edge_label,
+                        )
+                    )
+
+                    # Record edge traversal for visualization
+                    if (current_node_id, next_node_id) not in edge_history:
+                        edge_history[(current_node_id, next_node_id)] = tick
+
+        return next_layer, edge_history
+
+    async def run_simulation(
+        self,
+        num_epochs: int = 2,
+        metrics_collector: Optional[MetricsCollector] = None,
+        on_request_completed: Optional[Callable[[int, MetricsCollector], None]] = None,
+    ) -> MetricsCollector:
+        """Run complete simulation across multiple epochs."""
+        if metrics_collector is None:
+            metrics_collector = MetricsCollector()
+
+        print("=== CASTS Strategy Cache Simulation ===")
+        source_label = getattr(self.graph, "source_label", "synthetic")
+        distribution_note = "Zipf distribution" if source_label == "synthetic" else "real dataset"
+        print(f"1. Graph Data: {len(self.graph.nodes)} nodes ({distribution_note})")
+
+        type_counts: Dict[Any, Any] = {}
+        for node in self.graph.nodes.values():
+            node_type = node["type"]
+            type_counts[node_type] = type_counts.get(node_type, 0) + 1
+        print(f"   Node distribution: {type_counts}")
+
+        print("2. Embedding Service: OpenRouter API")
+        print("3. Strategy Cache: Initialized")
+        print(f"4. Starting simulation ({num_epochs} epochs)...")
+
+        for epoch in range(1, num_epochs + 1):
+            current_layer = await self.run_epoch(epoch, metrics_collector)
+
+            tick = 0
+            edge_history: Dict[Any, Any] = {}
+
+            while current_layer:
+                tick += 1
+
+                # Store the active requests before the tick
+                requests_before_tick = {layer[3] for layer in current_layer}
+
+                current_layer, edge_history = await self.execute_tick(
+                    tick, current_layer, metrics_collector, edge_history
+                )
+
+                # Determine completed requests
+                requests_after_tick = {layer[3] for layer in current_layer}
+                completed_requests = requests_before_tick - requests_after_tick
+
+                if completed_requests:
+                    if on_request_completed:
+                        for request_id in completed_requests:
+                            on_request_completed(request_id, metrics_collector)
+
+                    for request_id in completed_requests:
+                        # Clean up simplePath history for completed requests
+                        self.executor.clear_path_history(request_id)
+
+                if tick > self.max_depth:
+                    print(
+                        f"    [Depth limit reached (max_depth={self.max_depth}), "
+                        f"ending epoch {epoch}]"
+                    )
+                    break
+
+            # Cleanup low confidence SKUs at end of epoch
+            evicted = len(
+                [sku for sku in self.strategy_cache.knowledge_base if sku.confidence_score < 0.5]
+            )
+            self.strategy_cache.cleanup_low_confidence_skus()
+            metrics_collector.record_sku_eviction(evicted)
+
+            if evicted > 0:
+                print(f"  [Cleanup] Evicted {evicted} low-confidence SKUs")
+
+        return metrics_collector
