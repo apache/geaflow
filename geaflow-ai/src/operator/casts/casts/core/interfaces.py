@@ -5,7 +5,7 @@ and adherence to SOLID principles, especially Dependency Inversion Principle (DI
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Protocol, Set, Tuple
+from typing import Any, Protocol
 
 import numpy as np
 
@@ -15,18 +15,18 @@ class GoalGenerator(ABC):
 
     @property
     @abstractmethod
-    def goal_texts(self) -> List[str]:
+    def goal_texts(self) -> list[str]:
         """Get list of available goal descriptions."""
         pass
 
     @property
     @abstractmethod
-    def goal_weights(self) -> List[int]:
+    def goal_weights(self) -> list[int]:
         """Get weights for goal selection (higher = more frequent)."""
         pass
 
     @abstractmethod
-    def select_goal(self, node_type: Optional[str] = None) -> Tuple[str, str]:
+    def select_goal(self, node_type: str | None = None) -> tuple[str, str]:
         """Select a goal based on weights and optional node type context.
 
         Returns:
@@ -40,28 +40,28 @@ class GraphSchema(ABC):
 
     @property
     @abstractmethod
-    def node_types(self) -> Set[str]:
+    def node_types(self) -> set[str]:
         """Get all node types in the graph."""
         pass
 
     @property
     @abstractmethod
-    def edge_labels(self) -> Set[str]:
+    def edge_labels(self) -> set[str]:
         """Get all edge labels in the graph."""
         pass
 
     @abstractmethod
-    def get_node_schema(self, node_type: str) -> Dict[str, Any]:
+    def get_node_schema(self, node_type: str) -> dict[str, Any]:
         """Get schema information for a specific node type."""
         pass
 
     @abstractmethod
-    def get_valid_outgoing_edge_labels(self, node_id: str) -> List[str]:
+    def get_valid_outgoing_edge_labels(self, node_id: str) -> list[str]:
         """Get valid outgoing edge labels for a specific node."""
         pass
 
     @abstractmethod
-    def get_valid_incoming_edge_labels(self, node_id: str) -> List[str]:
+    def get_valid_incoming_edge_labels(self, node_id: str) -> list[str]:
         """Get valid incoming edge labels for a specific node."""
         pass
 
@@ -80,13 +80,13 @@ class DataSource(ABC):
 
     @property
     @abstractmethod
-    def nodes(self) -> Dict[str, Dict[str, Any]]:
+    def nodes(self) -> dict[str, dict[str, Any]]:
         """Get all nodes in the graph."""
         pass
 
     @property
     @abstractmethod
-    def edges(self) -> Dict[str, List[Dict[str, str]]]:
+    def edges(self) -> dict[str, list[dict[str, str]]]:
         """Get all edges in the graph."""
         pass
 
@@ -97,12 +97,12 @@ class DataSource(ABC):
         pass
 
     @abstractmethod
-    def get_node(self, node_id: str) -> Optional[Dict[str, Any]]:
+    def get_node(self, node_id: str) -> dict[str, Any] | None:
         """Get a specific node by ID."""
         pass
 
     @abstractmethod
-    def get_neighbors(self, node_id: str, edge_label: Optional[str] = None) -> List[str]:
+    def get_neighbors(self, node_id: str, edge_label: str | None = None) -> list[str]:
         """Get neighbor node IDs for a given node."""
         pass
 
@@ -120,10 +120,10 @@ class DataSource(ABC):
     def get_starting_nodes(
         self,
         goal: str,
-        recommended_node_types: List[str],
+        recommended_node_types: list[str],
         count: int,
         min_degree: int = 2,
-    ) -> List[str]:
+    ) -> list[str]:
         """Select appropriate starting nodes for traversal.
 
         Implements a multi-tier selection strategy:
@@ -149,17 +149,17 @@ class EmbeddingServiceProtocol(Protocol):
     async def embed_text(self, text: str) -> np.ndarray:
         """Generate embedding for text."""
 
-    async def embed_properties(self, properties: Dict[str, Any]) -> np.ndarray:
+    async def embed_properties(self, properties: dict[str, Any]) -> np.ndarray:
         """Generate embedding for property dictionary."""
 
 
 class LLMServiceProtocol(Protocol):
     """Protocol for LLM services (structural typing)."""
 
-    async def generate_strategy(self, context: Dict[str, Any]) -> str:
+    async def generate_strategy(self, context: dict[str, Any]) -> str:
         """Generate traversal strategy for given context."""
 
-    async def generate_sku(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    async def generate_sku(self, context: dict[str, Any]) -> dict[str, Any]:
         """Generate Strategy Knowledge Unit for given context."""
 
 
@@ -190,6 +190,6 @@ class Configuration(ABC):
         pass
 
     @abstractmethod
-    def get_llm_config(self) -> Dict[str, str]:
+    def get_llm_config(self) -> dict[str, str]:
         """Get LLM service configuration."""
         pass

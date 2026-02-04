@@ -4,7 +4,7 @@ from datetime import datetime
 from json import JSONDecodeError
 from pathlib import Path
 import re
-from typing import Any, Dict, List
+from typing import Any
 
 from openai import AsyncOpenAI
 
@@ -71,7 +71,7 @@ class LLMOracle:
             f.write(f"[{timestamp}] {message}\n")
 
     @staticmethod
-    def _extract_recent_decisions(signature: str, depth: int = 3) -> List[str]:
+    def _extract_recent_decisions(signature: str, depth: int = 3) -> list[str]:
         """Extract the most recent N decisions from a traversal signature.
 
         Args:
@@ -87,8 +87,8 @@ class LLMOracle:
     @staticmethod
     def _parse_and_validate_decision(
         decision: str,
-        valid_options: List[str],
-        safe_properties: Dict[str, Any],
+        valid_options: list[str],
+        safe_properties: dict[str, Any],
     ) -> str:
         """
         Validate the LLM's decision against the list of valid options provided by the state machine.
@@ -176,7 +176,7 @@ Recent decision history (last {len(recent_decisions)} steps):
         else:
             history_section = "Recent decision history: (no previous steps, starting fresh)\n"
 
-        def _format_list(values: List[str], max_items: int = 12) -> str:
+        def _format_list(values: list[str], max_items: int = 12) -> str:
             if len(values) <= max_items:
                 return ", ".join(values) if values else "none"
             head = ", ".join(values[:max_items])
@@ -318,7 +318,7 @@ Return ONLY valid JSON inside <output> tags. Example:
 
                 # --- Success Path ---
                 # If validation succeeds, construct and return the SKU immediately
-                def _default_predicate(_: Dict[str, Any]) -> bool:
+                def _default_predicate(_: dict[str, Any]) -> bool:
                     return True
 
                 try:
@@ -375,7 +375,7 @@ Return ONLY valid JSON inside <output> tags. Example:
         goal: str,
         available_node_types: set[str],
         max_recommendations: int = 3,
-    ) -> List[str]:
+    ) -> list[str]:
         """Recommend suitable starting node types for a given goal.
 
         Uses LLM to analyze the goal text and recommend 1-3 node types

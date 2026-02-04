@@ -1,7 +1,6 @@
 """Traversal executor for simulating graph traversal decisions."""
 
 import re
-from typing import Any, Dict, List, Optional, Set, Tuple
 
 from casts.core.interfaces import DataSource, GraphSchema
 
@@ -13,9 +12,9 @@ class TraversalExecutor:
         self.graph = graph
         self.schema = schema
         # Track visited nodes for each request to support simplePath()
-        self._path_history: Dict[int, Set[str]] = {}
+        self._path_history: dict[int, set[str]] = {}
 
-    def _ensure_path_history(self, request_id: int, current_node_id: str) -> Set[str]:
+    def _ensure_path_history(self, request_id: int, current_node_id: str) -> set[str]:
         """Ensure path history is initialized for a request and seed current node."""
         if request_id not in self._path_history:
             self._path_history[request_id] = {current_node_id}
@@ -23,8 +22,8 @@ class TraversalExecutor:
 
     async def execute_decision(
         self, current_node_id: str, decision: str, current_signature: str,
-        request_id: Optional[int] = None
-    ) -> List[Tuple[str, str, Optional[Tuple[Any, ...]]]]:
+        request_id: int | None = None
+    ) -> list[tuple[str, str, tuple[str, str] | None]]:
         """
         Execute a traversal decision and return next nodes with updated signatures.
 
@@ -38,7 +37,7 @@ class TraversalExecutor:
             List of (next_node_id, next_signature, traversed_edge) tuples
             where traversed_edge is (source_node_id, edge_label) or None
         """
-        next_nodes: List[Tuple[str, Optional[str], Optional[Tuple[str, str]]]] = []
+        next_nodes: list[tuple[str, str | None, tuple[str, str] | None]] = []
 
         # Check if simplePath is enabled for this traversal
         has_simple_path = "simplePath()" in current_signature
@@ -143,7 +142,7 @@ class TraversalExecutor:
             pass
 
         # Build final signatures for all nodes
-        final_nodes: List[Tuple[str, str, Optional[Tuple[Any, ...]]]] = []
+        final_nodes: list[tuple[str, str, tuple[str, str] | None]] = []
         for next_node_id, _, traversed_edge in next_nodes:
             # Always append the full decision to create a canonical, Level-2 signature.
             # The abstraction logic is now handled by the StrategyCache during matching.
@@ -164,7 +163,7 @@ class TraversalExecutor:
 
         return final_nodes
 
-    def clear_path_history(self, request_id: int):
+    def clear_path_history(self, request_id: int) -> None:
         """Clear the path history for a completed request.
 
         This should be called when a traversal request completes to free memory.

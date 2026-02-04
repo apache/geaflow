@@ -1,7 +1,7 @@
 """Simulation engine for managing CASTS strategy cache experiments."""
 
 import random
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Literal
 
 from casts.core.gremlin_state import GremlinStateMachine
 from casts.core.interfaces import DataSource
@@ -10,6 +10,8 @@ from casts.core.services import StrategyCache
 from casts.services.llm_oracle import LLMOracle
 from casts.simulation.executor import TraversalExecutor
 from casts.simulation.metrics import MetricsCollector
+
+CyclePenaltyMode = Literal["NONE", "PUNISH", "STOP"]
 
 
 class SimulationEngine:
@@ -38,7 +40,7 @@ class SimulationEngine:
 
     async def run_epoch(
         self, epoch: int, metrics_collector: MetricsCollector
-    ) -> List[Tuple[str, str, str, int, Optional[int], Optional[str], Optional[str]]]:
+    ) -> list[tuple[str, str, str, int, int | None, str | None, str | None]]:
         """Run a single epoch, initializing a layer of traversers."""
         if self.verbose:
             print(f"\n--- Epoch {epoch} ---")
@@ -74,8 +76,8 @@ class SimulationEngine:
             sample_nodes = []
 
         # 4. Initialize traversers for the starting nodes
-        current_layer: List[
-            Tuple[str, str, str, int, Optional[int], Optional[str], Optional[str]]
+        current_layer: list[
+            tuple[str, str, str, int, int | None, str | None, str | None]
         ] = []
         for node_id in sample_nodes:
             request_id = metrics_collector.initialize_path(
@@ -98,9 +100,9 @@ class SimulationEngine:
         )
         return decision.startswith(traversal_prefixes)
 
-    def _calculate_revisit_ratio(self, path_steps: List[Dict[str, Any]]) -> float:
+    def _calculate_revisit_ratio(self, path_steps: list[dict[str, Any]]) -> float:
         """Calculate node revisit ratio based on traversal steps."""
-        traversal_nodes: List[str] = []
+        traversal_nodes: list[str] = []
         for step in path_steps:
             decision = step.get("decision")
             if not decision:
@@ -144,7 +146,9 @@ class SimulationEngine:
                 - execution_success: True if validation passed, False to apply
                   confidence penalty
         """
-        cycle_penalty_mode = self.llm_oracle.config.get_str("CYCLE_PENALTY").upper()
+        cycle_penalty_mode: CyclePenaltyMode = self.llm_oracle.config.get_str(
+            "CYCLE_PENALTY"
+        ).upper()
 
         # Mode: NONE - skip all validation
         if cycle_penalty_mode == "NONE":
@@ -273,19 +277,19 @@ class SimulationEngine:
     async def execute_tick(
         self,
         tick: int,
-        current_layer: List[Tuple[str, str, str, int, Optional[int], Optional[str], Optional[str]]],
+        current_layer: list[tuple[str, str, str, int, int | None, str | None, str | None]],
         metrics_collector: MetricsCollector,
-        edge_history: Dict[Tuple[str, str], int],
-    ) -> Tuple[
-        List[Tuple[str, str, str, int, Optional[int], Optional[str], Optional[str]]],
-        Dict[Tuple[str, str], int],
+        edge_history: dict[tuple[str, str], int],
+    ) -> tuple[
+        list[tuple[str, str, str, int, int | None, str | None, str | None]],
+        dict[tuple[str, str], int],
     ]:
         """Execute a single simulation tick for all active traversers."""
         if self.verbose:
             print(f"\n[Tick {tick}] Processing {len(current_layer)} active traversers")
 
-        next_layer: List[
-            Tuple[str, str, str, int, Optional[int], Optional[str], Optional[str]]
+        next_layer: list[
+            tuple[str, str, str, int, int | None, str | None, str | None]
         ] = []
 
         for idx, traversal_state in enumerate(current_layer):
@@ -478,8 +482,8 @@ class SimulationEngine:
     async def run_simulation(
         self,
         num_epochs: int = 2,
-        metrics_collector: Optional[MetricsCollector] = None,
-        on_request_completed: Optional[Callable[[int, MetricsCollector], None]] = None,
+        metrics_collector: MetricsCollector | None = None,
+        on_request_completed: Callable[[int, MetricsCollector], None] | None = None,
     ) -> MetricsCollector:
         """Run complete simulation across multiple epochs."""
         if metrics_collector is None:
@@ -490,7 +494,7 @@ class SimulationEngine:
         distribution_note = "Zipf distribution" if source_label == "synthetic" else "real dataset"
         print(f"1. Graph Data: {len(self.graph.nodes)} nodes ({distribution_note})")
 
-        type_counts: Dict[Any, Any] = {}
+        type_counts: dict[Any, Any] = {}
         for node in self.graph.nodes.values():
             node_type = node["type"]
             type_counts[node_type] = type_counts.get(node_type, 0) + 1
@@ -504,7 +508,7 @@ class SimulationEngine:
             current_layer = await self.run_epoch(epoch, metrics_collector)
 
             tick = 0
-            edge_history: Dict[Any, Any] = {}
+            edge_history: dict[Any, Any] = {}
 
             while current_layer:
                 tick += 1

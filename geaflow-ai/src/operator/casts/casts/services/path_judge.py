@@ -1,6 +1,6 @@
 """LLM-based path judge for CASTS evaluation."""
 
-from typing import Mapping
+from collections.abc import Mapping
 
 from openai import OpenAI
 

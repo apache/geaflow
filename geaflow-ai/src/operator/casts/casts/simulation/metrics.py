@@ -1,7 +1,9 @@
 """Metrics collection and analysis for CASTS simulations."""
 
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any, Literal
+
+MatchType = Literal["Tier1", "Tier2", ""]
 
 
 @dataclass
@@ -48,10 +50,10 @@ class MetricsCollector:
 
     def __init__(self):
         self.metrics = SimulationMetrics()
-        self.paths: Dict[int, Dict[str, Any]] = {}
+        self.paths: dict[int, dict[str, Any]] = {}
         self.next_request_id = 0
 
-    def record_step(self, match_type: Optional[str] = None):
+    def record_step(self, match_type: MatchType | None = None) -> None:
         """Record a traversal step execution."""
         self.metrics.total_steps += 1
         if match_type == 'Tier1':
@@ -62,11 +64,11 @@ class MetricsCollector:
             self.metrics.misses += 1
             self.metrics.llm_calls += 1
 
-    def record_execution_failure(self):
+    def record_execution_failure(self) -> None:
         """Record a failed strategy execution."""
         self.metrics.execution_failures += 1
     
-    def record_sku_eviction(self, count: int = 1):
+    def record_sku_eviction(self, count: int = 1) -> None:
         """Record SKU evictions from cache cleanup."""
         self.metrics.sku_evictions += count
 
@@ -74,7 +76,7 @@ class MetricsCollector:
         self,
         epoch: int,
         start_node: str,
-        start_node_props: Dict[str, Any],
+        start_node_props: dict[str, Any],
         goal: str,
         rubric: str,
     ) -> int:
@@ -97,15 +99,15 @@ class MetricsCollector:
         request_id: int,
         tick: int,
         node_id: str,
-        parent_node: Optional[str],
-        parent_step_index: Optional[int],
-        edge_label: Optional[str],
+        parent_node: str | None,
+        parent_step_index: int | None,
+        edge_label: str | None,
         structural_signature: str,
         goal: str,
-        properties: Dict[str, Any],
-        match_type: Optional[str],
-        sku_id: Optional[str],
-        decision: Optional[str],
+        properties: dict[str, Any],
+        match_type: MatchType | None,
+        sku_id: str | None,
+        decision: str | None,
     ):
         """Record a step in a traversal path."""
         if request_id not in self.paths:
@@ -156,7 +158,7 @@ class MetricsCollector:
 
         return True
 
-    def get_summary(self) -> Dict[str, Any]:
+    def get_summary(self) -> dict[str, Any]:
         """Get a summary of all collected metrics."""
         return {
             "total_steps": self.metrics.total_steps,
@@ -169,7 +171,7 @@ class MetricsCollector:
             "hit_rate": self.metrics.hit_rate,
         }
     
-    def print_summary(self):
+    def print_summary(self) -> None:
         """Print a formatted summary of simulation metrics."""
         print("\n=== Simulation Results Analysis ===")
         print(f"Total Steps: {self.metrics.total_steps}")

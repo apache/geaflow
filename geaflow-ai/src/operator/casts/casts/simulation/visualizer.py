@@ -1,6 +1,6 @@
 """Visualization and reporting for CASTS simulation results."""
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from matplotlib.lines import Line2D
 import matplotlib.pyplot as plt
@@ -20,9 +20,9 @@ class SimulationVisualizer:
     """Handles visualization and reporting of simulation results."""
 
     @staticmethod
-    def generate_mermaid_diagram(request_id: int, path_info: Dict[str, Any]) -> str:
+    def generate_mermaid_diagram(request_id: int, path_info: dict[str, Any]) -> str:
         """Generate a Mermaid flowchart for a single request's traversal path."""
-        steps: List[Dict[str, Any]] = path_info["steps"]
+        steps: list[dict[str, Any]] = path_info["steps"]
 
         lines = [
             "graph TD",
@@ -31,7 +31,7 @@ class SimulationVisualizer:
         ]
 
         # Build a stable mapping from (tick, node_id) to step index
-        node_index: Dict[tuple, int] = {}
+        node_index: dict[tuple, int] = {}
         for idx, step in enumerate(steps):
             node_index[(step["tick"], step["node"])] = idx
 
@@ -65,7 +65,7 @@ class SimulationVisualizer:
         return "\n".join(lines)
 
     @staticmethod
-    def print_traversal_paths(paths: Dict[int, Dict[str, Any]]):
+    def print_traversal_paths(paths: dict[int, dict[str, Any]]):
         """Print both textual paths and Mermaid diagrams for all requests."""
         print("\n=== Traversal Paths for Each Request ===")
         for request_id, path_info in paths.items():
@@ -96,7 +96,7 @@ class SimulationVisualizer:
             print("-" * 40)
 
     @staticmethod
-    def print_knowledge_base_state(sorted_skus: List[StrategyKnowledgeUnit]):
+    def print_knowledge_base_state(sorted_skus: list[StrategyKnowledgeUnit]):
         """Print final knowledge base state (Top 5 SKUs by confidence)."""
         print("\n=== Final Knowledge Base State (Top 5 SKUs) ===")
         for sku in sorted_skus[:5]:
@@ -116,7 +116,7 @@ class SimulationVisualizer:
 
     @staticmethod
     async def print_tier2_diagnostics(
-        cache: StrategyCache, sorted_skus: List[StrategyKnowledgeUnit]
+        cache: StrategyCache, sorted_skus: list[StrategyKnowledgeUnit]
     ):
         """Print Tier2 threshold diagnostics and self-test."""
         print("\n=== Tier2 Threshold Diagnostics (Dynamic Similarity) ===")
@@ -178,11 +178,11 @@ class SimulationVisualizer:
 
     @staticmethod
     async def print_all_results(
-        paths: Dict[int, Dict[str, Any]],
+        paths: dict[int, dict[str, Any]],
         metrics: SimulationMetrics,
         cache: StrategyCache,
-        sorted_skus: List[StrategyKnowledgeUnit],
-        graph: Optional[DataSource] = None,
+        sorted_skus: list[StrategyKnowledgeUnit],
+        graph: DataSource | None = None,
         show_plots: bool = True,
     ):
         """Master function to print all simulation results.
@@ -216,7 +216,7 @@ class SimulationVisualizer:
 
     @staticmethod
     def plot_traversal_path(
-        request_id: int, path_info: Dict[str, Any], graph: DataSource, show: bool = True
+        request_id: int, path_info: dict[str, Any], graph: DataSource, show: bool = True
     ):
         """Generate a matplotlib visualization for a single request's traversal path.
 
@@ -229,7 +229,7 @@ class SimulationVisualizer:
         Returns:
             The matplotlib Figure when ``show`` is True, otherwise ``None``.
         """
-        steps: List[Dict[str, Any]] = path_info["steps"]
+        steps: list[dict[str, Any]] = path_info["steps"]
 
         # Create a directed graph for visualization
         G: nx.DiGraph = nx.DiGraph()
@@ -378,7 +378,7 @@ class SimulationVisualizer:
 
     @staticmethod
     def plot_all_traversal_paths(
-        paths: Dict[int, Dict[str, Any]], graph: DataSource, show: bool = True
+        paths: dict[int, dict[str, Any]], graph: DataSource, show: bool = True
     ):
         """Generate matplotlib visualizations for all requests' traversal paths.
 

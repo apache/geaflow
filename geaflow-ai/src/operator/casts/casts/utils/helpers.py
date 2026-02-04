@@ -3,7 +3,7 @@
 import json
 import math
 import re
-from typing import Any, Dict, List, Union
+from typing import Any
 import uuid
 
 import numpy as np
@@ -94,7 +94,7 @@ def parse_jsons(
     end_marker: str = "```",
     placeholder_start_marker: str = "__PAYLOAD_START__",
     placeholder_end_marker: str = "__PAYLOAD_END__",
-) -> List[Union[Dict[str, Any], json.JSONDecodeError]]:
+) -> list[dict[str, Any] | json.JSONDecodeError]:
     """
     Extract and parse JSON objects enclosed within specified markers from a text string.
 
@@ -142,9 +142,9 @@ def parse_jsons(
     # Add re.MULTILINE flag to allow ^ to match start of lines
     json_pattern = f"{start_marker}(.*?){re.escape(end_marker)}"
     json_matches = re.finditer(json_pattern, text, re.DOTALL | re.MULTILINE)
-    results: List[Union[Dict[str, Any], json.JSONDecodeError]] = []
+    results: list[dict[str, Any] | json.JSONDecodeError] = []
 
-    def _find_and_replace_placeholders(obj: Any, extracted_payloads: Dict[str, str]) -> None:
+    def _find_and_replace_placeholders(obj: Any, extracted_payloads: dict[str, str]) -> None:
         """Recursively find and replace placeholders in the object."""
         if isinstance(obj, dict):
             for key, value in obj.items():
@@ -159,7 +159,7 @@ def parse_jsons(
                 else:
                     _find_and_replace_placeholders(item, extracted_payloads)
 
-    def _replace_with_placeholder(m, extracted_payloads: Dict[str, str]):
+    def _replace_with_placeholder(m, extracted_payloads: dict[str, str]):
         raw_content = m.group(1)
         # Generate a unique placeholder for each match
         placeholder = f"__PLACEHOLDER_{uuid.uuid4().hex}__"
@@ -170,7 +170,7 @@ def parse_jsons(
     for match in json_matches:
         json_str = match.group(1).strip()
 
-        extracted_payloads: Dict[str, str] = {}
+        extracted_payloads: dict[str, str] = {}
 
         use_placeholder_logic = placeholder_start_marker and placeholder_end_marker
 

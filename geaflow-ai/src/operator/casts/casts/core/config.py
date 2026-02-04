@@ -5,7 +5,7 @@ config files, etc.) to eliminate hard-coded values.
 """
 
 import os
-from typing import Any, Dict, Literal
+from typing import Any, Literal
 
 from dotenv import load_dotenv
 
@@ -170,7 +170,7 @@ class DefaultConfiguration(Configuration):
         """Get string configuration value."""
         return str(self.get(key, default))
 
-    def get_embedding_config(self) -> Dict[str, str]:
+    def get_embedding_config(self) -> dict[str, str]:
         """Get embedding service configuration."""
         return {
             "endpoint": self.EMBEDDING_ENDPOINT,
@@ -178,7 +178,7 @@ class DefaultConfiguration(Configuration):
             "model": self.EMBEDDING_MODEL,
         }
 
-    def get_llm_config(self) -> Dict[str, str]:
+    def get_llm_config(self) -> dict[str, str]:
         """Get LLM service configuration."""
         return {
             "endpoint": self.LLM_ENDPOINT,
@@ -186,7 +186,7 @@ class DefaultConfiguration(Configuration):
             "model": self.LLM_MODEL,
         }
 
-    def get_simulation_config(self) -> Dict[str, Any]:
+    def get_simulation_config(self) -> dict[str, Any]:
         """Get simulation configuration."""
         return {
             "graph_size": self.SIMULATION_GRAPH_SIZE,
@@ -199,7 +199,7 @@ class DefaultConfiguration(Configuration):
             "enable_visualizer": self.SIMULATION_ENABLE_VISUALIZER,
         }
 
-    def get_cache_config(self) -> Dict[str, Any]:
+    def get_cache_config(self) -> dict[str, Any]:
         """Get cache configuration."""
         return {
             "min_confidence_threshold": self.CACHE_MIN_CONFIDENCE_THRESHOLD,

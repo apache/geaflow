@@ -13,7 +13,7 @@ import csv
 from dataclasses import dataclass
 from pathlib import Path
 import random
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any
 
 import networkx as nx
 
@@ -30,8 +30,8 @@ class GraphGeneratorConfig:
     """
 
     use_real_data: bool = False
-    real_data_dir: Optional[str] = None
-    real_subgraph_size: Optional[int] = None
+    real_data_dir: str | None = None
+    real_subgraph_size: int | None = None
 
 
 class GraphGenerator:
@@ -44,9 +44,9 @@ class GraphGenerator:
       to control size while preserving edge integrity.
     """
 
-    def __init__(self, size: int = 30, config: Optional[GraphGeneratorConfig] = None):
-        self.nodes: Dict[str, Dict[str, Any]] = {}
-        self.edges: Dict[str, List[Dict[str, str]]] = {}
+    def __init__(self, size: int = 30, config: GraphGeneratorConfig | None = None):
+        self.nodes: dict[str, dict[str, Any]] = {}
+        self.edges: dict[str, list[dict[str, str]]] = {}
 
         self.config = config or GraphGeneratorConfig()
         self.source_label = "synthetic"
@@ -150,7 +150,7 @@ class GraphGenerator:
             "Medium": "Medium.csv",
         }
 
-        node_attributes: Dict[Tuple[str, str], Dict[str, Any]] = {}
+        node_attributes: dict[tuple[str, str], dict[str, Any]] = {}
 
         for entity_type, filename in entity_files.items():
             path = data_dir / filename
@@ -231,9 +231,9 @@ class GraphGenerator:
             ("Medium", "Account", "MediumSignInAccount.csv", "mediumId", "accountId", "binds"),
         ]
 
-        edges: Dict[str, List[Dict[str, str]]] = {}
+        edges: dict[str, list[dict[str, str]]] = {}
 
-        def ensure_node(entity_type: str, raw_id: str) -> Optional[str]:
+        def ensure_node(entity_type: str, raw_id: str) -> str | None:
             key = (entity_type, raw_id)
             if key not in node_attributes:
                 return None
@@ -288,10 +288,10 @@ class GraphGenerator:
 
     def _sample_connected_subgraph(
         self,
-        node_attributes: Dict[Tuple[str, str], Dict[str, Any]],
-        edges: Dict[str, List[Dict[str, str]]],
+        node_attributes: dict[tuple[str, str], dict[str, Any]],
+        edges: dict[str, list[dict[str, str]]],
         max_size: int,
-    ) -> Tuple[Set[str], Dict[str, List[Dict[str, str]]]]:
+    ) -> tuple[set[str], dict[str, list[dict[str, str]]]]:
         """Sample a connected subgraph while preserving edge integrity.
 
         Strategy:
@@ -306,7 +306,7 @@ class GraphGenerator:
             return set(), {}
 
         # Build adjacency for undirected BFS
-        adj: Dict[str, Set[str]] = {}
+        adj: dict[str, set[str]] = {}
 
         def add_undirected(u: str, v: str) -> None:
             adj.setdefault(u, set()).add(v)
@@ -317,11 +317,11 @@ class GraphGenerator:
                 tgt_id = edge["target"]
                 add_undirected(src_id, tgt_id)
 
-        all_node_ids: List[str] = [attrs["id"] for attrs in node_attributes.values()]
+        all_node_ids: list[str] = [attrs["id"] for attrs in node_attributes.values()]
         seed = random.choice(all_node_ids)
 
-        visited: Set[str] = {seed}
-        queue: List[str] = [seed]
+        visited: set[str] = {seed}
+        queue: list[str] = [seed]
 
         while queue and len(visited) < max_size:
             current = queue.pop(0)
@@ -333,7 +333,7 @@ class GraphGenerator:
                         break
 
         # Restrict edges to sampled node set and keep them directed
-        new_edges: Dict[str, List[Dict[str, str]]] = {}
+        new_edges: dict[str, list[dict[str, str]]] = {}
         for src_id, edge_list in edges.items():
             if src_id not in visited:
                 continue

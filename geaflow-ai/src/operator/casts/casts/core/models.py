@@ -1,7 +1,7 @@
 """Core data models for CASTS (Context-Aware Strategy Cache System)."""
 
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Tuple
+from typing import Any, Callable
 
 import numpy as np
 
@@ -9,7 +9,7 @@ import numpy as np
 IDENTITY_KEYS = {"id", "node_id", "uuid", "UID", "Uid", "Id"}
 
 
-def filter_decision_properties(properties: Dict[str, Any]) -> Dict[str, Any]:
+def filter_decision_properties(properties: dict[str, Any]) -> dict[str, Any]:
     """Filter out identity fields from properties, keeping only decision-relevant attributes."""
     return {k: v for k, v in properties.items() if k not in IDENTITY_KEYS}
 
@@ -24,11 +24,11 @@ class Context:
     - goal: Natural language description of the traversal objective
     """
     structural_signature: str
-    properties: Dict[str, Any]
+    properties: dict[str, Any]
     goal: str
 
     @property
-    def safe_properties(self) -> Dict[str, Any]:
+    def safe_properties(self) -> dict[str, Any]:
         """Return properties with identity fields removed for decision-making."""
         return filter_decision_properties(self.properties)
 
@@ -56,7 +56,7 @@ class StrategyKnowledgeUnit:
     """
     id: str
     structural_signature: str
-    predicate: Callable[[Dict[str, Any]], bool]
+    predicate: Callable[[dict[str, Any]], bool]
     goal_template: str
     decision_template: str
     schema_fingerprint: str
@@ -69,6 +69,6 @@ class StrategyKnowledgeUnit:
         return hash(self.id)
 
     @property
-    def context_template(self) -> Tuple[str, Callable[[Dict[str, Any]], bool], str]:
+    def context_template(self) -> tuple[str, Callable[[dict[str, Any]], bool], str]:
         """Return the context template (s_sku, Φ, g_sku) as defined in the mathematical model."""
         return (self.structural_signature, self.predicate, self.goal_template)

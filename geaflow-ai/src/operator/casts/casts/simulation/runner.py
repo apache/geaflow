@@ -1,7 +1,7 @@
 """Main entry point for CASTS strategy cache simulations."""
 
 import asyncio
-from typing import Any, Dict
+from typing import Any
 
 from casts.core.config import DefaultConfiguration
 from casts.core.services import StrategyCache
@@ -35,8 +35,8 @@ async def run_simulation():
 
     # Setup verifier if enabled
     batch_evaluator = None
-    schema_summary: Dict[str, Any] = {}
-    all_evaluation_results: Dict[int, PathEvaluationScore] = {}
+    schema_summary: dict[str, Any] = {}
+    all_evaluation_results: dict[int, PathEvaluationScore] = {}
     if config.get_bool("SIMULATION_ENABLE_VERIFIER"):
         schema_summary = {
             "node_types": list(graph.get_schema().node_types),

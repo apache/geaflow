@@ -8,7 +8,7 @@ from collections import deque
 import csv
 from pathlib import Path
 import random
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import networkx as nx
 
@@ -68,14 +68,14 @@ class SyntheticBusinessGraphGoalGenerator(GoalGenerator):
         self._goal_weights = [100, 60, 40, 25, 15]
 
     @property
-    def goal_texts(self) -> List[str]:
+    def goal_texts(self) -> list[str]:
         return [g[0] for g in self._goals]
 
     @property
-    def goal_weights(self) -> List[int]:
+    def goal_weights(self) -> list[int]:
         return self._goal_weights.copy()
 
-    def select_goal(self, node_type: Optional[str] = None) -> Tuple[str, str]:
+    def select_goal(self, node_type: str | None = None) -> tuple[str, str]:
         """Select a goal and its rubric based on weights."""
         selected_goal, selected_rubric = random.choices(
             self._goals, weights=self._goal_weights, k=1
@@ -143,14 +143,14 @@ class RealBusinessGraphGoalGenerator(GoalGenerator):
         self._goal_weights = [100, 90, 80, 70, 60, 50]
 
     @property
-    def goal_texts(self) -> List[str]:
+    def goal_texts(self) -> list[str]:
         return [g[0] for g in self._goals]
 
     @property
-    def goal_weights(self) -> List[int]:
+    def goal_weights(self) -> list[int]:
         return self._goal_weights.copy()
 
-    def select_goal(self, node_type: Optional[str] = None) -> Tuple[str, str]:
+    def select_goal(self, node_type: str | None = None) -> tuple[str, str]:
         """Weighted random selection; optionally bias by node_type.
 
         If ``node_type`` is provided, slightly bias towards goals whose
@@ -159,12 +159,12 @@ class RealBusinessGraphGoalGenerator(GoalGenerator):
         """
 
         # Simple heuristic: filter a small candidate subset by node_type
-        candidates: List[Tuple[str, str]] = self._goals
-        weights: List[int] = self._goal_weights
+        candidates: list[tuple[str, str]] = self._goals
+        weights: list[int] = self._goal_weights
 
         if node_type is not None:
             node_type_lower = node_type.lower()
-            filtered: List[Tuple[Tuple[str, str], int]] = []
+            filtered: list[tuple[tuple[str, str], int]] = []
 
             for goal_tuple, w in zip(self._goals, self._goal_weights, strict=False):
                 text = goal_tuple[0]
@@ -192,34 +192,34 @@ class SyntheticDataSource(DataSource):
         Args:
             size: Number of nodes to generate
         """
-        self._nodes: Dict[str, Dict[str, Any]] = {}
-        self._edges: Dict[str, List[Dict[str, str]]] = {}
+        self._nodes: dict[str, dict[str, Any]] = {}
+        self._edges: dict[str, list[dict[str, str]]] = {}
         self._source_label = "synthetic"
         # NOTE: For synthetic graphs we assume the generated data is immutable
         # after initialization. If you mutate `nodes` / `edges` at runtime, you
         # must call `get_schema()` again so a fresh InMemoryGraphSchema (and
         # fingerprint) is built.
-        self._goal_generator: Optional[GoalGenerator] = None
+        self._goal_generator: GoalGenerator | None = None
         self._generate_zipf_data(size)
         self._schema = InMemoryGraphSchema(self._nodes, self._edges)
         self._goal_generator = SyntheticBusinessGraphGoalGenerator()
 
     @property
-    def nodes(self) -> Dict[str, Dict[str, Any]]:
+    def nodes(self) -> dict[str, dict[str, Any]]:
         return self._nodes
 
     @property
-    def edges(self) -> Dict[str, List[Dict[str, str]]]:
+    def edges(self) -> dict[str, list[dict[str, str]]]:
         return self._edges
 
     @property
     def source_label(self) -> str:
         return self._source_label
 
-    def get_node(self, node_id: str) -> Optional[Dict[str, Any]]:
+    def get_node(self, node_id: str) -> dict[str, Any] | None:
         return self._nodes.get(node_id)
 
-    def get_neighbors(self, node_id: str, edge_label: Optional[str] = None) -> List[str]:
+    def get_neighbors(self, node_id: str, edge_label: str | None = None) -> list[str]:
         """Get neighbor node IDs for a given node."""
         if node_id not in self._edges:
             return []
@@ -245,10 +245,10 @@ class SyntheticDataSource(DataSource):
     def get_starting_nodes(
         self,
         goal: str,
-        recommended_node_types: List[str],
+        recommended_node_types: list[str],
         count: int,
         min_degree: int = 2,
-    ) -> List[str]:
+    ) -> list[str]:
         """Select starting nodes using LLM-recommended node types.
 
         For synthetic data, this is straightforward because all nodes
@@ -392,15 +392,15 @@ class SyntheticDataSource(DataSource):
 class RealDataSource(DataSource):
     """Real graph data source loaded from CSV files."""
 
-    def __init__(self, data_dir: str, max_nodes: Optional[int] = None):
+    def __init__(self, data_dir: str, max_nodes: int | None = None):
         """Initialize real data source.
 
         Args:
             data_dir: Directory containing CSV files
             max_nodes: Maximum number of nodes to load (for sampling)
         """
-        self._nodes: Dict[str, Dict[str, Any]] = {}
-        self._edges: Dict[str, List[Dict[str, str]]] = {}
+        self._nodes: dict[str, dict[str, Any]] = {}
+        self._edges: dict[str, list[dict[str, str]]] = {}
         self._source_label = "real"
         self._data_dir = Path(data_dir)
         self._max_nodes = max_nodes
@@ -408,13 +408,13 @@ class RealDataSource(DataSource):
 
         # Schema is now lazily loaded and will be constructed on the first
         # call to `get_schema()` after the data is loaded.
-        self._schema: Optional[GraphSchema] = None
+        self._schema: GraphSchema | None = None
         self._schema_dirty = True  # Start with a dirty schema
-        self._goal_generator: Optional[GoalGenerator] = None
+        self._goal_generator: GoalGenerator | None = None
 
         # Caches for starting node selection
-        self._node_out_edges: Optional[Dict[str, List[str]]] = None
-        self._nodes_by_type: Optional[Dict[str, List[str]]] = None
+        self._node_out_edges: dict[str, list[str]] | None = None
+        self._nodes_by_type: dict[str, list[str]] | None = None
 
         self._load_real_graph()
 
@@ -422,21 +422,21 @@ class RealDataSource(DataSource):
         # self._goal_generator = RealBusinessGraphGoalGenerator(node_types, edge_labels)
 
     @property
-    def nodes(self) -> Dict[str, Dict[str, Any]]:
+    def nodes(self) -> dict[str, dict[str, Any]]:
         return self._nodes
 
     @property
-    def edges(self) -> Dict[str, List[Dict[str, str]]]:
+    def edges(self) -> dict[str, list[dict[str, str]]]:
         return self._edges
 
     @property
     def source_label(self) -> str:
         return self._source_label
 
-    def get_node(self, node_id: str) -> Optional[Dict[str, Any]]:
+    def get_node(self, node_id: str) -> dict[str, Any] | None:
         return self._nodes.get(node_id)
 
-    def get_neighbors(self, node_id: str, edge_label: Optional[str] = None) -> List[str]:
+    def get_neighbors(self, node_id: str, edge_label: str | None = None) -> list[str]:
         """Get neighbor node IDs for a given node."""
         if node_id not in self._edges:
             return []
@@ -480,10 +480,10 @@ class RealDataSource(DataSource):
     def get_starting_nodes(
         self,
         goal: str,
-        recommended_node_types: List[str],
+        recommended_node_types: list[str],
         count: int,
         min_degree: int = 2,
-    ) -> List[str]:
+    ) -> list[str]:
         """Select starting nodes using LLM-recommended node types.
 
         For real data, connectivity varies, so we rely on caches and fallbacks.
@@ -612,7 +612,7 @@ class RealDataSource(DataSource):
     def _add_shared_medium_links(self):
         """Add edges between account owners who share a login medium."""
         medium_to_accounts = {}
-        signin_edges: List[Tuple[str, str]] = self._find_edges_by_label(
+        signin_edges: list[tuple[str, str]] = self._find_edges_by_label(
             "signin",
             "Medium",
             "Account",
@@ -625,12 +625,12 @@ class RealDataSource(DataSource):
 
         # Build owner map
         owner_map = {}
-        person_owns: List[Tuple[str, str]] = self._find_edges_by_label(
+        person_owns: list[tuple[str, str]] = self._find_edges_by_label(
             "own",
             "Person",
             "Account",
         )
-        company_owns: List[Tuple[str, str]] = self._find_edges_by_label(
+        company_owns: list[tuple[str, str]] = self._find_edges_by_label(
             "own",
             "Company",
             "Account",
@@ -667,12 +667,12 @@ class RealDataSource(DataSource):
         """Add edges between owners of accounts that have transactions."""
         # Build an owner map: account_id -> owner_id
         owner_map = {}
-        person_owns: List[Tuple[str, str]] = self._find_edges_by_label(
+        person_owns: list[tuple[str, str]] = self._find_edges_by_label(
             "own",
             "Person",
             "Account",
         )
-        company_owns: List[Tuple[str, str]] = self._find_edges_by_label(
+        company_owns: list[tuple[str, str]] = self._find_edges_by_label(
             "own",
             "Company",
             "Account",
@@ -684,7 +684,7 @@ class RealDataSource(DataSource):
             owner_map[tgt] = src
 
         # Find all transfer edges
-        transfer_edges: List[Tuple[str, str]] = self._find_edges_by_label(
+        transfer_edges: list[tuple[str, str]] = self._find_edges_by_label(
             "transfer",
             "Account",
             "Account",
@@ -709,7 +709,7 @@ class RealDataSource(DataSource):
 
     def _find_edges_by_label(
         self, label: str, from_type: str, to_type: str
-    ) -> List[Tuple[str, str]]:
+    ) -> list[tuple[str, str]]:
         """Helper to find all edges of a certain type."""
         edges = []
 
@@ -854,7 +854,7 @@ class RealDataSource(DataSource):
         if len(largest_cc) > self._max_nodes:
             # Choose a seed type uniformly to avoid always starting from the
             # dominant type (often Account) when max_nodes is small.
-            nodes_by_type: Dict[str, List[str]] = {}
+            nodes_by_type: dict[str, list[str]] = {}
             for node_id in largest_cc:
                 node_type = G.nodes[node_id].get("type", "Unknown")
                 nodes_by_type.setdefault(node_type, []).append(node_id)
@@ -869,14 +869,14 @@ class RealDataSource(DataSource):
 
                 # Collect candidate neighbors (both directions) to preserve
                 # weak connectivity while allowing richer expansion.
-                candidates: List[str] = []
+                candidates: list[str] = []
                 for _, nbr in G.out_edges(current):
                     candidates.append(nbr)
                 for nbr, _ in G.in_edges(current):
                     candidates.append(nbr)
 
                 # Deduplicate while keeping a stable order.
-                deduped: List[str] = []
+                deduped: list[str] = []
                 seen = set()
                 for nbr in candidates:
                     if nbr in seen:

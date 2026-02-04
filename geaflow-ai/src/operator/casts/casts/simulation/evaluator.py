@@ -9,7 +9,7 @@ Scoring is aligned to CASTS core goals:
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any
 
 from casts.services.path_judge import PathJudge
 from casts.utils.helpers import parse_jsons
@@ -34,7 +34,7 @@ class PathEvaluationScore:
     total_score: float = 0.0
     grade: str = "F"
     explanation: str = ""
-    details: Dict[str, Any] = field(default_factory=dict)
+    details: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         self.total_score = (
@@ -73,12 +73,12 @@ class PathEvaluator:
 
     def evaluate_subgraph(
         self,
-        path_steps: List[Dict[str, Any]],
+        path_steps: list[dict[str, Any]],
         goal: str,
         rubric: str,
         start_node: str,
-        start_node_props: Dict[str, Any],
-        schema: Dict[str, Any],
+        start_node_props: dict[str, Any],
+        schema: dict[str, Any],
     ) -> PathEvaluationScore:
         """
         Evaluate a traversal subgraph and return detailed scoring.
@@ -91,7 +91,7 @@ class PathEvaluator:
             )
 
         # Reconstruct the subgraph tree for the LLM prompt
-        subgraph_nodes: Dict[int, Dict[str, Any]] = {
+        subgraph_nodes: dict[int, dict[str, Any]] = {
             -1: {"step": {"node": start_node, "p": start_node_props}, "children": []}
         }  # sentinel root
         for i, step in enumerate(path_steps):
@@ -154,7 +154,7 @@ class PathEvaluator:
 
     def _render_subgraph_ascii(
         self,
-        nodes: Dict[int, Dict[str, Any]],
+        nodes: dict[int, dict[str, Any]],
         root_idx: int,
         prefix: str = "",
         is_last: bool = True,
@@ -191,11 +191,11 @@ class PathEvaluator:
         goal: str,
         rubric: str,
         subgraph: Dict,
-        schema: Dict[str, Any],
-    ) -> Tuple[float, Dict[str, Any]]:
+        schema: dict[str, Any],
+    ) -> tuple[float, dict[str, Any]]:
         """Score query effectiveness via LLM judge (0–35)."""
 
-        detail: Dict[str, Any] = {}
+        detail: dict[str, Any] = {}
 
         coverage_bonus = COVERAGE_BONUS if len(subgraph) > 1 else 0.0
         detail["coverage_bonus"] = coverage_bonus
@@ -232,7 +232,7 @@ Output requirements (IMPORTANT):
 - Do NOT include any text outside the ```json ... ``` block.
 """  # noqa: E501
 
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "goal": goal,
             "subgraph_ascii": subgraph_ascii,
             "schema": schema,
@@ -244,7 +244,7 @@ Output requirements (IMPORTANT):
 
         parsed = parse_jsons(raw_response)
         llm_score: float = 0.0
-        reasoning: Dict[str, Any] = {}
+        reasoning: dict[str, Any] = {}
 
         if parsed:
             first = parsed[0]
@@ -265,10 +265,10 @@ Output requirements (IMPORTANT):
         return score, detail
 
     def _score_strategy_reusability(
-        self, sku_ids: List[str], decisions: List[str], steps: List[Dict[str, Any]]
-    ) -> Tuple[float, Dict[str, Any]]:
+        self, sku_ids: list[str], decisions: list[str], steps: list[dict[str, Any]]
+    ) -> tuple[float, dict[str, Any]]:
         score = 0.0
-        detail: Dict[str, Any] = {}
+        detail: dict[str, Any] = {}
 
         reuse_count = len(sku_ids) - len(set(sku_ids))
         reuse_score = min(10.0, max(0, reuse_count) * 2.5)
@@ -295,9 +295,9 @@ Output requirements (IMPORTANT):
         return min(STRATEGY_MAX_SCORE, score), detail
 
     def _score_cache_efficiency(
-        self, match_types: List[Optional[str]]
-    ) -> Tuple[float, Dict[str, Any]]:
-        detail: Dict[str, Any] = {}
+        self, match_types: list[str | None]
+    ) -> tuple[float, dict[str, Any]]:
+        detail: dict[str, Any] = {}
         total = len(match_types)
         if total == 0:
             return 0.0, {"note": "no_steps"}
@@ -326,10 +326,10 @@ Output requirements (IMPORTANT):
         return score, detail
 
     def _score_decision_consistency(
-        self, decisions: List[str], props: List[Dict[str, Any]]
-    ) -> Tuple[float, Dict[str, Any]]:
+        self, decisions: list[str], props: list[dict[str, Any]]
+    ) -> tuple[float, dict[str, Any]]:
         score = 0.0
-        detail: Dict[str, Any] = {}
+        detail: dict[str, Any] = {}
 
         direction_score = 0.0
         if decisions:
@@ -373,13 +373,13 @@ Output requirements (IMPORTANT):
         return min(CONSISTENCY_MAX_SCORE, score), detail
 
     def _score_information_utility(
-        self, props: List[Dict[str, Any]]
-    ) -> Tuple[float, Dict[str, Any]]:
-        detail: Dict[str, Any] = {}
+        self, props: list[dict[str, Any]]
+    ) -> tuple[float, dict[str, Any]]:
+        detail: dict[str, Any] = {}
         if not props:
             return 0.0, {"note": "no_properties"}
 
-        keys: Set[str] = set()
+        keys: set[str] = set()
         non_null = 0
         total = 0
         for prop in props:
@@ -420,8 +420,8 @@ Output requirements (IMPORTANT):
             parts.append("Path only weakly answers the goal; tighten goal alignment.")
         return " ".join(parts)
 
-    def _dominant_pattern_ratio(self, decisions: List[str]) -> float:
-        counts: Dict[str, int] = {}
+    def _dominant_pattern_ratio(self, decisions: list[str]) -> float:
+        counts: dict[str, int] = {}
         for decision in decisions:
             counts[decision] = counts.get(decision, 0) + 1
         dominant = max(counts.values()) if counts else 0
@@ -436,14 +436,14 @@ class BatchEvaluator:
 
     def evaluate_batch(
         self,
-        paths: Dict[int, Dict[str, Any]],
-        schema: Dict[str, Any],
-    ) -> Tuple[Dict[int, PathEvaluationScore], Dict[int, Dict[str, str]]]:
+        paths: dict[int, dict[str, Any]],
+        schema: dict[str, Any],
+    ) -> tuple[dict[int, PathEvaluationScore], dict[int, dict[str, str]]]:
         """
         Evaluate a batch of paths and return their evaluation scores with metadata.
         """
-        results: Dict[int, PathEvaluationScore] = {}
-        metadata: Dict[int, Dict[str, str]] = {}
+        results: dict[int, PathEvaluationScore] = {}
+        metadata: dict[int, dict[str, str]] = {}
         for request_id, path_data in paths.items():
             score = self.path_evaluator.evaluate_subgraph(
                 path_steps=path_data.get("steps", []),
@@ -462,8 +462,8 @@ class BatchEvaluator:
 
     def print_batch_summary(
         self,
-        results: Dict[int, PathEvaluationScore],
-        metadata: Optional[Dict[int, Dict[str, str]]] = None,
+        results: dict[int, PathEvaluationScore],
+        metadata: dict[int, dict[str, str]] | None = None,
     ) -> None:
         """
         Print a summary of evaluation results for a batch of paths.
@@ -502,7 +502,7 @@ class BatchEvaluator:
         print(f"  Maximum: {max_score:.2f}/100")
         print(f"  Minimum: {min_score:.2f}/100")
 
-        grade_counts: Dict[str, int] = {}
+        grade_counts: dict[str, int] = {}
         for score in scores:
             grade_counts[score.grade] = grade_counts.get(score.grade, 0) + 1
         print("Grade Distribution:")

@@ -1,21 +1,24 @@
 """Gremlin traversal state machine for validating graph traversal steps."""
 
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Sequence, Tuple, TypedDict
+from typing import Literal, Sequence, TypedDict
 
 from casts.core.interfaces import GraphSchema
+
+
+GremlinState = Literal["V", "E", "P", "END"]
 
 
 class GremlinStateDefinition(TypedDict):
     """Typed representation of a Gremlin state definition."""
 
-    options: List[str]
-    transitions: Dict[str, str]
+    options: list[str]
+    transitions: dict[str, GremlinState]
 
 
 # Gremlin Step State Machine
 # Defines valid transitions between step types (V: Vertex, E: Edge, P: Property)
-GREMLIN_STEP_STATE_MACHINE: Dict[str, GremlinStateDefinition] = {
+GREMLIN_STEP_STATE_MACHINE: dict[GremlinState, GremlinStateDefinition] = {
     # State: current element is a Vertex
     "V": {
         "options": [
@@ -116,13 +119,13 @@ def _normalize_signature(signature: str) -> str:
     return normalized.lstrip(".")
 
 
-def _split_steps(signature: str) -> List[str]:
+def _split_steps(signature: str) -> list[str]:
     """Split a traversal signature into raw step segments."""
     if not signature:
         return []
 
-    steps: List[str] = []
-    current: List[str] = []
+    steps: list[str] = []
+    current: list[str] = []
     depth = 0
 
     for ch in signature:
@@ -153,9 +156,9 @@ def _extract_step_name(step: str) -> str:
     return head
 
 
-def _combine_modifiers(steps: Sequence[str]) -> List[str]:
+def _combine_modifiers(steps: Sequence[str]) -> list[str]:
     """Combine modifier steps (e.g., order().by()) into a single step string."""
-    combined: List[str] = []
+    combined: list[str] = []
     for step in steps:
         step_name = _extract_step_name(step)
         if step_name in _MODIFIER_STEPS and combined:
@@ -167,7 +170,7 @@ def _combine_modifiers(steps: Sequence[str]) -> List[str]:
     return combined
 
 
-def _parse_traversal_signature(signature: str) -> List[ParsedStep]:
+def _parse_traversal_signature(signature: str) -> list[ParsedStep]:
     """Parse traversal signature into steps with normalized names."""
     normalized = _normalize_signature(signature)
     raw_steps = _combine_modifiers(_split_steps(normalized))
@@ -178,14 +181,14 @@ class GremlinStateMachine:
     """State machine for validating Gremlin traversal steps and determining next valid options."""
 
     @staticmethod
-    def parse_traversal_signature(structural_signature: str) -> List[str]:
+    def parse_traversal_signature(structural_signature: str) -> list[str]:
         """Parse traversal signature into decision steps for display or history."""
         return [step.raw for step in _parse_traversal_signature(structural_signature)]
 
     @staticmethod
     def get_state_and_options(
         structural_signature: str, graph_schema: GraphSchema, node_id: str
-    ) -> Tuple[str, List[str]]:
+    ) -> tuple[GremlinState, list[str]]:
         """
         Parse traversal signature to determine current state (V, E, or P) and return
         valid next steps.
@@ -204,7 +207,7 @@ class GremlinStateMachine:
         else:
             state = "V"  # Assume starting from a Vertex context
 
-            last_primary_step: Optional[str] = None
+            last_primary_step: str | None = None
             for step in _parse_traversal_signature(structural_signature):
                 if state not in GREMLIN_STEP_STATE_MACHINE:
                     state = "END"

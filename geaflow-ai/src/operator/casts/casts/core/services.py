@@ -1,7 +1,7 @@
 """Core strategy cache service for storing and retrieving traversal strategies."""
 
 import re
-from typing import Any, List, Optional, Tuple
+from typing import Any, Literal
 
 from casts.core.models import Context, StrategyKnowledgeUnit
 from casts.utils.helpers import (
@@ -9,6 +9,8 @@ from casts.utils.helpers import (
     calculate_tier2_threshold,
     cosine_similarity,
 )
+
+MatchType = Literal["Tier1", "Tier2", ""]
 
 
 class StrategyCache:
@@ -33,7 +35,7 @@ class StrategyCache:
     """
 
     def __init__(self, embed_service: Any, config: Any):
-        self.knowledge_base: List[StrategyKnowledgeUnit] = []
+        self.knowledge_base: list[StrategyKnowledgeUnit] = []
         self.embed_service = embed_service
 
         # Get all hyperparameters from the configuration object
@@ -51,13 +53,13 @@ class StrategyCache:
         self,
         context: Context,
         skip_tier1: bool = False,
-    ) -> Tuple[Optional[str], Optional[StrategyKnowledgeUnit], str]:
+    ) -> tuple[str | None, StrategyKnowledgeUnit | None, MatchType]:
         """
         Find a matching strategy for the given context.
 
         Returns:
             Tuple of (decision_template, strategy_knowledge_unit, match_type)
-            match_type: 'Tier1', 'Tier2', or None
+            match_type: 'Tier1', 'Tier2', or ''
 
         Two-tier matching:
         - Tier 1: Strict logic matching (exact structural signature, goal, schema, and predicate)
@@ -177,11 +179,11 @@ class StrategyCache:
         stored_abstract = self._to_abstract_signature(stored_sig)
         return runtime_abstract == stored_abstract
 
-    def add_sku(self, sku: StrategyKnowledgeUnit):
+    def add_sku(self, sku: StrategyKnowledgeUnit) -> None:
         """Add a new Strategy Knowledge Unit to the cache."""
         self.knowledge_base.append(sku)
 
-    def update_confidence(self, sku: StrategyKnowledgeUnit, success: bool):
+    def update_confidence(self, sku: StrategyKnowledgeUnit, success: bool) -> None:
         """
         Update confidence score using AIMD (Additive Increase, Multiplicative Decrease).
 
@@ -198,6 +200,6 @@ class StrategyCache:
             # Ensure confidence doesn't drop below minimum
             sku.confidence_score = max(0.1, sku.confidence_score)
 
-    def cleanup_low_confidence_skus(self):
+    def cleanup_low_confidence_skus(self) -> None:
         """Remove SKUs that have fallen below the minimum confidence threshold."""
         self.knowledge_base = [sku for sku in self.knowledge_base if sku.confidence_score >= 0.1]

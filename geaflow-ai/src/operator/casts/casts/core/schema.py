@@ -5,7 +5,7 @@ graph structure metadata from execution logic.
 """
 
 from enum import Enum
-from typing import Any, Dict, List, Set
+from typing import Any
 
 from casts.core.interfaces import GraphSchema
 
@@ -20,7 +20,9 @@ class SchemaState(str, Enum):
 class InMemoryGraphSchema(GraphSchema):
     """In-memory implementation of GraphSchema for CASTS data sources."""
 
-    def __init__(self, nodes: Dict[str, Dict[str, Any]], edges: Dict[str, List[Dict[str, str]]]):
+    def __init__(
+        self, nodes: dict[str, dict[str, Any]], edges: dict[str, list[dict[str, str]]]
+    ):
         """Initialize schema from graph data.
 
         Args:
@@ -50,11 +52,11 @@ class InMemoryGraphSchema(GraphSchema):
 
     def _reset_cache(self) -> None:
         """Reset cached schema data structures."""
-        self._node_types: Set[str] = set()
-        self._edge_labels: Set[str] = set()
-        self._node_type_schemas: Dict[str, Dict[str, Any]] = {}
-        self._node_edge_labels: Dict[str, List[str]] = {}
-        self._node_incoming_edge_labels: Dict[str, List[str]] = {}
+        self._node_types: set[str] = set()
+        self._edge_labels: set[str] = set()
+        self._node_type_schemas: dict[str, dict[str, Any]] = {}
+        self._node_edge_labels: dict[str, list[str]] = {}
+        self._node_incoming_edge_labels: dict[str, list[str]] = {}
 
     def _extract_schema(self) -> None:
         """Extract schema information from graph data."""
@@ -90,28 +92,28 @@ class InMemoryGraphSchema(GraphSchema):
                 }
 
     @property
-    def node_types(self) -> Set[str]:
+    def node_types(self) -> set[str]:
         """Get all node types in the graph."""
         self._ensure_ready()
         return self._node_types.copy()
 
     @property
-    def edge_labels(self) -> Set[str]:
+    def edge_labels(self) -> set[str]:
         """Get all edge labels in the graph."""
         self._ensure_ready()
         return self._edge_labels.copy()
 
-    def get_node_schema(self, node_type: str) -> Dict[str, Any]:
+    def get_node_schema(self, node_type: str) -> dict[str, Any]:
         """Get schema information for a specific node type."""
         self._ensure_ready()
         return self._node_type_schemas.get(node_type, {}).copy()
 
-    def get_valid_outgoing_edge_labels(self, node_id: str) -> List[str]:
+    def get_valid_outgoing_edge_labels(self, node_id: str) -> list[str]:
         """Get valid outgoing edge labels for a specific node."""
         self._ensure_ready()
         return self._node_edge_labels.get(node_id, []).copy()
 
-    def get_valid_incoming_edge_labels(self, node_id: str) -> List[str]:
+    def get_valid_incoming_edge_labels(self, node_id: str) -> list[str]:
         """Get valid incoming edge labels for a specific node."""
         self._ensure_ready()
         return self._node_incoming_edge_labels.get(node_id, []).copy()
@@ -121,7 +123,7 @@ class InMemoryGraphSchema(GraphSchema):
         self._ensure_ready()
         return label in self._edge_labels
 
-    def get_all_edge_labels(self) -> List[str]:
+    def get_all_edge_labels(self) -> list[str]:
         """Get all edge labels as a list (for backward compatibility)."""
         self._ensure_ready()
         return list(self._edge_labels)

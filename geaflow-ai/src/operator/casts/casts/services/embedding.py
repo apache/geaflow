@@ -1,7 +1,7 @@
 """Embedding service for generating vector representations of graph properties."""
 
 import hashlib
-from typing import Any, Dict
+from typing import Any
 
 import numpy as np
 from openai import AsyncOpenAI
@@ -67,7 +67,7 @@ class EmbeddingService:
         vector = rng.random(self.dimension)
         return vector / np.linalg.norm(vector)
 
-    async def embed_properties(self, properties: Dict[str, Any]) -> np.ndarray:
+    async def embed_properties(self, properties: dict[str, Any]) -> np.ndarray:
         """
         Generate embedding vector for a dictionary of properties.
         
