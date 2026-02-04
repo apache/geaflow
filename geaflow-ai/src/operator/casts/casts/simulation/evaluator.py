@@ -190,7 +190,7 @@ class PathEvaluator:
         self,
         goal: str,
         rubric: str,
-        subgraph: Dict,
+        subgraph: dict[int, dict[str, Any]],
         schema: dict[str, Any],
     ) -> tuple[float, dict[str, Any]]:
         """Score query effectiveness via LLM judge (0–35)."""

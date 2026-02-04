@@ -201,6 +201,7 @@ class GremlinStateMachine:
         Returns:
             Tuple of (current_state, list_of_valid_next_steps)
         """
+        state: GremlinState
         # Special case: initial state or empty
         if not structural_signature or structural_signature == "V()":
             state = "V"

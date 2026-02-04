@@ -1,7 +1,7 @@
 """Simulation engine for managing CASTS strategy cache experiments."""
 
 import random
-from typing import Any, Callable, Literal
+from typing import Any, Callable, Literal, cast
 
 from casts.core.gremlin_state import GremlinStateMachine
 from casts.core.interfaces import DataSource
@@ -146,9 +146,12 @@ class SimulationEngine:
                 - execution_success: True if validation passed, False to apply
                   confidence penalty
         """
-        cycle_penalty_mode: CyclePenaltyMode = self.llm_oracle.config.get_str(
-            "CYCLE_PENALTY"
-        ).upper()
+        raw_cycle_penalty_mode = self.llm_oracle.config.get_str("CYCLE_PENALTY").upper()
+        if raw_cycle_penalty_mode not in ("NONE", "PUNISH", "STOP"):
+            raw_cycle_penalty_mode = "STOP"
+        cycle_penalty_mode: CyclePenaltyMode = cast(
+            CyclePenaltyMode, raw_cycle_penalty_mode
+        )
 
         # Mode: NONE - skip all validation
         if cycle_penalty_mode == "NONE":
