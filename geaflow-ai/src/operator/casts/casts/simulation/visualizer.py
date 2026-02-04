@@ -8,7 +8,7 @@ import networkx as nx
 
 from casts.core.interfaces import DataSource
 from casts.core.models import Context, StrategyKnowledgeUnit
-from casts.core.services import StrategyCache
+from casts.core.strategy_cache import StrategyCache
 from casts.simulation.metrics import SimulationMetrics
 from casts.utils.helpers import (
     calculate_dynamic_similarity_threshold,

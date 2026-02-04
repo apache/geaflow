@@ -6,7 +6,7 @@ from typing import Any, Callable, Literal, cast
 from casts.core.gremlin_state import GremlinStateMachine
 from casts.core.interfaces import DataSource
 from casts.core.models import Context
-from casts.core.services import StrategyCache
+from casts.core.strategy_cache import StrategyCache
 from casts.services.llm_oracle import LLMOracle
 from casts.simulation.executor import TraversalExecutor
 from casts.simulation.metrics import MetricsCollector

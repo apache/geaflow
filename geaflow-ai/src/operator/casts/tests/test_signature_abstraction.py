@@ -19,7 +19,7 @@ from unittest.mock import AsyncMock, MagicMock
 from casts.core.config import DefaultConfiguration
 from casts.core.interfaces import DataSource, GraphSchema
 from casts.core.models import Context, StrategyKnowledgeUnit
-from casts.core.services import StrategyCache
+from casts.core.strategy_cache import StrategyCache
 from casts.simulation.executor import TraversalExecutor
 
 

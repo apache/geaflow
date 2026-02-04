@@ -4,7 +4,7 @@ import asyncio
 from typing import Any
 
 from casts.core.config import DefaultConfiguration
-from casts.core.services import StrategyCache
+from casts.core.strategy_cache import StrategyCache
 from casts.data.sources import DataSourceFactory
 from casts.services.embedding import EmbeddingService
 from casts.services.llm_oracle import LLMOracle
