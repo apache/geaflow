@@ -17,8 +17,6 @@
 
 """Embedding service for generating vector representations of graph properties."""
 
-
-
 import numpy as np
 from openai import AsyncOpenAI
 
