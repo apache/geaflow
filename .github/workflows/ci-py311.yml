@@ -24,6 +24,6 @@
         - name: Install uv
           run: pip install uv
         - name: Sync deps
-          run: uv sync --frozen
+          run: uv sync
         - name: Run tests
           run: uv run pytest

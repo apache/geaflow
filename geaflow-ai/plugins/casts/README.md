@@ -71,7 +71,7 @@ From the plugins directory (parent of this module):
 
 ```bash
 cd /Users/kuda/code/geaflow/geaflow-ai/plugins
-uv sync --frozen
+uv sync
 python -m simulation.runner
 ```
 
@@ -80,7 +80,7 @@ python -m simulation.runner
 Run tests locally:
 
 ```bash
-uv sync --frozen
+uv sync
 pytest
 ```
 
