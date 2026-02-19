@@ -44,6 +44,7 @@ import org.apache.geaflow.dsl.udf.graph.IncMinimumSpanningTree;
 import org.apache.geaflow.dsl.udf.graph.IncWeakConnectedComponents;
 import org.apache.geaflow.dsl.udf.graph.IncrementalKCore;
 import org.apache.geaflow.dsl.udf.graph.JaccardSimilarity;
+import org.apache.geaflow.dsl.udf.graph.JaccardSimilarityAlgorithm;
 import org.apache.geaflow.dsl.udf.graph.KCore;
 import org.apache.geaflow.dsl.udf.graph.KHop;
 import org.apache.geaflow.dsl.udf.graph.LabelPropagation;
@@ -235,6 +236,7 @@ public class BuildInSqlFunctionTable extends ListSqlOperatorTable {
             .add(GeaFlowFunction.of(ClusterCoefficient.class))
             .add(GeaFlowFunction.of(IncWeakConnectedComponents.class))
             .add(GeaFlowFunction.of(CommonNeighbors.class))
+            .add(GeaFlowFunction.of(JaccardSimilarityAlgorithm.class))
             .add(GeaFlowFunction.of(JaccardSimilarity.class))
             .add(GeaFlowFunction.of(IncKHopAlgorithm.class))
             .add(GeaFlowFunction.of(LabelPropagation.class))
