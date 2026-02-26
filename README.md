@@ -1,10 +1,10 @@
 # Guide
 
 [![Discord](https://badgen.net/badge/icon/Discord?icon=discord&label)](https://discord.gg/apKdP3DXuH)
-[![Commit](https://badgen.net/github/last-commit/tugraph-family/tugraph-analytics/master?icon=git&label=Commit)](https://github.com/TuGraph-family/tugraph-analytics/commits/master)
+[![Commit](https://badgen.net/github/last-commit/apache/geaflow/master?icon=git&label=Commit)](https://github.com/apache/geaflow/commits/master)
 [![Docker](https://shields.io/docker/pulls/tugraph/geaflow-console?logo=docker&label=Docker&color=blue)](https://hub.docker.com/r/tugraph/geaflow-console/tags)
-[![License](https://shields.io/github/license/tugraph-family/tugraph-analytics?logo=apache&label=License&color=blue)](https://www.apache.org/licenses/LICENSE-2.0.html)
-[![Release](https://shields.io/github/v/release/tugraph-family/tugraph-analytics.svg?logo=stackblitz&label=Version&color=red)](https://github.com/TuGraph-family/tugraph-analytics/releases)
+[![License](https://shields.io/github/license/apache/geaflow?logo=apache&label=License&color=blue)](https://www.apache.org/licenses/LICENSE-2.0.html)
+[![Release](https://shields.io/github/v/release/apache/geaflow.svg?logo=stackblitz&label=Version&color=red)](https://github.com/apache/geaflow/releases)
 [![Blog](https://badgen.net/static/Blog/github.io/orange?icon=rss)](https://geaflow.github.io/)
 
 > 🌐️ English | [中文](README_cn.md)
