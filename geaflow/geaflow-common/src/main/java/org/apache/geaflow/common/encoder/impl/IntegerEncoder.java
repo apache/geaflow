@@ -27,31 +27,37 @@ public class IntegerEncoder extends AbstractEncoder<Integer> {
 
     public static final IntegerEncoder INSTANCE = new IntegerEncoder();
 
+    // VarInt encoding constants
+    private static final int VARINT_MASK = 0x7F;
+    private static final int VARINT_CONTINUE_FLAG = 0x80;
+    private static final int VARINT_SHIFT = 7;
+    private static final int DIRECT_WRITE_THRESHOLD = 128;
+
     @Override
     public void encode(Integer data, OutputStream outputStream) throws IOException {
         // if between 0 ~ 127, just write the byte
-        if (data >= 0 && data < 128) {
+        if (data >= 0 && data < DIRECT_WRITE_THRESHOLD) {
             outputStream.write(data);
             return;
         }
 
         // write var int, takes 1 ~ 5 byte
         int value = data;
-        int varInt = (value & 0x7F);
-        value >>>= 7;
+        int varInt = (value & VARINT_MASK);
+        value >>>= VARINT_SHIFT;
 
-        varInt |= 0x80;
-        varInt |= ((value & 0x7F) << 8);
-        value >>>= 7;
+        varInt |= VARINT_CONTINUE_FLAG;
+        varInt |= ((value & VARINT_MASK) << 8);
+        value >>>= VARINT_SHIFT;
         if (value == 0) {
             outputStream.write(varInt);
             outputStream.write(varInt >> 8);
             return;
         }
 
-        varInt |= (0x80 << 8);
-        varInt |= ((value & 0x7F) << 16);
-        value >>>= 7;
+        varInt |= (VARINT_CONTINUE_FLAG << 8);
+        varInt |= ((value & VARINT_MASK) << 16);
+        value >>>= VARINT_SHIFT;
         if (value == 0) {
             outputStream.write(varInt);
             outputStream.write(varInt >> 8);
@@ -59,9 +65,9 @@ public class IntegerEncoder extends AbstractEncoder<Integer> {
             return;
         }
 
-        varInt |= (0x80 << 16);
-        varInt |= ((value & 0x7F) << 24);
-        value >>>= 7;
+        varInt |= (VARINT_CONTINUE_FLAG << 16);
+        varInt |= ((value & VARINT_MASK) << 24);
+        value >>>= VARINT_SHIFT;
         if (value == 0) {
             outputStream.write(varInt);
             outputStream.write(varInt >> 8);
@@ -70,7 +76,7 @@ public class IntegerEncoder extends AbstractEncoder<Integer> {
             return;
         }
 
-        varInt |= (0x80 << 24);
+        varInt |= (VARINT_CONTINUE_FLAG << 24);
         outputStream.write(varInt);
         outputStream.write(varInt >> 8);
         outputStream.write(varInt >> 16);
@@ -81,19 +87,19 @@ public class IntegerEncoder extends AbstractEncoder<Integer> {
     @Override
     public Integer decode(InputStream inputStream) throws IOException {
         int b = inputStream.read();
-        int result = b & 0x7F;
-        if ((b & 0x80) != 0) {
+        int result = b & VARINT_MASK;
+        if ((b & VARINT_CONTINUE_FLAG) != 0) {
             b = inputStream.read();
-            result |= (b & 0x7F) << 7;
-            if ((b & 0x80) != 0) {
+            result |= (b & VARINT_MASK) << VARINT_SHIFT;
+            if ((b & VARINT_CONTINUE_FLAG) != 0) {
                 b = inputStream.read();
-                result |= (b & 0x7F) << 14;
-                if ((b & 0x80) != 0) {
+                result |= (b & VARINT_MASK) << (VARINT_SHIFT * 2);
+                if ((b & VARINT_CONTINUE_FLAG) != 0) {
                     b = inputStream.read();
-                    result |= (b & 0x7F) << 21;
-                    if ((b & 0x80) != 0) {
+                    result |= (b & VARINT_MASK) << (VARINT_SHIFT * 3);
+                    if ((b & VARINT_CONTINUE_FLAG) != 0) {
                         b = inputStream.read();
-                        result |= (b & 0x7F) << 28;
+                        result |= (b & VARINT_MASK) << (VARINT_SHIFT * 4);
                     }
                 }
             }
