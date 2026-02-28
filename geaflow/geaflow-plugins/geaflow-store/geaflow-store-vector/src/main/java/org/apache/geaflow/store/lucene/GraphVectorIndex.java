@@ -23,7 +23,7 @@ import java.io.IOException;
 import org.apache.lucene.analysis.standard.StandardAnalyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
-import org.apache.lucene.document.KnnVectorField;
+import org.apache.lucene.document.KnnFloatVectorField;
 import org.apache.lucene.document.StoredField;
 import org.apache.lucene.document.TextField;
 import org.apache.lucene.index.DirectoryReader;
@@ -31,7 +31,7 @@ import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
 import org.apache.lucene.search.IndexSearcher;
-import org.apache.lucene.search.KnnVectorQuery;
+import org.apache.lucene.search.KnnFloatVectorQuery;
 import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.store.ByteBuffersDirectory;
 import org.apache.lucene.store.Directory;
@@ -107,7 +107,7 @@ public class GraphVectorIndex<K> implements IVectorIndex<K> {
             }
 
             // Add vector field
-            doc.add(new KnnVectorField(fieldName, vector));
+            doc.add(new KnnFloatVectorField(fieldName, vector));
 
             // Add document to index
             writer.addDocument(doc);
@@ -142,12 +142,12 @@ public class GraphVectorIndex<K> implements IVectorIndex<K> {
             IndexSearcher searcher = new IndexSearcher(reader);
 
             // Create KNN vector query
-            KnnVectorQuery knnQuery = new KnnVectorQuery(fieldName, vector, topK);
+            KnnFloatVectorQuery knnQuery = new KnnFloatVectorQuery(fieldName, vector, topK);
 
             // Execute search
             TopDocs topDocs = searcher.search(knnQuery, topK);
 
-            Document firstDoc = searcher.doc(topDocs.scoreDocs[0].doc);
+            Document firstDoc = searcher.storedFields().document(topDocs.scoreDocs[0].doc);
 
             K result;
             if (keyClass == String.class) {

@@ -88,7 +88,7 @@ public class RocksdbClient {
         if (this.rocksDBOptions == null || this.rocksDBOptions.isClosed()) {
             LOGGER.info("rocksdb optionClass {}", optionClass);
             try {
-                this.rocksDBOptions = (IRocksDBOptions) Class.forName(optionClass).newInstance();
+                this.rocksDBOptions = (IRocksDBOptions) Class.forName(optionClass).getDeclaredConstructor().newInstance();
                 this.rocksDBOptions.init(config);
             } catch (Throwable e) {
                 LOGGER.error("{} not found", optionClass);
