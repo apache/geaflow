@@ -30,6 +30,12 @@ module_root_parent = Path(__file__).resolve().parents[2]
 if str(module_root_parent) not in sys.path:
     sys.path.insert(0, str(module_root_parent))
 
+# Ensure the CASTS plugin root is importable so tests can import `core.*` and
+# `harness.*` directly (pytest sets rootdir to the plugin directory).
+plugin_root = Path(__file__).resolve().parents[1]
+if str(plugin_root) not in sys.path:
+    sys.path.insert(0, str(plugin_root))
+
 
 def _ensure_env() -> None:
     os.environ.setdefault("EMBEDDING_ENDPOINT", "http://localhost")

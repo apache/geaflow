@@ -22,14 +22,14 @@ import asyncio
 from core.config import DefaultConfiguration
 from core.strategy_cache import StrategyCache
 from core.types import JsonDict
-from data.sources import DataSourceFactory
+from harness.data.sources import DataSourceFactory
+from harness.simulation.engine import SimulationEngine
+from harness.simulation.evaluator import BatchEvaluator, PathEvaluationScore, PathEvaluator
+from harness.simulation.metrics import MetricsCollector
+from harness.simulation.visualizer import SimulationVisualizer
 from services.embedding import EmbeddingService
 from services.llm_oracle import LLMOracle
 from services.path_judge import PathJudge
-from simulation.engine import SimulationEngine
-from simulation.evaluator import BatchEvaluator, PathEvaluationScore, PathEvaluator
-from simulation.metrics import MetricsCollector
-from simulation.visualizer import SimulationVisualizer
 
 
 async def run_simulation():
@@ -93,14 +93,12 @@ async def run_simulation():
     # Run simulation
     metrics_collector = await engine.run_simulation(
         num_epochs=config.get_int("SIMULATION_NUM_EPOCHS"),
-        on_request_completed=evaluate_completed_request
+        on_request_completed=evaluate_completed_request,
     )
 
     # Get sorted SKUs for reporting
     sorted_skus = sorted(
-        strategy_cache.knowledge_base,
-        key=lambda x: x.confidence_score,
-        reverse=True
+        strategy_cache.knowledge_base, key=lambda x: x.confidence_score, reverse=True
     )
 
     # Print results

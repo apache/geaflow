@@ -1,29 +1,93 @@
-  name: CASTS Python Tests
+################################################################################
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+################################################################################
 
-  on:
-    pull_request:
-      paths:
-        - "geaflow-ai/plugins/casts/**"
-    push:
-      branches: ["master"]
-      paths:
-        - "geaflow-ai/plugins/casts/**"
-    workflow_dispatch:
+name: Python CI (uv + 3.11)
 
-  jobs:
-    tests:
-      runs-on: ubuntu-latest
-      defaults:
-        run:
-          working-directory: geaflow-ai/plugins/casts
-      steps:
-        - uses: actions/checkout@v4
-        - uses: actions/setup-python@v5
-          with:
-            python-version: "3.11"
-        - name: Install uv
-          run: pip install uv
-        - name: Sync deps
-          run: uv sync
-        - name: Run tests
-          run: uv run pytest
+on:
+  pull_request:
+    paths:
+      - "geaflow-ai/plugins/casts/**"
+      - "geaflow-ai/plugins/lightmem/**"
+      - ".github/workflows/ci-py311.yml"
+  push:
+    branches: ["master"]
+    paths:
+      - "geaflow-ai/plugins/casts/**"
+      - "geaflow-ai/plugins/lightmem/**"
+      - ".github/workflows/ci-py311.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: ${{ matrix.plugin }} (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11"]
+        plugin: ["casts", "lightmem"]
+
+    defaults:
+      run:
+        shell: bash
+        working-directory: geaflow-ai/plugins/${{ matrix.plugin }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "0.9.17"
+          enable-cache: true
+
+      - name: Sync deps
+        run: |
+          python -m venv .venv
+          uv sync --extra dev --no-editable
+
+      - name: Lint (ruff)
+        run: |
+          uv run --no-editable ruff check .
+
+      - name: Format check (ruff)
+        run: |
+          uv run --no-editable ruff format --check .
+
+      - name: Type check (mypy)
+        run: |
+          if [[ "${{ matrix.plugin }}" == "casts" ]]; then
+            uv run --no-editable mypy -p api -p core -p services -p harness
+          else
+            uv run --no-editable mypy -p lightmem -p api
+          fi
+
+      - name: Run tests
+        run: |
+          uv run --no-editable pytest -q

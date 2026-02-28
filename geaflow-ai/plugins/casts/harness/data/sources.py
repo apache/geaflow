@@ -118,9 +118,7 @@ class RealBusinessGraphGoalGenerator(GoalGenerator):
         loan = "Loan" if "Loan" in node_types else "loan node"
 
         invest = "invest" if "invest" in edge_labels else "invest relation"
-        guarantee = (
-            "guarantee" if "guarantee" in edge_labels else "guarantee relation"
-        )
+        guarantee = "guarantee" if "guarantee" in edge_labels else "guarantee relation"
         transfer = "transfer" if "transfer" in edge_labels else "transfer relation"
         withdraw = "withdraw" if "withdraw" in edge_labels else "withdraw relation"
         repay = "repay" if "repay" in edge_labels else "repay relation"
@@ -194,9 +192,7 @@ class RealBusinessGraphGoalGenerator(GoalGenerator):
                 candidates = list(c_tuple)
                 weights = list(w_tuple)
 
-        selected_goal, selected_rubric = random.choices(
-            candidates, weights=weights, k=1
-        )[0]
+        selected_goal, selected_rubric = random.choices(candidates, weights=weights, k=1)[0]
         return selected_goal, selected_rubric
 
 
@@ -205,7 +201,7 @@ class SyntheticDataSource(DataSource):
 
     def __init__(self, size: int = 30):
         """Initialize synthetic data source.
-        
+
         Args:
             size: Number of nodes to generate
         """
@@ -243,8 +239,8 @@ class SyntheticDataSource(DataSource):
 
         neighbors = []
         for edge in self._edges[node_id]:
-            if edge_label is None or edge['label'] == edge_label:
-                neighbors.append(edge['target'])
+            if edge_label is None or edge["label"] == edge_label:
+                neighbors.append(edge["target"])
         return neighbors
 
     def get_schema(self) -> GraphSchema:
@@ -323,37 +319,37 @@ class SyntheticDataSource(DataSource):
     def _generate_zipf_data(self, size: int):
         """Generate synthetic data following Zipf distribution."""
         business_types = [
-            'Retail SME',
-            'Logistics Partner',
-            'Enterprise Vendor',
-            'Regional Distributor',
-            'FinTech Startup',
+            "Retail SME",
+            "Logistics Partner",
+            "Enterprise Vendor",
+            "Regional Distributor",
+            "FinTech Startup",
         ]
         type_weights = [100, 50, 25, 12, 6]
 
-        business_categories = ['retail', 'wholesale', 'finance', 'manufacturing']
-        regions = ['NA', 'EU', 'APAC', 'LATAM']
-        risk_levels = ['low', 'medium', 'high']
+        business_categories = ["retail", "wholesale", "finance", "manufacturing"]
+        regions = ["NA", "EU", "APAC", "LATAM"]
+        risk_levels = ["low", "medium", "high"]
 
         # Generate nodes
         for i in range(size):
             node_type = random.choices(business_types, weights=type_weights, k=1)[0]
-            status = 'active' if random.random() < 0.8 else 'inactive'
+            status = "active" if random.random() < 0.8 else "inactive"
             age = random.randint(18, 60)
 
             node = {
-                'id': str(i),
-                'type': node_type,
-                'category': random.choice(business_categories),
-                'region': random.choice(regions),
-                'risk': random.choice(risk_levels),
-                'status': status,
-                'age': age,
+                "id": str(i),
+                "type": node_type,
+                "category": random.choice(business_categories),
+                "region": random.choice(regions),
+                "risk": random.choice(risk_levels),
+                "status": status,
+                "age": age,
             }
             self._nodes[str(i)] = node
 
         # Generate edges with more structured, denser relationship patterns
-        edge_labels = ['friend', 'supplier', 'partner', 'investor', 'customer']
+        edge_labels = ["friend", "supplier", "partner", "investor", "customer"]
 
         # Baseline randomness: ensure each node has some edges.
         for i in range(size):
@@ -363,34 +359,34 @@ class SyntheticDataSource(DataSource):
                 if target_id == str(i):
                     continue
                 label = random.choice(edge_labels)
-                edge = {'target': target_id, 'label': label}
+                edge = {"target": target_id, "label": label}
                 self._edges.setdefault(str(i), []).append(edge)
 
         # Structural bias: different business types favor certain relations
         # to help the LLM learn stable patterns.
         for i in range(size):
             src_id = str(i)
-            node_type = self._nodes[src_id]['type']
+            node_type = self._nodes[src_id]["type"]
 
             # Retail SME: more customer / supplier edges
-            if node_type == 'Retail SME':
-                extra_labels = ['customer', 'supplier']
+            if node_type == "Retail SME":
+                extra_labels = ["customer", "supplier"]
                 extra_edges = 2
             # Logistics Partner: more partner / supplier edges
-            elif node_type == 'Logistics Partner':
-                extra_labels = ['partner', 'supplier']
+            elif node_type == "Logistics Partner":
+                extra_labels = ["partner", "supplier"]
                 extra_edges = 2
             # Enterprise Vendor: more supplier / investor edges
-            elif node_type == 'Enterprise Vendor':
-                extra_labels = ['supplier', 'investor']
+            elif node_type == "Enterprise Vendor":
+                extra_labels = ["supplier", "investor"]
                 extra_edges = 2
             # Regional Distributor: more partner / customer edges
-            elif node_type == 'Regional Distributor':
-                extra_labels = ['partner', 'customer']
+            elif node_type == "Regional Distributor":
+                extra_labels = ["partner", "customer"]
                 extra_edges = 2
             # FinTech Startup: more investor / partner edges
             else:  # 'FinTech Startup'
-                extra_labels = ['investor', 'partner']
+                extra_labels = ["investor", "partner"]
                 extra_edges = 3  # Slightly higher to test deeper paths.
 
             for _ in range(extra_edges):
@@ -398,7 +394,7 @@ class SyntheticDataSource(DataSource):
                 if target_id == src_id:
                     continue
                 label = random.choice(extra_labels)
-                edge = {'target': target_id, 'label': label}
+                edge = {"target": target_id, "label": label}
                 self._edges.setdefault(src_id, []).append(edge)
 
         # Optional: increase global "friend" connectivity to reduce isolated components.
@@ -407,7 +403,7 @@ class SyntheticDataSource(DataSource):
             if random.random() < 0.3:  # 30% of nodes add an extra friend edge.
                 target_id = str(random.randint(0, size - 1))
                 if target_id != src_id:
-                    edge = {'target': target_id, 'label': 'friend'}
+                    edge = {"target": target_id, "label": "friend"}
                     self._edges.setdefault(src_id, []).append(edge)
 
 
@@ -465,8 +461,8 @@ class RealDataSource(DataSource):
 
         neighbors = []
         for edge in self._edges[node_id]:
-            if edge_label is None or edge['label'] == edge_label:
-                neighbors.append(edge['target'])
+            if edge_label is None or edge["label"] == edge_label:
+                neighbors.append(edge["target"])
         return neighbors
 
     def reload(self):
@@ -778,12 +774,10 @@ class RealDataSource(DataSource):
 
         # Check if a similar edge already exists
         for edge in self._edges[src_id]:
-            if edge['target'] == tgt_id and edge['label'] == label:
+            if edge["target"] == tgt_id and edge["label"] == label:
                 return  # Edge already exists
 
-        self._edges[src_id].append({'target': tgt_id, 'label': label})
-
-
+        self._edges[src_id].append({"target": tgt_id, "label": label})
 
     def _load_nodes_from_csv(self, filepath: Path, entity_type: str):
         """Load nodes from a CSV file using actual column names as attributes."""
@@ -791,32 +785,32 @@ class RealDataSource(DataSource):
             return
 
         try:
-            with open(filepath, encoding='utf-8') as f:
+            with open(filepath, encoding="utf-8") as f:
                 # Use DictReader to get actual column names
-                reader = csv.DictReader(f, delimiter='|')
+                reader = csv.DictReader(f, delimiter="|")
                 if not reader.fieldnames:
                     return
 
                 # First column is the ID field
                 id_field = reader.fieldnames[0]
-                
+
                 for row in reader:
                     raw_id = row.get(id_field)
                     if not raw_id:  # Skip empty IDs
                         continue
-                        
+
                     node_id = f"{entity_type}_{raw_id}"
                     node = {
-                        'id': node_id,
-                        'type': entity_type,
-                        'raw_id': raw_id,
+                        "id": node_id,
+                        "type": entity_type,
+                        "raw_id": raw_id,
                     }
-                    
+
                     # Add all fields using their real column names
                     for field_name, field_value in row.items():
                         if field_name != id_field and field_value:
                             node[field_name] = field_value
-                    
+
                     self._nodes[node_id] = node
         except Exception as e:
             print(f"Warning: Error loading {filepath}: {e}")
@@ -827,8 +821,8 @@ class RealDataSource(DataSource):
             return
 
         try:
-            with open(filepath, encoding='utf-8') as f:
-                reader = csv.reader(f, delimiter='|')
+            with open(filepath, encoding="utf-8") as f:
+                reader = csv.reader(f, delimiter="|")
                 for row in reader:
                     if len(row) >= 2:
                         src_id = f"{from_type}_{row[0]}"
@@ -836,7 +830,7 @@ class RealDataSource(DataSource):
 
                         # Only add edge if both nodes exist
                         if src_id in self._nodes and tgt_id in self._nodes:
-                            edge = {'target': tgt_id, 'label': label}
+                            edge = {"target": tgt_id, "label": label}
                             if src_id not in self._edges:
                                 self._edges[src_id] = []
                             self._edges[src_id].append(edge)
@@ -860,7 +854,7 @@ class RealDataSource(DataSource):
             G.add_node(node_id, **node)
         for src_id, edge_List in self._edges.items():
             for edge in edge_List:
-                G.add_edge(src_id, edge['target'], label=edge['label'])
+                G.add_edge(src_id, edge["target"], label=edge["label"])
 
         # Find largest connected component
         if not G.nodes():
@@ -914,9 +908,7 @@ class RealDataSource(DataSource):
                 random.shuffle(deduped)
                 deduped.sort(
                     key=lambda nid: (
-                        0
-                        if G.nodes[nid].get("type", "Unknown") not in seen_types
-                        else 1
+                        0 if G.nodes[nid].get("type", "Unknown") not in seen_types else 1
                     )
                 )
 
@@ -935,9 +927,7 @@ class RealDataSource(DataSource):
 
         # Filter nodes and edges to sampled subset
         self._nodes = {
-            node_id: node
-            for node_id, node in self._nodes.items()
-            if node_id in sampled_nodes
+            node_id: node for node_id, node in self._nodes.items() if node_id in sampled_nodes
         }
         self._edges = {
             src_id: [edge for edge in edges if edge["target"] in sampled_nodes]

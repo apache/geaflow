@@ -26,10 +26,11 @@ Scoring is aligned to CASTS core goals:
 """
 
 from dataclasses import dataclass, field
+from typing import Sequence
 
 from core.types import JsonDict
+from harness.simulation.metrics import PathInfo, PathStep
 from services.path_judge import PathJudge
-from simulation.metrics import PathInfo, PathStep
 from utils.helpers import parse_jsons
 
 QUERY_MAX_SCORE = 35.0
@@ -312,9 +313,7 @@ Output requirements (IMPORTANT):
 
         return min(STRATEGY_MAX_SCORE, score), detail
 
-    def _score_cache_efficiency(
-        self, match_types: list[str | None]
-    ) -> tuple[float, JsonDict]:
+    def _score_cache_efficiency(self, match_types: Sequence[str | None]) -> tuple[float, JsonDict]:
         detail: JsonDict = {}
         total = len(match_types)
         if total == 0:
@@ -390,9 +389,7 @@ Output requirements (IMPORTANT):
 
         return min(CONSISTENCY_MAX_SCORE, score), detail
 
-    def _score_information_utility(
-        self, props: list[JsonDict]
-    ) -> tuple[float, JsonDict]:
+    def _score_information_utility(self, props: list[JsonDict]) -> tuple[float, JsonDict]:
         detail: JsonDict = {}
         if not props:
             return 0.0, {"note": "no_properties"}

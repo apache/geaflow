@@ -38,9 +38,7 @@ class SchemaState(str, Enum):
 class InMemoryGraphSchema(GraphSchema):
     """In-memory implementation of GraphSchema for CASTS data sources."""
 
-    def __init__(
-        self, nodes: GraphNodes, edges: GraphEdges
-    ):
+    def __init__(self, nodes: GraphNodes, edges: GraphEdges):
         """Initialize schema from graph data.
 
         Args:

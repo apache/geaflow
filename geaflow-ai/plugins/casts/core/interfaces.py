@@ -214,3 +214,8 @@ class Configuration(ABC):
     def get_llm_config(self) -> dict[str, str]:
         """Get LLM service configuration."""
         pass
+
+    @abstractmethod
+    def get_embedding_config(self) -> dict[str, str]:
+        """Get embedding service configuration."""
+        pass

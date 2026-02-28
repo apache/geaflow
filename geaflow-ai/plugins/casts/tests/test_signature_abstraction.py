@@ -37,7 +37,7 @@ from core.config import DefaultConfiguration
 from core.interfaces import DataSource, GraphSchema
 from core.models import Context, StrategyKnowledgeUnit
 from core.strategy_cache import StrategyCache
-from simulation.executor import TraversalExecutor
+from harness.simulation.executor import TraversalExecutor
 
 
 class MockGraphSchema(GraphSchema):
@@ -135,9 +135,7 @@ class TestTraversalExecutorCanonicalSignature(unittest.IsolatedAsyncioTestCase):
         decision = "out('friend')"
         current_node_id = "A"
 
-        result = await self.executor.execute_decision(
-            current_node_id, decision, current_signature
-        )
+        result = await self.executor.execute_decision(current_node_id, decision, current_signature)
 
         # Verify edge labels are preserved in the signature.
         self.assertEqual(len(result), 1)
@@ -151,9 +149,7 @@ class TestTraversalExecutorCanonicalSignature(unittest.IsolatedAsyncioTestCase):
         decision = "has('type','Person')"
         current_node_id = "A"
 
-        result = await self.executor.execute_decision(
-            current_node_id, decision, current_signature
-        )
+        result = await self.executor.execute_decision(current_node_id, decision, current_signature)
 
         # Verify has() parameters are preserved.
         if result:  # has() may not match and can return an empty list.
@@ -166,9 +162,7 @@ class TestTraversalExecutorCanonicalSignature(unittest.IsolatedAsyncioTestCase):
         decision = "outE('transfer')"
         current_node_id = "B"
 
-        result = await self.executor.execute_decision(
-            current_node_id, decision, current_signature
-        )
+        result = await self.executor.execute_decision(current_node_id, decision, current_signature)
 
         self.assertEqual(len(result), 1)
         next_node_id, next_signature, traversed_edge = result[0]
@@ -180,9 +174,7 @@ class TestTraversalExecutorCanonicalSignature(unittest.IsolatedAsyncioTestCase):
         decision = "dedup()"
         current_node_id = "A"
 
-        result = await self.executor.execute_decision(
-            current_node_id, decision, current_signature
-        )
+        result = await self.executor.execute_decision(current_node_id, decision, current_signature)
 
         # dedup should be retained in the signature.
         self.assertEqual(len(result), 1)
@@ -201,11 +193,9 @@ class TestSignatureAbstraction(unittest.TestCase):
         """Create a StrategyCache with the specified abstraction level."""
         config = MagicMock()
         config.get_float = MagicMock(
-            side_effect=lambda k, d=0.0: 2.0
-            if "THRESHOLD" in k
-            else 0.1
-            if k == "MIN_EXECUTION_CONFIDENCE"
-            else d
+            side_effect=lambda k, d=0.0: (
+                2.0 if "THRESHOLD" in k else 0.1 if k == "MIN_EXECUTION_CONFIDENCE" else d
+            )
         )
         config.get_str = MagicMock(return_value="schema_v2_canonical")
         config.get_int = MagicMock(

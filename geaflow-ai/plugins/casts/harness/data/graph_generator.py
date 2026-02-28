@@ -20,7 +20,8 @@
 This module supports two data sources:
 
 1. Synthetic graph data with Zipf-like distribution (default).
-2. Real transaction/relationship data loaded from CSV files under ``real_graph_data/``
+2. Real transaction/relationship data loaded from CSV files under ``real_graph_data/`` (or
+   the repo-default ``harness/data/real_graph_data/``)
    (or a custom loader via ``GraphGeneratorConfig.real_data_loader``).
 
 Use :class:`GraphGenerator` as the unified in-memory representation. The simulation
@@ -34,7 +35,7 @@ import networkx as nx
 
 from core.constants import EDGE_LABEL_KEY, EDGE_TARGET_KEY, NODE_ID_KEY, NODE_TYPE_KEY
 from core.types import GraphEdges, GraphNodes, JsonDict
-from data.real_graph_loader import RealGraphLoader, default_real_graph_loader
+from harness.data.real_graph_loader import RealGraphLoader, default_real_graph_loader
 
 
 @dataclass
@@ -106,7 +107,7 @@ class GraphGenerator:
         ]
         # Weights approximating 1/k distribution
         type_weights = [100, 50, 25, 12, 6]
-        
+
         business_categories = ["retail", "wholesale", "finance", "manufacturing"]
         regions = ["NA", "EU", "APAC", "LATAM"]
         risk_levels = ["low", "medium", "high"]
@@ -116,7 +117,7 @@ class GraphGenerator:
             node_type = random.choices(business_types, weights=type_weights, k=1)[0]
             status = "active" if random.random() < 0.8 else "inactive"
             age = random.randint(18, 60)
-            
+
             node: JsonDict = {
                 NODE_ID_KEY: str(i),
                 NODE_TYPE_KEY: node_type,
@@ -142,11 +143,8 @@ class GraphGenerator:
                     if self.nodes[str(i)]["type"] == "Retail SME" and random.random() < 0.7:
                         label = "related"
                     elif (
-                        self.nodes[str(i)]["type"] == "Logistics Partner"
-                        and random.random() < 0.7
+                        self.nodes[str(i)]["type"] == "Logistics Partner" and random.random() < 0.7
                     ):
                         label = "friend"
 
-                    self.edges[str(i)].append(
-                        {EDGE_TARGET_KEY: str(target), EDGE_LABEL_KEY: label}
-                    )
+                    self.edges[str(i)].append({EDGE_TARGET_KEY: str(target), EDGE_LABEL_KEY: label})

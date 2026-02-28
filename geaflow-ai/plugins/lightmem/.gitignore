@@ -1,0 +1,19 @@
+# Byte-compiled / optimized files
+__pycache__/
+*.py[cod]
+.pytest_cache/
+geaflow_ai_lightmem.egg-info/*
+
+# Environment variables
+.env
+
+# Virtual environment
+.venv/
+uv.lock
+
+# Logs
+/logs/
+
+# IDE / OS specific
+.vscode/
+.DS_Store

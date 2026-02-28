@@ -18,5 +18,5 @@ uv.lock
 .DS_Store
 
 # Data files
-data/real_graph_data/
+harness/data/real_graph_data/
 casts_traversal_path_req_*.png

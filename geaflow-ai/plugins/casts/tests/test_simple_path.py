@@ -109,6 +109,7 @@ class TestSimplePathExecution:
     @pytest.fixture
     def mock_graph(self):
         """Create a simple mock graph for testing."""
+
         # Create a simple graph: A -> B -> C -> A (triangle)
         class MockGraph:
             def __init__(self):
@@ -128,6 +129,7 @@ class TestSimplePathExecution:
     @pytest.fixture
     def mock_schema(self):
         """Create a mock schema."""
+
         class MockSchema:
             def get_valid_outgoing_edge_labels(self, node_type):
                 return ["friend"]
@@ -139,7 +141,7 @@ class TestSimplePathExecution:
 
     async def test_simple_path_step_execution(self, mock_graph, mock_schema):
         """Test that simplePath() step passes through current node."""
-        from simulation.executor import TraversalExecutor
+        from harness.simulation.executor import TraversalExecutor
 
         executor = TraversalExecutor(mock_graph, mock_schema)
 
@@ -158,7 +160,7 @@ class TestSimplePathExecution:
 
     async def test_simple_path_filtering(self, mock_graph, mock_schema):
         """Test that simplePath filters out visited nodes."""
-        from simulation.executor import TraversalExecutor
+        from harness.simulation.executor import TraversalExecutor
 
         executor = TraversalExecutor(mock_graph, mock_schema)
 
@@ -194,7 +196,7 @@ class TestSimplePathExecution:
 
     async def test_without_simple_path_allows_cycles(self, mock_graph, mock_schema):
         """Test that without simplePath(), cycles are allowed."""
-        from simulation.executor import TraversalExecutor
+        from harness.simulation.executor import TraversalExecutor
 
         executor = TraversalExecutor(mock_graph, mock_schema)
 
@@ -230,7 +232,7 @@ class TestSimplePathExecution:
 
     async def test_simple_path_allows_filter_steps(self, mock_graph, mock_schema):
         """Test that simplePath does not block non-traversal filter steps."""
-        from simulation.executor import TraversalExecutor
+        from harness.simulation.executor import TraversalExecutor
 
         executor = TraversalExecutor(mock_graph, mock_schema)
 
@@ -253,7 +255,7 @@ class TestSimplePathExecution:
 
     async def test_clear_path_history(self, mock_graph, mock_schema):
         """Test that clear_path_history properly cleans up."""
-        from simulation.executor import TraversalExecutor
+        from harness.simulation.executor import TraversalExecutor
 
         executor = TraversalExecutor(mock_graph, mock_schema)
 

@@ -153,7 +153,7 @@ class StrategyCache:
             return signature
 
         abstract_parts = []
-        steps = signature.split('.')
+        steps = signature.split(".")
         for i, step in enumerate(steps):
             if i == 0:
                 abstract_parts.append(step)

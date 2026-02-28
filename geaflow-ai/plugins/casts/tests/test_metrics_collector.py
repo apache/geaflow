@@ -17,7 +17,7 @@
 
 """Unit tests for MetricsCollector class."""
 
-from simulation.metrics import MetricsCollector
+from harness.simulation.metrics import MetricsCollector
 
 
 class TestMetricsCollector:
@@ -53,7 +53,7 @@ class TestMetricsCollector:
             properties={"name": "Alice"},
             match_type="Tier1",
             sku_id="sku1",
-            decision="out('knows')"
+            decision="out('knows')",
         )
 
         steps = metrics.paths[request_id]["steps"]
@@ -152,8 +152,18 @@ class TestRollbackSteps:
         # Add 5 steps
         for i in range(5):
             metrics.record_path_step(
-                request_id, i, f"node{i}", None, None, None, f"sig{i}",
-                "goal", {}, "Tier1", f"sku{i}", f"d{i}"
+                request_id,
+                i,
+                f"node{i}",
+                None,
+                None,
+                None,
+                f"sig{i}",
+                "goal",
+                {},
+                "Tier1",
+                f"sku{i}",
+                f"d{i}",
             )
         assert len(metrics.paths[request_id]["steps"]) == 5
 

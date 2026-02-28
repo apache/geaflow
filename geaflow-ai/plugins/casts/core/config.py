@@ -67,7 +67,7 @@ class DefaultConfiguration(Configuration):
         True  # If True, use real data from CSVs; otherwise, generate synthetic data.
     )
     SIMULATION_REAL_DATA_DIR = (
-        "data/real_graph_data"  # Directory containing the real graph data CSV files.
+        "harness/data/real_graph_data"  # Directory containing the real graph data CSV files.
     )
     SIMULATION_REAL_SUBGRAPH_SIZE = 200  # Max number of nodes to sample for the real data subgraph.
     SIMULATION_ENABLE_VERIFIER = True  # If True, enables the LLM-based path evaluator.
@@ -138,6 +138,14 @@ class DefaultConfiguration(Configuration):
     CACHE_SIMILARITY_BETA = 0.05
     # Fingerprint for the current graph schema. Changing this will invalidate all existing SKUs.
     CACHE_SCHEMA_FINGERPRINT = "schema_v1"
+
+    # ============================================
+    # LLM ORACLE SAFETY
+    # ============================================
+    # If True, allow evaluating LLM-provided predicate code via `eval`.
+    # This is unsafe for production and should remain False unless running in
+    # a trusted/offline environment.
+    LLM_ORACLE_ENABLE_PREDICATE_EVAL = False
 
     # SIGNATURE CONFIGURATION
     # Signature abstraction level, used as a MATCHING STRATEGY at runtime.

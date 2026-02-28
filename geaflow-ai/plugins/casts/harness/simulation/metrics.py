@@ -24,6 +24,7 @@ from core.types import JsonDict
 
 MatchType = Literal["Tier1", "Tier2", ""]
 
+
 class PathStep(TypedDict):
     """Recorded traversal step for a request."""
 
@@ -39,6 +40,7 @@ class PathStep(TypedDict):
     sku_id: str | None
     decision: str | None
 
+
 class PathInfo(TypedDict):
     """Traversal path metadata and step history."""
 
@@ -48,6 +50,7 @@ class PathInfo(TypedDict):
     goal: str
     rubric: str
     steps: list[PathStep]
+
 
 class MetricsSummary(TypedDict):
     """Summary of aggregate simulation metrics."""
@@ -112,9 +115,9 @@ class MetricsCollector:
     def record_step(self, match_type: MatchType | None = None) -> None:
         """Record a traversal step execution."""
         self.metrics.total_steps += 1
-        if match_type == 'Tier1':
+        if match_type == "Tier1":
             self.metrics.tier1_hits += 1
-        elif match_type == 'Tier2':
+        elif match_type == "Tier2":
             self.metrics.tier2_hits += 1
         else:
             self.metrics.misses += 1
@@ -123,7 +126,7 @@ class MetricsCollector:
     def record_execution_failure(self) -> None:
         """Record a failed strategy execution."""
         self.metrics.execution_failures += 1
-    
+
     def record_sku_eviction(self, count: int = 1) -> None:
         """Record SKU evictions from cache cleanup."""
         self.metrics.sku_evictions += count
@@ -146,10 +149,10 @@ class MetricsCollector:
             "start_node_props": start_node_props,
             "goal": goal,
             "rubric": rubric,
-            "steps": []
+            "steps": [],
         }
         return request_id
-    
+
     def record_path_step(
         self,
         request_id: int,
@@ -168,21 +171,23 @@ class MetricsCollector:
         """Record a step in a traversal path."""
         if request_id not in self.paths:
             return
-            
-        self.paths[request_id]["steps"].append({
-            "tick": tick,
-            "node": node_id,
-            "parent_node": parent_node,
-            # For visualization only: explicit edge to previous step
-            "parent_step_index": parent_step_index,
-            "edge_label": edge_label,
-            "s": structural_signature,
-            "g": goal,
-            "p": dict(properties),
-            "match_type": match_type,
-            "sku_id": sku_id,
-            "decision": decision
-        })
+
+        self.paths[request_id]["steps"].append(
+            {
+                "tick": tick,
+                "node": node_id,
+                "parent_node": parent_node,
+                # For visualization only: explicit edge to previous step
+                "parent_step_index": parent_step_index,
+                "edge_label": edge_label,
+                "s": structural_signature,
+                "g": goal,
+                "p": dict(properties),
+                "match_type": match_type,
+                "sku_id": sku_id,
+                "decision": decision,
+            }
+        )
 
     def rollback_steps(self, request_id: int, count: int = 1) -> bool:
         """
@@ -226,7 +231,7 @@ class MetricsCollector:
             "sku_evictions": self.metrics.sku_evictions,
             "hit_rate": self.metrics.hit_rate,
         }
-    
+
     def print_summary(self) -> None:
         """Print a formatted summary of simulation metrics."""
         print("\n=== Simulation Results Analysis ===")

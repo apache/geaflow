@@ -26,17 +26,16 @@ from openai import AsyncOpenAI
 
 from core.config import DefaultConfiguration
 from core.gremlin_state import GremlinStateMachine
-from core.interfaces import Configuration, GraphSchema
+from core.interfaces import Configuration, EmbeddingServiceProtocol, GraphSchema
 from core.models import Context, StrategyKnowledgeUnit
 from core.types import JsonDict
-from services.embedding import EmbeddingService
 from utils.helpers import parse_jsons
 
 
 class LLMOracle:
     """Real LLM Oracle using OpenRouter API for generating traversal strategies."""
 
-    def __init__(self, embed_service: EmbeddingService, config: Configuration):
+    def __init__(self, embed_service: EmbeddingServiceProtocol, config: Configuration):
         """Initialize LLM Oracle with configuration.
 
         Args:
@@ -171,7 +170,7 @@ class LLMOracle:
                 predicate=lambda x: True,
                 goal_template=context.goal,
                 decision_template="stop",
-                schema_fingerprint="schema_v1",
+                schema_fingerprint=self.config.get_str("CACHE_SCHEMA_FINGERPRINT", "schema_v1"),
                 property_vector=property_vector,
                 confidence_score=1.0,
                 logic_complexity=1,
@@ -207,12 +206,8 @@ Recent decision history (last {len(recent_decisions)} steps):
 
         node_type = str(safe_properties.get("type") or context.properties.get("type") or "")
         node_schema = schema.get_node_schema(node_type) if node_type else {}
-        outgoing_labels = (
-            schema.get_valid_outgoing_edge_labels(node_type) if node_type else []
-        )
-        incoming_labels = (
-            schema.get_valid_incoming_edge_labels(node_type) if node_type else []
-        )
+        outgoing_labels = schema.get_valid_outgoing_edge_labels(node_type) if node_type else []
+        incoming_labels = schema.get_valid_incoming_edge_labels(node_type) if node_type else []
 
         max_depth = self.config.get_int("SIMULATION_MAX_DEPTH")
         current_depth = len(
@@ -348,14 +343,22 @@ Return ONLY valid JSON inside <output> tags. Example:
                 def _default_predicate(_: JsonDict) -> bool:
                     return True
 
+                predicate = _default_predicate
+                allow_eval = False
                 try:
-                    predicate_code = result.get("predicate", "lambda x: True")
-                    predicate = eval(predicate_code)
-                    if not callable(predicate):
-                        predicate = _default_predicate
-                    _ = predicate(safe_properties)  # Test call
+                    allow_eval = self.config.get_bool("LLM_ORACLE_ENABLE_PREDICATE_EVAL", False)
                 except Exception:
-                    predicate = _default_predicate
+                    allow_eval = False
+
+                if allow_eval:
+                    try:
+                        predicate_code = result.get("predicate", "lambda x: True")
+                        predicate_candidate = eval(predicate_code, {"__builtins__": {}}, {})
+                        if callable(predicate_candidate):
+                            _ = predicate_candidate(safe_properties)  # Test call
+                            predicate = predicate_candidate
+                    except Exception:
+                        predicate = _default_predicate
 
                 property_vector = await self.embed_service.embed_properties(safe_properties)
                 sigma_val = result.get("sigma_logic", 1)
@@ -369,7 +372,7 @@ Return ONLY valid JSON inside <output> tags. Example:
                     goal_template=context.goal,
                     property_vector=property_vector,
                     decision_template=decision,
-                    schema_fingerprint="schema_v1",
+                    schema_fingerprint=self.config.get_str("CACHE_SCHEMA_FINGERPRINT", "schema_v1"),
                     confidence_score=1.0,  # Start with high confidence
                     logic_complexity=sigma_val,
                 )
@@ -391,7 +394,7 @@ Return ONLY valid JSON inside <output> tags. Example:
             predicate=lambda x: True,
             goal_template=context.goal,
             decision_template="stop",
-            schema_fingerprint="schema_v1",
+            schema_fingerprint=self.config.get_str("CACHE_SCHEMA_FINGERPRINT", "schema_v1"),
             property_vector=property_vector,
             confidence_score=1.0,
             logic_complexity=1,
@@ -458,9 +461,7 @@ Your response (JSON array only, using ```json), for example:
             )
 
             if not self.client:
-                self._write_debug(
-                    "LLM client not available, falling back to all node types"
-                )
+                self._write_debug("LLM client not available, falling back to all node types")
                 # Fallback: return all types if LLM unavailable
                 return node_types_list[:max_recommendations]
 
@@ -494,8 +495,7 @@ Your response (JSON array only, using ```json), for example:
             if isinstance(result, list):
                 # Filter to only valid node types and limit to max
                 recommended = [
-                    nt for nt in result
-                    if isinstance(nt, str) and nt in available_node_types
+                    nt for nt in result if isinstance(nt, str) and nt in available_node_types
                 ][:max_recommendations]
 
                 self._write_debug(

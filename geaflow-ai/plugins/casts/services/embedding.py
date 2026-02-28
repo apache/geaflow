@@ -34,7 +34,7 @@ class EmbeddingService:
 
     def __init__(self, config: Configuration):
         """Initialize embedding service with configuration.
-        
+
         Args:
             config: Configuration object containing API settings
         """
@@ -58,9 +58,7 @@ class EmbeddingService:
         if not model:
             missing.append("EMBEDDING_MODEL_NAME")
         if missing:
-            raise ValueError(
-                "Missing required embedding configuration: " + ", ".join(missing)
-            )
+            raise ValueError("Missing required embedding configuration: " + ", ".join(missing))
 
         self.client = AsyncOpenAI(api_key=api_key, base_url=endpoint)
         self.model = model
@@ -69,10 +67,10 @@ class EmbeddingService:
     async def embed_text(self, text: str) -> np.ndarray:
         """
         Generate embedding vector for a text string.
-        
+
         Args:
             text: Input text to embed
-            
+
         Returns:
             Normalized numpy array of embedding vector
         """
@@ -85,10 +83,10 @@ class EmbeddingService:
     async def embed_properties(self, properties: JsonDict) -> np.ndarray:
         """
         Generate embedding vector for a dictionary of properties.
-        
+
         Args:
             properties: Property dictionary (identity fields will be filtered out)
-            
+
         Returns:
             Normalized numpy array of embedding vector
         """

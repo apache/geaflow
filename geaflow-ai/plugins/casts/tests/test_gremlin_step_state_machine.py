@@ -70,6 +70,7 @@ deterministic, and robust.
        - **Idea**: Enforce strict syntax.
        - **Verify**: `V().outV()` must lead to `END` with no options.
 """
+
 import unittest
 
 from core.gremlin_state import GremlinStateMachine
@@ -82,22 +83,22 @@ class TestGraphSchema(unittest.TestCase):
     def setUp(self):
         """Set up a mock graph schema for testing."""
         nodes = {
-            'A': {'id': 'A', 'type': 'Person'},
-            'B': {'id': 'B', 'type': 'Person'},
-            'C': {'id': 'C', 'type': 'Company'},
-            'D': {'id': 'D', 'type': 'Person'},  # Node with only incoming edges
+            "A": {"id": "A", "type": "Person"},
+            "B": {"id": "B", "type": "Person"},
+            "C": {"id": "C", "type": "Company"},
+            "D": {"id": "D", "type": "Person"},  # Node with only incoming edges
         }
         edges = {
-            'A': [
-                {'label': 'friend', 'target': 'B'},
-                {'label': 'works_for', 'target': 'C'},
+            "A": [
+                {"label": "friend", "target": "B"},
+                {"label": "works_for", "target": "C"},
             ],
-            'B': [
-                {'label': 'friend', 'target': 'A'},
+            "B": [
+                {"label": "friend", "target": "A"},
             ],
-            'C': [
-                {'label': 'employs', 'target': 'A'},
-                {'label': 'partner', 'target': 'D'},
+            "C": [
+                {"label": "employs", "target": "A"},
+                {"label": "partner", "target": "D"},
             ],
         }
         self.schema = InMemoryGraphSchema(nodes, edges)
@@ -105,59 +106,54 @@ class TestGraphSchema(unittest.TestCase):
     def test_get_valid_outgoing_edge_labels(self):
         """Test that get_valid_outgoing_edge_labels returns correct outgoing labels."""
         self.assertCountEqual(
-            self.schema.get_valid_outgoing_edge_labels('Person'), ['friend', 'works_for']
+            self.schema.get_valid_outgoing_edge_labels("Person"), ["friend", "works_for"]
         )
         self.assertCountEqual(
-            self.schema.get_valid_outgoing_edge_labels('Company'), ['employs', 'partner']
+            self.schema.get_valid_outgoing_edge_labels("Company"), ["employs", "partner"]
         )
 
     def test_get_valid_outgoing_edge_labels_no_outgoing(self):
         """Test get_valid_outgoing_edge_labels returns empty list with no outgoing edges."""
-        self.assertEqual(self.schema.get_valid_outgoing_edge_labels('Unknown'), [])
+        self.assertEqual(self.schema.get_valid_outgoing_edge_labels("Unknown"), [])
 
     def test_get_valid_incoming_edge_labels(self):
         """Test that get_valid_incoming_edge_labels returns correct incoming labels."""
         self.assertCountEqual(
-            self.schema.get_valid_incoming_edge_labels('Person'),
-            ['employs', 'friend', 'partner'],
+            self.schema.get_valid_incoming_edge_labels("Person"),
+            ["employs", "friend", "partner"],
         )
-        self.assertCountEqual(
-            self.schema.get_valid_incoming_edge_labels('Company'), ['works_for']
-        )
+        self.assertCountEqual(self.schema.get_valid_incoming_edge_labels("Company"), ["works_for"])
 
     def test_get_valid_incoming_edge_labels_no_incoming(self):
         """Test get_valid_incoming_edge_labels returns empty list with no incoming edges."""
-        self.assertEqual(self.schema.get_valid_incoming_edge_labels('Unknown'), [])
+        self.assertEqual(self.schema.get_valid_incoming_edge_labels("Unknown"), [])
 
 
 class TestGremlinStateMachine(unittest.TestCase):
-
     def setUp(self):
         """Set up a mock graph schema for testing the state machine."""
         nodes = {
-            'A': {'id': 'A', 'type': 'Person'},
-            'B': {'id': 'B', 'type': 'Person'},
-            'C': {'id': 'C', 'type': 'Company'},
+            "A": {"id": "A", "type": "Person"},
+            "B": {"id": "B", "type": "Person"},
+            "C": {"id": "C", "type": "Company"},
         }
         edges = {
-            'A': [
-                {'label': 'friend', 'target': 'B'},
-                {'label': 'knows', 'target': 'B'},
+            "A": [
+                {"label": "friend", "target": "B"},
+                {"label": "knows", "target": "B"},
             ],
-            'B': [
-                {'label': 'friend', 'target': 'A'},
+            "B": [
+                {"label": "friend", "target": "A"},
             ],
-            'C': [
-                {'label': 'employs', 'target': 'A'},
+            "C": [
+                {"label": "employs", "target": "A"},
             ],
         }
         self.schema = InMemoryGraphSchema(nodes, edges)
 
     def test_vertex_state_options(self):
         """Test that the state machine generates correct, concrete options from a vertex state."""
-        state, options = GremlinStateMachine.get_state_and_options(
-            "V()", self.schema, "Person"
-        )
+        state, options = GremlinStateMachine.get_state_and_options("V()", self.schema, "Person")
         self.assertEqual(state, "V")
 
         # Check for concrete 'out' steps
@@ -178,9 +174,7 @@ class TestGremlinStateMachine(unittest.TestCase):
 
     def test_empty_labels(self):
         """Test that no label-based steps are generated if there are no corresponding edges."""
-        state, options = GremlinStateMachine.get_state_and_options(
-            "V()", self.schema, "Company"
-        )
+        state, options = GremlinStateMachine.get_state_and_options("V()", self.schema, "Company")
         self.assertEqual(state, "V")
         # Company has outgoing 'employs'/'partner' edges but no incoming edges in this setup.
         self.assertIn("out('employs')", options)
