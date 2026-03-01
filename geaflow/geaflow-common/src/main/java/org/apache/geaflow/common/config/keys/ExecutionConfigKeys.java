@@ -585,7 +585,7 @@ public class ExecutionConfigKeys implements Serializable {
 
     public static final ConfigKey REPORTER_LIST = ConfigKeys.key("geaflow.metric.reporters")
         .defaultValue("")
-        .description("metric reporter list. Multiple reporters are seperated by comma. for "
+        .description("metric reporter list. Multiple reporters are separated by comma. for "
             + "example: influxdb,tsdb,prometheus,slf4j");
 
     public static final ConfigKey METRIC_META_REPORT_DELAY = ConfigKeys

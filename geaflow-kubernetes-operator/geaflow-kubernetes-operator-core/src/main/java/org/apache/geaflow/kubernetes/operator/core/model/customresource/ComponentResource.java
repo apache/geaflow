@@ -41,7 +41,7 @@ public class ComponentResource {
     private Integer memoryMb;
 
     /**
-     * Jvm args. Seperated with comma.
+     * Jvm args. Separated with comma.
      * e.g. -Xmx1024m,-Xms1024m,-Xn512m
      */
     private String jvmOptions;
