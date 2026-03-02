@@ -30,6 +30,10 @@
     <modelVersion>4.0.0</modelVersion>
     <artifactId>geaflow-dsl-runtime</artifactId>
 
+    <properties>
+        <geaflow.surefire.forkedProcessTimeoutInSeconds>600</geaflow.surefire.forkedProcessTimeoutInSeconds>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>org.apache.geaflow</groupId>
@@ -173,7 +177,7 @@
                     <perCoreThreadCount>false</perCoreThreadCount>
 
                     <!-- Increase timeout for distributed operations -->
-                    <forkedProcessTimeoutInSeconds>600</forkedProcessTimeoutInSeconds>
+                    <forkedProcessTimeoutInSeconds>${geaflow.surefire.forkedProcessTimeoutInSeconds}</forkedProcessTimeoutInSeconds>
                     <testFailureIgnore>false</testFailureIgnore>
                     <skipAfterFailureCount>1</skipAfterFailureCount>
 

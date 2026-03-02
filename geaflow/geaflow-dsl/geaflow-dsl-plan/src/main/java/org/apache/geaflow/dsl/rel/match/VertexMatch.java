@@ -168,6 +168,8 @@ public class VertexMatch extends AbstractRelNode implements SingleMatchNode, IMa
             .item("input", input)
             .item("label", label)
             .item("vertexTypes", vertexTypes)
+            .item("pushDownFilter", pushDownFilter)
+            .item("pathType", pathType)
             .item("idSet", idSet);
     }
 
