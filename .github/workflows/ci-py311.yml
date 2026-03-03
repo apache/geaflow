@@ -91,3 +91,41 @@ jobs:
       - name: Run tests
         run: |
           uv run --no-editable pytest -q
+
+  smoke:
+    name: smoke-${{ matrix.plugin }} (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    needs: tests
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11"]
+        plugin: ["casts", "lightmem"]
+
+    defaults:
+      run:
+        shell: bash
+        working-directory: geaflow-ai/plugins/${{ matrix.plugin }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "0.9.17"
+          enable-cache: true
+
+      - name: Prepare venv
+        run: |
+          python -m venv .venv
+
+      - name: Smoke test
+        run: |
+          bash ./scripts/smoke.sh
