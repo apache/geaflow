@@ -31,6 +31,9 @@ public class Substr extends UDF {
         if (str == null || pos == null || length == null) {
             return null;
         }
+        if (pos == Integer.MIN_VALUE) {
+            return str;
+        }
         if ((Math.abs(pos) > str.length())) {
             return str;
         }
@@ -62,6 +65,9 @@ public class Substr extends UDF {
 
     public BinaryString eval(BinaryString str, Integer pos, Integer length) {
         if (str == null || pos == null || length == null) {
+            return null;
+        }
+        if (pos == Integer.MIN_VALUE) {
             return null;
         }
         if (Math.abs(pos) > str.getLength()) {
