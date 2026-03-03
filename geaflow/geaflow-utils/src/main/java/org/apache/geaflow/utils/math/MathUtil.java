@@ -184,6 +184,9 @@ public class MathUtil {
      * @return The average(values)
      */
     public static long average(long[] values) {
+        if (values == null || values.length == 0) {
+            return 0;
+        }
         //Find average
         double sum = 0d;
         for (long value : values) {
@@ -198,6 +201,9 @@ public class MathUtil {
      * @return The average(values)
      */
     public static long average(List<Long> values) {
+        if (values == null || values.isEmpty()) {
+            return 0;
+        }
         //Find average
         double sum = 0d;
         for (long value : values) {

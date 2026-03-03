@@ -19,6 +19,7 @@
 
 package org.apache.geaflow.utils.math;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import org.testng.Assert;
@@ -67,6 +68,32 @@ public class MathUtilTest {
         List<Long> array = Arrays.asList(1L, 2L, 8L, 9L, 13L, 3L, 12L, 4L, 7L, 6L, 11L, 10L, 5L);
         result = MathUtil.average(array);
         Assert.assertEquals(7, result);
+    }
+
+    @Test
+    public void testAverageEmptyArray() {
+        // Test empty array returns 0
+        long[] emptyArray = new long[0];
+        long result = MathUtil.average(emptyArray);
+        Assert.assertEquals(0, result);
+
+        // Test null array returns 0
+        long[] nullArray = null;
+        result = MathUtil.average(nullArray);
+        Assert.assertEquals(0, result);
+    }
+
+    @Test
+    public void testAverageEmptyList() {
+        // Test empty list returns 0
+        List<Long> emptyList = new ArrayList<>();
+        long result = MathUtil.average(emptyList);
+        Assert.assertEquals(0, result);
+
+        // Test null list returns 0
+        List<Long> nullList = null;
+        result = MathUtil.average(nullList);
+        Assert.assertEquals(0, result);
     }
 
     @Test
