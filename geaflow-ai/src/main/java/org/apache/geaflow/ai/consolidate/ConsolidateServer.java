@@ -23,22 +23,37 @@ import java.util.ArrayList;
 import java.util.List;
 import org.apache.geaflow.ai.consolidate.function.ConsolidateFunction;
 import org.apache.geaflow.ai.consolidate.function.EmbeddingRelationFunction;
-import org.apache.geaflow.ai.consolidate.function.KeywordRelationFunction;
 import org.apache.geaflow.ai.graph.GraphAccessor;
 import org.apache.geaflow.ai.graph.MutableGraph;
+import org.apache.geaflow.ai.index.IndexStore;
 
 public class ConsolidateServer {
 
     private static final List<ConsolidateFunction> functions = new ArrayList<>();
 
     static {
-        functions.add(new KeywordRelationFunction());
         functions.add(new EmbeddingRelationFunction());
     }
 
-    public int executeConsolidateTask(GraphAccessor graphAccessor, MutableGraph graph) {
-        for (ConsolidateFunction function : functions) {
-            function.eval(graphAccessor, graph);
+    private final List<ConsolidateFunction> activeFunctions;
+
+    public ConsolidateServer() {
+        this.activeFunctions = functions;
+    }
+
+    public ConsolidateServer(List<ConsolidateFunction> activeFunctions) {
+        this.activeFunctions = activeFunctions;
+    }
+
+    public List<ConsolidateFunction> getActiveFunctions() {
+        return activeFunctions;
+    }
+
+    public int executeConsolidateTask(GraphAccessor graphAccessor,
+                                      MutableGraph graph,
+                                      List<IndexStore> indexStores) {
+        for (ConsolidateFunction function : activeFunctions) {
+            function.eval(graphAccessor, graph, indexStores);
         }
         return 0;
     }

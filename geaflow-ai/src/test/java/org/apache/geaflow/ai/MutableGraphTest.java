@@ -24,13 +24,18 @@ import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import org.apache.geaflow.ai.common.config.Constants;
+import org.apache.geaflow.ai.common.model.ModelConfig;
 import org.apache.geaflow.ai.consolidate.ConsolidateServer;
+import org.apache.geaflow.ai.consolidate.function.EmbeddingRelationFunction;
+import org.apache.geaflow.ai.consolidate.function.KeywordRelationFunction;
 import org.apache.geaflow.ai.graph.GraphEntity;
 import org.apache.geaflow.ai.graph.GraphVertex;
 import org.apache.geaflow.ai.graph.LocalMemoryGraphAccessor;
 import org.apache.geaflow.ai.graph.MemoryMutableGraph;
 import org.apache.geaflow.ai.graph.io.*;
+import org.apache.geaflow.ai.index.EmbeddingIndexStore;
 import org.apache.geaflow.ai.index.EntityAttributeIndexStore;
+import org.apache.geaflow.ai.index.vector.EmbeddingVector;
 import org.apache.geaflow.ai.index.vector.KeywordVector;
 import org.apache.geaflow.ai.search.VectorSearch;
 import org.apache.geaflow.ai.verbalization.Context;
@@ -177,7 +182,7 @@ public class MutableGraphTest {
             .mapToObj(textFileReader::getRow)
             .map(String::trim).collect(Collectors.toList());
         for(String chunk : chunks) {
-            String vid = UUID.randomUUID().toString().replace("-", "");
+            String vid = String.valueOf(chunk.hashCode());
             memoryMutableGraph.addVertex(new Vertex(vertexSchema.getName(),
                 vid, Collections.singletonList(chunk)));
         }
@@ -198,10 +203,11 @@ public class MutableGraphTest {
             }
         }
 
-
-        ConsolidateServer consolidate = new ConsolidateServer();
+        ConsolidateServer consolidate = new ConsolidateServer(
+            Collections.singletonList(new KeywordRelationFunction()));
         int taskId = consolidate.executeConsolidateTask(
-            graphAccessor, memoryMutableGraph);
+            graphAccessor, memoryMutableGraph,
+            Collections.singletonList(indexStore));
         LOGGER.info("Success to run consolidation task, taskId: {}.", taskId);
 
         relatedResult = searchGraphEntities(server, query, 3);
@@ -233,4 +239,101 @@ public class MutableGraphTest {
         }
         return server.getSessionEntities(sessionId);
     }
+
+    @Test
+    public void testEmbeddingConsolidation() throws IOException {
+        GraphSchema graphSchema = new GraphSchema();
+        VertexSchema vertexSchema = new VertexSchema("chunk", "id",
+            Collections.singletonList("text"));
+        EdgeSchema edgeSchema = new EdgeSchema("relation", "srcId", "dstId",
+            Collections.singletonList("rel"));
+        graphSchema.addVertex(vertexSchema);
+        graphSchema.addEdge(edgeSchema);
+        Map<String, EntityGroup > entities = new HashMap<>();
+        entities.put(vertexSchema.getName(), new VertexGroup(vertexSchema, new ArrayList<>()));
+        entities.put(edgeSchema.getName(), new EdgeGroup(edgeSchema, new ArrayList<>()));
+        MemoryGraph graph = new MemoryGraph(graphSchema, entities);
+
+        LocalMemoryGraphAccessor graphAccessor = new LocalMemoryGraphAccessor(graph);
+        MemoryMutableGraph memoryMutableGraph = new MemoryMutableGraph(graph);
+        LOGGER.info("Success to init empty graph.");
+
+        TextFileReader textFileReader = new TextFileReader(10000);
+        textFileReader.readFile("text/Confucius");
+        List<String> chunks = IntStream.range(0, textFileReader.getRowCount())
+            .mapToObj(textFileReader::getRow)
+            .map(String::trim).collect(Collectors.toList());
+        for(String chunk : chunks) {
+            String vid = String.valueOf(chunk.hashCode());
+            memoryMutableGraph.addVertex(new Vertex(vertexSchema.getName(),
+                vid, Collections.singletonList(chunk)));
+        }
+
+        ModelConfig modelInfo = new ModelConfig();
+        EmbeddingIndexStore embeddingStore = new EmbeddingIndexStore();
+        embeddingStore.initStore(graphAccessor,
+            new SubgraphSemanticPromptFunction(graphAccessor),
+            "src/test/resources/index/ConfuciusEmbeddingIndexStore",
+            modelInfo);
+        LOGGER.info("Success to init ConfuciusEmbeddingIndexStore.");
+
+        GraphMemoryServer server = new GraphMemoryServer();
+        server.addGraphAccessor(graphAccessor);
+        server.addIndexStore(embeddingStore);
+        LOGGER.info("Success to init GraphMemoryServer.");
+
+        GraphVertex vertexForTest = graphAccessor.scanVertex().next();
+        String testId = vertexForTest.getVertex().getId();
+        String query = vertexForTest.getVertex().getValues().toString();
+        List<GraphEntity> relatedResult = searchGraphEntities(server, query, 3);
+        Assertions.assertTrue(relatedResult.isEmpty());
+        LOGGER.info("query: {} result: {}", query, relatedResult);
+
+        for (GraphEntity relatedEntity : relatedResult) {
+            if (relatedEntity instanceof GraphVertex) {
+                String relatedId = ((GraphVertex) relatedEntity).getVertex().getId();
+                Assertions.assertTrue(graphAccessor.getEdge(
+                    Constants.CONSOLIDATE_EMBEDDING_RELATION_LABEL, testId, relatedId
+                ).isEmpty());
+            }
+        }
+
+        ConsolidateServer consolidate = new ConsolidateServer(
+            Collections.singletonList(new EmbeddingRelationFunction()));
+        int taskId = consolidate.executeConsolidateTask(
+            graphAccessor, memoryMutableGraph,
+            Collections.singletonList(embeddingStore));
+        LOGGER.info("Success to run consolidation task, taskId: {}.", taskId);
+
+        double[] vec = ((EmbeddingVector)(embeddingStore.getStringIndex(query).get(0))).getVec();
+        relatedResult = searchGraphEntities(server, vec, 3);
+        Assertions.assertFalse(relatedResult.isEmpty());
+        LOGGER.info("query: {} result: {}", query, relatedResult);
+
+        //Test for at least one related entity in result
+        int existNum = 0;
+        for (GraphEntity relatedEntity : relatedResult) {
+            if (relatedEntity instanceof GraphVertex) {
+                String relatedId = ((GraphVertex) relatedEntity).getVertex().getId();
+                if(!graphAccessor.getEdge(Constants.CONSOLIDATE_EMBEDDING_RELATION_LABEL,
+                    testId, relatedId).isEmpty()) {
+                    existNum++;
+                }
+            }
+        }
+        LOGGER.info("relatedResult size: {} found size: {}", relatedResult.size(), existNum);
+        Assertions.assertTrue(existNum > 0);
+    }
+
+    private List<GraphEntity> searchGraphEntities(GraphMemoryServer server,
+                                                  double[] vec, int times) {
+        String sessionId = server.createSession();
+        for (int i = 0; i < times; i++) {
+            VectorSearch search = new VectorSearch(null, sessionId);
+            search.addVector(new EmbeddingVector(vec));
+            sessionId = server.search(search);
+        }
+        return server.getSessionEntities(sessionId);
+    }
+
 }

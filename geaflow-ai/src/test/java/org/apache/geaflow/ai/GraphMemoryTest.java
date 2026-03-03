@@ -19,6 +19,7 @@
 
 package org.apache.geaflow.ai;
 
+import org.apache.geaflow.ai.common.config.Constants;
 import org.apache.geaflow.ai.common.model.ModelConfig;
 import org.apache.geaflow.ai.graph.EmptyGraphAccessor;
 import org.apache.geaflow.ai.graph.GraphAccessor;
@@ -85,6 +86,7 @@ public class GraphMemoryTest {
 
     @Test
     public void testLdbcMainPipeline() {
+        Constants.GRAPH_SEARCH_STORE_DEFAULT_TOPN = 30;
         LdbcPromptFormatter ldbcPromptFormatter = new LdbcPromptFormatter();
         LocalMemoryGraphAccessor graphAccessor =
                 new LocalMemoryGraphAccessor(this.getClass().getClassLoader(),

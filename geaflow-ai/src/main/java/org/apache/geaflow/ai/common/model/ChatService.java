@@ -30,6 +30,10 @@ public class ChatService extends AbstractModelService {
         getModelConfig().setModel(model);
     }
 
+    public ChatService(ModelConfig modelConfig) {
+        super(modelConfig);
+    }
+
     public String chat(String sentence) {
         RemoteModelClient model = new RemoteModelClient();
         ModelContext context = ModelContext.emptyContext();

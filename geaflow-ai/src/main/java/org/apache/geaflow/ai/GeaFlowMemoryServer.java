@@ -19,14 +19,22 @@
 
 package org.apache.geaflow.ai;
 
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.apache.commons.lang3.StringUtils;
+import org.apache.geaflow.ai.common.config.Constants;
+import org.apache.geaflow.ai.common.model.EmbeddingService;
+import org.apache.geaflow.ai.common.model.ModelConfig;
 import org.apache.geaflow.ai.common.util.SeDeUtil;
 import org.apache.geaflow.ai.graph.*;
 import org.apache.geaflow.ai.graph.io.*;
+import org.apache.geaflow.ai.index.EmbeddingIndexStore;
 import org.apache.geaflow.ai.index.EntityAttributeIndexStore;
+import org.apache.geaflow.ai.index.vector.EmbeddingVector;
 import org.apache.geaflow.ai.index.vector.KeywordVector;
 import org.apache.geaflow.ai.search.VectorSearch;
 import org.apache.geaflow.ai.service.ServerMemoryCache;
@@ -46,6 +54,8 @@ public class GeaFlowMemoryServer {
     private static final int DEFAULT_PORT = 8080;
 
     private static final ServerMemoryCache CACHE = new ServerMemoryCache();
+    private static ModelConfig embeddingModelConfig = new ModelConfig();
+    private EmbeddingService embeddingService = null;
 
     public static void main(String[] args) {
         System.setProperty("solon.app.name", SERVER_NAME);
@@ -59,6 +69,32 @@ public class GeaFlowMemoryServer {
             app.get("/health", ctx -> {
                 ctx.output("{\"status\":\"UP\",\"service\":\"" + SERVER_NAME + "\"}");
             });
+
+            String externalConfigPath = app.cfg().get("config.path");
+            if (StringUtils.isNotBlank(externalConfigPath)) {
+                java.nio.file.Path configFile = Paths.get(externalConfigPath);
+                if (Files.exists(configFile)) {
+                    try {
+                        LOGGER.info("Loading external config from: {}", externalConfigPath);
+                        app.cfg().loadAdd(externalConfigPath);
+
+                        String model = app.cfg().getProperty("model.embedding.name", null);
+                        String url = app.cfg().getProperty("model.embedding.url", null);
+                        String api = app.cfg().getProperty("model.embedding.api", null);
+                        String token = app.cfg().getProperty("model.embedding.token", null);
+                        embeddingModelConfig = new ModelConfig(model, url, api, token);
+                    } catch (Exception e) {
+                        LOGGER.warn("Failed to load external config '{}': {}. Proceeding with defaults.",
+                            externalConfigPath, e.getMessage());
+                    }
+                } else {
+                    LOGGER.warn("External config file not found: '{}'. Using default/internal configuration.",
+                        externalConfigPath);
+                }
+            } else {
+                LOGGER.info("No external config.path specified. Using embedded configuration.");
+            }
+
         });
     }
 
@@ -73,8 +109,10 @@ public class GeaFlowMemoryServer {
     public String createGraph(@Body String input) {
         GraphSchema graphSchema = SeDeUtil.deserializeGraphSchema(input);
         String graphName = graphSchema.getName();
-        if (graphName == null || CACHE.getGraphByName(graphName) != null) {
+        if (graphName == null) {
             throw new RuntimeException("Cannot create graph name: " + graphName);
+        } else if (CACHE.getGraphByName(graphName) != null) {
+            return "Graph exists: " + graphName;
         }
         Map<String, EntityGroup> entities = new HashMap<>();
         for (VertexSchema vertexSchema : graphSchema.getVertexSchemaList()) {
@@ -88,13 +126,20 @@ public class GeaFlowMemoryServer {
         LocalMemoryGraphAccessor graphAccessor = new LocalMemoryGraphAccessor(graph);
         LOGGER.info("Success to init empty graph.");
 
-        EntityAttributeIndexStore indexStore = new EntityAttributeIndexStore();
-        indexStore.initStore(new SubgraphSemanticPromptFunction(graphAccessor));
+        EmbeddingIndexStore indexStore = new EmbeddingIndexStore();
+        String indexFilePath = "/tmp/GraphMemoryIndexStore/" + graphName;
+        indexStore.initStore(graphAccessor,
+            new SubgraphSemanticPromptFunction(graphAccessor),
+            indexFilePath, embeddingModelConfig
+        );
+        EntityAttributeIndexStore searchStore = new EntityAttributeIndexStore();
+        searchStore.initStore(new SubgraphSemanticPromptFunction(graphAccessor));
         LOGGER.info("Success to init EntityAttributeIndexStore.");
 
         GraphMemoryServer server = new GraphMemoryServer();
         server.addGraphAccessor(graphAccessor);
         server.addIndexStore(indexStore);
+        server.addIndexStore(searchStore);
         LOGGER.info("Success to init GraphMemoryServer.");
         CACHE.putServer(server);
 
@@ -160,8 +205,6 @@ public class GeaFlowMemoryServer {
                 memoryMutableGraph.addEdge(((GraphEdge) entity).getEdge());
             }
         }
-        CACHE.getConsolidateServer().executeConsolidateTask(
-            CACHE.getServerByName(graphName).getGraphAccessors().get(0), memoryMutableGraph);
         return "Success to add entities, num: " + graphEntities.size();
     }
 
@@ -196,6 +239,7 @@ public class GeaFlowMemoryServer {
         if (server == null) {
             throw new RuntimeException("Server not exist.");
         }
+        Constants.GRAPH_SEARCH_STORE_DEFAULT_TOPN = 5;
         String sessionId = server.createSession();
         CACHE.putSession(server, sessionId);
         return sessionId;
@@ -209,9 +253,19 @@ public class GeaFlowMemoryServer {
         if (graphName == null) {
             throw new RuntimeException("Graph not exist.");
         }
-        GraphMemoryServer server = CACHE.getServerByName(graphName);
+
+        MutableGraph mutableGraph = new MemoryMutableGraph((MemoryGraph) CACHE.getGraphByName(graphName));
+        CACHE.getConsolidateServer().executeConsolidateTask(
+            CACHE.getServerByName(graphName).getGraphAccessors().get(0), mutableGraph,
+            CACHE.getServerByName(graphName).getIndexStores()
+        );
         VectorSearch search = new VectorSearch(null, sessionId);
         search.addVector(new KeywordVector(query));
+        List<double[]> vecList = EmbeddingService.getVec(getEmbeddingService().embedding(query));
+        for (double[] vec : vecList) {
+            search.addVector(new EmbeddingVector(vec));
+        }
+        GraphMemoryServer server = CACHE.getServerByName(graphName);
         server.search(search);
         Context context = server.verbalize(sessionId,
             new SubgraphSemanticPromptFunction(server.getGraphAccessors().get(0)));
@@ -228,5 +282,12 @@ public class GeaFlowMemoryServer {
         GraphMemoryServer server = CACHE.getServerByName(graphName);
         List<GraphEntity> result = server.getSessionEntities(sessionId);
         return result.toString();
+    }
+
+    public EmbeddingService getEmbeddingService() {
+        if (embeddingService == null) {
+            embeddingService = new EmbeddingService(embeddingModelConfig);
+        }
+        return embeddingService;
     }
 }

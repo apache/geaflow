@@ -20,7 +20,11 @@
 package org.apache.geaflow.ai.common.model;
 
 import com.google.gson.Gson;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
+import org.apache.commons.lang3.StringUtils;
 
 public class EmbeddingService extends AbstractModelService {
 
@@ -31,6 +35,10 @@ public class EmbeddingService extends AbstractModelService {
     public EmbeddingService(String model) {
         super(new ModelConfig());
         getModelConfig().setModel(model);
+    }
+
+    public EmbeddingService(ModelConfig modelConfig) {
+        super(modelConfig);
     }
 
     public String embedding(String... inputs) {
@@ -45,6 +53,17 @@ public class EmbeddingService extends AbstractModelService {
             builder.append(json);
         }
         return builder.toString();
+    }
+
+    public static List<double[]> getVec(String input) {
+        Gson gson = new Gson();
+        List<String> jsonArray = Arrays.stream(input.split("\n")).filter(
+            StringUtils::isNoneBlank).collect(Collectors.toList());
+        List<double[]> res = new ArrayList<>(jsonArray.size());
+        for (String json : jsonArray) {
+            res.add(gson.fromJson(json, EmbeddingResult.class).embedding);
+        }
+        return res;
     }
 
     public static class EmbeddingResult {
