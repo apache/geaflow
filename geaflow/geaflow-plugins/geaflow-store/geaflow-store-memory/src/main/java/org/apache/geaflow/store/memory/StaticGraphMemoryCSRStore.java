@@ -218,7 +218,7 @@ public class StaticGraphMemoryCSRStore<K, VV, EV> extends BaseStaticGraphMemoryS
 
         public List<IEdge<K, EV>> getEdges(K sid) {
             int pos = getDictId(sid);
-            return pos == NON_EXIST ? Collections.EMPTY_LIST : getEdges(sid, pos);
+            return pos == NON_EXIST ? Collections.emptyList() : getEdges(sid, pos);
         }
 
         public List<IEdge<K, EV>> getEdges(K sid, int pos) {

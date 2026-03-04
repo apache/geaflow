@@ -71,7 +71,7 @@ public class StaticGraphMemoryStore<K, VV, EV> extends BaseStaticGraphMemoryStor
     @Override
     protected List<IEdge<K, EV>> getEdges(K sid) {
         Tuple<IVertex<K, VV>, List<IEdge<K, EV>>> v = map.get(sid);
-        return v == null ? Collections.EMPTY_LIST : v.f1;
+        return v == null ? Collections.emptyList() : v.f1;
     }
 
     @Override

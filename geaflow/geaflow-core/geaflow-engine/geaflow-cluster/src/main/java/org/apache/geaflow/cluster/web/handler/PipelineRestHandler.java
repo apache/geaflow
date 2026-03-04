@@ -78,7 +78,7 @@ public class PipelineRestHandler implements Serializable {
             metricFetcher.update();
             PipelineMetricCache cache = metricCache.getPipelineMetricCaches().get(pipelineName);
             if (cache == null) {
-                return ApiResponse.success(Collections.EMPTY_LIST);
+                return ApiResponse.success(Collections.emptyList());
             }
             return ApiResponse.success(cache.getCycleMetricList().values());
         } catch (Throwable t) {

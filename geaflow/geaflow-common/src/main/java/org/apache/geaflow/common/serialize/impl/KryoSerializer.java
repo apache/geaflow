@@ -74,7 +74,7 @@ public class KryoSerializer implements ISerializer {
             kryo.setRegistrationRequired(false);
 
             kryo.register(Arrays.asList("").getClass(), new ArraysAsListSerializer());
-            kryo.register(Collections.EMPTY_LIST.getClass(), new CollectionsEmptyListSerializer());
+            kryo.register(Collections.emptyList().getClass(), new CollectionsEmptyListSerializer());
             kryo.register(Collections.singletonList("").getClass(),
                 new CollectionsSingletonListSerializer());
             kryo.register(ClosureSerializer.Closure.class, new ClosureSerializer());

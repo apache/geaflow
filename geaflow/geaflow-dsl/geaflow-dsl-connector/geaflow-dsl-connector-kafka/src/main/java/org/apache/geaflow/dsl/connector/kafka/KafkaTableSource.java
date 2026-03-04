@@ -235,7 +235,7 @@ public class KafkaTableSource extends AbstractTableSource {
         if (windowStartOffset == null || windowStartOffset.timestamp() >= windowEndTimeMs) {
             // no data in current window, skip!
             KafkaOffset offset = new KafkaOffset(partitionWithOffset.f1, windowEndTimeMs);
-            return (FetchData<T>) FetchData.createStreamFetch(Collections.EMPTY_LIST, offset, false);
+            return (FetchData<T>) FetchData.createStreamFetch(Collections.emptyList(), offset, false);
         }
         List<String> dataList = new ArrayList<>();
         long responseMaxTimestamp = -1;

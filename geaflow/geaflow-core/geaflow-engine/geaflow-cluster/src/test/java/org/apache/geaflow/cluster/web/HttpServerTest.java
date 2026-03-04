@@ -60,7 +60,7 @@ public class HttpServerTest {
             }
         }).start();
 
-        Mockito.when(clusterManager.getContainerInfos()).thenReturn(Collections.EMPTY_MAP);
+        Mockito.when(clusterManager.getContainerInfos()).thenReturn(Collections.emptyMap());
 
         latch.await();
         doGet("http://localhost:8090/", "rest/overview");
