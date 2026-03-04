@@ -1,0 +1,9 @@
+repos:
+  - repo: local
+    hooks:
+      - id: maven-spotless-check
+        name: Spotless check (Maven)
+        entry: bash -c 'mvn -DspotlessFiles=\"$@\" spotless:check' --
+        language: system
+        pass_filenames: true
+        files: "\\.java$"
