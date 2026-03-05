@@ -26,6 +26,10 @@ import org.apache.geaflow.shuffle.message.SliceId;
 import org.apache.geaflow.shuffle.pipeline.buffer.PipeChannelBuffer;
 import org.apache.geaflow.shuffle.pipeline.fetcher.OneShardFetcher;
 
+/* This file is based on source code from the Flink Project (http://flink.apache.org/), licensed by the Apache
+ * Software Foundation (ASF) under the Apache License, Version 2.0. See the NOTICE file distributed with this work for
+ * additional information regarding copyright ownership. */
+
 /**
  * This class is an adaptation of Flink's org.apache.flink.runtime.io.network.partition.consumer.InputChannel.
  */

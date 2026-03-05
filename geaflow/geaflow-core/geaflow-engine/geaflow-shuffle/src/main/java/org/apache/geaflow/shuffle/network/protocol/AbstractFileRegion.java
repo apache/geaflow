@@ -22,6 +22,10 @@ package org.apache.geaflow.shuffle.network.protocol;
 import io.netty.channel.FileRegion;
 import io.netty.util.AbstractReferenceCounted;
 
+/* This file is based on source code from the Spark Project (http://spark.apache.org/), licensed by the Apache
+ * Software Foundation (ASF) under the Apache License, Version 2.0. See the NOTICE file distributed with this work for
+ * additional information regarding copyright ownership. */
+
 /**
  * This class is an adaptation of Spark's org.apache.spark.network.util.AbstractFileRegion.
  */

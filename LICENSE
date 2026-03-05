@@ -200,3 +200,98 @@
    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
    See the License for the specific language governing permissions and
    limitations under the License.
+
+
+------------------------------------------------------------------------------------
+This product includes derivative works from the following third-party projects:
+
+
+------------------------------------------------------------------------------------
+Apache Flink (https://github.com/apache/flink, version 1.18)
+Licensed under the Apache License, Version 2.0.
+
+The following files are derived from Apache Flink:
+geaflow/geaflow-utils/src/main/java/org/apache/geaflow/utils/KeyGroupAssignment.java
+geaflow/geaflow-core/geaflow-engine/geaflow-shuffle/src/main/java/org/apache/geaflow/shuffle/network/netty/NettyClient.java
+geaflow/geaflow-core/geaflow-engine/geaflow-shuffle/src/main/java/org/apache/geaflow/shuffle/network/netty/NettyServer.java
+geaflow/geaflow-core/geaflow-engine/geaflow-shuffle/src/main/java/org/apache/geaflow/shuffle/network/netty/SliceRequestClientHandler.java
+geaflow/geaflow-core/geaflow-engine/geaflow-shuffle/src/main/java/org/apache/geaflow/shuffle/network/protocol/NettyMessage.java
+geaflow/geaflow-core/geaflow-engine/geaflow-shuffle/src/main/java/org/apache/geaflow/shuffle/pipeline/channel/AbstractInputChannel.java
+geaflow/geaflow-core/geaflow-engine/geaflow-shuffle/src/main/java/org/apache/geaflow/shuffle/pipeline/channel/LocalInputChannel.java
+geaflow/geaflow-core/geaflow-engine/geaflow-shuffle/src/main/java/org/apache/geaflow/shuffle/pipeline/channel/ChannelId.java
+geaflow/geaflow-core/geaflow-engine/geaflow-shuffle/src/main/java/org/apache/geaflow/shuffle/pipeline/fetcher/MultiShardFetcher.java
+geaflow/geaflow-core/geaflow-engine/geaflow-shuffle/src/main/java/org/apache/geaflow/shuffle/pipeline/fetcher/OneShardFetcher.java
+geaflow/geaflow-core/geaflow-engine/geaflow-shuffle/src/main/java/org/apache/geaflow/shuffle/pipeline/fetcher/ShardFetcher.java
+geaflow/geaflow-core/geaflow-engine/geaflow-shuffle/src/main/java/org/apache/geaflow/shuffle/util/TransportException.java
+geaflow/geaflow-deploy/geaflow-on-k8s/src/main/java/org/apache/geaflow/cluster/k8s/entrypoint/KubernetesMasterRunner.java
+geaflow/geaflow-deploy/geaflow-on-k8s/src/main/java/org/apache/geaflow/cluster/k8s/entrypoint/KubernetesDriverRunner.java
+geaflow/geaflow-deploy/geaflow-on-k8s/src/main/java/org/apache/geaflow/cluster/k8s/entrypoint/KubernetesContainerRunner.java
+geaflow/geaflow-deploy/geaflow-on-k8s/src/main/java/org/apache/geaflow/cluster/k8s/config/KubernetesConfigKeys.java
+
+
+------------------------------------------------------------------------------------
+Apache Flink Kubernetes Operator (https://github.com/apache/flink-kubernetes-operator, version 1.1)
+Licensed under the Apache License, Version 2.0.
+
+The following file is derived from Apache Flink Kubernetes Operator:
+geaflow-kubernetes-operator/geaflow-kubernetes-operator-core/src/main/java/org/apache/geaflow/kubernetes/operator/core/status/GeaflowStatusRecorder.java
+
+
+------------------------------------------------------------------------------------
+Apache Spark (https://github.com/apache/spark, version 3.0)
+Licensed under the Apache License, Version 2.0.
+
+The following files are derived from Apache Spark:
+geaflow/geaflow-core/geaflow-engine/geaflow-shuffle/src/main/java/org/apache/geaflow/shuffle/network/protocol/AbstractFileRegion.java
+geaflow/geaflow-core/geaflow-engine/geaflow-shuffle/src/main/java/org/apache/geaflow/shuffle/network/protocol/CompositeFileRegion.java
+geaflow/geaflow-core/geaflow-engine/geaflow-shuffle/src/main/java/org/apache/geaflow/shuffle/network/protocol/MemoryBytesFileRegion.java
+geaflow/geaflow-core/geaflow-engine/geaflow-shuffle/src/main/java/org/apache/geaflow/shuffle/network/netty/NettyFrameDecoder.java
+geaflow/geaflow-common/src/main/java/org/apache/geaflow/common/binary/BinaryString.java
+
+
+------------------------------------------------------------------------------------
+Netty (https://github.com/netty/netty, version 4.1)
+Licensed under the Apache License, Version 2.0.
+
+The following files are derived from Netty:
+geaflow/geaflow-memory/src/main/java/org/apache/geaflow/memory/Chunk.java
+geaflow/geaflow-memory/src/main/java/org/apache/geaflow/memory/DirectMemory.java
+geaflow/geaflow-memory/src/main/java/org/apache/geaflow/memory/Page.java
+geaflow/geaflow-memory/src/main/java/org/apache/geaflow/memory/PlatformDependent.java
+geaflow/geaflow-memory/src/main/java/org/apache/geaflow/memory/cleaner/Cleaner.java
+geaflow/geaflow-memory/src/main/java/org/apache/geaflow/memory/cleaner/CleanerJava6.java
+geaflow/geaflow-memory/src/main/java/org/apache/geaflow/memory/cleaner/CleanerJava9.java
+
+
+------------------------------------------------------------------------------------
+Presto (https://github.com/prestodb/presto, version 0.276)
+Licensed under the Apache License, Version 2.0.
+
+The following files are derived from Presto:
+geaflow/geaflow-analytics-service/geaflow-analytics-service-client/org/apache/geaflow/analytics/service/client/jdbc/property/ConnectProperty.java
+geaflow/geaflow-analytics-service/geaflow-analytics-service-client/org/apache/geaflow/analytics/service/client/jdbc/property/AbstractConnectProperty.java
+geaflow/geaflow-analytics-service/geaflow-analytics-service-client/org/apache/geaflow/analytics/service/client/jdbc/property/ConnectProperties.java
+geaflow/geaflow-analytics-service/geaflow-analytics-service-client/org/apache/geaflow/analytics/service/client/jdbc/AnalyticsDriver.java
+geaflow/geaflow-analytics-service/geaflow-analytics-service-client/org/apache/geaflow/analytics/service/client/HttpResponse.java
+geaflow/geaflow-analytics-service/geaflow-analytics-service-common/org/apache/geaflow/analytics/service/query/IQueryStatus.java
+geaflow/geaflow-analytics-service/geaflow-analytics-service-common/org/apache/geaflow/analytics/service/query/QueryIdGenerator.java
+geaflow/geaflow-analytics-service/geaflow-analytics-service-common/org/apache/geaflow/analytics/service/query/QueryResults.java
+
+
+------------------------------------------------------------------------------------
+Apache Hive (https://github.com/apache/hive, version 3.0)
+Licensed under the Apache License, Version 2.0.
+
+The following file is derived from Apache Hive:
+geaflow/geaflow-dsl/geaflow-dsl-plan/org/apache/geaflow/dsl/udf/table/string/Like.java
+
+
+------------------------------------------------------------------------------------
+Guava (https://github.com/google/guava, version 22.0)
+Licensed under the Apache License, Version 2.0.
+
+The following file is derived from Guava:
+geaflow/geaflow-state/geaflow-state-common/org/apache/geaflow/state/iterator/MultiIterator.java
+
+
+------------------------------------------------------------------------------------

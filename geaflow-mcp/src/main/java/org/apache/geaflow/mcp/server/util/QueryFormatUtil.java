@@ -95,4 +95,5 @@ public class QueryFormatUtil {
                 throw new RuntimeException("Cannt convert type name: " + iType);
         }
     }
+
 }

@@ -76,19 +76,20 @@ public class InferTaskRunImpl implements InferTaskRun {
         try {
             inferTask = inferTaskBuilder.start();
             this.inferTaskStatus = InferTaskStatus.RUNNING;
-            ProcessLoggerManager processLogger = new ProcessLoggerManager(inferTask, new Slf4JProcessOutputConsumer(this.getClass().getSimpleName()));
-            processLogger.startLogging();
-            int exitValue = 0;
-            if (inferTask.waitFor(TIMEOUT_SECOND, TimeUnit.SECONDS)) {
-                exitValue = inferTask.exitValue();
-                this.inferTaskStatus = FAILED;
-            } else {
-                this.inferTaskStatus = InferTaskStatus.RUNNING;
-            }
-            if (exitValue != 0) {
-                throw new GeaflowRuntimeException(
-                    String.format("infer task [%s] run failed, exitCode is %d, message is "
-                        + "%s", inferScript, exitValue, processLogger.getErrorOutputLogger().get()));
+            try (ProcessLoggerManager processLogger = new ProcessLoggerManager(inferTask, new Slf4JProcessOutputConsumer(this.getClass().getSimpleName()))) {
+                processLogger.startLogging();
+                int exitValue = 0;
+                if (inferTask.waitFor(TIMEOUT_SECOND, TimeUnit.SECONDS)) {
+                    exitValue = inferTask.exitValue();
+                    this.inferTaskStatus = FAILED;
+                } else {
+                    this.inferTaskStatus = InferTaskStatus.RUNNING;
+                }
+                if (exitValue != 0) {
+                    throw new GeaflowRuntimeException(
+                        String.format("infer task [%s] run failed, exitCode is %d, message is "
+                                      + "%s", inferScript, exitValue, processLogger.getErrorOutputLogger().get()));
+                }
             }
         } catch (Exception e) {
             throw new GeaflowRuntimeException("infer task run failed", e);

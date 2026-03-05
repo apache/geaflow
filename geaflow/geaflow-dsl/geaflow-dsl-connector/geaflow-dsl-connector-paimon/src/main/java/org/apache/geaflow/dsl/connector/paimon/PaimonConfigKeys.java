@@ -49,4 +49,18 @@ public class PaimonConfigKeys {
         .noDefaultValue()
         .description("The paimon table name to read.");
 
+    public static final ConfigKey GEAFLOW_DSL_PAIMON_SOURCE_MODE = ConfigKeys
+            .key("geaflow.dsl.paimon.source.mode")
+            .defaultValue(SourceMode.BATCH.name())
+            .description("The paimon source mode, if stream, will continue to read data from paimon.");
+
+    public static final ConfigKey GEAFLOW_DSL_PAIMON_SCAN_SNAPSHOT_ID = ConfigKeys
+            .key("geaflow.dsl.paimon.scan.snapshot.id")
+            .defaultValue(null)
+            .description("If scan mode is from-snapshot, this parameter is required.");
+
+    public static final ConfigKey GEAFLOW_DSL_PAIMON_SCAN_MODE = ConfigKeys
+            .key("geaflow.dsl.paimon.scan.mode")
+            .defaultValue(StartupMode.LATEST.getValue())
+            .description("Determines the scan mode for paimon source, 'latest' or 'from-snapshot'.");
 }

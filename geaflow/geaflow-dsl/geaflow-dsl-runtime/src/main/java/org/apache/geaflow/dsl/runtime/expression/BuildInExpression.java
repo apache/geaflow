@@ -89,6 +89,8 @@ public class BuildInExpression extends AbstractReflectCallExpression {
 
     public static final String CURRENT_TIMESTAMP = "currentTimestamp";
 
+    public static final String SAME = "same";
+
     public BuildInExpression(List<Expression> inputs, IType<?> outputType,
                              Class<?> implementClass, String methodName) {
         super(inputs, outputType, implementClass, methodName);

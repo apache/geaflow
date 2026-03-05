@@ -23,25 +23,24 @@ import com.aliyun.odps.Column;
 import com.aliyun.odps.Odps;
 import com.aliyun.odps.PartitionSpec;
 import com.aliyun.odps.Table;
+import com.aliyun.odps.TableSchema;
 import com.aliyun.odps.account.Account;
 import com.aliyun.odps.account.AliyunAccount;
 import com.aliyun.odps.data.ArrayRecord;
-import com.aliyun.odps.data.Record;
-import com.aliyun.odps.data.RecordWriter;
 import com.aliyun.odps.tunnel.TableTunnel;
-import com.aliyun.odps.tunnel.TableTunnel.UploadSession;
 import com.aliyun.odps.tunnel.TunnelException;
-import com.aliyun.odps.utils.StringUtils;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 import java.io.IOException;
-import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import javax.annotation.Nullable;
 import org.apache.geaflow.api.context.RuntimeContext;
 import org.apache.geaflow.common.config.Configuration;
 import org.apache.geaflow.dsl.common.data.Row;
@@ -56,24 +55,24 @@ public class OdpsTableSink implements TableSink {
     private static final Logger LOGGER = LoggerFactory.getLogger(OdpsTableSink.class);
 
     private int bufferSize = 1000;
+    private int flushIntervalMs = Integer.MAX_VALUE;
+
     private int timeoutSeconds = 60;
     private String endPoint;
     private String project;
     private String tableName;
     private String accessKey;
     private String accessId;
-    private String partitionSpec;
-    private String shardNamePrefix;
     private StructType schema;
+    private String partitionSpec;
 
-    private transient Odps odps;
-    private transient Table table;
     private transient TableTunnel tunnel;
-    private transient UploadSession uploadSession;
-    private transient RecordWriter writer;
     private transient Column[] recordColumns;
     private transient int[] columnIndex;
-    private transient List<Object[]> buffer;
+    private transient PartitionExtractor partitionExtractor;
+    private transient Map<String, PartitionWriter> partitionWriters;
+
+    private final ExecutorService executor = Executors.newSingleThreadExecutor();
 
     @Override
     public void init(Configuration tableConf, StructType schema) {
@@ -90,10 +89,13 @@ public class OdpsTableSink implements TableSink {
         this.accessKey = tableConf.getString(OdpsConfigKeys.GEAFLOW_DSL_ODPS_ACCESS_KEY);
         this.accessId = tableConf.getString(OdpsConfigKeys.GEAFLOW_DSL_ODPS_ACCESS_ID);
         this.partitionSpec = tableConf.getString(OdpsConfigKeys.GEAFLOW_DSL_ODPS_PARTITION_SPEC);
-        this.shardNamePrefix = project + "-" + tableName + "-";
         int bufferSize = tableConf.getInteger(OdpsConfigKeys.GEAFLOW_DSL_ODPS_SINK_BUFFER_SIZE);
         if (bufferSize > 0) {
             this.bufferSize = bufferSize;
+        }
+        int flushIntervalMs = tableConf.getInteger(OdpsConfigKeys.GEAFLOW_DSL_ODPS_SINK_FLUSH_INTERVAL_MS);
+        if (flushIntervalMs > 0) {
+            this.flushIntervalMs = flushIntervalMs;
         }
         int timeoutSeconds = tableConf.getInteger(OdpsConfigKeys.GEAFLOW_DSL_ODPS_TIMEOUT_SECONDS);
         if (timeoutSeconds > 0) {
@@ -101,42 +103,32 @@ public class OdpsTableSink implements TableSink {
         }
         checkArguments();
 
-        LOGGER.info("init odps table sink, endPoint : {},  project : {}, tableName : {}, "
-            + "partitionSpec: {}", endPoint, project, tableName, partitionSpec);
+        LOGGER.info("init odps table sink, endPoint : {},  project : {}, tableName : {}",
+                endPoint, project, tableName);
     }
 
     @Override
     public void open(RuntimeContext context) {
-        this.buffer = new ArrayList<>(bufferSize);
         Account account = new AliyunAccount(accessId, accessKey);
-        this.odps = new Odps(account);
+        Odps odps = new Odps(account);
         odps.setEndpoint(endPoint);
         odps.setDefaultProject(project);
-        this.table = odps.tables().get(project, tableName);
         this.tunnel = new TableTunnel(odps);
-        if (StringUtils.isEmpty(partitionSpec)) {
-            throw new GeaFlowDSLException("For ODPS sink, partition spec cannot be empty.");
-        }
-        PartitionSpec usePartitionSpec = new PartitionSpec(partitionSpec);
-        ExecutorService executor = Executors.newSingleThreadExecutor();
-        Future<UploadSession> future = executor.submit(() -> {
-            try {
-                return tunnel.createUploadSession(project, tableName, usePartitionSpec);
-            } catch (TunnelException e) {
-                throw new GeaFlowDSLException("Cannot get odps session.", e);
-            }
-        });
-        try {
-            this.uploadSession = future.get(this.timeoutSeconds, TimeUnit.SECONDS);
-        } catch (Exception e) {
-            throw new GeaFlowDSLException("Cannot list partitions from ODPS, endPoint: " + this.endPoint, e);
-        }
-        this.recordColumns = this.uploadSession.getSchema().getColumns().toArray(new Column[0]);
+        Table table = odps.tables().get(tableName);
+        TableSchema tableSchema = table.getSchema();
+        this.recordColumns = tableSchema.getColumns().toArray(new Column[0]);
         this.columnIndex = new int[recordColumns.length];
         for (int i = 0; i < this.recordColumns.length; i++) {
             String columnName = this.recordColumns[i].getName();
             columnIndex[i] = this.schema.indexOf(columnName);
         }
+        if (this.partitionSpec != null && !this.partitionSpec.isEmpty()) {
+            this.partitionExtractor = DefaultPartitionExtractor.create(this.partitionSpec, schema);
+        } else {
+            List<Column> partitionColumns = tableSchema.getPartitionColumns();
+            this.partitionExtractor = DefaultPartitionExtractor.create(partitionColumns, schema);
+        }
+        this.partitionWriters = new HashMap<>();
     }
 
     @Override
@@ -149,58 +141,66 @@ public class OdpsTableSink implements TableSink {
                 values[i] = null;
             }
         }
-        buffer.add(values);
-        if (buffer.size() >= bufferSize) {
-            try {
-                flush();
-            } catch (Exception e) {
-                throw new IOException(e);
-            }
-        }
+        PartitionWriter writer = createOrGetWriter(partitionExtractor.extractPartition(row));
+        writer.write(new ArrayRecord(recordColumns, values));
     }
 
     @Override
     public void finish() throws IOException {
-        try {
-            flush();
-        } catch (Exception e) {
-            throw new IOException(e);
-        }
+        flush();
     }
 
     @Override
     public void close() {
         LOGGER.info("close.");
-        if (writer != null) {
-            try {
-                writer.close();
-            } catch (IOException e) {
-                throw new GeaFlowDSLException("Error when closing Odps writer.", e);
+        flush();
+    }
+
+    private void flush() {
+        try {
+            for (PartitionWriter writer : partitionWriters.values()) {
+                writer.flush();
             }
+        } catch (IOException e) {
+            throw new RuntimeException("Flush data error.", e);
         }
     }
 
-    private void flush() throws IOException {
-        if (buffer.isEmpty()) {
-            return;
+    /**
+     * Create or get writer.
+     * @param partition the partition
+     * @return a writer
+     */
+    private PartitionWriter createOrGetWriter(String partition) {
+        PartitionWriter partitionWriter = partitionWriters.get(partition);
+        if (partitionWriter == null) {
+            TableTunnel.StreamUploadSession session = createUploadSession(partition);
+            partitionWriter = new PartitionWriter(session, bufferSize, flushIntervalMs);
+            partitionWriters.put(partition, partitionWriter);
         }
-        List<Object[]> flushBuffer = buffer;
-        buffer = new ArrayList<>(bufferSize);
-        List<Record> records = new ArrayList<>();
-        for (Object[] value : flushBuffer) {
-            Record record = new ArrayRecord(recordColumns, value);
-            records.add(record);
-        }
-        if (writer == null) {
+        return partitionWriter;
+    }
+
+    /**
+     * Create an upload session.
+     * @param partition the partition
+     * @return an upload session
+     */
+    private TableTunnel.StreamUploadSession createUploadSession(@Nullable String partition) {
+        Future<TableTunnel.StreamUploadSession> future = executor.submit(() -> {
             try {
-                assert uploadSession != null : "The uploadSession has not been open.";
-                writer = uploadSession.openBufferedWriter();
+                if (partition == null || partition.isEmpty()) {
+                    return tunnel.createStreamUploadSession(project, tableName);
+                }
+                return tunnel.createStreamUploadSession(project, tableName, new PartitionSpec(partition));
             } catch (TunnelException e) {
-                throw new GeaFlowDSLException("Cannot get Odps writer.", e);
+                throw new GeaFlowDSLException("Cannot get odps session.", e);
             }
-        }
-        for (Record record : records) {
-            writer.write(record);
+        });
+        try {
+            return future.get(this.timeoutSeconds, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            throw new GeaFlowDSLException("Create stream upload session with endpoint " + this.endPoint + " failed", e);
         }
     }
 
@@ -208,8 +208,7 @@ public class OdpsTableSink implements TableSink {
         Preconditions.checkArgument(!Strings.isNullOrEmpty(endPoint), "endPoint is null");
         Preconditions.checkArgument(!Strings.isNullOrEmpty(project), "project is null");
         Preconditions.checkArgument(!Strings.isNullOrEmpty(tableName), "tableName is null");
-        Preconditions.checkArgument(!Strings.isNullOrEmpty(endPoint), "accessKey is null");
-        Preconditions.checkArgument(!Strings.isNullOrEmpty(project), "accessId is null");
-        Preconditions.checkNotNull(new PartitionSpec(partitionSpec));
+        Preconditions.checkArgument(!Strings.isNullOrEmpty(accessId), "accessId is null");
+        Preconditions.checkArgument(!Strings.isNullOrEmpty(accessKey), "accessKey is null");
     }
 }
