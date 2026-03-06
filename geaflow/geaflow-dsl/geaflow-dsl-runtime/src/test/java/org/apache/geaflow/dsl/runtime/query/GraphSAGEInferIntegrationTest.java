@@ -397,7 +397,8 @@ public class GraphSAGEInferIntegrationTest {
         
         // Write test script to file
         File testScriptFile = new File(PYTHON_UDF_DIR, "test_graphsage_udf.py");
-        try (FileWriter writer = new FileWriter(testScriptFile, StandardCharsets.UTF_8)) {
+        try (java.io.OutputStreamWriter writer = new java.io.OutputStreamWriter(
+                new java.io.FileOutputStream(testScriptFile), StandardCharsets.UTF_8)) {
             writer.write(testScript);
         }
         
@@ -544,7 +545,8 @@ public class GraphSAGEInferIntegrationTest {
         
         // Write to test directory
         File udfFile = new File(PYTHON_UDF_DIR, "TransFormFunctionUDF.py");
-        try (FileWriter writer = new FileWriter(udfFile, StandardCharsets.UTF_8)) {
+        try (java.io.OutputStreamWriter writer = new java.io.OutputStreamWriter(
+                new java.io.FileOutputStream(udfFile), StandardCharsets.UTF_8)) {
             writer.write(pythonUDF);
         }
         
@@ -552,7 +554,8 @@ public class GraphSAGEInferIntegrationTest {
         try {
             String requirements = readResourceFileStatic("/requirements.txt");
             File reqFile = new File(PYTHON_UDF_DIR, "requirements.txt");
-            try (FileWriter writer = new FileWriter(reqFile, StandardCharsets.UTF_8)) {
+            try (java.io.OutputStreamWriter writer = new java.io.OutputStreamWriter(
+                    new java.io.FileOutputStream(reqFile), StandardCharsets.UTF_8)) {
                 writer.write(requirements);
             }
         } catch (Exception e) {
