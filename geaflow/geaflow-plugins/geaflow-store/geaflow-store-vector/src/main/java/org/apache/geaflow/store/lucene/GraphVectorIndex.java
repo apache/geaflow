@@ -145,8 +145,10 @@ public class GraphVectorIndex<K> implements IVectorIndex<K> {
             // Execute search
             TopDocs topDocs = searcher.search(knnQuery, topK);
 
+            if (topDocs.scoreDocs.length == 0) {
+                return null;
+            }
             Document firstDoc = searcher.storedFields().document(topDocs.scoreDocs[0].doc);
-
             K result;
             if (keyClass == String.class) {
                 String value = firstDoc.get(KEY_FIELD_NAME);

@@ -155,4 +155,11 @@ public class GraphVectorIndexTest {
         assertEquals(result1, key);
         assertEquals(result2, key);
     }
+    @Test
+    public void testSearchNonExistentFieldReturnsNull() {
+        stringIndex.addVectorIndex(true, "vertex_1", "embedding", new float[]{0.1f, 0.2f, 0.3f, 0.4f});
+        // searching for a non-existent field should return null
+        String result = stringIndex.searchVectorIndex(true, "nonexistent_field", new float[]{0.1f, 0.2f, 0.3f, 0.4f}, 1);
+        assertEquals(result, null);
+    }
 }
