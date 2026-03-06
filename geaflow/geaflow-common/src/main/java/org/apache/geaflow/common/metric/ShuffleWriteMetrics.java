@@ -23,6 +23,8 @@ import java.io.Serializable;
 
 public class ShuffleWriteMetrics implements Serializable {
 
+    private static final int BYTES_PER_KB = 1024;
+
     /**
      * total output channels.
      */
@@ -216,7 +218,7 @@ public class ShuffleWriteMetrics implements Serializable {
     @Override
     public String toString() {
         return "WriteMetrics{" + "outputRecords=" + writtenRecords + ", encodedKb="
-            + encodedSize / 1024 + ", encodeMs=" + encodeMs + ", spillNum=" + spillNum
+            + encodedSize / BYTES_PER_KB + ", encodeMs=" + encodeMs + ", spillNum=" + spillNum
             + ", spillDisk=" + spillDisk + ", oomCnt=" + oomCount + ", spillMs=" + spillMs
             + ", maxSpillKB=" + maxSpillKB + ", " + "maxSliceKB=" + maxSliceKB + ", channels="
             + numChannels + ", writtenChannels=" + writtenChannels + '}';

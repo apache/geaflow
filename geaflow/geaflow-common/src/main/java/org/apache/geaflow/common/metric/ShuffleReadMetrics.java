@@ -23,6 +23,8 @@ import java.io.Serializable;
 
 public class ShuffleReadMetrics implements Serializable {
 
+    private static final int BYTES_PER_KB = 1024;
+
     private int fetchSlices;
     /**
      * total records of fetch response.
@@ -123,7 +125,7 @@ public class ShuffleReadMetrics implements Serializable {
 
     @Override
     public String toString() {
-        return "ReadMetrics{" + "fetchSlices=" + fetchSlices + ", fetchRecords=" + fetchRecords + ", decodeKB=" + decodeBytes / 1024 + ", fetchWaitMs=" + fetchWaitMs
+        return "ReadMetrics{" + "fetchSlices=" + fetchSlices + ", fetchRecords=" + fetchRecords + ", decodeKB=" + decodeBytes / BYTES_PER_KB + ", fetchWaitMs=" + fetchWaitMs
             + ", decodeMs=" + decodeMs + '}';
     }
 }

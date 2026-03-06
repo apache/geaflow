@@ -23,6 +23,8 @@ import java.io.Serializable;
 
 public class CycleMetrics implements Serializable {
 
+    private static final int BYTES_PER_KB = 1024;
+
     private String name;
     private String pipelineName;
     private String opName;
@@ -172,9 +174,9 @@ public class CycleMetrics implements Serializable {
         cycleMetrics.setAvgGcTime(totalGcTime / taskNum);
         cycleMetrics.setSlowestTaskExecuteTime(slowestTaskExecuteTime);
         cycleMetrics.setInputRecords(totalInputRecords);
-        cycleMetrics.setInputKb(totalInputBytes / 1024);
+        cycleMetrics.setInputKb(totalInputBytes / BYTES_PER_KB);
         cycleMetrics.setOutputRecords(totalOutputRecords);
-        cycleMetrics.setOutputKb(totalOutputBytes / 1024);
+        cycleMetrics.setOutputKb(totalOutputBytes / BYTES_PER_KB);
         return cycleMetrics;
     }
 
