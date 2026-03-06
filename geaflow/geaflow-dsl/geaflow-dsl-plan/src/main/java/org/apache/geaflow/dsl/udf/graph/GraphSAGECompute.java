@@ -455,9 +455,9 @@ public class GraphSAGECompute extends IncVertexCentricCompute<Object, List<Doubl
                         // Note: The snapshot's vertex() query is bound to the current vertex
                         // For querying other vertices, we may need a different approach
                         // For now, we check if this is the current vertex
-                        var vertexOpt = snapshot.vertex().get();
-                        if (vertexOpt != null && vertexOpt.getId().equals(vertexId)) {
-                            List<Double> features = vertexOpt.getValue();
+                        IVertex<Object, List<Double>> vertexFromSnapshot = snapshot.vertex().get();
+                        if (vertexFromSnapshot != null && vertexFromSnapshot.getId().equals(vertexId)) {
+                            List<Double> features = vertexFromSnapshot.getValue();
                             return features != null ? features : new ArrayList<>();
                         }
                         
