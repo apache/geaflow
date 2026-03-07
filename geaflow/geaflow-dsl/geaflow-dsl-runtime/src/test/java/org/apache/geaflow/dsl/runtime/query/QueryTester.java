@@ -193,7 +193,7 @@ public class QueryTester implements Serializable {
 
     private void compareResult(String actualResult, String expectResult) {
         if (compareWithOrder) {
-            Assert.assertEquals(expectResult, actualResult);
+            Assert.assertEquals(actualResult, expectResult);
         } else {
             String[] actualLines = actualResult.split("\n");
             String[] expectLines = expectResult.split("\n");
@@ -209,7 +209,7 @@ public class QueryTester implements Serializable {
             String actualSort = StringUtils.join(actualLines, "\n");
             String expectSort = StringUtils.join(expectLines, "\n");
             if (!Objects.equals(actualSort, expectSort)) {
-                Assert.assertEquals(expectResult, actualResult);
+                Assert.assertEquals(actualResult, expectResult);
             }
         }
     }

@@ -31,4 +31,11 @@ public class IsoGqlSyntaxTest extends BaseDslTest {
         String unParseStmts = parseStmtsAndUnParse(parseStmtsAndUnParse(unParseSql));
         Assert.assertEquals(unParseStmts, unParseSql);
     }
+
+    @Test
+    public void testIsoGQLSamePredicate() throws Exception {
+        String unParseSql = parseSqlAndUnParse("IsoGQLSame.sql");
+        String unParseStmts = parseStmtsAndUnParse(parseStmtsAndUnParse(unParseSql));
+        Assert.assertEquals(unParseStmts, unParseSql);
+    }
 }

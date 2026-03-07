@@ -187,11 +187,11 @@ public abstract class AbstractMemoryPool<T> implements PoolMetric {
     }
 
     void freeChunk(Chunk<T> chunk, long handle, long length) {
-        final boolean needDestoryChunk;
+        final boolean needDestroyChunk;
         synchronized (this) {
-            needDestoryChunk = !chunk.parent.free(chunk, handle);
+            needDestroyChunk = !chunk.parent.free(chunk, handle);
         }
-        if (needDestoryChunk) {
+        if (needDestroyChunk) {
             // destroyChunk not need to be called while holding the synchronized lock.
             destroyChunk(chunk);
         }

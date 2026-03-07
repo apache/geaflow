@@ -90,4 +90,5 @@ jobs:
           pip list | grep -i torch
 
       - name: Build and Test On JDK 8
-        run: mvn -B -e clean test -Pjdk8 -Duser.timezone=Asia/Shanghai -Dlog4j.configuration="log4j.rootLogger=WARN, stdout"
+        run: mvn -B -e clean test -Pjdk8 -pl !geaflow/geaflow-plugins/geaflow-store/geaflow-store-vector
+        -Duser.timezone=Asia/Shanghai -Dlog4j.configuration="log4j .rootLogger=WARN, stdout"

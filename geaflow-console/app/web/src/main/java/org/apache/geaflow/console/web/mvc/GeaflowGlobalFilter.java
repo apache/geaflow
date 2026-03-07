@@ -50,9 +50,9 @@ public class GeaflowGlobalFilter implements Filter, Ordered {
             filterChain.doFilter(request, response);
 
         } catch (Exception e) {
-            String mesage = Fmt.as("Request url {} failed", request.getRequestURI());
-            log.info(mesage);
-            log.error(mesage, e.getCause());
+            String message = Fmt.as("Request url {} failed", request.getRequestURI());
+            log.info(message);
+            log.error(message, e.getCause());
             GeaflowApiResponse.error(e.getCause()).write(response);
 
         } finally {

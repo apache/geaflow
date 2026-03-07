@@ -48,6 +48,7 @@ public class OdpsConfigKeys {
         .noDefaultValue()
         .description("The odps endpoint.");
 
+    @Deprecated
     public static final ConfigKey GEAFLOW_DSL_ODPS_PARTITION_SPEC = ConfigKeys
         .key("geaflow.dsl.odps.partition.spec")
         .defaultValue("")
@@ -57,6 +58,11 @@ public class OdpsConfigKeys {
         .key("geaflow.dsl.odps.sink.buffer.size")
         .defaultValue(1000)
         .description("The buffer size of odps sink buffer.");
+
+    public static final ConfigKey GEAFLOW_DSL_ODPS_SINK_FLUSH_INTERVAL_MS = ConfigKeys
+            .key("geaflow.dsl.odps.sink.flush.interval.ms")
+            .defaultValue(10000)
+            .description("The flush interval of odps sink buffer.");
 
     public static final ConfigKey GEAFLOW_DSL_ODPS_TIMEOUT_SECONDS = ConfigKeys
         .key("geaflow.dsl.odps.timeout.seconds")

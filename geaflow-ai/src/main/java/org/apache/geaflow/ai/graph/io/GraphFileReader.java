@@ -1,0 +1,80 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+package org.apache.geaflow.ai.graph.io;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+
+public class GraphFileReader {
+
+    public static MemoryGraph getGraph(ClassLoader classLoader, String path, long limit,
+                                       Function<Vertex, Vertex> vertexMapper,
+                                       Function<Edge, Edge> edgeMapper) throws IOException {
+        Map<String, List<String>> result = ResourceFileScanner.scanGraphLdbcSfFolder(classLoader, path);
+        GraphSchema graphSchema = new GraphSchema();
+        Map<String, EntityGroup> entities = new HashMap<>();
+        for (Map.Entry<String, List<String>> entry : result.entrySet()) {
+            String entityName = entry.getKey();
+            List<String> fileNames = entry.getValue();
+            for (String fileName : fileNames) {
+                CsvFileReader reader = new CsvFileReader(limit);
+                reader.readCsvFile(path + "/" + entityName + "/" + fileName);
+                List<String> colSchema = reader.getColSchema();
+                boolean isVertex = colSchema.contains("id");
+                if (isVertex) {
+                    int idIndex = colSchema.indexOf("id");
+                    if (idIndex < 0) {
+                        throw new RuntimeException("Cannot find index of the id column.");
+                    }
+                    VertexSchema vertexSchema = new VertexSchema(entityName, colSchema.get(idIndex), colSchema);
+                    List<Vertex> vertices = new ArrayList<>(reader.getRowCount());
+                    for (int i = 0; i < reader.getRowCount(); i++) {
+                        List<String> row = reader.getRow(i);
+                        Vertex newVertex = vertexMapper.apply(new Vertex(entityName, row.get(idIndex), row));
+                        vertices.add(newVertex);
+                    }
+                    VertexGroup vertexGroup = new VertexGroup(vertexSchema, vertices);
+                    entities.put(entityName, vertexGroup);
+                    graphSchema.addVertex(vertexSchema);
+                } else {
+                    boolean containTime = colSchema.contains("creationDate");
+                    int srcIdIndex = containTime ? 1 : 0;
+                    int dstIdIndex = containTime ? 2 : 1;
+                    EdgeSchema edgeSchema = new EdgeSchema(entityName, colSchema.get(srcIdIndex), colSchema.get(dstIdIndex), colSchema);
+                    List<Edge> edges = new ArrayList<>(reader.getRowCount());
+                    for (int i = 0; i < reader.getRowCount(); i++) {
+                        List<String> row = reader.getRow(i);
+                        Edge newEdge = edgeMapper.apply(new Edge(entityName, row.get(srcIdIndex), row.get(dstIdIndex), row));
+                        edges.add(newEdge);
+                    }
+                    EdgeGroup edgeGroup = new EdgeGroup(edgeSchema, edges);
+                    entities.put(entityName, edgeGroup);
+                    graphSchema.addEdge(edgeSchema);
+                }
+            }
+        }
+        return new MemoryGraph(graphSchema, entities);
+    }
+
+}

@@ -24,6 +24,7 @@ import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.sql.SqlOperator;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.apache.calcite.sql.util.ReflectiveSqlOperatorTable;
+import org.apache.geaflow.dsl.operator.SqlSameOperator;
 
 public class BuildInSqlOperatorTable extends ReflectiveSqlOperatorTable {
 
@@ -173,7 +174,9 @@ public class BuildInSqlOperatorTable extends ReflectiveSqlOperatorTable {
         SqlStdOperatorTable.CUME_DIST,
         SqlStdOperatorTable.ROW_NUMBER,
         SqlStdOperatorTable.LAG,
-        SqlStdOperatorTable.LEAD
+        SqlStdOperatorTable.LEAD,
+        // ISO-GQL SAME predicate
+        SqlSameOperator.INSTANCE
     };
 
     public BuildInSqlOperatorTable() {
