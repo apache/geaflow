@@ -80,11 +80,3 @@ jobs:
       - name: Build and Test On JDK 8
         run: mvn -B -e clean test -Pjdk8 -pl !geaflow/geaflow-plugins/geaflow-store/geaflow-store-vector
         -Duser.timezone=Asia/Shanghai -Dlog4j.configuration="log4j .rootLogger=WARN, stdout"
-
-      - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v4
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: "**/target/site/jacoco/jacoco.xml"
-          fail_ci_if_error: false
-          verbose: true
