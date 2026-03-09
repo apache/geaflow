@@ -1,0 +1,50 @@
+[project]
+name = "geaflow-ai-lightmem"
+version = "0.1.0"
+description = "LightMem: ledger + views memory kernel"
+requires-python = ">=3.10"
+dependencies = [
+  "numpy>=2.0.0",
+  "fastapi>=0.115.0",
+  "uvicorn>=0.30.0",
+  "pydantic>=2.6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0.0",
+  "httpx>=0.27.0",
+  "ruff>=0.14.0",
+  "mypy>=1.10.0",
+]
+
+[build-system]
+requires = ["setuptools>=69.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["lightmem", "api"]
+package-dir = {"lightmem" = "core", "api" = "api"}
+
+[tool.setuptools.package-data]
+lightmem = ["py.typed"]
+api = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+[tool.mypy]
+python_version = "3.11"
+show_error_codes = true
+pretty = true

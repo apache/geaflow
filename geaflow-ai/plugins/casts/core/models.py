@@ -36,12 +36,13 @@ def filter_decision_properties(properties: JsonDict) -> JsonDict:
 @dataclass
 class Context:
     """Runtime context c = (structural_signature, properties, goal)
-    
+
     Represents the current state of a graph traversal:
     - structural_signature: Current traversal path as a string (e.g., "V().out().in()")
     - properties: Current node properties (with identity fields filtered out)
     - goal: Natural language description of the traversal objective
     """
+
     structural_signature: str
     properties: JsonDict
     goal: str
@@ -55,13 +56,13 @@ class Context:
 @dataclass
 class StrategyKnowledgeUnit:
     """Strategy Knowledge Unit (SKU) - Core building block of the strategy cache.
-    
+
     Mathematical definition:
-    SKU = (context_template, decision_template, schema_fingerprint, 
+    SKU = (context_template, decision_template, schema_fingerprint,
            property_vector, confidence_score, logic_complexity)
-    
+
     where context_template = (structural_signature, predicate, goal_template)
-    
+
     Attributes:
         id: Unique identifier for this SKU
         structural_signature: s_sku - structural pattern that must match exactly
@@ -73,6 +74,7 @@ class StrategyKnowledgeUnit:
         confidence_score: eta - dynamic confidence score (AIMD updated)
         logic_complexity: sigma_logic - intrinsic logic complexity measure
     """
+
     id: str
     structural_signature: str
     predicate: Callable[[JsonDict], bool]

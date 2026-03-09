@@ -20,8 +20,8 @@
 from unittest.mock import Mock
 
 from core.config import DefaultConfiguration
-from simulation.engine import SimulationEngine
-from simulation.metrics import MetricsCollector
+from harness.simulation.engine import SimulationEngine
+from harness.simulation.metrics import MetricsCollector
 
 
 class MockSKU:
@@ -41,10 +41,7 @@ class MockStrategyCache:
 
     def update_confidence(self, sku, success):
         """Record confidence updates."""
-        self.confidence_updates.append({
-            "sku": sku,
-            "success": success
-        })
+        self.confidence_updates.append({"sku": sku, "success": success})
 
 
 class TestLifecycleIntegration:
@@ -65,7 +62,7 @@ class TestLifecycleIntegration:
             graph=self.mock_graph,
             strategy_cache=self.strategy_cache,
             llm_oracle=self.llm_oracle,
-            verbose=False
+            verbose=False,
         )
 
     def test_complete_lifecycle_with_passing_precheck(self):
@@ -77,16 +74,24 @@ class TestLifecycleIntegration:
 
         # Add a step with low revisit
         metrics.record_path_step(
-            request_id, 0, "node1", None, None, None, "sig1", "goal", {},
-            "Tier1", "sku1", "out('friend')"
+            request_id,
+            0,
+            "node1",
+            None,
+            None,
+            None,
+            "sig1",
+            "goal",
+            {},
+            "Tier1",
+            "sku1",
+            "out('friend')",
         )
 
         sku = MockSKU(confidence_score=0.5)
 
         # Phase 1: Precheck
-        should_execute, precheck_success = self.engine.execute_prechecker(
-            sku, request_id, metrics
-        )
+        should_execute, precheck_success = self.engine.execute_prechecker(sku, request_id, metrics)
         assert should_execute is True
         assert precheck_success is True
 
@@ -114,16 +119,24 @@ class TestLifecycleIntegration:
         # Create high revisit ratio
         for i in range(10):
             metrics.record_path_step(
-                request_id, i, "node1", None, None, None, f"sig{i}",
-                "goal", {}, "Tier1", f"sku{i}", "out('friend')"
+                request_id,
+                i,
+                "node1",
+                None,
+                None,
+                None,
+                f"sig{i}",
+                "goal",
+                {},
+                "Tier1",
+                f"sku{i}",
+                "out('friend')",
             )
 
         sku = MockSKU(confidence_score=0.5)
 
         # Phase 1: Precheck
-        should_execute, precheck_success = self.engine.execute_prechecker(
-            sku, request_id, metrics
-        )
+        should_execute, precheck_success = self.engine.execute_prechecker(sku, request_id, metrics)
         assert should_execute is False
         assert precheck_success is False
 
@@ -140,16 +153,24 @@ class TestLifecycleIntegration:
         # Create high revisit ratio
         for i in range(10):
             metrics.record_path_step(
-                request_id, i, "node1", None, None, None, f"sig{i}",
-                "goal", {}, "Tier1", f"sku{i}", "out('friend')"
+                request_id,
+                i,
+                "node1",
+                None,
+                None,
+                None,
+                f"sig{i}",
+                "goal",
+                {},
+                "Tier1",
+                f"sku{i}",
+                "out('friend')",
             )
 
         sku = MockSKU(confidence_score=0.5)
 
         # Phase 1: Precheck
-        should_execute, precheck_success = self.engine.execute_prechecker(
-            sku, request_id, metrics
-        )
+        should_execute, precheck_success = self.engine.execute_prechecker(sku, request_id, metrics)
         assert should_execute is True  # Continue execution
         assert precheck_success is False  # But signal failure
 
@@ -174,8 +195,18 @@ class TestLifecycleIntegration:
         # Add steps leading to cycle
         for i in range(10):
             metrics.record_path_step(
-                request_id, i, "node1", None, None, None, f"sig{i}",
-                "goal", {}, "Tier1", f"sku{i}", "out('friend')"
+                request_id,
+                i,
+                "node1",
+                None,
+                None,
+                None,
+                f"sig{i}",
+                "goal",
+                {},
+                "Tier1",
+                f"sku{i}",
+                "out('friend')",
             )
 
         initial_step_count = len(metrics.paths[request_id]["steps"])
@@ -184,9 +215,7 @@ class TestLifecycleIntegration:
         sku = MockSKU(confidence_score=0.5)
 
         # Precheck fails
-        should_execute, _ = self.engine.execute_prechecker(
-            sku, request_id, metrics
-        )
+        should_execute, _ = self.engine.execute_prechecker(sku, request_id, metrics)
 
         if not should_execute:
             # Simulate rollback as done in real code
@@ -202,9 +231,7 @@ class TestLifecycleIntegration:
         request_id = metrics.initialize_path(0, "node1", {}, "goal", "rubric")
 
         # Phase 1: Precheck with None SKU
-        should_execute, precheck_success = self.engine.execute_prechecker(
-            None, request_id, metrics
-        )
+        should_execute, precheck_success = self.engine.execute_prechecker(None, request_id, metrics)
         assert should_execute is True
         assert precheck_success is True
 
@@ -228,16 +255,24 @@ class TestLifecycleIntegration:
         # Add cyclic steps
         for i in range(5):
             metrics.record_path_step(
-                request_id, i, "node1", None, None, None, f"sig{i}",
-                "goal", {}, "Tier1", f"sku{i}", "out('friend')"
+                request_id,
+                i,
+                "node1",
+                None,
+                None,
+                None,
+                f"sig{i}",
+                "goal",
+                {},
+                "Tier1",
+                f"sku{i}",
+                "out('friend')",
             )
 
         sku = MockSKU(confidence_score=0.5)
 
         # Precheck fails due to cycle
-        should_execute, precheck_success = self.engine.execute_prechecker(
-            sku, request_id, metrics
-        )
+        should_execute, precheck_success = self.engine.execute_prechecker(sku, request_id, metrics)
 
         # Should continue but penalize
         assert should_execute is True
@@ -261,16 +296,24 @@ class TestLifecycleIntegration:
         # Create both cycle and low confidence
         for i in range(10):
             metrics.record_path_step(
-                request_id, i, "node1", None, None, None, f"sig{i}",
-                "goal", {}, "Tier1", f"sku{i}", "out('friend')"
+                request_id,
+                i,
+                "node1",
+                None,
+                None,
+                None,
+                f"sig{i}",
+                "goal",
+                {},
+                "Tier1",
+                f"sku{i}",
+                "out('friend')",
             )
 
         sku = MockSKU(confidence_score=0.2)  # Below threshold
 
         # Precheck should fail on first condition met
-        should_execute, precheck_success = self.engine.execute_prechecker(
-            sku, request_id, metrics
-        )
+        should_execute, precheck_success = self.engine.execute_prechecker(sku, request_id, metrics)
 
         # Should terminate (STOP mode)
         assert should_execute is False
@@ -285,16 +328,24 @@ class TestLifecycleIntegration:
         # Create worst-case scenario: high cycles + low confidence
         for i in range(20):
             metrics.record_path_step(
-                request_id, i, "node1", None, None, None, f"sig{i}",
-                "goal", {}, "Tier1", f"sku{i}", "out('friend')"
+                request_id,
+                i,
+                "node1",
+                None,
+                None,
+                None,
+                f"sig{i}",
+                "goal",
+                {},
+                "Tier1",
+                f"sku{i}",
+                "out('friend')",
             )
 
         sku = MockSKU(confidence_score=0.01)  # Extremely low
 
         # Precheck should still pass in NONE mode
-        should_execute, precheck_success = self.engine.execute_prechecker(
-            sku, request_id, metrics
-        )
+        should_execute, precheck_success = self.engine.execute_prechecker(sku, request_id, metrics)
 
         assert should_execute is True
         assert precheck_success is True
@@ -308,9 +359,7 @@ class TestLifecycleIntegration:
         sku = MockSKU(confidence_score=0.5)
 
         # Precheck on empty path
-        should_execute, precheck_success = self.engine.execute_prechecker(
-            sku, request_id, metrics
-        )
+        should_execute, precheck_success = self.engine.execute_prechecker(sku, request_id, metrics)
 
         # Should pass (no cycle possible with empty path)
         assert should_execute is True
@@ -326,22 +375,28 @@ class TestLifecycleIntegration:
         # Add steps
         for i in range(5):
             metrics.record_path_step(
-                request_id, i, f"node{i}", None, None, None, f"sig{i}",
-                "goal", {}, "Tier1", f"sku{i}", "out('friend')"
+                request_id,
+                i,
+                f"node{i}",
+                None,
+                None,
+                None,
+                f"sig{i}",
+                "goal",
+                {},
+                "Tier1",
+                f"sku{i}",
+                "out('friend')",
             )
 
-        initial_steps = [
-            step.copy() for step in metrics.paths[request_id]["steps"]
-        ]
+        initial_steps = [step.copy() for step in metrics.paths[request_id]["steps"]]
         sku = MockSKU(confidence_score=0.5)
 
         # Run precheck
         self.engine.execute_prechecker(sku, request_id, metrics)
 
         # Run postcheck
-        self.engine.execute_postchecker(
-            sku, request_id, metrics, ["node6"]
-        )
+        self.engine.execute_postchecker(sku, request_id, metrics, ["node6"])
 
         # Verify path state unchanged
         assert len(metrics.paths[request_id]["steps"]) == len(initial_steps)
@@ -363,10 +418,7 @@ class TestEdgeCases:
         self.mock_graph.get_schema.return_value = Mock()
 
         self.engine = SimulationEngine(
-            graph=self.mock_graph,
-            strategy_cache=Mock(),
-            llm_oracle=self.llm_oracle,
-            verbose=False
+            graph=self.mock_graph, strategy_cache=Mock(), llm_oracle=self.llm_oracle, verbose=False
         )
 
     def test_lifecycle_with_single_step_path(self):
@@ -378,14 +430,22 @@ class TestEdgeCases:
 
         # Single step - cannot have cycle
         metrics.record_path_step(
-            request_id, 0, "node1", None, None, None, "sig1", "goal", {},
-            "Tier1", "sku1", "out('friend')"
+            request_id,
+            0,
+            "node1",
+            None,
+            None,
+            None,
+            "sig1",
+            "goal",
+            {},
+            "Tier1",
+            "sku1",
+            "out('friend')",
         )
 
         sku = MockSKU(confidence_score=0.5)
-        should_execute, success = self.engine.execute_prechecker(
-            sku, request_id, metrics
-        )
+        should_execute, success = self.engine.execute_prechecker(sku, request_id, metrics)
 
         # Single step should pass (cycle detection requires >= 2 steps)
         assert should_execute is True
@@ -403,26 +463,42 @@ class TestEdgeCases:
         # Start with low revisit (pass)
         for i in range(3):
             metrics.record_path_step(
-                request_id, i, f"node{i}", None, None, None, f"sig{i}",
-                "goal", {}, "Tier1", f"sku{i}", "out('friend')"
+                request_id,
+                i,
+                f"node{i}",
+                None,
+                None,
+                None,
+                f"sig{i}",
+                "goal",
+                {},
+                "Tier1",
+                f"sku{i}",
+                "out('friend')",
             )
 
         sku = MockSKU(confidence_score=0.5)
-        should_execute, success = self.engine.execute_prechecker(
-            sku, request_id, metrics
-        )
+        should_execute, success = self.engine.execute_prechecker(sku, request_id, metrics)
         results.append(("pass", should_execute, success))
 
         # Add cycles (fail) - all same node
         for i in range(7):
             metrics.record_path_step(
-                request_id, 3 + i, "node1", None, None, None, f"sig{3+i}",
-                "goal", {}, "Tier1", f"sku{3+i}", "out('friend')"
+                request_id,
+                3 + i,
+                "node1",
+                None,
+                None,
+                None,
+                f"sig{3 + i}",
+                "goal",
+                {},
+                "Tier1",
+                f"sku{3 + i}",
+                "out('friend')",
             )
 
-        should_execute, success = self.engine.execute_prechecker(
-            sku, request_id, metrics
-        )
+        should_execute, success = self.engine.execute_prechecker(sku, request_id, metrics)
         results.append(("fail", should_execute, success))
 
         # Verify pattern: first passes (0% revisit), second fails (high revisit)
@@ -437,14 +513,22 @@ class TestEdgeCases:
         request_id = metrics.initialize_path(0, "node1", {}, "goal", "rubric")
 
         metrics.record_path_step(
-            request_id, 0, "node1", None, None, None, "sig", "goal", {},
-            "Tier1", "sku1", "out('friend')"
+            request_id,
+            0,
+            "node1",
+            None,
+            None,
+            None,
+            "sig",
+            "goal",
+            {},
+            "Tier1",
+            "sku1",
+            "out('friend')",
         )
 
         sku = MockSKU(confidence_score=0.0)
-        should_execute, success = self.engine.execute_prechecker(
-            sku, request_id, metrics
-        )
+        should_execute, success = self.engine.execute_prechecker(sku, request_id, metrics)
 
         # Should fail due to confidence < 0.1
         assert should_execute is False
@@ -458,14 +542,22 @@ class TestEdgeCases:
         request_id = metrics.initialize_path(0, "node1", {}, "goal", "rubric")
 
         metrics.record_path_step(
-            request_id, 0, "node1", None, None, None, "sig", "goal", {},
-            "Tier1", "sku1", "out('friend')"
+            request_id,
+            0,
+            "node1",
+            None,
+            None,
+            None,
+            "sig",
+            "goal",
+            {},
+            "Tier1",
+            "sku1",
+            "out('friend')",
         )
 
         sku = MockSKU(confidence_score=1.0)
-        should_execute, success = self.engine.execute_prechecker(
-            sku, request_id, metrics
-        )
+        should_execute, success = self.engine.execute_prechecker(sku, request_id, metrics)
 
         # Should pass all checks
         assert should_execute is True

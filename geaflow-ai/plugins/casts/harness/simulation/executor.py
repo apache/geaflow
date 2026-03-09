@@ -38,8 +38,11 @@ class TraversalExecutor:
         return self._path_history[request_id]
 
     async def execute_decision(
-        self, current_node_id: str, decision: str, current_signature: str,
-        request_id: int | None = None
+        self,
+        current_node_id: str,
+        decision: str,
+        current_signature: str,
+        request_id: int | None = None,
     ) -> list[tuple[str, str, tuple[str, str] | None]]:
         """
         Execute a traversal decision and return next nodes with updated signatures.

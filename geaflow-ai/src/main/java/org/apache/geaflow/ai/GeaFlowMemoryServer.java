@@ -19,6 +19,7 @@
 
 package org.apache.geaflow.ai;
 
+import com.google.gson.Gson;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -27,7 +28,16 @@ import org.apache.geaflow.ai.common.util.SeDeUtil;
 import org.apache.geaflow.ai.graph.*;
 import org.apache.geaflow.ai.graph.io.*;
 import org.apache.geaflow.ai.index.EntityAttributeIndexStore;
+import org.apache.geaflow.ai.index.vector.CastsVector;
 import org.apache.geaflow.ai.index.vector.KeywordVector;
+import org.apache.geaflow.ai.protocol.AiScope;
+import org.apache.geaflow.ai.memory.MemoryClient;
+import org.apache.geaflow.ai.memory.MemoryRecallRequest;
+import org.apache.geaflow.ai.memory.MemoryRecallResponse;
+import org.apache.geaflow.ai.memory.MemoryWriteRequest;
+import org.apache.geaflow.ai.memory.MemoryWriteResponse;
+import org.apache.geaflow.ai.memory.LightMemConfig;
+import org.apache.geaflow.ai.memory.LightMemRestClient;
 import org.apache.geaflow.ai.search.VectorSearch;
 import org.apache.geaflow.ai.service.ServerMemoryCache;
 import org.apache.geaflow.ai.verbalization.Context;
@@ -44,6 +54,8 @@ public class GeaFlowMemoryServer {
 
     private static final String SERVER_NAME = "geaflow-memory-server";
     private static final int DEFAULT_PORT = 8080;
+
+    private static final Gson GSON = new Gson();
 
     private static final ServerMemoryCache CACHE = new ServerMemoryCache();
 
@@ -219,6 +231,75 @@ public class GeaFlowMemoryServer {
     }
 
     @Post
+    @Mapping("/query/castsExec")
+    public String execCastsQuery(@Param("sessionId") String sessionId,
+                                 @Param("maxDepth") Integer maxDepth,
+                                 @Body String query) {
+        String graphName = CACHE.getGraphNameBySession(sessionId);
+        if (graphName == null) {
+            throw new RuntimeException("Graph not exist.");
+        }
+        GraphMemoryServer server = CACHE.getServerByName(graphName);
+        int depth = maxDepth == null ? 5 : maxDepth;
+        VectorSearch search = new VectorSearch(null, sessionId);
+        // Seed the starting subgraph by keyword recall, then let CASTS traverse multi-hop.
+        search.addVector(new KeywordVector(query));
+        search.addVector(new CastsVector(query, depth));
+        server.search(search);
+        Context context = server.verbalize(sessionId,
+            new SubgraphSemanticPromptFunction(server.getGraphAccessors().get(0)));
+        return context.toString();
+    }
+
+    @Post
+    @Mapping("/memory/write")
+    public String memoryWrite(
+        @Param("tenantId") String tenantId,
+        @Param("userId") String userId,
+        @Param("agentId") String agentId,
+        @Param("runId") String runId,
+        @Param("actorId") String actorId,
+        @Param("sessionId") String sessionId,
+        @Body String input
+    ) {
+        String effectiveRunId = isBlank(runId) ? normalized(sessionId) : normalized(runId);
+        AiScope scope = buildScope(tenantId, userId, agentId, effectiveRunId, actorId);
+        validateScope(scope);
+
+        MemoryWriteRequest request = isBlank(input) ? new MemoryWriteRequest() : GSON.fromJson(input, MemoryWriteRequest.class);
+        if (request == null) {
+            request = new MemoryWriteRequest();
+        }
+        MemoryClient client = new MemoryClient(new LightMemRestClient(LightMemConfig.fromEnv()), SERVER_NAME);
+        MemoryWriteResponse resp = client.write(scope, request);
+        return GSON.toJson(resp);
+    }
+
+    @Post
+    @Mapping("/memory/recall")
+    public String memoryRecall(
+        @Param("tenantId") String tenantId,
+        @Param("userId") String userId,
+        @Param("agentId") String agentId,
+        @Param("runId") String runId,
+        @Param("actorId") String actorId,
+        @Param("sessionId") String sessionId,
+        @Body String input
+    ) {
+        String effectiveRunId = isBlank(runId) ? normalized(sessionId) : normalized(runId);
+        AiScope scope = buildScope(tenantId, userId, agentId, effectiveRunId, actorId);
+        validateScope(scope);
+
+        MemoryRecallRequest request = isBlank(input) ? null : GSON.fromJson(input, MemoryRecallRequest.class);
+        if (request == null || isBlank(request.query)) {
+            throw new RuntimeException("MemoryRecallRequest.query is required");
+        }
+        MemoryClient client = new MemoryClient(new LightMemRestClient(LightMemConfig.fromEnv()), SERVER_NAME);
+        MemoryRecallResponse resp = client.recall(scope, request);
+        return GSON.toJson(resp);
+    }
+
+    @Post
     @Mapping("/query/result")
     public String getResult(@Param("sessionId") String sessionId) {
         String graphName = CACHE.getGraphNameBySession(sessionId);
@@ -228,5 +309,44 @@ public class GeaFlowMemoryServer {
         GraphMemoryServer server = CACHE.getServerByName(graphName);
         List<GraphEntity> result = server.getSessionEntities(sessionId);
         return result.toString();
+    }
+
+    private static AiScope buildScope(
+        String tenantId,
+        String userId,
+        String agentId,
+        String runId,
+        String actorId
+    ) {
+        AiScope scope = new AiScope();
+        scope.tenantId = normalized(tenantId);
+        scope.userId = normalized(userId);
+        scope.agentId = normalized(agentId);
+        scope.runId = normalized(runId);
+        scope.actorId = normalized(actorId);
+        return scope;
+    }
+
+    private static void validateScope(AiScope scope) {
+        boolean ok = !isBlank(scope.tenantId)
+            || !isBlank(scope.userId)
+            || !isBlank(scope.agentId)
+            || !isBlank(scope.runId)
+            || !isBlank(scope.actorId);
+        if (!ok) {
+            throw new RuntimeException("Scope is required (tenantId/userId/agentId/runId/actorId)");
+        }
+    }
+
+    private static String normalized(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
     }
 }

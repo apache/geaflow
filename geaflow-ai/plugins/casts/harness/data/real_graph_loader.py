@@ -28,7 +28,7 @@ from core.constants import EDGE_LABEL_KEY, EDGE_TARGET_KEY, NODE_ID_KEY, NODE_TY
 from core.types import GraphEdges, GraphNodes, JsonDict
 
 if TYPE_CHECKING:
-    from data.graph_generator import GraphGeneratorConfig
+    from harness.data.graph_generator import GraphGeneratorConfig
 
 RealGraphLoader = Callable[
     ["GraphGeneratorConfig"],
@@ -214,7 +214,7 @@ def _sample_connected_subgraph(
 def _resolve_data_dir(real_data_dir: str | None) -> Path:
     """Resolve the directory that contains real graph CSV files."""
 
-    project_root = Path(__file__).resolve().parents[1]
+    project_root = Path(__file__).resolve().parents[2]
 
     if real_data_dir:
         configured = Path(real_data_dir)
@@ -225,7 +225,7 @@ def _resolve_data_dir(real_data_dir: str | None) -> Path:
         return configured
 
     default_candidates = [
-        project_root / "data" / "real_graph_data",
+        project_root / "harness" / "data" / "real_graph_data",
         project_root / "real_graph_data",
     ]
     for candidate in default_candidates:

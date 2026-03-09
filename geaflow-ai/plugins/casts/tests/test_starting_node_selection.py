@@ -22,7 +22,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from core.config import DefaultConfiguration
-from data.sources import SyntheticDataSource
+from harness.data.sources import SyntheticDataSource
 from services.embedding import EmbeddingService
 from services.llm_oracle import LLMOracle
 
@@ -40,9 +40,7 @@ def mock_config():
 
 
 @pytest.mark.asyncio
-async def test_recommend_starting_node_types_basic(
-    mock_embedding_service, mock_config
-):
+async def test_recommend_starting_node_types_basic(mock_embedding_service, mock_config):
     """Test basic happy-path for recommending starting node types."""
     # Arrange
     oracle = LLMOracle(mock_embedding_service, mock_config)
@@ -50,18 +48,16 @@ async def test_recommend_starting_node_types_basic(
 
     # Mock the LLM response
     mock_response = MagicMock()
-    mock_response.choices[0].message.content = '''```json
+    mock_response.choices[0].message.content = """```json
     ["Person", "Company"]
-    ```'''
+    ```"""
     oracle.client.chat.completions.create.return_value = mock_response
 
     goal = "Find risky investments between people and companies."
     available_types = {"Person", "Company", "Loan", "Account"}
 
     # Act
-    recommended = await oracle.recommend_starting_node_types(
-        goal, available_types
-    )
+    recommended = await oracle.recommend_starting_node_types(goal, available_types)
 
     # Assert
     assert isinstance(recommended, list)
@@ -71,50 +67,42 @@ async def test_recommend_starting_node_types_basic(
 
 
 @pytest.mark.asyncio
-async def test_recommend_starting_node_types_malformed_json(
-    mock_embedding_service, mock_config
-):
+async def test_recommend_starting_node_types_malformed_json(mock_embedding_service, mock_config):
     """Test robustness against malformed JSON from LLM."""
     # Arrange
     oracle = LLMOracle(mock_embedding_service, mock_config)
     oracle.client = AsyncMock()
     mock_response = MagicMock()
-    mock_response.choices[0].message.content = '''```json
+    mock_response.choices[0].message.content = """```json
     ["Person", "Company",,]
-    ```'''  # Extra comma
+    ```"""  # Extra comma
     oracle.client.chat.completions.create.return_value = mock_response
 
     # Act
-    recommended = await oracle.recommend_starting_node_types(
-        "test goal", {"Person", "Company"}
-    )
+    recommended = await oracle.recommend_starting_node_types("test goal", {"Person", "Company"})
 
     # Assert
-    assert recommended == [] # Should fail gracefully
+    assert recommended == []  # Should fail gracefully
 
 
 @pytest.mark.asyncio
-async def test_recommend_starting_node_types_with_comments(
-    mock_embedding_service, mock_config
-):
+async def test_recommend_starting_node_types_with_comments(mock_embedding_service, mock_config):
     """Test that parse_jsons handles comments correctly."""
     # Arrange
     oracle = LLMOracle(mock_embedding_service, mock_config)
     oracle.client = AsyncMock()
     mock_response = MagicMock()
-    mock_response.choices[0].message.content = '''```json
+    mock_response.choices[0].message.content = """```json
     // Top-level comment
     [
         "Person", // Person node type
         "Company"  // Company node type
     ]
-    ```'''
+    ```"""
     oracle.client.chat.completions.create.return_value = mock_response
 
     # Act
-    recommended = await oracle.recommend_starting_node_types(
-        "test goal", {"Person", "Company"}
-    )
+    recommended = await oracle.recommend_starting_node_types("test goal", {"Person", "Company"})
 
     # Assert
     assert set(recommended) == {"Person", "Company"}
@@ -129,15 +117,13 @@ async def test_recommend_starting_node_types_filters_invalid_types(
     oracle = LLMOracle(mock_embedding_service, mock_config)
     oracle.client = AsyncMock()
     mock_response = MagicMock()
-    mock_response.choices[0].message.content = '''```json
+    mock_response.choices[0].message.content = """```json
 ["Person", "Unicorn"]
-```'''
+```"""
     oracle.client.chat.completions.create.return_value = mock_response
 
     # Act
-    recommended = await oracle.recommend_starting_node_types(
-        "test goal", {"Person", "Company"}
-    )
+    recommended = await oracle.recommend_starting_node_types("test goal", {"Person", "Company"})
 
     # Assert
     assert recommended == ["Person"]
@@ -153,13 +139,16 @@ def synthetic_data_source():
         "1": {"id": "1", "type": "Person"},
         "2": {"id": "2", "type": "Company"},
         "3": {"id": "3", "type": "Company"},
-        "4": {"id": "4", "type": "Loan"}, # Degree 0
+        "4": {"id": "4", "type": "Loan"},  # Degree 0
     }
     source._edges = {
-        "0": [{"target": "1", "label": "friend"}, {"target": "2", "label": "invest"}], # Degree 2
-        "1": [{"target": "3", "label": "invest"}], # Degree 1
-        "2": [{"target": "0", "label": "customer"}, {"target": "3", "label": "partner"}], # Degree 2
-        "3": [{"target": "1", "label": "customer"}], # Degree 1
+        "0": [{"target": "1", "label": "friend"}, {"target": "2", "label": "invest"}],  # Degree 2
+        "1": [{"target": "3", "label": "invest"}],  # Degree 1
+        "2": [
+            {"target": "0", "label": "customer"},
+            {"target": "3", "label": "partner"},
+        ],  # Degree 2
+        "3": [{"target": "1", "label": "customer"}],  # Degree 1
     }
     return source
 

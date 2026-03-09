@@ -25,9 +25,9 @@ from core.interfaces import DataSource
 from core.models import Context, StrategyKnowledgeUnit
 from core.strategy_cache import StrategyCache
 from core.types import TraversalResult
+from harness.simulation.executor import TraversalExecutor
+from harness.simulation.metrics import MetricsCollector, PathStep
 from services.llm_oracle import LLMOracle
-from simulation.executor import TraversalExecutor
-from simulation.metrics import MetricsCollector, PathStep
 
 CyclePenaltyMode = Literal["NONE", "PUNISH", "STOP"]
 
@@ -94,9 +94,7 @@ class SimulationEngine:
             sample_nodes = []
 
         # 4. Initialize traversers for the starting nodes
-        current_layer: list[
-            tuple[str, str, str, int, int | None, str | None, str | None]
-        ] = []
+        current_layer: list[tuple[str, str, str, int, int | None, str | None, str | None]] = []
         for node_id in sample_nodes:
             request_id = metrics_collector.initialize_path(
                 epoch, node_id, self.graph.nodes[node_id], goal_text, rubric
@@ -167,9 +165,7 @@ class SimulationEngine:
         raw_cycle_penalty_mode = self.llm_oracle.config.get_str("CYCLE_PENALTY").upper()
         if raw_cycle_penalty_mode not in ("NONE", "PUNISH", "STOP"):
             raw_cycle_penalty_mode = "STOP"
-        cycle_penalty_mode: CyclePenaltyMode = cast(
-            CyclePenaltyMode, raw_cycle_penalty_mode
-        )
+        cycle_penalty_mode: CyclePenaltyMode = cast(CyclePenaltyMode, raw_cycle_penalty_mode)
 
         # Mode: NONE - skip all validation
         if cycle_penalty_mode == "NONE":
@@ -207,9 +203,7 @@ class SimulationEngine:
 
         # === VALIDATION 2: Confidence Threshold ===
         # Check if SKU confidence has fallen too low
-        min_confidence = self.llm_oracle.config.get_float(
-            "MIN_EXECUTION_CONFIDENCE"
-        )
+        min_confidence = self.llm_oracle.config.get_float("MIN_EXECUTION_CONFIDENCE")
         if sku.confidence_score < min_confidence:
             if self.verbose:
                 print(
@@ -311,9 +305,7 @@ class SimulationEngine:
         if self.verbose:
             print(f"\n[Tick {tick}] Processing {len(current_layer)} active traversers")
 
-        next_layer: list[
-            tuple[str, str, str, int, int | None, str | None, str | None]
-        ] = []
+        next_layer: list[tuple[str, str, str, int, int | None, str | None, str | None]] = []
 
         for idx, traversal_state in enumerate(current_layer):
             (

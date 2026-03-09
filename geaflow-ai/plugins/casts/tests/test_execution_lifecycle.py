@@ -20,8 +20,8 @@
 from unittest.mock import Mock
 
 from core.config import DefaultConfiguration
-from simulation.engine import SimulationEngine
-from simulation.metrics import MetricsCollector
+from harness.simulation.engine import SimulationEngine
+from harness.simulation.metrics import MetricsCollector
 
 
 class MockSKU:
@@ -45,10 +45,7 @@ class TestExecutePrechecker:
         self.mock_graph.get_schema.return_value = Mock()
 
         self.engine = SimulationEngine(
-            graph=self.mock_graph,
-            strategy_cache=Mock(),
-            llm_oracle=self.llm_oracle,
-            verbose=False
+            graph=self.mock_graph, strategy_cache=Mock(), llm_oracle=self.llm_oracle, verbose=False
         )
 
     def test_none_mode_skips_all_validation(self):
@@ -75,9 +72,7 @@ class TestExecutePrechecker:
             )
 
         sku = MockSKU(confidence_score=0.5)
-        should_execute, success = self.engine.execute_prechecker(
-            sku, request_id, metrics
-        )
+        should_execute, success = self.engine.execute_prechecker(sku, request_id, metrics)
 
         # Should always return (True, True) in NONE mode
         assert should_execute is True
@@ -109,9 +104,7 @@ class TestExecutePrechecker:
             )
 
         sku = MockSKU(confidence_score=0.5)
-        should_execute, success = self.engine.execute_prechecker(
-            sku, request_id, metrics
-        )
+        should_execute, success = self.engine.execute_prechecker(sku, request_id, metrics)
 
         # Should continue but signal failure for penalty
         assert should_execute is True
@@ -143,9 +136,7 @@ class TestExecutePrechecker:
             )
 
         sku = MockSKU(confidence_score=0.5)
-        should_execute, success = self.engine.execute_prechecker(
-            sku, request_id, metrics
-        )
+        should_execute, success = self.engine.execute_prechecker(sku, request_id, metrics)
 
         # Should terminate and signal failure
         assert should_execute is False
@@ -176,9 +167,7 @@ class TestExecutePrechecker:
             )
 
         sku = MockSKU(confidence_score=0.5)
-        should_execute, success = self.engine.execute_prechecker(
-            sku, request_id, metrics
-        )
+        should_execute, success = self.engine.execute_prechecker(sku, request_id, metrics)
 
         # Should pass all checks (0% revisit < 50% threshold)
         assert should_execute is True
@@ -208,9 +197,7 @@ class TestExecutePrechecker:
             )
 
         sku = MockSKU(confidence_score=0.5)
-        should_execute, success = self.engine.execute_prechecker(
-            sku, request_id, metrics
-        )
+        should_execute, success = self.engine.execute_prechecker(sku, request_id, metrics)
 
         assert should_execute is True
         assert success is True
@@ -240,9 +227,7 @@ class TestExecutePrechecker:
 
         # SKU with confidence below threshold
         sku = MockSKU(confidence_score=0.1)
-        should_execute, success = self.engine.execute_prechecker(
-            sku, request_id, metrics
-        )
+        should_execute, success = self.engine.execute_prechecker(sku, request_id, metrics)
 
         # Should terminate due to low confidence
         assert should_execute is False
@@ -273,9 +258,7 @@ class TestExecutePrechecker:
 
         # SKU with confidence below threshold
         sku = MockSKU(confidence_score=0.1)
-        should_execute, success = self.engine.execute_prechecker(
-            sku, request_id, metrics
-        )
+        should_execute, success = self.engine.execute_prechecker(sku, request_id, metrics)
 
         # Should continue but penalize
         assert should_execute is True
@@ -287,9 +270,7 @@ class TestExecutePrechecker:
         metrics = MetricsCollector()
         request_id = metrics.initialize_path(0, "node1", {}, "goal", "rubric")
 
-        should_execute, success = self.engine.execute_prechecker(
-            None, request_id, metrics
-        )
+        should_execute, success = self.engine.execute_prechecker(None, request_id, metrics)
 
         # None SKU should always pass
         assert should_execute is True
@@ -302,7 +283,9 @@ class TestExecutePrechecker:
         sku = MockSKU(confidence_score=0.5)
 
         should_execute, success = self.engine.execute_prechecker(
-            sku, 999, metrics  # Non-existent request ID
+            sku,
+            999,
+            metrics,  # Non-existent request ID
         )
 
         # Should pass since path doesn't exist
@@ -347,9 +330,7 @@ class TestExecutePrechecker:
         )
 
         sku = MockSKU(confidence_score=0.5)
-        should_execute, success = self.engine.execute_prechecker(
-            sku, request_id, metrics
-        )
+        should_execute, success = self.engine.execute_prechecker(sku, request_id, metrics)
 
         # Should pass at exactly threshold (not greater than)
         assert should_execute is True
@@ -382,9 +363,7 @@ class TestExecutePrechecker:
             )
 
         sku = MockSKU(confidence_score=0.5)
-        should_execute, success = self.engine.execute_prechecker(
-            sku, request_id, metrics
-        )
+        should_execute, success = self.engine.execute_prechecker(sku, request_id, metrics)
 
         # Should fail cycle detection
         assert should_execute is False
@@ -405,10 +384,7 @@ class TestExecutePostchecker:
         self.mock_graph.get_schema.return_value = Mock()
 
         self.engine = SimulationEngine(
-            graph=self.mock_graph,
-            strategy_cache=Mock(),
-            llm_oracle=self.llm_oracle,
-            verbose=False
+            graph=self.mock_graph, strategy_cache=Mock(), llm_oracle=self.llm_oracle, verbose=False
         )
 
     def test_postchecker_always_returns_true(self):
@@ -418,9 +394,7 @@ class TestExecutePostchecker:
         sku = MockSKU()
         execution_result = ["node2", "node3"]
 
-        result = self.engine.execute_postchecker(
-            sku, request_id, metrics, execution_result
-        )
+        result = self.engine.execute_postchecker(sku, request_id, metrics, execution_result)
 
         assert result is True
 
@@ -430,9 +404,7 @@ class TestExecutePostchecker:
         request_id = metrics.initialize_path(0, "node1", {}, "goal", "rubric")
         execution_result = []
 
-        result = self.engine.execute_postchecker(
-            None, request_id, metrics, execution_result
-        )
+        result = self.engine.execute_postchecker(None, request_id, metrics, execution_result)
 
         assert result is True
 
@@ -442,9 +414,7 @@ class TestExecutePostchecker:
         request_id = metrics.initialize_path(0, "node1", {}, "goal", "rubric")
         sku = MockSKU()
 
-        result = self.engine.execute_postchecker(
-            sku, request_id, metrics, []
-        )
+        result = self.engine.execute_postchecker(sku, request_id, metrics, [])
 
         assert result is True
 
@@ -463,10 +433,7 @@ class TestCyclePenaltyModes:
         self.mock_graph.get_schema.return_value = Mock()
 
         self.engine = SimulationEngine(
-            graph=self.mock_graph,
-            strategy_cache=Mock(),
-            llm_oracle=self.llm_oracle,
-            verbose=False
+            graph=self.mock_graph, strategy_cache=Mock(), llm_oracle=self.llm_oracle, verbose=False
         )
 
     def test_mode_none_case_insensitive(self):
@@ -478,14 +445,22 @@ class TestCyclePenaltyModes:
         # Add cyclic steps
         for i in range(5):
             metrics.record_path_step(
-                request_id, i, "node1", None, None, None, f"sig{i}",
-                "goal", {}, "Tier1", f"sku{i}", f"d{i}"
+                request_id,
+                i,
+                "node1",
+                None,
+                None,
+                None,
+                f"sig{i}",
+                "goal",
+                {},
+                "Tier1",
+                f"sku{i}",
+                f"d{i}",
             )
 
         sku = MockSKU(confidence_score=0.5)
-        should_execute, success = self.engine.execute_prechecker(
-            sku, request_id, metrics
-        )
+        should_execute, success = self.engine.execute_prechecker(sku, request_id, metrics)
 
         # NONE mode should skip validation even with lowercase
         assert should_execute is True
@@ -519,9 +494,7 @@ class TestCyclePenaltyModes:
                 )
 
             sku = MockSKU(confidence_score=0.5)
-            should_execute, success = self.engine.execute_prechecker(
-                sku, request_id, metrics
-            )
+            should_execute, success = self.engine.execute_prechecker(sku, request_id, metrics)
 
             # All variants should work consistently
             assert should_execute is True
@@ -542,10 +515,7 @@ class TestConfigurationParameters:
         self.mock_graph.get_schema.return_value = Mock()
 
         self.engine = SimulationEngine(
-            graph=self.mock_graph,
-            strategy_cache=Mock(),
-            llm_oracle=self.llm_oracle,
-            verbose=False
+            graph=self.mock_graph, strategy_cache=Mock(), llm_oracle=self.llm_oracle, verbose=False
         )
 
     def test_cycle_detection_threshold_default(self):
@@ -588,9 +558,7 @@ class TestConfigurationParameters:
             )
 
         sku = MockSKU(confidence_score=0.6)  # Above 0.5 min confidence
-        should_execute, success = self.engine.execute_prechecker(
-            sku, request_id, metrics
-        )
+        should_execute, success = self.engine.execute_prechecker(sku, request_id, metrics)
 
         # Should fail cycle detection but pass confidence check
         assert should_execute is True  # PUNISH mode continues

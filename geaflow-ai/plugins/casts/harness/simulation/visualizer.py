@@ -24,7 +24,7 @@ import networkx as nx
 from core.interfaces import DataSource
 from core.models import Context, StrategyKnowledgeUnit
 from core.strategy_cache import StrategyCache
-from simulation.metrics import PathInfo, PathStep, SimulationMetrics
+from harness.simulation.metrics import PathInfo, PathStep, SimulationMetrics
 from utils.helpers import (
     calculate_dynamic_similarity_threshold,
     calculate_tier2_threshold,
@@ -119,9 +119,7 @@ class SimulationVisualizer:
             print(f"  - structural_signature: {sku.structural_signature}")
             vector_head = sku.property_vector[:3]
             rounded_head = [round(x, 3) for x in vector_head]
-            vector_summary = (
-                f"Vector(dim={len(sku.property_vector)}, head={rounded_head}...)"
-            )
+            vector_summary = f"Vector(dim={len(sku.property_vector)}, head={rounded_head}...)"
             print(f"  - property_vector: {vector_summary}")
             print(f"  - goal_template: {sku.goal_template}")
             print(f"  - decision_template: {sku.decision_template}")
@@ -225,9 +223,7 @@ class SimulationVisualizer:
 
         # Generate matplotlib visualizations if graph is provided
         if graph is not None:
-            SimulationVisualizer.plot_all_traversal_paths(
-                paths=paths, graph=graph, show=show_plots
-            )
+            SimulationVisualizer.plot_all_traversal_paths(paths=paths, graph=graph, show=show_plots)
 
     @staticmethod
     def plot_traversal_path(
@@ -392,9 +388,7 @@ class SimulationVisualizer:
         return fig
 
     @staticmethod
-    def plot_all_traversal_paths(
-        paths: dict[int, PathInfo], graph: DataSource, show: bool = True
-    ):
+    def plot_all_traversal_paths(paths: dict[int, PathInfo], graph: DataSource, show: bool = True):
         """Generate matplotlib visualizations for all requests' traversal paths.
 
         Args:

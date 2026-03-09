@@ -23,5 +23,6 @@ public enum VectorType {
     TraversalVector,
     EmbeddingVector,
     MagnitudeVector,
-    KeywordVector
+    KeywordVector,
+    CastsVector
 }

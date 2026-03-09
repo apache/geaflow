@@ -55,15 +55,17 @@ class TestDynamicSimilarityThreshold(unittest.TestCase):
         sku_head = self.create_mock_sku(eta=1000, sigma=1)
         threshold_head = calculate_dynamic_similarity_threshold(sku_head, kappa=0.01, beta=0.1)
         # Expected: approx 0.998 (allow small error)
-        self.assertAlmostEqual(threshold_head, 0.998, places=2,
-                               msg="Head scenario threshold should be near 0.998")
+        self.assertAlmostEqual(
+            threshold_head, 0.998, places=2, msg="Head scenario threshold should be near 0.998"
+        )
 
         # Example 2: Tail scenario (eta=0.5, sigma=1, beta=0.1, kappa=0.01)
         sku_tail = self.create_mock_sku(eta=0.5, sigma=1)
         threshold_tail = calculate_dynamic_similarity_threshold(sku_tail, kappa=0.01, beta=0.1)
         # Expected: approx 0.99 (more permissive)
-        self.assertAlmostEqual(threshold_tail, 0.99, places=2,
-                               msg="Tail scenario threshold should be near 0.99")
+        self.assertAlmostEqual(
+            threshold_tail, 0.99, places=2, msg="Tail scenario threshold should be near 0.99"
+        )
 
         # Example 3: Complex logic scenario (eta=1000, sigma=5, beta=0.1, kappa=0.01)
         sku_complex = self.create_mock_sku(eta=1000, sigma=5)
@@ -71,13 +73,13 @@ class TestDynamicSimilarityThreshold(unittest.TestCase):
             sku_complex, kappa=0.01, beta=0.1
         )
         # Expected: near 0.99, actual result is closer to 0.9988
-        self.assertGreater(threshold_complex, 0.998,
-                           msg="Complex-logic scenario threshold should be > 0.998")
+        self.assertGreater(
+            threshold_complex, 0.998, msg="Complex-logic scenario threshold should be > 0.998"
+        )
 
         # Head scenario should be stricter than tail scenario
         self.assertGreater(
-            threshold_head, threshold_tail,
-            msg="High-frequency SKU should have a higher threshold"
+            threshold_head, threshold_tail, msg="High-frequency SKU should have a higher threshold"
         )
 
     def test_monotonicity_with_confidence(self):
@@ -99,7 +101,7 @@ class TestDynamicSimilarityThreshold(unittest.TestCase):
         for i in range(1, len(thresholds)):
             msg = (
                 "Thresholds must be monotonic: "
-                f"eta={confidence_values[i]} should be >= eta={confidence_values[i-1]}"
+                f"eta={confidence_values[i]} should be >= eta={confidence_values[i - 1]}"
             )
             self.assertGreaterEqual(
                 thresholds[i],
@@ -126,7 +128,7 @@ class TestDynamicSimilarityThreshold(unittest.TestCase):
         for i in range(1, len(thresholds)):
             msg = (
                 "Threshold should increase with complexity: "
-                f"sigma={complexity_values[i]} should be >= sigma={complexity_values[i-1]}"
+                f"sigma={complexity_values[i]} should be >= sigma={complexity_values[i - 1]}"
             )
             self.assertGreaterEqual(
                 thresholds[i],
@@ -172,12 +174,13 @@ class TestDynamicSimilarityThreshold(unittest.TestCase):
         # As kappa increases, threshold should decrease.
         for i in range(1, len(thresholds)):
             self.assertLessEqual(
-                thresholds[i], thresholds[i-1],
+                thresholds[i],
+                thresholds[i - 1],
                 msg=(
                     "Threshold should decrease as kappa increases: "
                     f"kappa={kappa_values[i]} -> {thresholds[i]:.4f} "
-                    f"<= kappa={kappa_values[i-1]} -> {thresholds[i-1]:.4f}"
-                )
+                    f"<= kappa={kappa_values[i - 1]} -> {thresholds[i - 1]:.4f}"
+                ),
             )
 
     def test_beta_sensitivity(self):
@@ -199,9 +202,7 @@ class TestDynamicSimilarityThreshold(unittest.TestCase):
             threshold_high = calculate_dynamic_similarity_threshold(
                 sku_high, kappa=kappa, beta=beta
             )
-            threshold_low = calculate_dynamic_similarity_threshold(
-                sku_low, kappa=kappa, beta=beta
-            )
+            threshold_low = calculate_dynamic_similarity_threshold(sku_low, kappa=kappa, beta=beta)
 
             gap = threshold_high - threshold_low
             threshold_gaps.append(gap)
@@ -209,11 +210,12 @@ class TestDynamicSimilarityThreshold(unittest.TestCase):
         # As beta increases, the gap should increase.
         for i in range(1, len(threshold_gaps)):
             self.assertGreaterEqual(
-                threshold_gaps[i], threshold_gaps[i-1],
+                threshold_gaps[i],
+                threshold_gaps[i - 1],
                 msg=(
                     "Gap should increase as beta increases: "
-                    f"beta={beta_values[i]} gap >= beta={beta_values[i-1]} gap"
-                )
+                    f"beta={beta_values[i]} gap >= beta={beta_values[i - 1]} gap"
+                ),
             )
 
     def test_realistic_scenarios_with_current_config(self):
@@ -234,17 +236,17 @@ class TestDynamicSimilarityThreshold(unittest.TestCase):
         for name, eta, sigma, (expected_min, expected_max) in test_cases:
             with self.subTest(scenario=name, eta=eta, sigma=sigma):
                 sku = self.create_mock_sku(eta=eta, sigma=sigma)
-                threshold = calculate_dynamic_similarity_threshold(
-                    sku, kappa=kappa, beta=beta
-                )
+                threshold = calculate_dynamic_similarity_threshold(sku, kappa=kappa, beta=beta)
 
                 self.assertGreaterEqual(
-                    threshold, expected_min,
-                    msg=f"{name}: threshold {threshold:.4f} should be >= {expected_min}"
+                    threshold,
+                    expected_min,
+                    msg=f"{name}: threshold {threshold:.4f} should be >= {expected_min}",
                 )
                 self.assertLessEqual(
-                    threshold, expected_max,
-                    msg=f"{name}: threshold {threshold:.4f} should be <= {expected_max}"
+                    threshold,
+                    expected_max,
+                    msg=f"{name}: threshold {threshold:.4f} should be <= {expected_max}",
                 )
 
     def test_practical_matching_scenario(self):
@@ -271,18 +273,22 @@ class TestDynamicSimilarityThreshold(unittest.TestCase):
 
         # Old config should not match
         self.assertAlmostEqual(
-            threshold_old, 0.8915, delta=0.01,
-            msg=f"Old threshold should be near 0.8915, actual: {threshold_old:.4f}"
+            threshold_old,
+            0.8915,
+            delta=0.01,
+            msg=f"Old threshold should be near 0.8915, actual: {threshold_old:.4f}",
         )
         self.assertLess(
-            user_similarity, threshold_old,
-            msg=f"Old config should not match: {user_similarity:.4f} < {threshold_old:.4f}"
+            user_similarity,
+            threshold_old,
+            msg=f"Old config should not match: {user_similarity:.4f} < {threshold_old:.4f}",
         )
 
         # Increasing kappa should lower the threshold
         self.assertLess(
-            threshold_new, threshold_old,
-            msg=f"Higher kappa should lower threshold: {threshold_new:.4f} < {threshold_old:.4f}"
+            threshold_new,
+            threshold_old,
+            msg=f"Higher kappa should lower threshold: {threshold_new:.4f} < {threshold_old:.4f}",
         )
 
         print("\n[Scenario] SKU_17 (eta=20, sigma=2):")
@@ -298,11 +304,12 @@ class TestDynamicSimilarityThreshold(unittest.TestCase):
         )
 
         self.assertLessEqual(
-            threshold_simple_old, user_similarity,
+            threshold_simple_old,
+            user_similarity,
             msg=(
                 "Simple SKU should match under old config: "
                 f"{threshold_simple_old:.4f} <= {user_similarity:.4f}"
-            )
+            ),
         )
 
     def test_mathematical_properties_summary(self):
@@ -311,11 +318,7 @@ class TestDynamicSimilarityThreshold(unittest.TestCase):
         beta = 0.10
 
         # Generate test points
-        test_points = [
-            (eta, sigma)
-            for eta in [1, 2, 5, 10, 20, 50, 100]
-            for sigma in [1, 2, 3, 5]
-        ]
+        test_points = [(eta, sigma) for eta in [1, 2, 5, 10, 20, 50, 100] for sigma in [1, 2, 3, 5]]
 
         for eta, sigma in test_points:
             sku = self.create_mock_sku(eta=eta, sigma=sigma)
@@ -334,21 +337,15 @@ class TestDynamicSimilarityThreshold(unittest.TestCase):
         threshold_high = calculate_dynamic_similarity_threshold(
             sku_high_freq, kappa=kappa, beta=beta
         )
-        threshold_low = calculate_dynamic_similarity_threshold(
-            sku_low_freq, kappa=kappa, beta=beta
-        )
+        threshold_low = calculate_dynamic_similarity_threshold(sku_low_freq, kappa=kappa, beta=beta)
 
         self.assertGreater(
-            threshold_high, threshold_low,
-            msg="High-frequency SKU should have a higher threshold"
+            threshold_high, threshold_low, msg="High-frequency SKU should have a higher threshold"
         )
 
         # Ensure a meaningful gap
         gap_ratio = (threshold_high - threshold_low) / threshold_low
-        self.assertGreater(
-            gap_ratio, 0.01,
-            msg="Threshold gap should be > 1%"
-        )
+        self.assertGreater(gap_ratio, 0.01, msg="Threshold gap should be > 1%")
 
 
 class TestThresholdIntegrationWithStrategyCache(unittest.TestCase):
