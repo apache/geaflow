@@ -160,8 +160,12 @@ public class GeaFlowMemoryServer {
                 memoryMutableGraph.addEdge(((GraphEdge) entity).getEdge());
             }
         }
+        GraphMemoryServer insertServer = CACHE.getServerByName(graphName);
+        if (insertServer == null || insertServer.getGraphAccessors().isEmpty()) {
+            throw new RuntimeException("Server or graph accessor not available for graph: " + graphName);
+        }
         CACHE.getConsolidateServer().executeConsolidateTask(
-            CACHE.getServerByName(graphName).getGraphAccessors().get(0), memoryMutableGraph);
+            insertServer.getGraphAccessors().get(0), memoryMutableGraph);
         return "Success to add entities, num: " + graphEntities.size();
     }
 
@@ -213,6 +217,9 @@ public class GeaFlowMemoryServer {
         VectorSearch search = new VectorSearch(null, sessionId);
         search.addVector(new KeywordVector(query));
         server.search(search);
+        if (server.getGraphAccessors().isEmpty()) {
+            throw new RuntimeException("No graph accessor available for session: " + sessionId);
+        }
         Context context = server.verbalize(sessionId,
             new SubgraphSemanticPromptFunction(server.getGraphAccessors().get(0)));
         return context.toString();

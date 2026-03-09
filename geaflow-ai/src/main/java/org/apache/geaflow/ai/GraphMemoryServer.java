@@ -81,6 +81,9 @@ public class GraphMemoryServer {
             sessionManagement.createSession(sessionId);
         }
 
+        if (graphAccessors.isEmpty()) {
+            throw new RuntimeException("No graph accessor available");
+        }
         for (IndexStore indexStore : indexStores) {
             if (indexStore instanceof EntityAttributeIndexStore) {
                 SessionOperator searchOperator = new SessionOperator(graphAccessors.get(0), indexStore);

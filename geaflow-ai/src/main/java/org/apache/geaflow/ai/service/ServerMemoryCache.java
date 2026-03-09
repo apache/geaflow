@@ -38,11 +38,17 @@ public class ServerMemoryCache {
     }
 
     public void putServer(GraphMemoryServer server) {
+        if (server.getGraphAccessors().isEmpty()) {
+            throw new RuntimeException("Cannot register server without graph accessor");
+        }
         name2Server.put(server.getGraphAccessors().get(0)
             .getGraphSchema().getName(), server);
     }
 
     public void putSession(GraphMemoryServer server, String sessionId) {
+        if (server.getGraphAccessors().isEmpty()) {
+            throw new RuntimeException("Cannot register session without graph accessor");
+        }
         session2GraphName.put(sessionId,
             server.getGraphAccessors().get(0).getGraphSchema().getName());
     }
