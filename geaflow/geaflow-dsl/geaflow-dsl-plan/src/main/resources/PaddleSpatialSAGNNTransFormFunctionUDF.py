@@ -48,14 +48,18 @@ Configuration:
 import abc
 import os
 import traceback
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Tuple
 
 import numpy as np
 import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
 import pgl
-from pgl.nn import functional as GF
+from paddlespatial.networks.sagnn import (
+    SpatialLocalAGG,
+    SpatialOrientedAGG,
+    SpatialAttnProp,
+)
 
 # ───────────────────────────────────────────────────────────────────────────────
 # Abstract base (mirrors the one in TransFormFunctionUDF.py so users can copy
@@ -82,128 +86,54 @@ class TransFormFunction(abc.ABC):
 
 
 # ───────────────────────────────────────────────────────────────────────────────
-# PaddleSpatial SA-GNN building blocks
+# SA-GNN model composed from official PaddleSpatial layers
 # ───────────────────────────────────────────────────────────────────────────────
-
-class SpatialLocalAGG(nn.Layer):
-    """
-    Local GCN aggregation layer from PaddleSpatial SA-GNN.
-
-    Performs degree-normalised message passing on a pgl.Graph instance.
-    Optionally applies a linear projection before aggregation.
-    """
-
-    def __init__(self, input_dim: int, hidden_dim: int,
-                 transform: bool = True, activation=None):
-        super(SpatialLocalAGG, self).__init__()
-        self.transform = transform
-        if self.transform:
-            self.linear = nn.Linear(input_dim, hidden_dim, bias_attr=False)
-        self.activation = activation
-
-    def forward(self, graph: pgl.Graph, feature: paddle.Tensor) -> paddle.Tensor:
-        norm = GF.degree_norm(graph)
-        if self.transform:
-            feature = self.linear(feature)
-        feature = feature * norm
-        output = graph.send_recv(feature, "sum")
-        output = output * norm
-        if self.activation is not None:
-            output = self.activation(output)
-        return output
-
-
-class SpatialOrientedAGG(nn.Layer):
-    """
-    Direction-aware aggregation layer from PaddleSpatial SA-GNN.
-
-    Partitions edges into ``num_sectors`` spatial sectors based on the
-    relative angle between source and destination node coordinates.
-    Each sector is aggregated independently via SpatialLocalAGG and
-    the results are concatenated then projected.
-
-    Coordinates are expected in the node feature dict under the key 'coord'
-    with shape (num_nodes, 2).
-    """
-
-    def __init__(self, input_dim: int, hidden_dim: int,
-                 num_sectors: int = 8, transform: bool = True, activation=None):
-        super(SpatialOrientedAGG, self).__init__()
-        self.num_sectors = num_sectors
-        linear_input_dim = (hidden_dim if transform else input_dim) * (num_sectors + 1)
-        self.linear = nn.Linear(linear_input_dim, hidden_dim, bias_attr=False)
-        self.conv_layers = nn.LayerList([
-            SpatialLocalAGG(input_dim, hidden_dim, transform, activation=lambda x: x)
-            for _ in range(num_sectors + 1)
-        ])
-
-    def _partition_edges_by_sector(
-            self, g: pgl.Graph
-    ) -> List[List[Tuple[int, int]]]:
-        """Return edge lists partitioned into num_sectors+1 directional buckets."""
-        subgraph_edges = [[] for _ in range(self.num_sectors + 1)]
-        g_np = g.numpy()
-        coords = g_np.node_feat.get('coord')  # (N, 2)
-        for src, dst in g_np.edges:
-            if coords is not None:
-                rel = coords[dst] - coords[src]
-                if rel[0] == 0 and rel[1] == 0:
-                    sec = 0
-                else:
-                    rel[0] += 1e-9
-                    angle = np.arctan(rel[1] / rel[0])
-                    angle += np.pi * int(angle < 0)
-                    angle += np.pi * int(rel[0] < 0)
-                    sec = int(angle / (np.pi / self.num_sectors))
-                    sec = min(sec, self.num_sectors)
-            else:
-                sec = 0
-            subgraph_edges[sec].append((int(src), int(dst)))
-        return subgraph_edges
-
-    def forward(self, graph: pgl.Graph, feature: paddle.Tensor) -> paddle.Tensor:
-        from pgl.sampling.custom import subgraph as pgl_subgraph
-        partitioned = self._partition_edges_by_sector(graph)
-        g_np = graph.numpy()
-        h_list = []
-        for i, conv in enumerate(self.conv_layers):
-            sub_g = pgl_subgraph(g_np, g_np.nodes, edges=partitioned[i])
-            sub_g = sub_g.tensor()
-            h_list.append(conv(sub_g, feature))
-        feat_h = paddle.concat(h_list, axis=-1)
-        feat_h = paddle.cast(feat_h, 'float32')
-        return self.linear(feat_h)
-
 
 class SAGNNModel(nn.Layer):
     """
-    Full SA-GNN model composing local + oriented aggregation layers.
+    Full SA-GNN model using the three official PaddleSpatial layers:
+      Layer 1: SpatialLocalAGG   – degree-normalised local GCN aggregation
+      Layer 2: SpatialOrientedAGG – direction-aware sector-partitioned aggregation
+      Layer 3: SpatialAttnProp   – location-aware multi-head attention propagation
+      Projection: Linear(num_heads * attn_hidden → output_dim)
 
-    Architecture:
-      Layer 0: SpatialLocalAGG (GCN-like, fast)
-      Layer 1: SpatialOrientedAGG (direction-aware, richer spatial context)
-      Projection: Linear(hidden_dim → output_dim)
+    All layer classes are imported directly from paddlespatial.networks.sagnn,
+    ensuring parameter shapes and forward logic match the original paper exactly.
 
-    The model is intentionally kept simple so that it can run on a mini-graph
-    containing only the centre node and its sampled neighbours (the data that
-    the SAGNN.java algorithm sends to the Python process).
+    Requirements:
+      graph.node_feat['coord'] must be set to a (num_nodes, 2) float32 tensor
+      before calling forward().
     """
 
     def __init__(self, input_dim: int, hidden_dim: int, output_dim: int,
-                 num_sectors: int = 8):
+                 num_sectors: int = 8, num_heads: int = 4, dropout: float = 0.0):
         super(SAGNNModel, self).__init__()
+        attn_per_head_dim = hidden_dim // num_heads
+
+        # Layer 1: project input features into hidden_dim space via local GCN.
+        # transform=True enables the input linear projection (input_dim → hidden_dim).
         self.local_agg = SpatialLocalAGG(
             input_dim, hidden_dim, transform=True, activation=F.relu)
+
+        # Layer 2: direction-aware aggregation across num_sectors+1 angular sectors.
+        # transform=True enables per-sector linear projection (hidden_dim → hidden_dim).
         self.oriented_agg = SpatialOrientedAGG(
-            hidden_dim, hidden_dim, num_sectors=num_sectors,
-            transform=True, activation=None)
-        self.proj = nn.Linear(hidden_dim, output_dim)
+            hidden_dim, hidden_dim, num_sectors, transform=True, activation=None)
+
+        # Layer 3: location-aware multi-head attention propagation.
+        # Output shape: (num_nodes, num_heads * attn_per_head_dim) == (num_nodes, hidden_dim).
+        self.attn_prop = SpatialAttnProp(
+            hidden_dim, attn_per_head_dim, num_heads, dropout)
+
+        # Final projection to desired output dimension.
+        self.proj = nn.Linear(num_heads * attn_per_head_dim, output_dim)
 
     def forward(self, graph: pgl.Graph, feature: paddle.Tensor) -> paddle.Tensor:
         h = self.local_agg(graph, feature)
         h = F.relu(h)
         h = self.oriented_agg(graph, h)
         h = F.relu(h)
+        h = self.attn_prop(graph, h)
         h = self.proj(h)
         return h
 
@@ -267,6 +197,8 @@ class SAGNNTransFormFunction(TransFormFunction):
         self.hidden_dim: int = 128
         self.output_dim: int = 64
         self.num_sectors: int = 8
+        self.num_heads: int = 4       # attention heads for SpatialAttnProp
+        self.dropout: float = 0.0     # dropout rate (set > 0 only during training)
 
         # ── load model ────────────────────────────────────────────────────
         model_path = os.path.join(os.getcwd(), "sagnn_model.pdparams")
@@ -291,6 +223,8 @@ class SAGNNTransFormFunction(TransFormFunction):
             hidden_dim=self.hidden_dim,
             output_dim=self.output_dim,
             num_sectors=self.num_sectors,
+            num_heads=self.num_heads,
+            dropout=self.dropout,
         )
         if os.path.exists(model_path):
             try:
