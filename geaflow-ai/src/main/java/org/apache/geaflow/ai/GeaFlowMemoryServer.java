@@ -121,7 +121,7 @@ public class GeaFlowMemoryServer {
         } else if (schema instanceof EdgeSchema) {
             memoryMutableGraph.addEdgeSchema((EdgeSchema) schema);
         } else {
-            throw new RuntimeException("Cannt add schema: " + input);
+            throw new RuntimeException("Cannot add schema: " + input);
         }
         return "addSchema has been called, schemaName: " + schemaName;
     }
