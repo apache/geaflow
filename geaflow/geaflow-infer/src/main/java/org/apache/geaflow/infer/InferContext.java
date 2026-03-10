@@ -20,6 +20,7 @@ package org.apache.geaflow.infer;
 
 import static org.apache.geaflow.common.config.keys.FrameworkConfigKeys.INFER_ENV_INIT_TIMEOUT_SEC;
 import static org.apache.geaflow.common.config.keys.FrameworkConfigKeys.INFER_ENV_USER_TRANSFORM_CLASSNAME;
+import static org.apache.geaflow.common.config.keys.FrameworkConfigKeys.INFER_FRAMEWORK_TYPE;
 
 import com.google.common.base.Preconditions;
 import java.util.ArrayList;
@@ -161,9 +162,16 @@ public class InferContext<OUT> implements AutoCloseable {
         List<String> runCommands = new ArrayList<>();
         runCommands.add(inferEnvironmentContext.getPythonExec());
         runCommands.add(inferEnvironmentContext.getInferScript());
-        runCommands.add(inferEnvironmentContext.getInferTFClassNameParam(this.userDataTransformClass));
+        // Use framework-agnostic --modelClassName; infer_server.py accepts both names.
+        runCommands.add(inferEnvironmentContext.getInferModelClassNameParam(this.userDataTransformClass));
         runCommands.add(inferEnvironmentContext.getInferShareMemoryInputParam(receiveQueueKey));
         runCommands.add(inferEnvironmentContext.getInferShareMemoryOutputParam(sendQueueKey));
+        // Pass the framework type so infer_server.py loads the correct session class.
+        String frameworkType = config.getString(INFER_FRAMEWORK_TYPE);
+        if (frameworkType == null || frameworkType.isEmpty()) {
+            frameworkType = "TORCH";
+        }
+        runCommands.add(inferEnvironmentContext.getInferFrameworkParam(frameworkType));
         inferTaskRunner.run(runCommands);
     }
 

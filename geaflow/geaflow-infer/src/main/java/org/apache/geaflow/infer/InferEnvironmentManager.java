@@ -19,6 +19,9 @@
 package org.apache.geaflow.infer;
 
 import static org.apache.geaflow.common.config.keys.FrameworkConfigKeys.INFER_ENV_CONDA_URL;
+import static org.apache.geaflow.common.config.keys.FrameworkConfigKeys.INFER_ENV_PADDLE_GPU_ENABLE;
+import static org.apache.geaflow.common.config.keys.FrameworkConfigKeys.INFER_ENV_PADDLE_CUDA_VERSION;
+import static org.apache.geaflow.common.config.keys.FrameworkConfigKeys.INFER_FRAMEWORK_TYPE;
 import static org.apache.geaflow.infer.util.InferFileUtils.releaseLock;
 
 import com.google.common.base.Joiner;
@@ -223,6 +226,21 @@ public class InferEnvironmentManager implements AutoCloseable {
         execParams.add(requirementsPath);
         String conda = configuration.getString(INFER_ENV_CONDA_URL);
         execParams.add(conda);
+        // Pass framework type so the shell script can install the right dependencies.
+        String frameworkType = configuration.getString(INFER_FRAMEWORK_TYPE);
+        if (frameworkType == null || frameworkType.isEmpty()) {
+            frameworkType = "TORCH";
+        }
+        execParams.add(frameworkType.toUpperCase());
+        // Pass GPU-enable flag for Paddle (shell uses it to choose the wheel).
+        boolean paddleGpu = configuration.getBoolean(INFER_ENV_PADDLE_GPU_ENABLE);
+        execParams.add(String.valueOf(paddleGpu));
+        // Pass CUDA version for Paddle GPU wheel selection.
+        String cudaVersion = configuration.getString(INFER_ENV_PADDLE_CUDA_VERSION);
+        if (cudaVersion == null || cudaVersion.isEmpty()) {
+            cudaVersion = "11.7";
+        }
+        execParams.add(cudaVersion);
         List<String> shellCommand = new ArrayList<>(Arrays.asList(SHELL_START, shellPath));
         shellCommand.addAll(execParams);
         String cmd = Joiner.on(" ").join(shellCommand);

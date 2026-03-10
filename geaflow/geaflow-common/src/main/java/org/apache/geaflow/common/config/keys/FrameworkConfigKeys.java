@@ -163,6 +163,41 @@ public class FrameworkConfigKeys implements Serializable {
         .noDefaultValue()
         .description("path to system Python executable (e.g., /usr/bin/python3 or /opt/homebrew/bin/python3)");
 
+    /**
+     * Deep-learning framework type used by the Python inference sub-process.
+     * Accepted values (case-insensitive): "TORCH" (default), "PADDLE".
+     * Setting this to "PADDLE" causes infer_server.py to load PaddleInferSession
+     * instead of TorchInferSession and causes install-infer-env.sh to install
+     * PaddlePaddle + PGL instead of PyTorch dependencies.
+     */
+    public static final ConfigKey INFER_FRAMEWORK_TYPE = ConfigKeys
+        .key("geaflow.infer.framework.type")
+        .defaultValue("TORCH")
+        .description("inference framework type: TORCH (default) or PADDLE");
+
+    /**
+     * Whether to install the GPU-enabled PaddlePaddle wheel.
+     * When true, install-infer-env.sh installs paddlepaddle-gpu; otherwise CPU-only.
+     * Only effective when geaflow.infer.framework.type=PADDLE.
+     */
+    public static final ConfigKey INFER_ENV_PADDLE_GPU_ENABLE = ConfigKeys
+        .key("geaflow.infer.env.paddle.gpu.enable")
+        .defaultValue(false)
+        .description("enable GPU-accelerated PaddlePaddle (requires CUDA drivers on the node); "
+            + "only used when geaflow.infer.framework.type=PADDLE");
+
+    /**
+     * CUDA version string used to select the correct PaddlePaddle GPU wheel.
+     * Example values: "11.7", "11.8", "12.0".
+     * Only effective when geaflow.infer.framework.type=PADDLE and
+     * geaflow.infer.env.paddle.gpu.enable=true.
+     */
+    public static final ConfigKey INFER_ENV_PADDLE_CUDA_VERSION = ConfigKeys
+        .key("geaflow.infer.env.paddle.cuda.version")
+        .defaultValue("11.7")
+        .description("CUDA version for PaddlePaddle GPU wheel selection (e.g. 11.7, 12.0); "
+            + "only used when geaflow.infer.framework.type=PADDLE and paddle.gpu.enable=true");
+
     public static final ConfigKey ASP_ENABLE = ConfigKeys
         .key("geaflow.iteration.asp.enable")
         .defaultValue(false)
