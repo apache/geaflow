@@ -18,7 +18,7 @@ graph TD
     A[外部 LBS 数据源] -->|WebHook/主动抓取| B(数据接入层 Kafka)
     C[押运车辆实时 GPS] -->|MQTT/TCP| B
     
-    subgraph GeaFlow 实时图计算集群
+    subgraph GeaFlow ["GeaFlow 实时图计算集群"]
         B --> D[GeaFlow Kafka Source]
         D --> E{流式数据预处理与特征聚合}
         E -->|更新流| F[(GeaFlow 动态图状态 RocksDB)]
@@ -26,7 +26,7 @@ graph TD
         F --> G[SAGNN 周期性流推理任务]
     end
     
-    subgraph Paimon 数据湖 (流批一体存储)
+    subgraph Paimon ["Paimon 数据湖 (流批一体存储)"]
         E -->|原始清洗数据归档| I[(Paimon ODS/DWD 层)]
         G -->|推理结果与图快照| J[(Paimon DWS/ADS 层)]
     end
