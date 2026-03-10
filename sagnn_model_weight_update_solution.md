@@ -13,12 +13,12 @@
 ```mermaid
 graph TD
     A[(Paimon 数据湖 DWS层)] -->|1. Time Travel 批量捞取特征与标签| B[PaddlePaddle 离线训练集群]
-    B -->|2. 模型增量训练与验证| C{模型效果评估 (Eval)}
-    C -->|通过 (Better Metrics)| D[模型版本注册中心 / HDFS]
+    B -->|2. 模型增量训练与验证| C{模型效果评估 Eval}
+    C -->|通过 Better Metrics| D[模型版本注册中心 / HDFS]
     C -->|未通过| E[丢弃本次权重]
     
     D -->|3. Webhook / RPC 触发更新| F[GeaFlow Infer Environment Manager]
-    F -->|4. 动态分发模型文件| G[GeaFlow Worker Nodes (Python UDF)]
+    F -->|4. 动态分发模型文件| G[GeaFlow Worker Nodes Python UDF]
     G -->|5. 热加载新权重| H[SAGNNTransFormFunction]
 ```
 
