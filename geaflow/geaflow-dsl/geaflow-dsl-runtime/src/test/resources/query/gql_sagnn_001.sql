@@ -25,6 +25,7 @@ CREATE TABLE tbl_result (
   embedding varchar  -- String representation of List<Double> spatial embedding
 ) WITH (
 	type='file',
+	geaflow.dsl.column.separator = '|',
 	geaflow.dsl.file.path='${target}'
 );
 

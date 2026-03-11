@@ -19,8 +19,8 @@
 package org.apache.geaflow.infer;
 
 import static org.apache.geaflow.common.config.keys.FrameworkConfigKeys.INFER_ENV_CONDA_URL;
-import static org.apache.geaflow.common.config.keys.FrameworkConfigKeys.INFER_ENV_PADDLE_GPU_ENABLE;
 import static org.apache.geaflow.common.config.keys.FrameworkConfigKeys.INFER_ENV_PADDLE_CUDA_VERSION;
+import static org.apache.geaflow.common.config.keys.FrameworkConfigKeys.INFER_ENV_PADDLE_GPU_ENABLE;
 import static org.apache.geaflow.common.config.keys.FrameworkConfigKeys.INFER_FRAMEWORK_TYPE;
 import static org.apache.geaflow.infer.util.InferFileUtils.releaseLock;
 
@@ -219,7 +219,6 @@ public class InferEnvironmentManager implements AutoCloseable {
     }
 
     private boolean createInferVirtualEnv(InferDependencyManager dependencyManager, String workingDir) {
-        String shellPath = dependencyManager.getBuildInferEnvShellPath();
         List<String> execParams = new ArrayList<>();
         String requirementsPath = dependencyManager.getInferEnvRequirementsPath();
         execParams.add(workingDir);
@@ -241,6 +240,7 @@ public class InferEnvironmentManager implements AutoCloseable {
             cudaVersion = "11.7";
         }
         execParams.add(cudaVersion);
+        final String shellPath = dependencyManager.getBuildInferEnvShellPath();
         List<String> shellCommand = new ArrayList<>(Arrays.asList(SHELL_START, shellPath));
         shellCommand.addAll(execParams);
         String cmd = Joiner.on(" ").join(shellCommand);

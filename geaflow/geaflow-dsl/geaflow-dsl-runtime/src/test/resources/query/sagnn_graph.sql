@@ -29,6 +29,7 @@ CREATE TABLE v_poi (
 ) WITH (
 	type='file',
 	geaflow.dsl.window.size = -1,
+	geaflow.dsl.column.separator = '|',
 	geaflow.dsl.file.path = 'resource:///data/sagnn_vertex.txt'
 );
 
