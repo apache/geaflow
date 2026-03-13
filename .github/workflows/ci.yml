@@ -77,6 +77,18 @@ jobs:
         with:
           version: "21.7"
 
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+          cache: 'pip'
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r geaflow/geaflow-dsl/geaflow-dsl-plan/src/main/resources/requirements.txt
+          pip list | grep -i torch
+
       - name: Build and Test On JDK 8
         run: mvn -B -e clean test -Pjdk8 -pl !geaflow/geaflow-plugins/geaflow-store/geaflow-store-vector
         -Duser.timezone=Asia/Shanghai -Dlog4j.configuration="log4j .rootLogger=WARN, stdout"

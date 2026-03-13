@@ -19,6 +19,9 @@
 package org.apache.geaflow.infer;
 
 import static org.apache.geaflow.common.config.keys.FrameworkConfigKeys.INFER_ENV_CONDA_URL;
+import static org.apache.geaflow.common.config.keys.FrameworkConfigKeys.INFER_ENV_PADDLE_GPU_ENABLE;
+import static org.apache.geaflow.common.config.keys.FrameworkConfigKeys.INFER_ENV_PADDLE_CUDA_VERSION;
+import static org.apache.geaflow.common.config.keys.FrameworkConfigKeys.INFER_FRAMEWORK_TYPE;
 import static org.apache.geaflow.infer.util.InferFileUtils.releaseLock;
 
 import com.google.common.base.Joiner;
@@ -122,6 +125,12 @@ public class InferEnvironmentManager implements AutoCloseable {
     }
 
     private InferEnvironmentContext constructInferEnvironment(Configuration configuration) {
+        // Check if system Python should be used
+        boolean useSystemPython = configuration.getBoolean(FrameworkConfigKeys.INFER_ENV_USE_SYSTEM_PYTHON);
+        if (useSystemPython) {
+            return constructSystemPythonEnvironment(configuration);
+        }
+        
         String inferEnvDirectory = InferFileUtils.createTargetDir(VIRTUAL_ENV_DIR, configuration);
         String inferFilesDirectory = InferFileUtils.createTargetDir(INFER_FILES_DIR, configuration);
 
@@ -170,6 +179,45 @@ public class InferEnvironmentManager implements AutoCloseable {
         return environmentContext;
     }
 
+    private InferEnvironmentContext constructSystemPythonEnvironment(Configuration configuration) {
+        String inferFilesDirectory = InferFileUtils.createTargetDir(INFER_FILES_DIR, configuration);
+        String systemPythonPath = configuration.getString(FrameworkConfigKeys.INFER_ENV_SYSTEM_PYTHON_PATH);
+        
+        if (systemPythonPath == null || systemPythonPath.isEmpty()) {
+            throw new GeaflowRuntimeException(
+                "System Python path not configured. Set geaflow.infer.env.system.python.path");
+        }
+        
+        // Verify Python executable exists
+        File pythonFile = new File(systemPythonPath);
+        if (!pythonFile.exists()) {
+            throw new GeaflowRuntimeException(
+                "Python executable not found at: " + systemPythonPath);
+        }
+        
+        // For system Python, we use the Python path's parent directory as the virtual env directory
+        // This allows InferEnvironmentContext to construct paths correctly
+        String pythonParentDir = new File(systemPythonPath).getParent();
+        String pythonGrandParentDir = new File(pythonParentDir).getParent();
+        
+        InferEnvironmentContext environmentContext =
+            new InferEnvironmentContext(pythonGrandParentDir, inferFilesDirectory, configuration);
+        
+        try {
+            // Setup inference runtime files (Python server scripts)
+            InferDependencyManager inferDependencyManager = new InferDependencyManager(environmentContext);
+            LOGGER.info("Using system Python from: {}", systemPythonPath);
+            LOGGER.info("Inference files directory: {}", inferFilesDirectory);
+            environmentContext.setFinished(true);
+            return environmentContext;
+        } catch (Throwable e) {
+            ERROR_CASE.set(e);
+            LOGGER.error("Failed to setup system Python environment", e);
+            environmentContext.setFinished(false);
+            return environmentContext;
+        }
+    }
+
     private boolean createInferVirtualEnv(InferDependencyManager dependencyManager, String workingDir) {
         String shellPath = dependencyManager.getBuildInferEnvShellPath();
         List<String> execParams = new ArrayList<>();
@@ -178,6 +226,21 @@ public class InferEnvironmentManager implements AutoCloseable {
         execParams.add(requirementsPath);
         String conda = configuration.getString(INFER_ENV_CONDA_URL);
         execParams.add(conda);
+        // Pass framework type so the shell script can install the right dependencies.
+        String frameworkType = configuration.getString(INFER_FRAMEWORK_TYPE);
+        if (frameworkType == null || frameworkType.isEmpty()) {
+            frameworkType = "TORCH";
+        }
+        execParams.add(frameworkType.toUpperCase());
+        // Pass GPU-enable flag for Paddle (shell uses it to choose the wheel).
+        boolean paddleGpu = configuration.getBoolean(INFER_ENV_PADDLE_GPU_ENABLE);
+        execParams.add(String.valueOf(paddleGpu));
+        // Pass CUDA version for Paddle GPU wheel selection.
+        String cudaVersion = configuration.getString(INFER_ENV_PADDLE_CUDA_VERSION);
+        if (cudaVersion == null || cudaVersion.isEmpty()) {
+            cudaVersion = "11.7";
+        }
+        execParams.add(cudaVersion);
         List<String> shellCommand = new ArrayList<>(Arrays.asList(SHELL_START, shellPath));
         shellCommand.addAll(execParams);
         String cmd = Joiner.on(" ").join(shellCommand);
