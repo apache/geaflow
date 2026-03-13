@@ -80,7 +80,7 @@ As shown in the figure above, Flink performs slightly better than GeaFlow in one
 ## Contribution
 Thank you very much for contributing to GeaFlow, whether bug reporting, documentation improvement, or major feature development, we warmly welcome all contributions.
 
-For more information: [Contribution](docs/docs-en/source/9.contribution.md).
+For more information: [Contribution](./CONTRIBUTING.md).
 
 ## Contact Us
 

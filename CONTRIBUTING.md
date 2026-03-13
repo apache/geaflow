@@ -20,7 +20,7 @@ If you have an idea for a contribution, please share it with the community. Ever
 
 ## Code of Conduct
 
-Please follow our [Code of Conduct](../CODE_OF_CONDUCT.md) in all your interactions with the project.
+Please follow our [Code of Conduct](CODE_OF_CONDUCT.md) in all your interactions with the project.
 
 ## Coding Style
 
@@ -32,7 +32,7 @@ If you find a bug or have a feature request, please open an issue on our [GitHub
 
 ## Documentation
 
-Our user and developer documentation can be found in the [docs folder](../docs). We welcome any improvements you can make!
+Our user and developer documentation can be found in the [docs folder](docs). We welcome any improvements you can make!
 
 ## Community
 
