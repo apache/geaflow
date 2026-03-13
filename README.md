@@ -6,6 +6,7 @@
 [![License](https://shields.io/github/license/apache/geaflow?logo=apache&label=License&color=blue)](https://www.apache.org/licenses/LICENSE-2.0.html)
 [![Release](https://shields.io/github/v/release/apache/geaflow.svg?logo=stackblitz&label=Version&color=red)](https://github.com/apache/geaflow/releases)
 [![Blog](https://badgen.net/static/Blog/github.io/orange?icon=rss)](https://geaflow.github.io/)
+[![Codecov](https://codecov.io/gh/apache/geaflow/branch/master/graph/badge.svg)](https://codecov.io/gh/apache/geaflow)
 
 > 🌐️ English | [中文](README_cn.md)
 
