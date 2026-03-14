@@ -27,9 +27,11 @@ import org.apache.geaflow.ai.index.EmbeddingIndexStore;
 import org.apache.geaflow.ai.index.EntityAttributeIndexStore;
 import org.apache.geaflow.ai.index.IndexStore;
 import org.apache.geaflow.ai.index.vector.EmbeddingVector;
+import org.apache.geaflow.ai.index.vector.IVector;
 import org.apache.geaflow.ai.index.vector.KeywordVector;
 import org.apache.geaflow.ai.index.vector.MagnitudeVector;
 import org.apache.geaflow.ai.index.vector.TraversalVector;
+import org.apache.geaflow.ai.index.vector.VectorType;
 import org.apache.geaflow.ai.search.VectorSearch;
 import org.apache.geaflow.ai.verbalization.Context;
 import org.apache.geaflow.ai.verbalization.SubgraphSemanticPromptFunction;
@@ -37,6 +39,9 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 public class GraphMemoryTest {
 
@@ -50,6 +55,188 @@ public class GraphMemoryTest {
         search.addVector(new MagnitudeVector());
         search.addVector(new TraversalVector("src", "edge", "dst"));
         LOGGER.info(String.valueOf(search));
+    }
+
+    // ========== MagnitudeVector Tests ==========
+    
+    @Test
+    public void testMagnitudeVectorConstructorAndGetter() {
+        MagnitudeVector vector = new MagnitudeVector(0.85);
+        assertEquals(vector.getMagnitude(), 0.85, 0.0001);
+    }
+
+    @Test
+    public void testMagnitudeVectorMatchExactSameValue() {
+        MagnitudeVector v1 = new MagnitudeVector(5.0);
+        MagnitudeVector v2 = new MagnitudeVector(5.0);
+
+        assertEquals(v1.match(v2), 1.0, 0.0001);
+    }
+
+    @Test
+    public void testMagnitudeVectorMatchDifferentValues() {
+        MagnitudeVector v1 = new MagnitudeVector(10.0);
+        MagnitudeVector v2 = new MagnitudeVector(5.0);
+
+        // Expected: 1 - |10-5|/max(10,5) = 1 - 5/10 = 0.5
+        assertEquals(v1.match(v2), 0.5, 0.0001);
+    }
+
+    @Test
+    public void testMagnitudeVectorMatchWithIncompatibleType() {
+        MagnitudeVector v1 = new MagnitudeVector(5.0);
+        IVector incompatibleVector = new IVector() {
+            @Override
+            public double match(IVector other) {
+                return 0;
+            }
+
+            @Override
+            public VectorType getType() {
+                return null;
+            }
+        };
+
+        assertEquals(v1.match(incompatibleVector), 0.0, 0.0001);
+    }
+
+    @Test
+    public void testMagnitudeVectorEqualsAndHashCode() {
+        MagnitudeVector v1 = new MagnitudeVector(5.0);
+        MagnitudeVector v2 = new MagnitudeVector(5.0);
+        MagnitudeVector v3 = new MagnitudeVector(10.0);
+
+        assertEquals(v1, v2);
+        assertEquals(v1.hashCode(), v2.hashCode());
+        assertNotEquals(v1, v3);
+    }
+
+    @Test
+    public void testMagnitudeVectorToString() {
+        MagnitudeVector vector = new MagnitudeVector(0.75);
+        String str = vector.toString();
+
+        assertEquals(str, "MagnitudeVector{magnitude=0.75}");
+    }
+
+    @Test
+    public void testMagnitudeVectorGetType() {
+        MagnitudeVector vector = new MagnitudeVector(1.0);
+        assertEquals(vector.getType(), VectorType.MagnitudeVector);
+    }
+
+    // ========== TraversalVector Tests ==========
+    
+    @Test
+    public void testTraversalVectorConstructorValidInput() {
+        new TraversalVector(
+            "Alice", "knows", "Bob",
+            "Bob", "knows", "Charlie"
+        );
+
+        // Should not throw exception
+    }
+
+    @Test
+    public void testTraversalVectorConstructorInvalidInput() {
+        // Should throw exception if not multiple of 3
+        org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class, () ->
+            new TraversalVector("Alice", "knows", "Bob", "Bob", "knows")
+        );
+    }
+
+    @Test
+    public void testTraversalVectorMatchExactSamePath() {
+        TraversalVector v1 = new TraversalVector(
+            "Alice", "knows", "Bob",
+            "Bob", "knows", "Charlie"
+        );
+        TraversalVector v2 = new TraversalVector(
+            "Alice", "knows", "Bob",
+            "Bob", "knows", "Charlie"
+        );
+
+        assertEquals(v1.match(v2), 1.0, 0.0001);
+    }
+
+    @Test
+    public void testTraversalVectorMatchSubgraphContainment() {
+        // v1 is contained within v2
+        TraversalVector v1 = new TraversalVector(
+            "Bob", "knows", "Charlie"
+        );
+        TraversalVector v2 = new TraversalVector(
+            "Alice", "knows", "Bob",
+            "Bob", "knows", "Charlie",
+            "Charlie", "knows", "Dave"
+        );
+
+        // v1 is subgraph of v2, so score should be 0.8
+        assertEquals(v1.match(v2), 0.8, 0.0001);
+    }
+
+    @Test
+    public void testTraversalVectorMatchPartialOverlap() {
+        // Two vectors sharing one common edge
+        TraversalVector v1 = new TraversalVector(
+            "Alice", "knows", "Bob",
+            "Bob", "likes", "Charlie"
+        );
+        TraversalVector v2 = new TraversalVector(
+            "Bob", "knows", "Charlie",
+            "Alice", "knows", "Bob"
+        );
+
+        // One common edge out of 3 unique edges total = 1/3
+        double expected = 1.0 / 3.0;
+        assertEquals(v1.match(v2), expected, 0.0001);
+    }
+
+    @Test
+    public void testTraversalVectorMatchNoOverlap() {
+        TraversalVector v1 = new TraversalVector(
+            "Alice", "knows", "Bob"
+        );
+        TraversalVector v2 = new TraversalVector(
+            "Charlie", "knows", "Dave"
+        );
+
+        assertEquals(v1.match(v2), 0.0, 0.0001);
+    }
+
+    @Test
+    public void testTraversalVectorEqualsAndHashCode() {
+        TraversalVector v1 = new TraversalVector(
+            "Alice", "knows", "Bob",
+            "Bob", "knows", "Charlie"
+        );
+        TraversalVector v2 = new TraversalVector(
+            "Alice", "knows", "Bob",
+            "Bob", "knows", "Charlie"
+        );
+        TraversalVector v3 = new TraversalVector(
+            "Bob", "knows", "Charlie"
+        );
+
+        assertEquals(v1, v2);
+        assertEquals(v1.hashCode(), v2.hashCode());
+        assertNotEquals(v1, v3);
+    }
+
+    @Test
+    public void testTraversalVectorToString() {
+        TraversalVector vector = new TraversalVector(
+            "Alice", "knows", "Bob"
+        );
+        String str = vector.toString();
+
+        assertEquals(str, "TraversalVector{vec=Alice-knows->Bob}");
+    }
+
+    @Test
+    public void testTraversalVectorGetType() {
+        TraversalVector vector = new TraversalVector("Alice", "knows", "Bob");
+        assertEquals(vector.getType(), VectorType.TraversalVector);
     }
 
     @Test

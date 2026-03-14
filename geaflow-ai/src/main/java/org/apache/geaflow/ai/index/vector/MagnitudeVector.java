@@ -19,11 +19,52 @@
 
 package org.apache.geaflow.ai.index.vector;
 
+import java.util.Objects;
+
 public class MagnitudeVector implements IVector {
+
+    private final double magnitude;
+
+    public MagnitudeVector() {
+        this.magnitude = 0.0;
+    }
+
+    public MagnitudeVector(double magnitude) {
+        this.magnitude = magnitude;
+    }
+
+    public double getMagnitude() {
+        return magnitude;
+    }
 
     @Override
     public double match(IVector other) {
-        return 0;
+        if (!(other instanceof MagnitudeVector)) {
+            return 0.0;
+        }
+
+        MagnitudeVector otherVec = (MagnitudeVector) other;
+        double otherMagnitude = otherVec.magnitude;
+
+        // Both zero -> perfect match
+        if (this.magnitude == 0.0 && otherMagnitude == 0.0) {
+            return 1.0;
+        }
+
+        // One is zero, other is not -> no match
+        if (this.magnitude == 0.0 || otherMagnitude == 0.0) {
+            return 0.0;
+        }
+
+        // Compute normalized difference
+        double diff = Math.abs(this.magnitude - otherMagnitude);
+        double max = Math.max(Math.abs(this.magnitude), Math.abs(otherMagnitude));
+
+        if (max == 0.0) {
+            return 1.0;
+        }
+
+        return 1.0 - (diff / max);
     }
 
     @Override
@@ -32,7 +73,24 @@ public class MagnitudeVector implements IVector {
     }
 
     @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+        MagnitudeVector that = (MagnitudeVector) o;
+        return Double.compare(that.magnitude, magnitude) == 0;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(magnitude);
+    }
+
+    @Override
     public String toString() {
-        return "MagnitudeVector{}";
+        return "MagnitudeVector{magnitude=" + magnitude + '}';
     }
 }
