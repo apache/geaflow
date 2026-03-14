@@ -230,7 +230,7 @@ public class GraphMemoryTest {
         );
         String str = vector.toString();
 
-        assertEquals(str, "TraversalVector{vec=Alice-knows-Bob}");
+        assertEquals(str, "TraversalVector{vec=Alice-knows->Bob}");
     }
 
     @Test

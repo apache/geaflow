@@ -113,6 +113,9 @@ public class TraversalVector implements IVector {
             if (i > 0) {
                 sb.append(i % 3 == 0 ? "; " : "-");
             }
+            if (i % 3 == 2) {
+                sb.append(">");
+            }
             sb.append(vec[i]);
         }
         return sb.append('}').toString();
