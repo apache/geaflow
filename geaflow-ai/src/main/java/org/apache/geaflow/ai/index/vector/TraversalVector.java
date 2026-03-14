@@ -19,6 +19,11 @@
 
 package org.apache.geaflow.ai.index.vector;
 
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Objects;
+import java.util.Set;
+
 public class TraversalVector implements IVector {
 
     private final String[] vec;
@@ -32,12 +37,73 @@ public class TraversalVector implements IVector {
 
     @Override
     public double match(IVector other) {
-        return 0;
+        if (!(other instanceof TraversalVector)) {
+            return 0.0;
+        }
+
+        TraversalVector otherVec = (TraversalVector) other;
+
+        // Exact match: identical triple sequence
+        if (Arrays.equals(this.vec, otherVec.vec)) {
+            return 1.0;
+        }
+
+        // Convert triples to set for efficient comparison
+        Set<String> thisTriples = getTriplesSet();
+        Set<String> otherTriples = otherVec.getTriplesSet();
+
+        // Check for subgraph containment (this is contained in other)
+        if (otherTriples.containsAll(thisTriples)) {
+            return 0.8;
+        }
+
+        // Compute partial overlap using Jaccard similarity
+        Set<String> intersection = new HashSet<>(thisTriples);
+        intersection.retainAll(otherTriples);
+
+        if (intersection.isEmpty()) {
+            return 0.0;
+        }
+
+        Set<String> union = new HashSet<>(thisTriples);
+        union.addAll(otherTriples);
+
+        return (double) intersection.size() / union.size();
+    }
+
+    /**
+     * Converts the array of triples into a Set of string representations.
+     * Each triple is represented as "src|edge|dst".
+     */
+    private Set<String> getTriplesSet() {
+        Set<String> triples = new HashSet<>();
+        for (int i = 0; i < vec.length; i += 3) {
+            String triple = vec[i] + "|" + vec[i + 1] + "|" + vec[i + 2];
+            triples.add(triple);
+        }
+        return triples;
     }
 
     @Override
     public VectorType getType() {
         return VectorType.TraversalVector;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+        TraversalVector that = (TraversalVector) o;
+        return Arrays.equals(vec, that.vec);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(Arrays.hashCode(vec));
     }
 
     @Override
@@ -48,9 +114,6 @@ public class TraversalVector implements IVector {
                 sb.append(i % 3 == 0 ? "; " : "-");
             }
             sb.append(vec[i]);
-            if (i % 3 == 2) {
-                sb.append(">");
-            }
         }
         return sb.append('}').toString();
     }
