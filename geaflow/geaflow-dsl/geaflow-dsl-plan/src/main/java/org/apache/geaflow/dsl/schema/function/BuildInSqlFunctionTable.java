@@ -232,15 +232,15 @@ public class BuildInSqlFunctionTable extends ListSqlOperatorTable {
             .add(GeaFlowFunction.of(IncMinimumSpanningTree.class))
             .add(GeaFlowFunction.of(ClosenessCentrality.class))
             .add(GeaFlowFunction.of(WeakConnectedComponents.class))
+            .add(GeaFlowFunction.of(ConnectedComponents.class))
+            .add(GeaFlowFunction.of(LabelPropagation.class))
+            .add(GeaFlowFunction.of(Louvain.class))
             .add(GeaFlowFunction.of(TriangleCount.class))
             .add(GeaFlowFunction.of(ClusterCoefficient.class))
             .add(GeaFlowFunction.of(IncWeakConnectedComponents.class))
             .add(GeaFlowFunction.of(CommonNeighbors.class))
             .add(GeaFlowFunction.of(JaccardSimilarity.class))
             .add(GeaFlowFunction.of(IncKHopAlgorithm.class))
-            .add(GeaFlowFunction.of(LabelPropagation.class))
-            .add(GeaFlowFunction.of(ConnectedComponents.class))
-            .add(GeaFlowFunction.of(Louvain.class))
             .build();
 
     public BuildInSqlFunctionTable(GQLJavaTypeFactory typeFactory) {
