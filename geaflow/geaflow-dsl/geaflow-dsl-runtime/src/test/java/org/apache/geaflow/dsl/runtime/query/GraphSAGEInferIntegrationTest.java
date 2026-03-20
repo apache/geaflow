@@ -20,11 +20,12 @@
 package org.apache.geaflow.dsl.runtime.query;
 
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.BufferedReader;
+import java.io.OutputStreamWriter;
+import java.io.FileOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -39,25 +40,39 @@ import org.apache.geaflow.infer.InferContext;
 import org.apache.geaflow.infer.InferContextPool;
 import org.testng.Assert;
 import org.testng.annotations.AfterMethod;
-import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 import org.testng.annotations.AfterClass;
 import org.testng.annotations.BeforeClass;
 
 /**
- * Production-grade integration test for GraphSAGE with Java-Python inference.
+ * Integration test for GraphSAGE Java-Python inference pipeline.
  *
- * <p>This test verifies the complete integration between Java GraphSAGECompute
- * and Python GraphSAGETransFormFunction, including:
- * - Feature reduction functionality
- * - Java-Python data exchange via shared memory
- * - Model inference execution
- * - Result validation
+ * <p>GraphSAGE is integrated using the <em>code-based approach</em>: the algorithm
+ * is instantiated directly as a Java class ({@link GraphSAGECompute}) and wired
+ * into the GeaFlow pipeline via
+ * {@code incGraphView.incrementalCompute(new GraphSAGECompute(numSamples, numLayers))}.
+ * See {@code GraphSAGEExample} in the {@code geaflow-examples} module for a full
+ * end-to-end pipeline demonstration.
+ *
+ * <p>This design avoids the GQL-UDF naming-conflict problem: because the
+ * algorithm is identified by its Java class rather than a string registered in
+ * {@code BuildInSqlFunctionTable}, multiple inference models can coexist in the
+ * same job without any name collision.
+ *
+ * <p>Tests in this class verify the Java-Python communication layer in
+ * isolation (without starting a full pipeline), covering:
+ * <ul>
+ *   <li>Feature reduction in {@link GraphSAGECompute}</li>
+ *   <li>Java-to-Python data exchange via shared memory ({@link InferContext})</li>
+ *   <li>Model inference execution and result shape validation</li>
+ * </ul>
  *
  * <p>Prerequisites:
- * - Python 3.x installed
- * - PyTorch and required dependencies installed
- * - TransFormFunctionUDF.py file in working directory
+ * <ul>
+ *   <li>Python 3.x installed</li>
+ *   <li>PyTorch and required dependencies installed (see {@code requirements.txt})</li>
+ *   <li>{@code TransFormFunctionUDF.py} available on the classpath</li>
+ * </ul>
  */
 public class GraphSAGEInferIntegrationTest {
 
@@ -97,8 +112,10 @@ public class GraphSAGEInferIntegrationTest {
                 sharedInferContext = InferContextPool.getOrCreate(config);
                 System.out.println("✓ Shared InferContext initialized successfully");
                 System.out.println("  Pool status: " + InferContextPool.getStatus());
-            } catch (Exception e) {
-                System.out.println("⚠ Failed to initialize shared InferContext: " + e.getMessage());
+            } catch (Throwable t) {
+                // Catch both Exception and Error (e.g., ExceptionInInitializerError)
+                // since InferContext initialization can fail at the class-loading level
+                System.out.println("⚠ Failed to initialize shared InferContext: " + t.getMessage());
                 System.out.println("Tests that depend on InferContext will be skipped");
                 // Don't fail the entire test class - let individual tests handle it
             }

@@ -58,8 +58,12 @@ public class GraphSAGECompute extends IncVertexCentricCompute<Object, List<Doubl
 
     private static final Logger LOGGER = LoggerFactory.getLogger(GraphSAGECompute.class);
 
+    /** Default Python transform class name bundled with GraphSAGE. */
+    public static final String DEFAULT_PYTHON_TRANSFORM_CLASS = "GraphSAGETransFormFunction";
+
     private final int numSamples;
     private final int numLayers;
+    private final String pythonTransformClassName;
 
     /**
      * Creates a GraphSAGE compute instance with default parameters.
@@ -67,6 +71,7 @@ public class GraphSAGECompute extends IncVertexCentricCompute<Object, List<Doubl
      * <p>Default configuration:
      * - numSamples: 10 neighbors per layer
      * - numLayers: 2 layers
+     * - pythonTransformClassName: {@value #DEFAULT_PYTHON_TRANSFORM_CLASS}
      * - iterations: numLayers + 1 (for neighbor sampling)
      */
     public GraphSAGECompute() {
@@ -74,15 +79,68 @@ public class GraphSAGECompute extends IncVertexCentricCompute<Object, List<Doubl
     }
 
     /**
-     * Creates a GraphSAGE compute instance with specified parameters.
+     * Creates a GraphSAGE compute instance with specified hyper-parameters.
+     *
+     * <p>Uses the default Python UDF class {@value #DEFAULT_PYTHON_TRANSFORM_CLASS}.
+     * To run multiple inference algorithms in the same job, use
+     * {@link #GraphSAGECompute(int, int, String)} and pass the
+     * desired Python class name explicitly.
      *
      * @param numSamples Number of neighbors to sample per layer
-     * @param numLayers Number of GraphSAGE layers
+     * @param numLayers  Number of GraphSAGE layers
      */
     public GraphSAGECompute(int numSamples, int numLayers) {
+        this(numSamples, numLayers, DEFAULT_PYTHON_TRANSFORM_CLASS);
+    }
+
+    /**
+     * Creates a GraphSAGE compute instance with full control over the Python UDF.
+     *
+     * <p>This constructor is the <em>code-based</em> entry point for specifying
+     * which Python transform class to use for inference. By passing a non-null
+     * {@code pythonTransformClassName}, the pipeline will create a dedicated
+     * {@link org.apache.geaflow.infer.InferContext} for this algorithm,
+     * independent of every other algorithm in the same job. This eliminates
+     * the UDF naming conflict when multiple neural-network algorithms need
+     * different Python models:
+     *
+     * <pre>
+     *   // Each algorithm carries its own Python UDF – no global naming conflict:
+     *   incGraphView.incrementalCompute(new GraphSAGECompute(10, 2, "GraphSAGETransFormFunction"))
+     *   incGraphView.incrementalCompute(new GCNCompute(64, "GCNTransFormFunction"))
+     * </pre>
+     *
+     * @param numSamples              Number of neighbors to sample per layer
+     * @param numLayers               Number of GraphSAGE layers
+     * @param pythonTransformClassName Fully-qualified Python class name in
+     *                                 {@code TransFormFunctionUDF.py} that will be
+     *                                 launched as a subprocess for inference;
+     *                                 must not be null or empty
+     */
+    public GraphSAGECompute(int numSamples, int numLayers, String pythonTransformClassName) {
         super(numLayers + 1); // iterations = numLayers + 1 for neighbor sampling
+        if (pythonTransformClassName == null || pythonTransformClassName.trim().isEmpty()) {
+            throw new IllegalArgumentException(
+                "pythonTransformClassName must not be null or empty. "
+                    + "Use the default '" + DEFAULT_PYTHON_TRANSFORM_CLASS + "' if unsure.");
+        }
         this.numSamples = numSamples;
         this.numLayers = numLayers;
+        this.pythonTransformClassName = pythonTransformClassName;
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Returns {@value #DEFAULT_PYTHON_TRANSFORM_CLASS} by default, or the
+     * class name supplied via constructor. The pipeline infrastructure uses this
+     * value to create a dedicated {@link org.apache.geaflow.infer.InferContext}
+     * for this algorithm, so multiple algorithms in the same job can each have
+     * their own Python process without any naming conflict.
+     */
+    @Override
+    public String getPythonTransformClassName() {
+        return pythonTransformClassName;
     }
 
     @Override

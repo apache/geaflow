@@ -50,18 +50,30 @@ import org.slf4j.LoggerFactory;
  * GraphSAGE algorithm implementation for GQL CALL syntax.
  *
  * <p>This class implements AlgorithmUserFunction to enable GraphSAGE to be called
- * via GQL CALL syntax: CALL GRAPHSAGE([numSamples, [numLayers]]) YIELD (vid, embedding)
+ * via GQL CALL syntax:
+ * <pre>
+ *   -- Use global config for Python UDF class name:
+ *   CALL GRAPHSAGE([numSamples, [numLayers]])
  *
- * <p>This implementation:
- * - Uses AlgorithmRuntimeContext for graph access
- * - Creates InferContext for Python model inference
- * - Implements neighbor sampling and feature collection
- * - Calls Python model for embedding generation
- * - Returns vertex ID and embedding vector
+ *   -- Specify Python UDF class name explicitly (avoids naming conflicts):
+ *   CALL GRAPHSAGE([numSamples, [numLayers[, 'PythonClassName']]])
+ * </pre>
  *
- * <p>Note: This requires Python inference environment to be enabled:
+ * <p>The optional third argument ({@code pythonTransformClassName}) is the key
+ * to supporting multiple inference algorithms in the same job. Instead of
+ * relying on the single global config key
+ * {@code geaflow.infer.env.user.transform.classname}, each CALL site can
+ * name its own Python UDF class:
+ * <pre>
+ *   CALL GRAPHSAGE(10, 2, 'GraphSAGETransFormFunction') YIELD ...
+ *   CALL OTHERAPLGORITHM(32, 'OtherTransFormFunction') YIELD ...
+ * </pre>
+ * The {@link InferContextPool} will maintain a separate Python subprocess for
+ * each distinct class name, so the two algorithms never interfere.
+ *
+ * <p>Requirements:
  * - geaflow.infer.env.enable=true
- * - geaflow.infer.env.user.transform.classname=GraphSAGETransFormFunction
+ * - Python environment with the specified transform class available
  */
 @Description(name = "graphsage", description = "built-in udga for GraphSAGE node embedding")
 public class GraphSAGE implements AlgorithmUserFunction<Object, Object> {
@@ -71,15 +83,24 @@ public class GraphSAGE implements AlgorithmUserFunction<Object, Object> {
     private AlgorithmRuntimeContext<Object, Object> context;
     private InferContext<List<Double>> inferContext;
     private FeatureReducer featureReducer;
-    
+
+    /** Default Python transform class used when no class is supplied as a parameter. */
+    public static final String DEFAULT_PYTHON_TRANSFORM_CLASS = "GraphSAGETransFormFunction";
+
     // Algorithm parameters
     private int numSamples = 10;  // Number of neighbors to sample per layer
     private int numLayers = 2;    // Number of GraphSAGE layers
+    /**
+     * Python transform class name resolved at init time.
+     * Defaults to {@value #DEFAULT_PYTHON_TRANSFORM_CLASS} but can be overridden
+     * by passing the class name as the third GQL CALL argument.
+     */
+    private String pythonTransformClassName = DEFAULT_PYTHON_TRANSFORM_CLASS;
     private static final int DEFAULT_REDUCED_DIMENSION = 64;
-    
+
     // Random number generator for neighbor sampling
     private static final Random RANDOM = new Random(42L);
-    
+
     // Cache for neighbor features: neighborId -> features
     // This cache is populated in the first iteration when we sample neighbors
     private final Map<Object, List<Double>> neighborFeaturesCache = new HashMap<>();
@@ -87,8 +108,16 @@ public class GraphSAGE implements AlgorithmUserFunction<Object, Object> {
     @Override
     public void init(AlgorithmRuntimeContext<Object, Object> context, Object[] parameters) {
         this.context = context;
-        
-        // Parse parameters
+
+        // Parse parameters:
+        //   parameters[0] -> numSamples  (optional, default 10)
+        //   parameters[1] -> numLayers   (optional, default 2)
+        //   parameters[2] -> pythonTransformClassName  (optional, defaults to
+        //                    DEFAULT_PYTHON_TRANSFORM_CLASS)
+        //
+        // Passing the Python class name as a GQL argument is the recommended
+        // approach when multiple algorithms with different Python UDFs need to
+        // run in the same job, because it eliminates the global naming conflict.
         if (parameters.length > 0) {
             this.numSamples = Integer.parseInt(String.valueOf(parameters[0]));
         }
@@ -96,41 +125,88 @@ public class GraphSAGE implements AlgorithmUserFunction<Object, Object> {
             this.numLayers = Integer.parseInt(String.valueOf(parameters[1]));
         }
         if (parameters.length > 2) {
-            throw new IllegalArgumentException(
-                "Only support up to 2 arguments: numSamples, numLayers. "
-                    + "Usage: CALL GRAPHSAGE([numSamples, [numLayers]])");
+            String className = String.valueOf(parameters[2]).trim();
+            if (className.isEmpty()) {
+                throw new IllegalArgumentException(
+                    "pythonTransformClassName (3rd argument) must not be empty.");
+            }
+            this.pythonTransformClassName = className;
         }
-        
+        if (parameters.length > 3) {
+            throw new IllegalArgumentException(
+                "GRAPHSAGE accepts at most 3 arguments: "
+                    + "numSamples, numLayers, pythonTransformClassName. "
+                    + "Usage: CALL GRAPHSAGE([numSamples[, numLayers[, 'PythonClassName']]])");
+        }
+
         // Initialize feature reducer
         int[] importantDims = new int[DEFAULT_REDUCED_DIMENSION];
         for (int i = 0; i < DEFAULT_REDUCED_DIMENSION; i++) {
             importantDims[i] = i;
         }
         this.featureReducer = new FeatureReducer(importantDims);
-        
-        // Initialize Python inference context if enabled
+
+        // Initialize Python inference context if enabled.
+        // A dedicated Configuration is created with the resolved Python class name
+        // so that InferContextPool can maintain separate subprocesses for
+        // algorithms that use different Python UDFs.
         try {
             boolean inferEnabled = ConfigHelper.getBooleanOrDefault(
                 context.getConfig().getConfigMap(),
                 FrameworkConfigKeys.INFER_ENV_ENABLE.getKey(),
                 false);
-            
+
             if (inferEnabled) {
-                // Use InferContextPool instead of direct instantiation
-                // This allows efficient reuse of InferContext across multiple instances
-                this.inferContext = InferContextPool.getOrCreate(context.getConfig());
+                org.apache.geaflow.common.config.Configuration inferConfig =
+                    buildInferConfig(context.getConfig());
+                this.inferContext = InferContextPool.getOrCreate(inferConfig);
                 LOGGER.info(
-                    "GraphSAGE initialized with numSamples={}, numLayers={}, Python inference enabled. {}",
-                    numSamples, numLayers, InferContextPool.getStatus());
+                    "GraphSAGE initialized: numSamples={}, numLayers={}, "
+                        + "pythonTransformClass='{}', inferContextPool={}",
+                    numSamples, numLayers, pythonTransformClassName,
+                    InferContextPool.getStatus());
             } else {
                 LOGGER.warn("GraphSAGE requires Python inference environment. "
                     + "Please set geaflow.infer.env.enable=true");
             }
         } catch (Exception e) {
             LOGGER.error("Failed to initialize Python inference context", e);
-            throw new RuntimeException("GraphSAGE requires Python inference environment: " 
+            throw new RuntimeException("GraphSAGE requires Python inference environment: "
                 + e.getMessage(), e);
         }
+    }
+
+    /**
+     * Builds the {@link org.apache.geaflow.common.config.Configuration} used for
+     * creating this algorithm's {@link InferContext}.
+     *
+     * <p>If {@link #pythonTransformClassName} differs from the value already
+     * present in {@code baseConfig}, a copy of the base configuration is
+     * returned with the key
+     * {@code geaflow.infer.env.user.transform.classname} overridden.
+     * This ensures that {@link InferContextPool} (which keys contexts by
+     * config hash) will create a separate Python subprocess for this class,
+     * so multiple CALL sites with different Python UDFs do not share a
+     * single process.
+     *
+     * @param baseConfig the runtime configuration provided by the framework
+     * @return an effective configuration with the correct Python class name set
+     */
+    private org.apache.geaflow.common.config.Configuration buildInferConfig(
+            org.apache.geaflow.common.config.Configuration baseConfig) {
+        String globalClassName = baseConfig.getString(
+            FrameworkConfigKeys.INFER_ENV_USER_TRANSFORM_CLASSNAME);
+        if (pythonTransformClassName.equals(globalClassName)) {
+            // No override needed; reuse existing config (and its cached InferContext).
+            return baseConfig;
+        }
+        // Create a derived config with the algorithm-specific Python class name.
+        java.util.Map<String, String> overrideMap =
+            new java.util.HashMap<>(baseConfig.getConfigMap());
+        overrideMap.put(
+            FrameworkConfigKeys.INFER_ENV_USER_TRANSFORM_CLASSNAME.getKey(),
+            pythonTransformClassName);
+        return new org.apache.geaflow.common.config.Configuration(overrideMap);
     }
 
     @Override
