@@ -27,9 +27,11 @@ import org.apache.geaflow.ai.index.EmbeddingIndexStore;
 import org.apache.geaflow.ai.index.EntityAttributeIndexStore;
 import org.apache.geaflow.ai.index.IndexStore;
 import org.apache.geaflow.ai.index.vector.EmbeddingVector;
+import org.apache.geaflow.ai.index.vector.IVector;
 import org.apache.geaflow.ai.index.vector.KeywordVector;
 import org.apache.geaflow.ai.index.vector.MagnitudeVector;
 import org.apache.geaflow.ai.index.vector.TraversalVector;
+import org.apache.geaflow.ai.index.vector.VectorType;
 import org.apache.geaflow.ai.search.VectorSearch;
 import org.apache.geaflow.ai.verbalization.Context;
 import org.apache.geaflow.ai.verbalization.SubgraphSemanticPromptFunction;
@@ -37,6 +39,9 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 public class GraphMemoryTest {
 
@@ -50,6 +55,55 @@ public class GraphMemoryTest {
         search.addVector(new MagnitudeVector());
         search.addVector(new TraversalVector("src", "edge", "dst"));
         LOGGER.info(String.valueOf(search));
+    }
+
+    // ========== MagnitudeVector Tests ==========
+    
+    @Test
+    public void testMagnitudeVectorConstructorAndGetter() {
+        MagnitudeVector vector = new MagnitudeVector(0.85);
+        assertEquals(vector.getMagnitude(), 0.85, 0.0001);
+    }
+
+    @Test
+    public void testMagnitudeVectorMatchExactSameValue() {
+        MagnitudeVector v1 = new MagnitudeVector(5.0);
+        MagnitudeVector v2 = new MagnitudeVector(5.0);
+
+        assertEquals(v1.match(v2), 1.0, 0.0001);
+    }
+
+    @Test
+    public void testMagnitudeVectorMatchDifferentValues() {
+        MagnitudeVector v1 = new MagnitudeVector(10.0);
+        MagnitudeVector v2 = new MagnitudeVector(5.0);
+
+        // Expected: 1 - |10-5|/max(10,5) = 1 - 5/10 = 0.5
+        assertEquals(v1.match(v2), 0.5, 0.0001);
+    }
+    @Test
+    public void testMagnitudeVectorEqualsAndHashCode() {
+        MagnitudeVector v1 = new MagnitudeVector(5.0);
+        MagnitudeVector v2 = new MagnitudeVector(5.0);
+        MagnitudeVector v3 = new MagnitudeVector(10.0);
+
+        assertEquals(v1, v2);
+        assertEquals(v1.hashCode(), v2.hashCode());
+        assertNotEquals(v1, v3);
+    }
+
+    @Test
+    public void testMagnitudeVectorToString() {
+        MagnitudeVector vector = new MagnitudeVector(0.75);
+        String str = vector.toString();
+
+        assertEquals(str, "MagnitudeVector{magnitude=0.75}");
+    }
+
+    @Test
+    public void testMagnitudeVectorGetType() {
+        MagnitudeVector vector = new MagnitudeVector(1.0);
+        assertEquals(vector.getType(), VectorType.MagnitudeVector);
     }
 
     @Test
