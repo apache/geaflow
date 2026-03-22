@@ -55,10 +55,6 @@ public class MagnitudeVector implements IVector {
             return 1.0;
         }
 
-        if (this.magnitude == 0.0 || otherMagnitude == 0.0) {
-            return 0.0;
-        }
-
         double diff = Math.abs(this.magnitude - otherMagnitude);
         double max = Math.max(Math.abs(this.magnitude), Math.abs(otherMagnitude));
 
@@ -68,7 +64,7 @@ public class MagnitudeVector implements IVector {
 
         return 1.0 - (diff / max);
     }
-    
+
     @Override
     public VectorType getType() {
         return VectorType.MagnitudeVector;
