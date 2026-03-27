@@ -20,18 +20,30 @@
 package org.apache.geaflow.plan.optimizer;
 
 import java.io.Serializable;
+import org.apache.geaflow.common.config.Configuration;
+import org.apache.geaflow.common.config.keys.ExecutionConfigKeys;
 import org.apache.geaflow.plan.graph.PipelineGraph;
 import org.apache.geaflow.plan.optimizer.strategy.ChainCombiner;
+import org.apache.geaflow.plan.optimizer.strategy.LocalShuffleOptimizer;
 import org.apache.geaflow.plan.optimizer.strategy.SingleWindowGroupRule;
 
 public class PipelineGraphOptimizer implements Serializable {
 
-    public void optimizePipelineGraph(PipelineGraph pipelineGraph) {
-        // Enforce chain combiner opt.
+    public void optimizePipelineGraph(PipelineGraph pipelineGraph, Configuration config) {
+        // 1. Enforce chain combiner optimization.
+        // Merge operators with forward partition into single execution unit.
         ChainCombiner chainCombiner = new ChainCombiner();
         chainCombiner.combineVertex(pipelineGraph);
 
-        // Enforce single window rule.
+        // 2. Local shuffle optimization (disabled by default).
+        // Mark vertices for co-location to enable automatic local shuffle.
+        if (config.getBoolean(ExecutionConfigKeys.LOCAL_SHUFFLE_OPTIMIZATION_ENABLE)) {
+            LocalShuffleOptimizer localShuffleOptimizer = new LocalShuffleOptimizer();
+            localShuffleOptimizer.optimize(pipelineGraph);
+        }
+
+        // 3. Enforce single window rule.
+        // Disable grouping for single-window batch jobs.
         SingleWindowGroupRule groupRule = new SingleWindowGroupRule();
         groupRule.apply(pipelineGraph);
     }
