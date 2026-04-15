@@ -40,6 +40,18 @@ public class InferEnvironmentContext {
     // Start infer process parameter.
     private static final String TF_CLASSNAME_KEY = "--tfClassName=";
 
+    private static final String MODEL_PATH_KEY = "--model_path=";
+
+    private static final String MODEL_VERSION_FILE_KEY = "--model_version_file=";
+
+    private static final String POLL_INTERVAL_SEC_KEY = "--poll_interval_sec=";
+
+    private static final String BACKOFF_SEC_KEY = "--backoff_sec=";
+
+    private static final String WARMUP_ENABLED_KEY = "--warmup_enabled=";
+
+    private static final String HOT_RELOAD_ENABLED_KEY = "--hot_reload_enabled=";
+
     private static final String SHARE_MEMORY_INPUT_KEY = "--input_queue_shm_id=";
 
     private static final String SHARE_MEMORY_OUTPUT_KEY = "--output_queue_shm_id=";
@@ -136,6 +148,30 @@ public class InferEnvironmentContext {
 
     public String getInferShareMemoryOutputParam(String shareMemoryOutputKey) {
         return SHARE_MEMORY_OUTPUT_KEY + shareMemoryOutputKey;
+    }
+
+    public String getInferModelPathParam(String modelPath) {
+        return MODEL_PATH_KEY + modelPath;
+    }
+
+    public String getInferModelVersionFileParam(String modelVersionFile) {
+        return MODEL_VERSION_FILE_KEY + modelVersionFile;
+    }
+
+    public String getInferPollIntervalSecParam(double pollIntervalSec) {
+        return POLL_INTERVAL_SEC_KEY + pollIntervalSec;
+    }
+
+    public String getInferBackoffSecParam(double backoffSec) {
+        return BACKOFF_SEC_KEY + backoffSec;
+    }
+
+    public String getInferWarmupEnabledParam(boolean warmupEnabled) {
+        return WARMUP_ENABLED_KEY + warmupEnabled;
+    }
+
+    public String getInferHotReloadEnabledParam(boolean hotReloadEnabled) {
+        return HOT_RELOAD_ENABLED_KEY + hotReloadEnabled;
     }
 
     public String getInferScript() {

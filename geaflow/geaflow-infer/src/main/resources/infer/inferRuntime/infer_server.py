@@ -54,9 +54,20 @@ def get_user_define_class(class_name):
         raise ValueError("class name = {} not found".format(class_name))
 
 
-def start_infer_process(class_name, output_queue_shm_id, input_queue_shm_id):
+def start_infer_process(class_name, output_queue_shm_id, input_queue_shm_id,
+                        model_path=None, model_version_file=None,
+                        poll_interval_sec=1.0, backoff_sec=10.0,
+                        warmup_enabled=True, hot_reload_enabled=True):
     transform_class = get_user_define_class(class_name)
-    infer_session = TorchInferSession(transform_class)
+    hot_reload_options = {
+        "model_path": model_path,
+        "model_version_file": model_version_file,
+        "poll_interval_sec": poll_interval_sec,
+        "backoff_sec": backoff_sec,
+        "warmup_enabled": warmup_enabled,
+        "hot_reload_enabled": hot_reload_enabled,
+    }
+    infer_session = TorchInferSession(transform_class, hot_reload_options)
     input_size = transform_class.input_size
     data_exchange = PicklerDataBridger(input_queue_shm_id, output_queue_shm_id, input_size)
     check_thread = check_ppid('check_process', True)
@@ -80,6 +91,10 @@ def start_infer_process(class_name, output_queue_shm_id, input_queue_shm_id):
             sys.exit(0)
 
 
+def _str2bool(value):
+    return str(value).lower() in ("1", "true", "t", "yes", "y", "on")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--tfClassName", type=str,
@@ -89,6 +104,23 @@ if __name__ == "__main__":
                                                                "id")
     parser.add_argument("--output_queue_shm_id", type=str,
                         help="output queue share memory id")
+    parser.add_argument("--model_path", type=str,
+                        default=os.path.join(os.getcwd(), "model.pt"),
+                        help="model file path")
+    parser.add_argument("--model_version_file", type=str,
+                        default=os.path.join(os.getcwd(), "model.version"),
+                        help="manifest file path")
+    parser.add_argument("--poll_interval_sec", type=float, default=1.0,
+                        help="manifest poll interval in seconds")
+    parser.add_argument("--backoff_sec", type=float, default=10.0,
+                        help="reload backoff in seconds after failure")
+    parser.add_argument("--warmup_enabled", type=_str2bool, default=True,
+                        help="enable dummy warmup before switching")
+    parser.add_argument("--hot_reload_enabled", type=_str2bool, default=True,
+                        help="enable model hot reload")
     args = parser.parse_args()
     start_infer_process(args.tfClassName, args.output_queue_shm_id,
-                        args.input_queue_shm_id)
+                        args.input_queue_shm_id, args.model_path,
+                        args.model_version_file, args.poll_interval_sec,
+                        args.backoff_sec, args.warmup_enabled,
+                        args.hot_reload_enabled)
