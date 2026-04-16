@@ -91,10 +91,6 @@ def start_infer_process(class_name, output_queue_shm_id, input_queue_shm_id,
             sys.exit(0)
 
 
-def _str2bool(value):
-    return str(value).lower() in ("1", "true", "t", "yes", "y", "on")
-
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--tfClassName", type=str,
@@ -114,13 +110,16 @@ if __name__ == "__main__":
                         help="manifest poll interval in seconds")
     parser.add_argument("--backoff_sec", type=float, default=10.0,
                         help="reload backoff in seconds after failure")
-    parser.add_argument("--warmup_enabled", type=_str2bool, default=True,
+    parser.add_argument("--warmup_enabled", choices=["True", "False"],
+                        default="True",
                         help="enable dummy warmup before switching")
-    parser.add_argument("--hot_reload_enabled", type=_str2bool, default=True,
+    parser.add_argument("--hot_reload_enabled", choices=["True", "False"],
+                        default="True",
                         help="enable model hot reload")
     args = parser.parse_args()
     start_infer_process(args.tfClassName, args.output_queue_shm_id,
                         args.input_queue_shm_id, args.model_path,
                         args.model_version_file, args.poll_interval_sec,
-                        args.backoff_sec, args.warmup_enabled,
-                        args.hot_reload_enabled)
+                        args.backoff_sec,
+                        args.warmup_enabled == "True",
+                        args.hot_reload_enabled == "True")
