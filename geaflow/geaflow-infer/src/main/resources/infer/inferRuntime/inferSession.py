@@ -56,8 +56,8 @@ class TorchInferSession(object):
             options.get("model_version_file") or os.path.join(model_root, "model.version")
         )
 
-        self._poll_interval_sec = max(0.1, float(options.get("poll_interval_sec", 1.0)))
-        self._backoff_sec = max(0.1, float(options.get("backoff_sec", 10.0)))
+        self._poll_interval_sec = float(options.get("poll_interval_sec", 1.0))
+        self._backoff_sec = float(options.get("backoff_sec", 10.0))
         self._warmup_enabled = bool(options.get("warmup_enabled", True))
         self._hot_reload_enabled = bool(options.get("hot_reload_enabled", True))
 
