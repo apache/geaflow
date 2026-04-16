@@ -167,11 +167,11 @@ public class InferEnvironmentContext {
     }
 
     public String getInferWarmupEnabledParam(boolean warmupEnabled) {
-        return WARMUP_ENABLED_KEY + warmupEnabled;
+        return WARMUP_ENABLED_KEY + (warmupEnabled ? "True" : "False");
     }
 
     public String getInferHotReloadEnabledParam(boolean hotReloadEnabled) {
-        return HOT_RELOAD_ENABLED_KEY + hotReloadEnabled;
+        return HOT_RELOAD_ENABLED_KEY + (hotReloadEnabled ? "True" : "False");
     }
 
     public String getInferScript() {
