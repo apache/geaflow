@@ -28,10 +28,9 @@ echo "execute shell at path ${CURRENT_DIR}"
 echo "install requirements path ${REQUIREMENTS_PATH}"
 
 MINICONDA_INSTALL=$CURRENT_DIR/miniconda.sh
-[ ! -e $MINICONDA_INSTALL ] && touch $MINICONDA_INSTALL
 
 function install_miniconda() {
-    if [ ! -f "$CONDA_INSTALL" ]; then
+    if [ ! -s "$MINICONDA_INSTALL" ]; then
         print_function "STEP" "download miniconda oss ${MINICOMDA_OSS_URL}..."
         download $MINICOMDA_OSS_URL $MINICONDA_INSTALL
         chmod +x $MINICONDA_INSTALL

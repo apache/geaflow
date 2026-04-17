@@ -20,6 +20,13 @@
 # cython:language_level=3
 
 from distutils.core import setup
-from Cython.Build import cythonize
+from distutils.extension import Extension
 
-setup(ext_modules=cythonize("mmap_ipc.pyx"))
+try:
+    from Cython.Build import cythonize
+except ImportError:
+    ext_modules = [Extension("mmap_ipc", sources=["mmap_ipc.cpp"], language="c++")]
+else:
+    ext_modules = cythonize("mmap_ipc.pyx")
+
+setup(ext_modules=ext_modules)
