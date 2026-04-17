@@ -25,6 +25,8 @@ import org.apache.commons.io.FileUtils;
 import org.apache.geaflow.common.config.keys.DSLConfigKeys;
 import org.apache.geaflow.common.config.keys.FrameworkConfigKeys;
 import org.apache.geaflow.file.FileConfigKeys;
+import org.apache.geaflow.infer.InferContextPool;
+import org.testng.annotations.AfterClass;
 import org.testng.annotations.Test;
 
 public class GQLAlgorithmTest {
@@ -84,6 +86,33 @@ public class GQLAlgorithmTest {
         QueryTester
             .build()
             .withQueryPath("/query/gql_algorithm_006.sql")
+            .execute()
+            .checkSinkResult();
+    }
+
+    @Test
+    public void testAlgorithmGCN() throws Exception {
+        QueryTester
+            .build()
+            .withQueryPath("/query/gql_algorithm_gcn.sql")
+            .execute()
+            .checkSinkResult();
+    }
+
+    @Test
+    public void testAlgorithmGCNBatching() throws Exception {
+        QueryTester
+            .build()
+            .withQueryPath("/query/gql_algorithm_gcn_batch.sql")
+            .execute()
+            .checkSinkResult();
+    }
+
+    @Test
+    public void testAlgorithmGCNDirectedEdgeSemantics() throws Exception {
+        QueryTester
+            .build()
+            .withQueryPath("/query/gql_algorithm_gcn_directed.sql")
             .execute()
             .checkSinkResult();
     }
@@ -340,6 +369,11 @@ public class GQLAlgorithmTest {
             .withQueryPath("/query/gql_edge_iterator_test.sql")
             .execute()
             .checkSinkResult();
+    }
+
+    @AfterClass(alwaysRun = true)
+    public void tearDownInferContextPool() {
+        InferContextPool.closeAll();
     }
 
     private void clearGraph() throws IOException {
