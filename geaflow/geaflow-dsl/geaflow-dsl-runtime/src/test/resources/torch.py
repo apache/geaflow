@@ -1,5 +1,3 @@
-# -*-coding:utf-8-*-
-
 #  Licensed to the Apache Software Foundation (ASF) under one
 #  or more contributor license agreements.  See the NOTICE file
 #  distributed with this work for additional information
@@ -17,16 +15,6 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
-# cython:language_level=3
 
-from distutils.core import setup
-from distutils.extension import Extension
-
-try:
-    from Cython.Build import cythonize
-except ImportError:
-    ext_modules = [Extension("mmap_ipc", sources=["mmap_ipc.cpp"], language="c++")]
-else:
-    ext_modules = cythonize("mmap_ipc.pyx")
-
-setup(ext_modules=ext_modules)
+def set_num_threads(_thread_count):
+    return None

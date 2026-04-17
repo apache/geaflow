@@ -22,17 +22,21 @@ package org.apache.geaflow.dsl.runtime.engine;
 import static org.apache.geaflow.common.config.keys.FrameworkConfigKeys.SYSTEM_STATE_BACKEND_TYPE;
 
 import java.util.Collections;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import org.apache.geaflow.api.graph.function.vc.VertexCentricAggTraversalFunction;
+import org.apache.geaflow.dsl.common.algo.BatchAlgorithmUserFunction;
 import org.apache.geaflow.dsl.common.algo.AlgorithmUserFunction;
 import org.apache.geaflow.dsl.common.data.Row;
 import org.apache.geaflow.dsl.common.data.RowVertex;
 import org.apache.geaflow.dsl.common.types.GraphSchema;
 import org.apache.geaflow.dsl.runtime.traversal.message.ITraversalAgg;
+import org.apache.geaflow.dsl.udf.graph.GCN;
 import org.apache.geaflow.model.traversal.ITraversalRequest;
 import org.apache.geaflow.state.KeyValueState;
 import org.apache.geaflow.state.StateFactory;
@@ -73,7 +77,9 @@ public class GeaFlowAlgorithmAggTraversalFunction implements
     public void open(
         VertexCentricTraversalFuncContext<Object, Row, Row, Object, Row> vertexCentricFuncContext) {
         this.traversalContext = vertexCentricFuncContext;
-        this.algorithmCtx = new GeaFlowAlgorithmRuntimeContext(this, traversalContext, graphSchema);
+        this.algorithmCtx = userFunction instanceof GCN
+            ? new GeaFlowAlgorithmModelRuntimeContext(this, traversalContext, graphSchema)
+            : new GeaFlowAlgorithmRuntimeContext(this, traversalContext, graphSchema);
         this.userFunction.init(algorithmCtx, params);
         this.invokeVIds = new HashSet<>();
         String stateName = traversalContext.getTraversalOpName() + "_" + STATE_SUFFIX;
@@ -122,14 +128,32 @@ public class GeaFlowAlgorithmAggTraversalFunction implements
 
     @Override
     public void finish() {
-        Iterator<Object> idIterator = getInvokeVIds();
-        while (idIterator.hasNext()) {
-            Object id = idIterator.next();
-            algorithmCtx.setVertexId(id);
-            RowVertex graphVertex = (RowVertex) traversalContext.vertex().withId(id).get();
-            if (graphVertex != null) {
-                Row newValue = getVertexNewValue(graphVertex.getId());
-                userFunction.finish(graphVertex, Optional.ofNullable(newValue));
+        if (userFunction instanceof BatchAlgorithmUserFunction) {
+            List<RowVertex> batchVertices = new ArrayList<>();
+            List<Optional<Row>> batchValues = new ArrayList<>();
+            Iterator<Object> idIterator = getInvokeVIds();
+            while (idIterator.hasNext()) {
+                Object id = idIterator.next();
+                algorithmCtx.setVertexId(id);
+                RowVertex graphVertex = (RowVertex) traversalContext.vertex().withId(id).get();
+                if (graphVertex != null) {
+                    Row newValue = getVertexNewValue(graphVertex.getId());
+                    batchVertices.add(graphVertex);
+                    batchValues.add(Optional.ofNullable(newValue));
+                }
+            }
+            ((BatchAlgorithmUserFunction<Object, Object>) userFunction).finishBatch(batchVertices,
+                batchValues);
+        } else {
+            Iterator<Object> idIterator = getInvokeVIds();
+            while (idIterator.hasNext()) {
+                Object id = idIterator.next();
+                algorithmCtx.setVertexId(id);
+                RowVertex graphVertex = (RowVertex) traversalContext.vertex().withId(id).get();
+                if (graphVertex != null) {
+                    Row newValue = getVertexNewValue(graphVertex.getId());
+                    userFunction.finish(graphVertex, Optional.ofNullable(newValue));
+                }
             }
         }
         algorithmCtx.finish();

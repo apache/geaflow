@@ -153,6 +153,12 @@
             <groupId>org.apache.geaflow</groupId>
             <artifactId>geaflow-view-meta</artifactId>
         </dependency>
+
+        <dependency>
+            <groupId>org.apache.geaflow</groupId>
+            <artifactId>geaflow-infer</artifactId>
+            <version>${project.version}</version>
+        </dependency>
     </dependencies>
 
     <build>
