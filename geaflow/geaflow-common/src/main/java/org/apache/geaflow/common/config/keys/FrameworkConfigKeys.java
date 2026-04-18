@@ -153,6 +153,36 @@ public class FrameworkConfigKeys implements Serializable {
         .noDefaultValue()
         .description("infer env conda url");
 
+    public static final ConfigKey INFER_ENV_HOT_RELOAD_MODEL_PATH = ConfigKeys
+        .key("geaflow.infer.env.hot.reload.model.path")
+        .noDefaultValue()
+        .description("infer env hot reload model path");
+
+    public static final ConfigKey INFER_ENV_HOT_RELOAD_MODEL_VERSION_FILE = ConfigKeys
+        .key("geaflow.infer.env.hot.reload.model.version.file")
+        .noDefaultValue()
+        .description("infer env hot reload model version manifest path");
+
+    public static final ConfigKey INFER_ENV_HOT_RELOAD_POLL_INTERVAL_SEC = ConfigKeys
+        .key("geaflow.infer.env.hot.reload.poll.interval.sec")
+        .defaultValue(1.0)
+        .description("infer env hot reload poll interval seconds");
+
+    public static final ConfigKey INFER_ENV_HOT_RELOAD_BACKOFF_SEC = ConfigKeys
+        .key("geaflow.infer.env.hot.reload.backoff.sec")
+        .defaultValue(10.0)
+        .description("infer env hot reload backoff seconds after failure");
+
+    public static final ConfigKey INFER_ENV_HOT_RELOAD_WARMUP_ENABLE = ConfigKeys
+        .key("geaflow.infer.env.hot.reload.warmup.enable")
+        .defaultValue(true)
+        .description("infer env hot reload warmup enable");
+
+    public static final ConfigKey INFER_ENV_HOT_RELOAD_ENABLE = ConfigKeys
+        .key("geaflow.infer.env.hot.reload.enable")
+        .defaultValue(true)
+        .description("infer env hot reload enable");
+
     public static final ConfigKey ASP_ENABLE = ConfigKeys
         .key("geaflow.iteration.asp.enable")
         .defaultValue(false)

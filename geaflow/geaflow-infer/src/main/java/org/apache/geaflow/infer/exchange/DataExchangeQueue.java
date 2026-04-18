@@ -26,7 +26,7 @@ import org.jctools.util.Pow2;
 
 public final class DataExchangeQueue implements Closeable {
 
-    private static final AtomicBoolean CLOSED = new AtomicBoolean(false);
+    private final AtomicBoolean closed = new AtomicBoolean(false);
     private final long outputNextAddress;
     private final long capacityAddress;
     private final long outputAddress;
@@ -66,11 +66,9 @@ public final class DataExchangeQueue implements Closeable {
 
     @Override
     public synchronized void close() {
-        CLOSED.set(true);
-        if (memoryMapper != null) {
+        if (closed.compareAndSet(false, true) && memoryMapper != null) {
             memoryMapper.close();
         }
-        UnSafeUtils.UNSAFE.freeMemory(mapAddress);
     }
 
     public long getMemoryMapSize() {
@@ -133,7 +131,7 @@ public final class DataExchangeQueue implements Closeable {
     }
 
     public synchronized void markFinished() {
-        if (!CLOSED.get()) {
+        if (!closed.get()) {
             UnSafeUtils.UNSAFE.putOrderedLong(null, endPointAddress, -1);
         }
     }
