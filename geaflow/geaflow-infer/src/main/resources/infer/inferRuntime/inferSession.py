@@ -1,3 +1,4 @@
+
 #  Licensed to the Apache Software Foundation (ASF) under one
 #  or more contributor license agreements.  See the NOTICE file
 #  distributed with this work for additional information
@@ -15,6 +16,7 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
+import atexit
 import copy
 import logging
 import os
@@ -56,27 +58,28 @@ class TorchInferSession(object):
             options.get("model_version_file") or os.path.join(model_root, "model.version")
         )
 
-        self._poll_interval_sec = float(options.get("poll_interval_sec", 1.0))
-        self._backoff_sec = float(options.get("backoff_sec", 10.0))
+        self._poll_interval_sec = max(float(options.get("poll_interval_sec", 1.0)), 0.01)
+        self._backoff_sec = max(float(options.get("backoff_sec", 10.0)), 0.0)
         self._warmup_enabled = bool(options.get("warmup_enabled", True))
         self._hot_reload_enabled = bool(options.get("hot_reload_enabled", True))
 
         self._state_lock = threading.Lock()
-        self._loader_thread = None
+        self._watcher_stop_event = threading.Event()
+        self._watcher_thread = None
         self._loading_version = None
         self._last_failed_version = None
         self._next_retry_ts = 0.0
-        self._next_check_ts = 0.0
-        self._standby_slot = None
+        self._closed = False
 
-        init_version = self._read_manifest_version() or "bootstrap"
-        init_slot = self._build_slot(init_version, reuse_template=True)
-        self._active_slot = init_slot
+        init_version = self._read_reload_fingerprint() or "bootstrap"
+        self.model_active = self._build_slot(init_version, reuse_template=True)
+        self.model_standby = self._build_slot(init_version)
 
         self._logger.info(
-            "infer hot reload initialized active_version=%s model_path=%s version_file=%s "
+            "infer hot reload initialized active_version=%s standby_version=%s model_path=%s version_file=%s "
             "poll_interval_sec=%.3f backoff_sec=%.3f warmup_enabled=%s hot_reload_enabled=%s",
-            init_slot.version,
+            self.model_active.version,
+            self.model_standby.version if self.model_standby is not None else None,
             self._model_path,
             self._version_file,
             self._poll_interval_sec,
@@ -84,70 +87,103 @@ class TorchInferSession(object):
             self._warmup_enabled,
             self._hot_reload_enabled,
         )
+        if self._hot_reload_enabled:
+            self._watcher_thread = threading.Thread(
+                target=self._watch_reload_loop,
+                name="infer-hot-reload-watcher",
+                daemon=True,
+            )
+            self._watcher_thread.start()
+        atexit.register(self.close)
 
     def run(self, *inputs):
-        self.maybe_reload()
+        self._ensure_open()
         active_slot = self._get_active_slot()
         return self._run_with_slot(active_slot, *inputs)
 
+    def close(self):
+        with self._state_lock:
+            if self._closed:
+                return
+            self._closed = True
+            self._watcher_stop_event.set()
+            watcher_thread = self._watcher_thread
+        if watcher_thread is not None and watcher_thread.is_alive() and watcher_thread is not threading.current_thread():
+            watcher_thread.join(timeout=1.0)
+        with self._state_lock:
+            self._watcher_thread = None
+            self._loading_version = None
+            self._last_failed_version = None
+            self._next_retry_ts = 0.0
+            self.model_standby = None
+            self.model_active = None
+
+    def _ensure_open(self):
+        with self._state_lock:
+            if self._closed:
+                raise RuntimeError("infer session already closed")
+
+    def _watch_reload_loop(self):
+        while not self._watcher_stop_event.wait(self._poll_interval_sec):
+            try:
+                self.maybe_reload()
+            except Exception:
+                self._logger.exception("infer hot reload watcher loop failed")
+
     def maybe_reload(self):
-        if not self._hot_reload_enabled:
+        if not self._hot_reload_enabled or self._closed:
             return
 
         now = time.monotonic()
-        if now < self._next_check_ts:
+        candidate_version = self._read_reload_fingerprint()
+        if not candidate_version:
             return
 
         with self._state_lock:
-            now = time.monotonic()
-            if now < self._next_check_ts:
+            if self._closed:
                 return
-            self._next_check_ts = now + self._poll_interval_sec
-
-            active_version = self._active_slot.version
-            candidate_version = self._read_manifest_version()
-            if not candidate_version or candidate_version == active_version:
+            if self._loading_version is not None:
                 return
-            if self._loading_version == candidate_version:
+            active_slot = self.model_active
+            standby_slot = self.model_standby
+            active_version = active_slot.version if active_slot is not None else None
+            standby_version = standby_slot.version if standby_slot is not None else None
+            if active_slot is None or standby_slot is None:
                 return
-
+            if candidate_version == active_version:
+                return
             if self._last_failed_version == candidate_version and now < self._next_retry_ts:
                 return
-
-            if self._loader_thread is not None and self._loader_thread.is_alive():
-                return
-
             self._loading_version = candidate_version
-            self._loader_thread = threading.Thread(
-                target=self._load_and_swap,
-                args=(candidate_version,),
-                name="infer-hot-reload",
-                daemon=True,
-            )
-            self._loader_thread.start()
             self._logger.info(
-                "infer hot reload scheduled candidate_version=%s active_version=%s",
+                "infer hot reload loading standby candidate_version=%s active_version=%s standby_version=%s",
                 candidate_version,
                 active_version,
+                standby_version,
             )
+
+        self._load_and_swap(candidate_version, active_slot, standby_slot)
 
     def _get_active_slot(self):
         with self._state_lock:
-            return self._active_slot
+            return self.model_active
 
-    def _load_and_swap(self, candidate_version):
+    def _load_and_swap(self, candidate_version, active_slot, standby_slot):
         start_ts = time.monotonic()
         warmup_ms = 0
         try:
-            standby_slot = self._build_slot(candidate_version)
+            self._load_slot(standby_slot)
             load_done_ts = time.monotonic()
             warmup_ms = self._warmup_slot(standby_slot)
 
             with self._state_lock:
-                old_version = self._active_slot.version
-                self._standby_slot = standby_slot
-                self._active_slot = standby_slot
-                self._standby_slot = None
+                if self._closed:
+                    self._loading_version = None
+                    return
+                old_version = active_slot.version if active_slot is not None else None
+                standby_slot.version = candidate_version
+                self.model_active = standby_slot
+                self.model_standby = active_slot
                 self._loading_version = None
                 self._last_failed_version = None
                 self._next_retry_ts = 0.0
@@ -164,11 +200,10 @@ class TorchInferSession(object):
         except Exception:
             fail_ts = time.monotonic()
             with self._state_lock:
-                self._standby_slot = None
                 self._loading_version = None
                 self._last_failed_version = candidate_version
                 self._next_retry_ts = fail_ts + self._backoff_sec
-                active_version = self._active_slot.version
+                active_version = self.model_active.version if self.model_active is not None else None
 
             self._logger.exception(
                 "infer hot reload failed switch_success=false candidate_version=%s active_version=%s "
@@ -183,6 +218,9 @@ class TorchInferSession(object):
         transform = self._build_transform(reuse_template)
         model = self._load_model(transform)
         return _ModelSlot(transform=transform, model=model, version=version)
+
+    def _load_slot(self, slot):
+        slot.model = self._load_model(slot.transform)
 
     def _build_transform(self, reuse_template):
         if reuse_template:
@@ -210,7 +248,7 @@ class TorchInferSession(object):
 
         warmup_inputs = self._get_warmup_inputs(slot.transform)
         if warmup_inputs is None:
-            return 0
+            raise RuntimeError("infer hot reload warmup inputs missing")
 
         start_ts = time.monotonic()
         self._run_with_slot(slot, *warmup_inputs)
@@ -254,6 +292,31 @@ class TorchInferSession(object):
         if isinstance(model_inputs, list):
             return model(*model_inputs)
         return model(model_inputs)
+
+    def _read_reload_fingerprint(self):
+        model_signature = self._file_signature(self._model_path)
+        version_signature = self._file_signature(self._version_file)
+        if model_signature is None and version_signature is None:
+            return None
+
+        fingerprint_parts = [
+            "model={}".format(model_signature or "missing"),
+            "manifest={}".format(version_signature or "missing"),
+        ]
+        manifest_version = self._read_manifest_version()
+        if manifest_version:
+            fingerprint_parts.append("token={}".format(manifest_version))
+        return "|".join(fingerprint_parts)
+
+    def _file_signature(self, path):
+        try:
+            stat_result = os.stat(path)
+        except FileNotFoundError:
+            return None
+        except Exception:
+            self._logger.exception("infer hot reload stat failed path=%s", path)
+            return None
+        return "{}:{}".format(int(stat_result.st_mtime_ns), stat_result.st_size)
 
     def _read_manifest_version(self):
         try:
