@@ -24,3 +24,9 @@
 *.gif binary
 *.ico binary
 *.svg binary
+
+# Excluded from `git archive` (source release tarball).
+# geaflow-kubernetes-operator follows an independent release cadence
+# and is not part of the main GeaFlow release.
+geaflow-kubernetes-operator export-ignore
+geaflow-kubernetes-operator/** export-ignore
