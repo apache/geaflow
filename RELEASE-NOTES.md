@@ -24,6 +24,18 @@
   driver and add it to the runtime classpath (e.g. drop the jar into
   Spring Boot's `--loader.path` or place it in the operator's `lib/`).
 
+### Build Requirements
+
+- **JDK 8 or JDK 11+** are both supported. The `jdk8` / `jdk11` Maven
+  profiles activate automatically based on the JVM in use.
+- **`geaflow-store-vector`** depends on Apache Lucene 9.x, which requires
+  Java 11+. It is therefore included in the build **only when running on
+  JDK 11+** (via the `jdk11-store-vector` profile in
+  `geaflow/geaflow-plugins/geaflow-store/pom.xml`). Building with JDK 8
+  simply omits this module — no `-pl` exclude flag is required.
+- A standard `mvn clean install -DskipTests` from the source tarball root
+  builds cleanly under both JDK 8 and JDK 11+.
+
 ### Removed from Source Release
 
 - **`data/InferUDF.zip`** has been removed from the source repository because

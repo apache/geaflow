@@ -38,7 +38,11 @@
         <module>geaflow-store-redis</module>
         <module>geaflow-store-jdbc</module>
         <module>geaflow-store-paimon</module>
-        <module>geaflow-store-vector</module>
+        <!--
+          geaflow-store-vector depends on Apache Lucene 9.x which requires
+          Java 11+. It is included only under the jdk11 profile below so
+          that `mvn clean install` works out of the box on JDK 8.
+        -->
     </modules>
 
     <dependencies>
@@ -64,5 +68,17 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
+
+    <profiles>
+        <profile>
+            <id>jdk11-store-vector</id>
+            <activation>
+                <jdk>[11,)</jdk>
+            </activation>
+            <modules>
+                <module>geaflow-store-vector</module>
+            </modules>
+        </profile>
+    </profiles>
 
 </project>
