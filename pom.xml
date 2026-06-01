@@ -494,6 +494,22 @@
                             </execution>
                         </executions>
                     </plugin>
+                    <!-- Nexus staging - holds ONE staging repository for the
+                         entire reactor deploy, preventing Nexus auto-staging
+                         from splitting uploads across multiple staging repos. -->
+                    <plugin>
+                        <groupId>org.sonatype.plugins</groupId>
+                        <artifactId>nexus-staging-maven-plugin</artifactId>
+                        <version>1.7.0</version>
+                        <extensions>true</extensions>
+                        <configuration>
+                            <serverId>apache.releases.https</serverId>
+                            <nexusUrl>https://repository.apache.org/</nexusUrl>
+                            <autoReleaseAfterClose>false</autoReleaseAfterClose>
+                            <stagingDescription>Apache GeaFlow (Incubating) ${project.version}</stagingDescription>
+                            <keepStagingRepositoryOnCloseRuleFailure>true</keepStagingRepositoryOnCloseRuleFailure>
+                        </configuration>
+                    </plugin>
                 </plugins>
             </build>
         </profile>
