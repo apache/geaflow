@@ -1,13 +1,16 @@
 # Apache GeaFlow (Incubating) Release Notes
 
-## 0.8.0 — _planned_
+## 0.8.0
 
-> Release date: TBD
-> Release manager: TBD
+> Release date: 2026-06-02
+> Release manager: Litao Lin (ltlin)
 
 ### Highlights
 
-- _(to be filled in before vote)_
+- **AI & Graph Intelligence**: Added vector store support, Lucene/Embedding-based search operators, graph consolidate algorithm, and CASTS for GeaFlow reasoning ability.
+- **Graph Algorithms**: Added Louvain community detection, label propagation (LPA), connected components (CC), cluster coefficient, and Jaccard similarity algorithms.
+- **ISO-GQL Compliance**: Implemented SAME predicate, PROPERTY_EXISTS predicate, and source/target predicate functions per ISO-GQL specification.
+- **New Connectors**: Added Neo4j and Elasticsearch connectors; ODPS connector now supports dynamic partition writes; Paimon stream source support.
 
 ### Breaking Changes
 
@@ -54,20 +57,72 @@
 
 ### Features
 
-- _(to be filled in)_
+- Support vector store (`geaflow-store-vector`) with Lucene-based indexing (#637)
+- Add Lucene & Embedding-based search operators for lightweight context memory (#716)
+- Add CASTS for GeaFlow reasoning ability (#737)
+- Support graph consolidate algorithm (#729)
+- Support Louvain community detection algorithm (#689)
+- Implement label propagation (LPA) and connected components (CC) algorithms (#670)
+- Support cluster coefficient algorithm (#640)
+- Add Jaccard similarity algorithm (#650)
+- Implement ISO-GQL SAME predicate for element identity comparison (#692)
+- Add ISO-GQL PROPERTY_EXISTS predicate (#702)
+- Implement ISO-GQL source/target predicate functions (#675)
+- Add Neo4j and Elasticsearch connectors (#653)
+- Write data into ODPS with dynamic partition support (#666)
+- Support Paimon stream source (#662)
+- Add MCP (Model Context Protocol) module (`geaflow-mcp`)
+- Add AI module (`geaflow-ai`)
 
 ### Improvements
 
-- _(to be filled in)_
+- Define BYTES_PER_KB constant for consistent byte-to-kilobyte conversions in metrics (#770)
+- Extract varint constants to improve encoder readability (#744)
+- Hard-coded optimization for cluster constants and magic numbers (#674)
+- Use classifier for artifact resolution (#720)
+- Add try-with-resources block around ProcessLoggerManager (#687)
+- Standardize editor configs for cross-platform development (#648)
+- Extract vertex/edge projector rules (#630)
+- Update repository references from tugraph-family to apache (#746)
 
 ### Bug Fixes
 
-- _(to be filled in)_
+- Fix data loss after failover (#633)
+- Add check for empty search results to prevent array out of bounds (#769)
+- Add runtime checks for graph accessors in multiple classes (#774)
+- Exclude lucene-core from elasticsearch client dependency and add specific version (#778)
+- Handle null and empty inputs in average methods (#760)
+- Fix raw type usage: replace Collections.EMPTY_LIST with Collections.emptyList() (#766)
+- Update RocksdbClient to use getDeclaredConstructor for options instantiation (#749)
+- Improve error handling in searchVectorIndex method (#750)
+- Correct typos in log messages and comments (#752)
+- Fix memory management in mmap_ipc.cpp (#725)
 
 ### Dependency Upgrades
 
-- _(to be filled in)_
+- Bump lz4-java from 1.3.0 to 1.10.1 (#714, #715)
+- Bump maven-gpg-plugin to 3.2.7
+- Bump maven-compiler-plugin to 3.11.0
+- Add nexus-staging-maven-plugin 1.7.0
 
 ### Contributors
 
-- _(to be filled in before vote — generate via `git shortlog -sn v0.7.0..v0.8.0`)_
+- Appointat
+- Haodong Tang
+- Jason Yao
+- Leomrlin
+- Loognqiang
+- Qingwen Zhao
+- SeasonPilot
+- Tengting Xu
+- Wang Rui
+- Weichen Zhao
+- accevolve
+- chzhoo
+- hey-money
+- kitalkuyo-gita
+- moses
+- shown
+- vamossagar12
+- yazong
+- 明城
