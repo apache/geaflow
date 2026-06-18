@@ -46,6 +46,8 @@ import org.apache.geaflow.dsl.udf.table.date.UnixTimeStamp;
 import org.apache.geaflow.dsl.udf.table.date.UnixTimeStampMillis;
 import org.apache.geaflow.dsl.udf.table.date.WeekDay;
 import org.apache.geaflow.dsl.udf.table.date.WeekOfYear;
+import org.apache.geaflow.dsl.udf.table.date.Quarter;
+import org.apache.geaflow.dsl.udf.table.date.DayOfYear;
 import org.apache.geaflow.dsl.udf.table.date.Year;
 import org.testng.annotations.Test;
 
@@ -278,6 +280,47 @@ public class UDFDateTest {
         assertNull(test.eval((java.sql.Timestamp) null));
         assertEquals((long) test.eval("1987-06-05"), 23);
         assertEquals((long) test.eval(new java.sql.Timestamp(1667900725)), 4);
+    }
+
+    @Test
+    public void testQuarter() {
+        Quarter test = new Quarter();
+        test.open(null);
+
+        assertEquals((long) test.eval("2023-01-01"), 1); 
+        assertEquals((long) test.eval("2023-12-31 23:59:59"), 4); 
+
+        
+        assertEquals((long) test.eval("1987-06-05 00:11:22"), 2); 
+
+        
+        assertNull(test.eval((String) null));
+        assertNull(test.eval((java.sql.Timestamp) null));
+
+        
+        assertEquals((long) test.eval(new java.sql.Timestamp(1667900725)), 1);
+    }
+
+    @Test
+    public void testDayOfYear() {
+        DayOfYear test = new DayOfYear();
+        test.open(null);
+
+        
+        assertEquals((long) test.eval("2023-01-01"), 1);
+        assertEquals((long) test.eval("2023-12-31"), 365); 
+        assertEquals((long) test.eval("2024-12-31"), 366); 
+
+        
+
+        assertEquals((long) test.eval("1987-06-05 00:11:22"), 156);
+
+        
+        assertNull(test.eval((String) null));
+        assertNull(test.eval((java.sql.Timestamp) null));
+
+        
+        assertEquals((long) test.eval(new java.sql.Timestamp(1667900725)), 20);
     }
 
     @Test

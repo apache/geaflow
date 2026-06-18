@@ -12,6 +12,8 @@ GeaFlow support the following date function:
 * [lastday](#lastday)
 * [day_of_month](#day_of_month)
 * [week_of_year](#week_of_year)
+* [quarter](#quarter)
+* [day_of_year](#day_of_year)
 * [date_add](#date_add)
 * [date_sub](#date_sub)
 * [date_diff](#date_diff)
@@ -205,7 +207,34 @@ Returns the week of the year of the given date. The default format is "yyyy-MM-d
 ```sql
 week_of_year('1987-06-05 00:11:22') = 23
 ```
+## quarter
+**Syntax**
 
+```sql
+int quarter(string dateString)
+```
+
+**Description**
+Returns the quarter of the year of the given date (1-4). The default format is "yyyy-MM-dd" or "yyyy-MM-dd HH:mm:ss". Returns null if the input is null.
+
+**Example**
+```sql
+quarter('1987-06-05 00:11:22') = 2
+```
+## day_of_year
+
+**Syntax**
+
+```sql
+int day_of_year(string dateString)
+```
+**Description**
+Returns the day of the year of the given date (1-366). The default format is "yyyy-MM-dd" or "yyyy-MM-dd HH:mm:ss". Returns null if the input is null.
+
+**Example**
+```sql
+day_of_year('1987-06-05 00:11:22') = 156
+```
 
 ## date_add
 **Syntax**

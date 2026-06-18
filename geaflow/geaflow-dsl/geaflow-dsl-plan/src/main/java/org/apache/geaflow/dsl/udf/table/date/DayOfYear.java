@@ -27,8 +27,8 @@ import org.joda.time.DateTime;
 import org.joda.time.format.DateTimeFormat;
 import org.joda.time.format.DateTimeFormatter;
 
-@Description(name = "week_of_year", description = "Returns the week of the year of the given date.")
-public class WeekOfYear extends UDF {
+@Description(name = "day_of_year", description = "Returns the day of the year of the given date.")
+public class DayOfYear extends UDF {
 
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormat.forPattern("yyyy-MM-dd");
     private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormat.forPattern(
@@ -44,7 +44,7 @@ public class WeekOfYear extends UDF {
             formatter = DATE_FORMATTER;
         }
         try {
-            return formatter.parseDateTime(dateString).getWeekOfWeekyear();
+            return formatter.parseDateTime(dateString).getDayOfYear();
         } catch (Exception e) {
             throw new GeaflowRuntimeException(e);
         }
@@ -54,6 +54,6 @@ public class WeekOfYear extends UDF {
         if (t == null) {
             return null;
         }
-        return dateTime.withMillis(t.getTime()).getWeekOfWeekyear();
+        return dateTime.withMillis(t.getTime()).getDayOfYear();
     }
 }
