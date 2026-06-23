@@ -82,9 +82,11 @@ import org.apache.geaflow.dsl.udf.table.date.UnixTimeStampMillis;
 import org.apache.geaflow.dsl.udf.table.date.WeekDay;
 import org.apache.geaflow.dsl.udf.table.date.WeekOfYear;
 import org.apache.geaflow.dsl.udf.table.date.Year;
+import org.apache.geaflow.dsl.udf.table.math.Cbrt;
 import org.apache.geaflow.dsl.udf.table.math.E;
 import org.apache.geaflow.dsl.udf.table.math.Log2;
 import org.apache.geaflow.dsl.udf.table.math.Round;
+import org.apache.geaflow.dsl.udf.table.math.Trunc;
 import org.apache.geaflow.dsl.udf.table.other.Direction;
 import org.apache.geaflow.dsl.udf.table.other.EdgeSrcId;
 import org.apache.geaflow.dsl.udf.table.other.EdgeTargetId;
@@ -169,9 +171,11 @@ public class BuildInSqlFunctionTable extends ListSqlOperatorTable {
             .add(GeaFlowFunction.of(ArrayUnion.class))
 
             // udf.table.math
+            .add(GeaFlowFunction.of(Cbrt.class))
             .add(GeaFlowFunction.of(E.class))
             .add(GeaFlowFunction.of(Log2.class))
             .add(GeaFlowFunction.of(Round.class))
+            .add(GeaFlowFunction.of(Trunc.class))
 
             // udf.table.string
             .add(GeaFlowFunction.of(Ascii2String.class))
