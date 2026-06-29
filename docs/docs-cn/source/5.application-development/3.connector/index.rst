@@ -17,4 +17,5 @@
    9.pulsar.md
    10.udc.md
    11.doris.md
+   12.clickhouse.md
 
