@@ -1319,6 +1319,26 @@ public final class GeaFlowBuiltinFunctions {
         }
     }
 
+    public static Double cbrt(Double a) {
+        if (a == null) {
+            return null;
+        }
+        return Math.cbrt(a);
+    }
+
+    public static Double trunc(Double a, Integer n) {
+        if (a == null || n == null) {
+            return null;
+        }
+
+        if (Double.isNaN(a) || Double.isInfinite(a)) {
+            return a;
+        } else {
+            return BigDecimal.valueOf(a).setScale(n, RoundingMode.DOWN)
+                .doubleValue();
+        }
+    }
+
     public static Boolean equal(Long a, Long b) {
         if (a == null || b == null) {
             return null;
