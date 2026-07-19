@@ -68,6 +68,7 @@ import org.apache.geaflow.dsl.udf.table.date.DateSub;
 import org.apache.geaflow.dsl.udf.table.date.DateTrunc;
 import org.apache.geaflow.dsl.udf.table.date.Day;
 import org.apache.geaflow.dsl.udf.table.date.DayOfMonth;
+import org.apache.geaflow.dsl.udf.table.date.DayOfYear;
 import org.apache.geaflow.dsl.udf.table.date.FromUnixTime;
 import org.apache.geaflow.dsl.udf.table.date.FromUnixTimeMillis;
 import org.apache.geaflow.dsl.udf.table.date.Hour;
@@ -76,6 +77,7 @@ import org.apache.geaflow.dsl.udf.table.date.LastDay;
 import org.apache.geaflow.dsl.udf.table.date.Minute;
 import org.apache.geaflow.dsl.udf.table.date.Month;
 import org.apache.geaflow.dsl.udf.table.date.Now;
+import org.apache.geaflow.dsl.udf.table.date.Quarter;
 import org.apache.geaflow.dsl.udf.table.date.Second;
 import org.apache.geaflow.dsl.udf.table.date.UnixTimeStamp;
 import org.apache.geaflow.dsl.udf.table.date.UnixTimeStampMillis;
@@ -150,6 +152,7 @@ public class BuildInSqlFunctionTable extends ListSqlOperatorTable {
             .add(GeaFlowFunction.of(DateTrunc.class))
             .add(GeaFlowFunction.of(Day.class))
             .add(GeaFlowFunction.of(DayOfMonth.class))
+            .add(GeaFlowFunction.of(DayOfYear.class))
             .add(GeaFlowFunction.of(FromUnixTime.class))
             .add(GeaFlowFunction.of(FromUnixTimeMillis.class))
             .add(GeaFlowFunction.of(Hour.class))
@@ -158,6 +161,7 @@ public class BuildInSqlFunctionTable extends ListSqlOperatorTable {
             .add(GeaFlowFunction.of(Minute.class))
             .add(GeaFlowFunction.of(Month.class))
             .add(GeaFlowFunction.of(Now.class))
+            .add(GeaFlowFunction.of(Quarter.class))
             .add(GeaFlowFunction.of(Second.class))
             .add(GeaFlowFunction.of(UnixTimeStamp.class))
             .add(GeaFlowFunction.of(UnixTimeStampMillis.class))
