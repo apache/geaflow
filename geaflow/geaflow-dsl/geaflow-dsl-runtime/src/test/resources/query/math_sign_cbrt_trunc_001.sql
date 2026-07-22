@@ -22,9 +22,15 @@
 -- registration in BuildInSqlFunctionTable, overload resolution, type
 -- inference, and runtime invocation through the query engine.
 --
--- Each function's overloads return distinct types (Double / Long /
--- Integer), so leaving the columns un-cast verifies that type
--- inference propagates the correct return type to the sink schema.
+-- Type-inference behaviour captured by the expected output:
+--   * sign(double)  -> Double  (sign_d column)
+--   * sign(bigint)  -> Double  (sign_l column) - bigint is promoted to
+--     double and matches sign(Double); the Long overload is not selected
+--   * sign(int)     -> Double  (sign_i column) - same promotion
+--   * trunc(bigint) -> Long    (trunc_l column) - Long overload selected
+--   * trunc(int)    -> Integer (trunc_i column) - Integer overload selected
+-- This difference between sign() and trunc() is the real Calcite overload
+-- resolution behaviour, which only an end-to-end SQL test can surface.
 
 set geaflow.dsl.column.separator = '|';
 
@@ -53,7 +59,13 @@ CREATE TABLE tbl_result (
     trunc_i int
 ) WITH (
     type='file',
-    geaflow.dsl.file.path='${target}'
+    -- Use a relative forward-slash path instead of the ${target} placeholder.
+    -- QueryTester rewrites ${target} to an absolute path that on Windows
+    -- contains backslashes; injected into a SQL string literal those
+    -- backslashes get escaped (\t -> tab, \U/\s/\g dropped) and the sink
+    -- path is corrupted. A relative path avoids the rewrite entirely and
+    -- resolves to the same target/ directory checkSinkResult() reads.
+    geaflow.dsl.file.path='target/math_sign_cbrt_trunc_001'
 );
 
 INSERT INTO tbl_result
