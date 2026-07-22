@@ -79,7 +79,9 @@ public class DorisConnectorIntegrationTest {
         if (externalFe != null && externalJdbc != null) {
             feNodes = externalFe;
             jdbcUrl = externalJdbc;
-        } else {
+        } else if (Boolean.getBoolean("doris.it.enabled")) {
+            // The container is heavy (multi-GB image) and needs host networking so the FE-to-BE
+            // Stream Load redirect is reachable, so it is opt-in and never runs in a normal CI.
             if (!DockerClientFactory.instance().isDockerAvailable()) {
                 throw new SkipException("Docker is not available, skip Doris integration test.");
             }
@@ -94,6 +96,10 @@ public class DorisConnectorIntegrationTest {
             dorisContainer.start();
             feNodes = "127.0.0.1:8030";
             jdbcUrl = "jdbc:mysql://127.0.0.1:9030/";
+        } else {
+            throw new SkipException("Doris integration test is disabled by default. Enable it with "
+                + "-Ddoris.it.enabled=true (requires Docker on a Linux host), or point it at an "
+                + "external Doris with -Ddoris.it.fenodes and -Ddoris.it.jdbcUrl.");
         }
         waitForBackendAlive();
         prepareSchema();
