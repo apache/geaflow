@@ -49,6 +49,7 @@
         <module>geaflow-dsl-connector-paimon</module>
         <module>geaflow-dsl-connector-neo4j</module>
         <module>geaflow-dsl-connector-elasticsearch</module>
+        <module>geaflow-dsl-connector-doris</module>
     </modules>
 
     <dependencyManagement>
