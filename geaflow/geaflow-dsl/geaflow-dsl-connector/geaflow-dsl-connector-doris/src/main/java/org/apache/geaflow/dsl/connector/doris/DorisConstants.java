@@ -29,8 +29,6 @@ public class DorisConstants {
 
     public static final String COMMA = ",";
 
-    public static final String COLON = ":";
-
     public static final String HTTP_SCHEME = "http://";
 
     /**

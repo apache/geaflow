@@ -58,11 +58,17 @@
             <version>${doris.httpclient.version}</version>
         </dependency>
 
-        <!-- Doris speaks the MySQL protocol, the source reads data through it. -->
+        <!--
+          Doris speaks the MySQL protocol and the source reads through it, but the source only
+          uses the standard java.sql API and loads the driver by name, so the GPL-licensed MySQL
+          driver is NOT bundled (test scope only, like geaflow-dsl-connector-jdbc). Users must
+          provide a MySQL-protocol driver on the runtime classpath to use the source.
+        -->
         <dependency>
             <groupId>mysql</groupId>
             <artifactId>mysql-connector-java</artifactId>
             <version>${mysql.version}</version>
+            <scope>test</scope>
         </dependency>
 
         <dependency>
