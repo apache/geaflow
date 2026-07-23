@@ -88,10 +88,9 @@ public class DorisTableSource implements TableSource {
         this.password = conf.getString(DorisConfigKeys.GEAFLOW_DSL_DORIS_PASSWORD);
         this.database = conf.getString(DorisConfigKeys.GEAFLOW_DSL_DORIS_DATABASE, "");
         this.table = conf.getString(DorisConfigKeys.GEAFLOW_DSL_DORIS_TABLE);
-        this.partitionNum = conf.getLong(DorisConfigKeys.GEAFLOW_DSL_DORIS_SOURCE_PARTITION_NUM);
-        if (partitionNum <= 0) {
-            throw new GeaFlowDSLException("Invalid doris source partition number: {}", partitionNum);
-        }
+        // Clamp the partition number to at least 1 instead of failing on non-positive values.
+        this.partitionNum = Math.max(1L,
+            conf.getLong(DorisConfigKeys.GEAFLOW_DSL_DORIS_SOURCE_PARTITION_NUM));
         this.partitionColumn = conf.getString(DorisConfigKeys.GEAFLOW_DSL_DORIS_SOURCE_PARTITION_COLUMN);
         this.lowerBound = conf.getLong(DorisConfigKeys.GEAFLOW_DSL_DORIS_SOURCE_PARTITION_LOWERBOUND);
         this.upperBound = conf.getLong(DorisConfigKeys.GEAFLOW_DSL_DORIS_SOURCE_PARTITION_UPPERBOUND);

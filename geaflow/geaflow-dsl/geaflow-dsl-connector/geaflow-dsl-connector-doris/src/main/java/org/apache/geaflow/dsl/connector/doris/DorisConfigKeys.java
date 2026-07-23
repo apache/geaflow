@@ -28,7 +28,8 @@ public class DorisConfigKeys {
         .key("geaflow.dsl.doris.fenodes")
         .noDefaultValue()
         .description("The Doris FE http address list (host:httpPort), comma separated. "
-            + "Used by the sink for Stream Load.");
+            + "Used by the sink for Stream Load. When multiple FEs are given the sink fails over "
+            + "to the next FE on a failed request.");
 
     public static final ConfigKey GEAFLOW_DSL_DORIS_JDBC_URL = ConfigKeys
         .key("geaflow.dsl.doris.jdbc.url")
@@ -58,8 +59,10 @@ public class DorisConfigKeys {
 
     public static final ConfigKey GEAFLOW_DSL_DORIS_SINK_FORMAT = ConfigKeys
         .key("geaflow.dsl.doris.sink.format")
-        .defaultValue("csv")
-        .description("The Stream Load payload format, csv or json. Default csv.");
+        .defaultValue("json")
+        .description("The Stream Load payload format, csv or json. Default json, which safely "
+            + "handles newlines, quotes, backslashes and unicode. Csv is a plain separator split "
+            + "without quoting and should only be used when values cannot contain the separators.");
 
     public static final ConfigKey GEAFLOW_DSL_DORIS_SINK_COLUMN_SEPARATOR = ConfigKeys
         .key("geaflow.dsl.doris.sink.column.separator")

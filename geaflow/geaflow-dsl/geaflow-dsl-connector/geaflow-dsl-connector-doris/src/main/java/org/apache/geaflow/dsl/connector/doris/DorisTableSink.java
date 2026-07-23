@@ -45,7 +45,7 @@ public class DorisTableSink implements TableSink {
     private static final Logger LOGGER = LoggerFactory.getLogger(DorisTableSink.class);
 
     private StructType schema;
-    private String feNode;
+    private String feNodes;
     private String database;
     private String table;
     private String username;
@@ -67,11 +67,11 @@ public class DorisTableSink implements TableSink {
     public void init(Configuration conf, StructType tableSchema) {
         LOGGER.info("init doris sink with config: {}, \n schema: {}", conf, tableSchema);
         this.schema = tableSchema;
-        String feNodes = conf.getString(DorisConfigKeys.GEAFLOW_DSL_DORIS_FENODES, "");
-        if (feNodes == null || feNodes.trim().isEmpty()) {
+        String feNodesConf = conf.getString(DorisConfigKeys.GEAFLOW_DSL_DORIS_FENODES, "");
+        if (feNodesConf == null || feNodesConf.trim().isEmpty()) {
             throw new GeaFlowDSLException("Doris fenodes must be specified for the sink.");
         }
-        this.feNode = feNodes.split(DorisConstants.COMMA)[0].trim();
+        this.feNodes = feNodesConf;
         this.database = conf.getString(DorisConfigKeys.GEAFLOW_DSL_DORIS_DATABASE);
         this.table = conf.getString(DorisConfigKeys.GEAFLOW_DSL_DORIS_TABLE);
         this.username = conf.getString(DorisConfigKeys.GEAFLOW_DSL_DORIS_USERNAME);
@@ -92,8 +92,15 @@ public class DorisTableSink implements TableSink {
         for (TableField field : schema.getFields()) {
             columns.add(field.getName());
         }
-        this.streamLoad = new DorisStreamLoad(feNode, database, table, username, password, format,
-            columnSeparator, lineDelimiter, columns, connectTimeoutMs, readTimeoutMs, maxRetries);
+        List<String> feNodeList = new ArrayList<>();
+        for (String node : feNodes.split(DorisConstants.COMMA)) {
+            if (!node.trim().isEmpty()) {
+                feNodeList.add(node.trim());
+            }
+        }
+        this.streamLoad = new DorisStreamLoad(feNodeList, database, table, username, password,
+            format, columnSeparator, lineDelimiter, columns, connectTimeoutMs, readTimeoutMs,
+            maxRetries);
         this.buffer = new ArrayList<>();
         this.bufferBytes = 0L;
     }
@@ -119,6 +126,9 @@ public class DorisTableSink implements TableSink {
         if (buffer == null || buffer.isEmpty()) {
             return;
         }
+        if (streamLoad == null) {
+            throw new GeaFlowDSLException("doris stream load client is not initialized.");
+        }
         String payload;
         if (DorisConstants.FORMAT_JSON.equalsIgnoreCase(format)) {
             payload = "[" + String.join(DorisConstants.COMMA, buffer) + "]";
@@ -134,13 +144,19 @@ public class DorisTableSink implements TableSink {
 
     @Override
     public void close() {
+        // Flush any remaining buffered rows before closing, and stay safe against multiple
+        // invocations: once flushed the buffer is empty and the client is nulled out.
         try {
-            if (streamLoad != null) {
-                streamLoad.close();
-                streamLoad = null;
+            flushBuffer();
+        } finally {
+            try {
+                if (streamLoad != null) {
+                    streamLoad.close();
+                    streamLoad = null;
+                }
+            } catch (IOException e) {
+                throw new GeaFlowDSLException("failed to close doris stream load client.", e);
             }
-        } catch (IOException e) {
-            throw new GeaFlowDSLException("failed to close doris stream load client.", e);
         }
     }
 }

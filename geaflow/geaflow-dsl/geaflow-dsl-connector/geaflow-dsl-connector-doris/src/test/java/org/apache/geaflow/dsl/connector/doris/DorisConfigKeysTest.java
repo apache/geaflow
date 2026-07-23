@@ -32,7 +32,7 @@ public class DorisConfigKeysTest {
         Assert.assertEquals(conf.getLong(DorisConfigKeys.GEAFLOW_DSL_DORIS_SINK_MAX_BYTES),
             10485760L);
         Assert.assertEquals(conf.getInteger(DorisConfigKeys.GEAFLOW_DSL_DORIS_SINK_MAX_RETRIES), 3);
-        Assert.assertEquals(conf.getString(DorisConfigKeys.GEAFLOW_DSL_DORIS_SINK_FORMAT), "csv");
+        Assert.assertEquals(conf.getString(DorisConfigKeys.GEAFLOW_DSL_DORIS_SINK_FORMAT), "json");
         Assert.assertEquals(conf.getString(DorisConfigKeys.GEAFLOW_DSL_DORIS_USERNAME), "root");
     }
 

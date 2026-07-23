@@ -24,6 +24,7 @@ import com.google.gson.JsonObject;
 import java.io.Closeable;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.UUID;
@@ -50,7 +51,7 @@ public class DorisStreamLoad implements Closeable {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(DorisStreamLoad.class);
 
-    private final String loadUrl;
+    private final List<String> loadUrls;
     private final String authHeader;
     private final String format;
     private final String columnSeparator;
@@ -60,19 +61,30 @@ public class DorisStreamLoad implements Closeable {
     private final CloseableHttpClient httpClient;
     private final Gson gson = new Gson();
 
-    public DorisStreamLoad(String feNode, String database, String table, String username,
+    public DorisStreamLoad(List<String> feNodes, String database, String table, String username,
                            String password, String format, String columnSeparator,
                            String lineDelimiter, List<String> columns, int connectTimeoutMs,
                            int readTimeoutMs, int maxRetries) {
-        this.loadUrl = String.format(DorisConstants.STREAM_LOAD_URL_PATTERN,
-            normalizeFeNode(feNode), database, table);
+        this.loadUrls = new ArrayList<>();
+        if (feNodes != null) {
+            for (String feNode : feNodes) {
+                if (feNode != null && !feNode.trim().isEmpty()) {
+                    this.loadUrls.add(String.format(DorisConstants.STREAM_LOAD_URL_PATTERN,
+                        normalizeFeNode(feNode), database, table));
+                }
+            }
+        }
+        if (this.loadUrls.isEmpty()) {
+            throw new GeaFlowDSLException("Doris fenodes must not be empty.");
+        }
         this.authHeader = "Basic " + Base64.getEncoder().encodeToString(
             (username + ":" + password).getBytes(StandardCharsets.UTF_8));
         this.format = format;
         this.columnSeparator = columnSeparator;
         this.lineDelimiter = lineDelimiter;
         this.columns = String.join(DorisConstants.COMMA, columns);
-        this.maxRetries = Math.max(1, maxRetries);
+        // Retry at least once per FE so a single FE failure can fail over to another FE.
+        this.maxRetries = Math.max(Math.max(1, maxRetries), this.loadUrls.size());
         RequestConfig requestConfig = RequestConfig.custom()
             .setConnectTimeout(connectTimeoutMs)
             .setSocketTimeout(readTimeoutMs)
@@ -105,21 +117,23 @@ public class DorisStreamLoad implements Closeable {
      */
     public void load(byte[] payload) {
         Exception lastError = null;
-        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+        for (int attempt = 0; attempt < maxRetries; attempt++) {
+            // Rotate over the FE list so a failed request fails over to the next FE.
+            String url = loadUrls.get(attempt % loadUrls.size());
             try {
-                doLoad(payload);
+                doLoad(url, payload);
                 return;
             } catch (Exception e) {
                 lastError = e;
-                LOGGER.warn("Stream Load attempt {}/{} failed: {}", attempt, maxRetries,
-                    e.getMessage());
+                LOGGER.warn("Stream Load attempt {}/{} to {} failed: {}", attempt + 1, maxRetries,
+                    url, e.getMessage());
             }
         }
         throw new GeaFlowDSLException("Doris Stream Load failed after " + maxRetries
             + " attempts.", lastError);
     }
 
-    private void doLoad(byte[] payload) throws IOException {
+    private void doLoad(String loadUrl, byte[] payload) throws IOException {
         HttpPut put = new HttpPut(loadUrl);
         put.setHeader(HttpHeaders.EXPECT, "100-continue");
         put.setHeader(HttpHeaders.AUTHORIZATION, authHeader);
@@ -169,7 +183,11 @@ public class DorisStreamLoad implements Closeable {
     }
 
     public String getLoadUrl() {
-        return loadUrl;
+        return loadUrls.get(0);
+    }
+
+    public List<String> getLoadUrls() {
+        return loadUrls;
     }
 
     @Override

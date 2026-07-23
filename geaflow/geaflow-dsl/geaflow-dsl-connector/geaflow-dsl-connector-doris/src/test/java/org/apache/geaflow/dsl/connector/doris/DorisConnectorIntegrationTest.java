@@ -31,6 +31,7 @@ import org.apache.geaflow.common.config.Configuration;
 import org.apache.geaflow.common.type.Types;
 import org.apache.geaflow.dsl.common.data.Row;
 import org.apache.geaflow.dsl.common.data.impl.ObjectRow;
+import org.apache.geaflow.dsl.common.exception.GeaFlowDSLException;
 import org.apache.geaflow.dsl.common.types.StructType;
 import org.apache.geaflow.dsl.common.types.TableField;
 import org.apache.geaflow.dsl.common.types.TableSchema;
@@ -262,5 +263,80 @@ public class DorisConnectorIntegrationTest {
             rowCount * 1000L / Math.max(1, jdbcCost));
         Assert.assertTrue(streamLoadCost < jdbcCost,
             "Stream Load should be faster than row-by-row JDBC insert.");
+    }
+
+    @Test(expectedExceptions = GeaFlowDSLException.class)
+    public void testTableNotFound() throws Exception {
+        Configuration conf = sinkConfig();
+        conf.put(DorisConfigKeys.GEAFLOW_DSL_DORIS_TABLE, "no_such_table");
+        DorisTableSink sink = new DorisTableSink();
+        sink.init(conf, schema());
+        sink.open(null);
+        sink.write(ObjectRow.create(1L, "a", 1));
+        sink.finish();
+    }
+
+    @Test
+    public void testFeFailover() throws Exception {
+        truncate();
+        // Put an unreachable FE first, the sink must fail over to the real FE and still succeed.
+        Configuration conf = sinkConfig();
+        conf.put(DorisConfigKeys.GEAFLOW_DSL_DORIS_FENODES, "127.0.0.1:1," + feNodes);
+        DorisTableSink sink = new DorisTableSink();
+        sink.init(conf, schema());
+        sink.open(null);
+        for (int i = 0; i < 100; i++) {
+            sink.write(ObjectRow.create((long) i, "name_" + i, i));
+        }
+        sink.finish();
+        sink.close();
+        Assert.assertEquals(countRows(), 100);
+    }
+
+    @Test
+    public void testDataTypeFidelity() throws Exception {
+        String typesTable = "types_table";
+        try (Connection connection = newConnection(jdbcUrl);
+             Statement statement = connection.createStatement()) {
+            statement.execute("DROP TABLE IF EXISTS " + DATABASE + "." + typesTable);
+            statement.execute("CREATE TABLE " + DATABASE + "." + typesTable + " ("
+                + "id BIGINT, c_int INT, c_double DOUBLE, c_varchar VARCHAR(256)) "
+                + "UNIQUE KEY(id) DISTRIBUTED BY HASH(id) BUCKETS 1 "
+                + "PROPERTIES(\"replication_num\" = \"1\")");
+        }
+        StructType typesSchema = new StructType(
+            new TableField("id", Types.LONG, false),
+            new TableField("c_int", Types.INTEGER, true),
+            new TableField("c_double", Types.DOUBLE, true),
+            new TableField("c_varchar", Types.BINARY_STRING, true));
+
+        Configuration conf = sinkConfig();
+        conf.put(DorisConfigKeys.GEAFLOW_DSL_DORIS_TABLE, typesTable);
+        String tricky = "a\nb\tc\"d\\e\u4e2d\u6587\ud83d\ude00";
+        DorisTableSink sink = new DorisTableSink();
+        sink.init(conf, typesSchema);
+        sink.open(null);
+        sink.write(ObjectRow.create(1L, 10, 1.5, tricky));
+        sink.write(ObjectRow.create(2L, null, null, null));
+        sink.finish();
+        sink.close();
+
+        try (Connection connection = newConnection(jdbcUrl);
+             Statement statement = connection.createStatement();
+             ResultSet rs = statement.executeQuery("SELECT id, c_int, c_double, c_varchar FROM "
+                 + DATABASE + "." + typesTable + " ORDER BY id")) {
+            Assert.assertTrue(rs.next());
+            Assert.assertEquals(rs.getLong("id"), 1L);
+            Assert.assertEquals(rs.getInt("c_int"), 10);
+            Assert.assertEquals(rs.getDouble("c_double"), 1.5);
+            Assert.assertEquals(rs.getString("c_varchar"), tricky);
+            Assert.assertTrue(rs.next());
+            Assert.assertEquals(rs.getLong("id"), 2L);
+            rs.getObject("c_int");
+            Assert.assertTrue(rs.wasNull(), "c_int should round-trip as NULL");
+            rs.getString("c_varchar");
+            Assert.assertTrue(rs.wasNull(), "c_varchar should round-trip as NULL");
+            Assert.assertFalse(rs.next());
+        }
     }
 }

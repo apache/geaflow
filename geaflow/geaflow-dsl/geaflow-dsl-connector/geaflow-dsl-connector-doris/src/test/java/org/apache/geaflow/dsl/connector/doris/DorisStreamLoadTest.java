@@ -21,19 +21,21 @@ package org.apache.geaflow.dsl.connector.doris;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
+import org.apache.geaflow.dsl.common.exception.GeaFlowDSLException;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 
 public class DorisStreamLoadTest {
 
-    private DorisStreamLoad newClient(String feNode) {
-        return new DorisStreamLoad(feNode, "test_db", "test_table", "root", "",
+    private DorisStreamLoad newClient(java.util.List<String> feNodes) {
+        return new DorisStreamLoad(feNodes, "test_db", "test_table", "root", "",
             DorisConstants.FORMAT_CSV, "\t", "\n", Arrays.asList("id", "name"), 1000, 1000, 3);
     }
 
     @Test
     public void testLoadUrlWithHostPort() throws IOException {
-        try (DorisStreamLoad client = newClient("127.0.0.1:8030")) {
+        try (DorisStreamLoad client = newClient(Collections.singletonList("127.0.0.1:8030"))) {
             Assert.assertEquals(client.getLoadUrl(),
                 "http://127.0.0.1:8030/api/test_db/test_table/_stream_load");
         }
@@ -41,9 +43,26 @@ public class DorisStreamLoadTest {
 
     @Test
     public void testLoadUrlWithScheme() throws IOException {
-        try (DorisStreamLoad client = newClient("http://doris-fe:8030")) {
+        try (DorisStreamLoad client = newClient(Collections.singletonList("http://doris-fe:8030"))) {
             Assert.assertEquals(client.getLoadUrl(),
                 "http://doris-fe:8030/api/test_db/test_table/_stream_load");
+        }
+    }
+
+    @Test
+    public void testMultipleFeNodesForFailover() throws IOException {
+        try (DorisStreamLoad client =
+                 newClient(Arrays.asList("fe1:8030", "fe2:8030", "fe3:8030"))) {
+            Assert.assertEquals(client.getLoadUrls().size(), 3);
+            Assert.assertEquals(client.getLoadUrls().get(1),
+                "http://fe2:8030/api/test_db/test_table/_stream_load");
+        }
+    }
+
+    @Test(expectedExceptions = GeaFlowDSLException.class)
+    public void testEmptyFeNodesThrows() throws IOException {
+        try (DorisStreamLoad client = newClient(Collections.emptyList())) {
+            Assert.fail("should have thrown for empty fenodes");
         }
     }
 }
