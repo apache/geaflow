@@ -43,4 +43,17 @@ public class DorisConstants {
     public static final String STREAM_LOAD_SUCCESS = "Success";
 
     public static final String STREAM_LOAD_PUBLISH_TIMEOUT = "Publish Timeout";
+
+    /**
+     * Returned when a load with the same label was already accepted. Because a batch reuses one
+     * label across all its retries, seeing this on a retry means our own earlier attempt already
+     * succeeded, so it is treated as success to keep retries idempotent.
+     */
+    public static final String STREAM_LOAD_LABEL_ALREADY_EXISTS = "Label Already Exists";
+
+    public static final String SEMICOLON = ";";
+
+    public static final String PARTITION_MODE_RANGE = "range";
+
+    public static final String PARTITION_MODE_CUSTOM = "custom";
 }

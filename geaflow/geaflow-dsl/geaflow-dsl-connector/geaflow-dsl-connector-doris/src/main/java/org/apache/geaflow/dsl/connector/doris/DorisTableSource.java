@@ -53,8 +53,11 @@ import org.slf4j.LoggerFactory;
 
 /**
  * A Doris table source that reads data through the MySQL protocol exposed by the Doris FE. The
- * data set can be split into several partitions on a numeric column so that partitions are read
- * in parallel by different tasks.
+ * data set is split into several partitions read in parallel by different tasks. Two partitioning
+ * strategies are supported: 'range' splits an evenly-distributed numeric column into ranges, and
+ * 'custom' uses user-provided WHERE predicates for non-numeric/skewed columns or arbitrary
+ * conditions. For 'range' the partition column should be indexed and evenly distributed, otherwise
+ * partitioning may cause full scans or hotspots.
  */
 public class DorisTableSource implements TableSource {
 
@@ -72,6 +75,8 @@ public class DorisTableSource implements TableSource {
     private String partitionColumn;
     private long lowerBound;
     private long upperBound;
+    private String partitionMode;
+    private String partitionClauses;
 
     private Map<Partition, Connection> partitionConnectionMap = new HashMap<>();
     private Map<Partition, Statement> partitionStatementMap = new HashMap<>();
@@ -94,7 +99,11 @@ public class DorisTableSource implements TableSource {
         this.partitionColumn = conf.getString(DorisConfigKeys.GEAFLOW_DSL_DORIS_SOURCE_PARTITION_COLUMN);
         this.lowerBound = conf.getLong(DorisConfigKeys.GEAFLOW_DSL_DORIS_SOURCE_PARTITION_LOWERBOUND);
         this.upperBound = conf.getLong(DorisConfigKeys.GEAFLOW_DSL_DORIS_SOURCE_PARTITION_UPPERBOUND);
-        if (partitionNum > 1 && lowerBound >= upperBound) {
+        this.partitionMode = conf.getString(DorisConfigKeys.GEAFLOW_DSL_DORIS_SOURCE_PARTITION_MODE);
+        this.partitionClauses = conf.getString(
+            DorisConfigKeys.GEAFLOW_DSL_DORIS_SOURCE_PARTITION_CLAUSES, "");
+        if (DorisConstants.PARTITION_MODE_RANGE.equalsIgnoreCase(partitionMode)
+            && partitionNum > 1 && lowerBound >= upperBound) {
             throw new GeaFlowDSLException("Upperbound must be greater than lowerbound "
                 + "(lowerbound:%d upperbound:%d).", lowerBound, upperBound);
         }
@@ -115,6 +124,35 @@ public class DorisTableSource implements TableSource {
 
     @Override
     public List<Partition> listPartitions() {
+        if (DorisConstants.PARTITION_MODE_CUSTOM.equalsIgnoreCase(partitionMode)) {
+            return listCustomPartitions();
+        }
+        return listRangePartitions();
+    }
+
+    /**
+     * Custom mode: one partition per user-provided WHERE predicate. This supports non-numeric or
+     * skewed partition columns and arbitrary conditions. An empty clause list falls back to a
+     * single full-table partition.
+     */
+    private List<Partition> listCustomPartitions() {
+        if (partitionClauses == null || partitionClauses.trim().isEmpty()) {
+            return Collections.singletonList(new DorisPartition(qualifiedTable(), ""));
+        }
+        List<Partition> partitions = new ArrayList<>();
+        for (String clause : partitionClauses.split(DorisConstants.SEMICOLON)) {
+            String predicate = clause.trim();
+            if (!predicate.isEmpty()) {
+                partitions.add(new DorisPartition(qualifiedTable(), "WHERE " + predicate));
+            }
+        }
+        if (partitions.isEmpty()) {
+            return Collections.singletonList(new DorisPartition(qualifiedTable(), ""));
+        }
+        return partitions;
+    }
+
+    private List<Partition> listRangePartitions() {
         if (partitionNum == 1) {
             return Collections.singletonList(new DorisPartition(qualifiedTable(), ""));
         }

@@ -116,29 +116,35 @@ public class DorisStreamLoad implements Closeable {
      * transient failures and throws a {@link GeaFlowDSLException} once all retries are exhausted.
      */
     public void load(byte[] payload) {
+        // Generate one stable label per batch and reuse it across every retry and FE failover
+        // attempt. Doris loads a given label at most once, so reusing the label makes retries
+        // idempotent: if an earlier attempt actually committed but the client saw a network
+        // error, the retry hits "Label Already Exists" (handled as success) instead of writing
+        // the batch twice.
+        String label = generateLabel();
         Exception lastError = null;
         for (int attempt = 0; attempt < maxRetries; attempt++) {
             // Rotate over the FE list so a failed request fails over to the next FE.
             String url = loadUrls.get(attempt % loadUrls.size());
             try {
-                doLoad(url, payload);
+                doLoad(url, payload, label);
                 return;
             } catch (Exception e) {
                 lastError = e;
-                LOGGER.warn("Stream Load attempt {}/{} to {} failed: {}", attempt + 1, maxRetries,
-                    url, e.getMessage());
+                LOGGER.warn("Stream Load attempt {}/{} to {} with label {} failed: {}",
+                    attempt + 1, maxRetries, url, label, e.getMessage());
             }
         }
         throw new GeaFlowDSLException("Doris Stream Load failed after " + maxRetries
-            + " attempts.", lastError);
+            + " attempts with label " + label + ".", lastError);
     }
 
-    private void doLoad(String loadUrl, byte[] payload) throws IOException {
+    private void doLoad(String loadUrl, byte[] payload, String label) throws IOException {
         HttpPut put = new HttpPut(loadUrl);
         put.setHeader(HttpHeaders.EXPECT, "100-continue");
         put.setHeader(HttpHeaders.AUTHORIZATION, authHeader);
         put.setHeader("format", format);
-        put.setHeader("label", generateLabel());
+        put.setHeader("label", label);
         put.setHeader("two_phase_commit", "false");
         if (DorisConstants.FORMAT_CSV.equalsIgnoreCase(format)) {
             put.setHeader("column_separator", columnSeparator);
@@ -169,6 +175,13 @@ public class DorisStreamLoad implements Closeable {
             throw new IOException("Stream Load response without status: " + body);
         }
         String status = result.get(DorisConstants.STREAM_LOAD_RESULT_STATUS).getAsString();
+        if (DorisConstants.STREAM_LOAD_LABEL_ALREADY_EXISTS.equals(status)) {
+            // A retry of this batch reused the same label, so the batch was already accepted by an
+            // earlier attempt. Treat it as success to avoid duplicate writes.
+            LOGGER.info("Stream Load label already exists, treated as an idempotent retry: {}",
+                body);
+            return;
+        }
         if (!DorisConstants.STREAM_LOAD_SUCCESS.equals(status)
             && !DorisConstants.STREAM_LOAD_PUBLISH_TIMEOUT.equals(status)) {
             String message = result.has(DorisConstants.STREAM_LOAD_RESULT_MESSAGE)

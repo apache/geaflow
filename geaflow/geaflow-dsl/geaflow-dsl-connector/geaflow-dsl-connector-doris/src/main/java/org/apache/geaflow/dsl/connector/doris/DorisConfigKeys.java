@@ -98,18 +98,38 @@ public class DorisConfigKeys {
 
     public static final ConfigKey GEAFLOW_DSL_DORIS_REQUEST_READ_TIMEOUT_MS = ConfigKeys
         .key("geaflow.dsl.doris.request.read.timeout.ms")
-        .defaultValue(30000)
-        .description("The socket read timeout in milliseconds for Stream Load. Default 30000.");
+        .defaultValue(60000)
+        .description("The socket read/write timeout in milliseconds for a Stream Load request, "
+            + "covering the upload of the whole batch. Default 60000. Increase it for very large "
+            + "batches on slow networks, and lower it to fail faster on network anomalies.");
+
+    public static final ConfigKey GEAFLOW_DSL_DORIS_SOURCE_PARTITION_MODE = ConfigKeys
+        .key("geaflow.dsl.doris.source.partition.mode")
+        .defaultValue("range")
+        .description("The source partitioning strategy: 'range' splits a numeric partition column "
+            + "into evenly-sized ranges; 'custom' uses the user-provided predicates in "
+            + "geaflow.dsl.doris.source.partition.clauses, which supports non-numeric/skewed "
+            + "columns and arbitrary conditions. Default range.");
+
+    public static final ConfigKey GEAFLOW_DSL_DORIS_SOURCE_PARTITION_CLAUSES = ConfigKeys
+        .key("geaflow.dsl.doris.source.partition.clauses")
+        .defaultValue("")
+        .description("Semicolon-separated WHERE predicates for the 'custom' partition mode, one "
+            + "partition per predicate, e.g. \"dt='2024-01-01';dt='2024-01-02'\". The predicates "
+            + "should be disjoint and jointly cover the data. Empty means a single partition.");
 
     public static final ConfigKey GEAFLOW_DSL_DORIS_SOURCE_PARTITION_NUM = ConfigKeys
         .key("geaflow.dsl.doris.source.partition.num")
         .defaultValue(1L)
-        .description("The source partition number for parallel reads. Default 1.");
+        .description("The source partition number for parallel reads in 'range' mode. Default 1. "
+            + "For balanced partitions the partition column should be numeric and indexed; "
+            + "splitting on an unindexed or highly-skewed column may cause full scans or hotspots.");
 
     public static final ConfigKey GEAFLOW_DSL_DORIS_SOURCE_PARTITION_COLUMN = ConfigKeys
         .key("geaflow.dsl.doris.source.partition.column")
         .defaultValue("id")
-        .description("The numeric column used to split the source into partitions.");
+        .description("The numeric column used to split the source into partitions in 'range' mode. "
+            + "Prefer an indexed, evenly-distributed column such as the primary key.");
 
     public static final ConfigKey GEAFLOW_DSL_DORIS_SOURCE_PARTITION_LOWERBOUND = ConfigKeys
         .key("geaflow.dsl.doris.source.partition.lowerbound")
