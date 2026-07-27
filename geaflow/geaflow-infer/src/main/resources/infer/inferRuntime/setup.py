@@ -27,6 +27,9 @@ try:
 except ImportError:
     ext_modules = [Extension("mmap_ipc", sources=["mmap_ipc.cpp"], language="c++")]
 else:
-    ext_modules = cythonize("mmap_ipc.pyx")
+    ext_modules = cythonize(
+        [Extension("mmap_ipc", ["mmap_ipc.pyx"], include_dirs=["."])],
+        force=True,
+        build_dir="build/cython")
 
 setup(ext_modules=ext_modules)

@@ -62,12 +62,11 @@ function install_miniconda() {
         print_function "STEP" "build share memory lib package"
         cd $CURRENT_DIR/../inferFiles || exit
         $PYTHON_EXEC setup.py build_ext --inplace > /dev/null 2>&1
-        print_function "STEP" "build share memory lib [SUCCESS]"
-
         if [ $? -ne 0 ]; then
             echo "install miniconda failed"
             exit 1
         fi
+        print_function "STEP" "build share memory lib [SUCCESS]"
         print_function "STEP" "install conda ... [SUCCESS]"
     fi
 }
@@ -78,8 +77,7 @@ function install_requirements() {
         print_function "STEP" "installing requirements..."
         max_retry_times=3
         retry_times=0
-        source $CURRENT_DIR/conda/bin/activate
-        install_command="conda run -p $CURRENT_DIR/conda $PYTHON_EXEC -m pip install --ignore-installed -r ${REQUIREMENTS_PATH}"
+        install_command="$PYTHON_EXEC -m pip install --ignore-installed -r ${REQUIREMENTS_PATH}"
         ${install_command} >/dev/null 2>&1
         status=$?
         while [[ ${status} -ne 0 ]] && [[ ${retry_times} -lt ${max_retry_times} ]]; do

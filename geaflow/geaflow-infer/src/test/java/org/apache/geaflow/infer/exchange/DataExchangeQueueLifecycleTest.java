@@ -22,6 +22,7 @@ package org.apache.geaflow.infer.exchange;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 
+import java.io.File;
 import java.lang.reflect.Field;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.testng.annotations.Test;
@@ -68,6 +69,17 @@ public class DataExchangeQueueLifecycleTest {
                 "close() should mark the queue instance as closed");
         } finally {
             freeQueueMemory(queue);
+        }
+    }
+
+    @Test
+    public void testCloseReleasesFileMappingWithoutFreeingMappedAddress() throws Exception {
+        File mapFile = File.createTempFile("data-exchange-queue", ".mmap");
+        DataExchangeQueue queue = new DataExchangeQueue(mapFile.getAbsolutePath(), 8, true);
+        try {
+            queue.close();
+        } finally {
+            mapFile.delete();
         }
     }
 

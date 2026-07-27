@@ -22,7 +22,7 @@ set geaflow.dsl.gcn.vertex.feature.fields = age;
 set geaflow.dsl.gcn.batch.size = 2;
 set geaflow.infer.env.enable = true;
 set geaflow.infer.env.user.transform.classname = GCNBatchMarkerTransform;
-set geaflow.infer.env.conda.url = '';
+set geaflow.infer.env.conda.url = 'https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh';
 
 CREATE GRAPH gcn_batch_graph (
     Vertex person (

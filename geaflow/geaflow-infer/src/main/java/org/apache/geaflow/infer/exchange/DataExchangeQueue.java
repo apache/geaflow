@@ -72,9 +72,6 @@ public final class DataExchangeQueue implements Closeable {
         if (memoryMapper != null) {
             memoryMapper.close();
         }
-        if (mapAddress != 0) {
-            UnSafeUtils.UNSAFE.freeMemory(mapAddress);
-        }
     }
 
     public long getMemoryMapSize() {

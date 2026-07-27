@@ -21,8 +21,8 @@ package org.apache.geaflow.dsl.runtime.engine;
 
 import static org.apache.geaflow.common.config.keys.FrameworkConfigKeys.SYSTEM_STATE_BACKEND_TYPE;
 
-import java.util.Collections;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -30,8 +30,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import org.apache.geaflow.api.graph.function.vc.VertexCentricAggTraversalFunction;
-import org.apache.geaflow.dsl.common.algo.BatchAlgorithmUserFunction;
 import org.apache.geaflow.dsl.common.algo.AlgorithmUserFunction;
+import org.apache.geaflow.dsl.common.algo.BatchAlgorithmUserFunction;
 import org.apache.geaflow.dsl.common.data.Row;
 import org.apache.geaflow.dsl.common.data.RowVertex;
 import org.apache.geaflow.dsl.common.types.GraphSchema;
