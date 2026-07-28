@@ -27,7 +27,7 @@ import org.joda.time.DateTime;
 import org.joda.time.format.DateTimeFormat;
 import org.joda.time.format.DateTimeFormatter;
 
-@Description(name = "day_of_year", description = "Returns the day of the year of the given date.")
+@Description(name = "day_of_year", description = "Returns the day of the year for the given date.")
 public class DayOfYear extends UDF {
 
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormat.forPattern("yyyy-MM-dd");
