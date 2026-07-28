@@ -20,10 +20,22 @@
 package org.apache.geaflow.ai.verbalization;
 
 import java.util.List;
+import org.apache.geaflow.ai.graph.GraphAccessor;
 import org.apache.geaflow.ai.graph.GraphEntity;
 import org.apache.geaflow.ai.subgraph.SubGraph;
 
 public interface VerbalizationFunction {
+
+    /**
+     * Version of the data this function renders, see {@link GraphAccessor#getGraphVersion()}.
+     * Consumers memoizing verbalizations use it to drop stale entries.
+     *
+     * @return current source version, or {@link GraphAccessor#VERSION_UNSUPPORTED} when the
+     *     function cannot tell whether its source changed, in which case results must not be cached
+     */
+    default long getSourceVersion() {
+        return GraphAccessor.VERSION_UNSUPPORTED;
+    }
 
     String verbalize(SubGraph subGraph);
 

@@ -82,6 +82,7 @@ public class MemoryMutableGraph implements MutableGraph {
         }
         this.graph.getGraphSchema().addVertex(vertexSchema);
         this.graph.entities.put(vertexSchema.getLabel(), new VertexGroup(vertexSchema, new ArrayList<>()));
+        this.graph.bumpVersion();
         return ErrorCode.SUCCESS;
     }
 
@@ -105,6 +106,7 @@ public class MemoryMutableGraph implements MutableGraph {
         }
         this.graph.getGraphSchema().addEdge(edgeSchema);
         this.graph.entities.put(edgeSchema.getLabel(), new EdgeGroup(edgeSchema, new ArrayList<>()));
+        this.graph.bumpVersion();
         return ErrorCode.SUCCESS;
     }
 }

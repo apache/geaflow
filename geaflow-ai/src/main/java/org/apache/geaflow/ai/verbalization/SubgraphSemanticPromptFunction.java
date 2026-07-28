@@ -39,6 +39,11 @@ public class SubgraphSemanticPromptFunction implements VerbalizationFunction {
     }
 
     @Override
+    public long getSourceVersion() {
+        return graphAccessor.getGraphVersion();
+    }
+
+    @Override
     public String verbalize(SubGraph subGraph) {
         if (subGraph == null || subGraph.getGraphEntityList().isEmpty()) {
             return "Empty.";

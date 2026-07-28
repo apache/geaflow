@@ -20,6 +20,7 @@
 package org.apache.geaflow.ai.graph.io;
 
 import java.util.*;
+import java.util.concurrent.atomic.AtomicLong;
 import org.apache.geaflow.ai.common.ErrorCode;
 import org.apache.geaflow.ai.graph.Graph;
 
@@ -28,9 +29,40 @@ public class MemoryGraph implements Graph {
     public GraphSchema graphSchema;
     public Map<String, EntityGroup> entities;
 
+    /**
+     * Bumped on every content or schema change so that derived structures such as verbalization
+     * caches and keyword indexes can detect that they went stale, even when the graph is mutated
+     * directly instead of through a server API.
+     */
+    private final AtomicLong version = new AtomicLong();
+
+    /**
+     * Bumped only by vertex and schema changes. Structures that depend on vertices alone, such as
+     * the global keyword index, can watch this instead of {@link #version} and stay valid across
+     * edge writes.
+     */
+    private final AtomicLong vertexVersion = new AtomicLong();
+
     public MemoryGraph(GraphSchema graphSchema, Map<String, EntityGroup> entities) {
         this.graphSchema = graphSchema;
         this.entities = entities;
+    }
+
+    public long getVersion() {
+        return version.get();
+    }
+
+    public long getVertexVersion() {
+        return vertexVersion.get();
+    }
+
+    public void bumpVersion() {
+        version.incrementAndGet();
+        vertexVersion.incrementAndGet();
+    }
+
+    public void bumpEdgeVersion() {
+        version.incrementAndGet();
     }
 
     @Override
@@ -40,6 +72,7 @@ public class MemoryGraph implements Graph {
 
     public void setGraphSchema(GraphSchema graphSchema) {
         this.graphSchema = graphSchema;
+        bumpVersion();
     }
 
     private EntityGroup getEntity(String entityName) {
@@ -75,7 +108,7 @@ public class MemoryGraph implements Graph {
             return ErrorCode.GRAPH_ENTITY_GROUP_NOT_MATCH;
         }
         VertexGroup vertexGroup = (VertexGroup) vg;
-        return vertexGroup.removeVertex(id);
+        return bumped(vertexGroup.removeVertex(id));
     }
 
     @Override
@@ -89,7 +122,7 @@ public class MemoryGraph implements Graph {
             return ErrorCode.GRAPH_ENTITY_GROUP_NOT_MATCH;
         }
         VertexGroup vertexGroup = (VertexGroup) vg;
-        return vertexGroup.updateVertex(newVertex);
+        return bumped(vertexGroup.updateVertex(newVertex));
     }
 
     @Override
@@ -103,7 +136,7 @@ public class MemoryGraph implements Graph {
             return ErrorCode.GRAPH_ENTITY_GROUP_NOT_MATCH;
         }
         VertexGroup vertexGroup = (VertexGroup) vg;
-        return vertexGroup.addVertex(newVertex);
+        return bumped(vertexGroup.addVertex(newVertex));
     }
 
     @Override
@@ -126,7 +159,7 @@ public class MemoryGraph implements Graph {
             return ErrorCode.GRAPH_ENTITY_GROUP_NOT_MATCH;
         }
         EdgeGroup edgeGroup = (EdgeGroup) vg;
-        return edgeGroup.removeEdge(edge);
+        return edgeBumped(edgeGroup.removeEdge(edge));
     }
 
     @Override
@@ -140,7 +173,7 @@ public class MemoryGraph implements Graph {
             return ErrorCode.GRAPH_ENTITY_GROUP_NOT_MATCH;
         }
         EdgeGroup edgeGroup = (EdgeGroup) vg;
-        return edgeGroup.addEdge(newEdge);
+        return edgeBumped(edgeGroup.addEdge(newEdge));
     }
 
     @Override
@@ -164,6 +197,24 @@ public class MemoryGraph implements Graph {
             }
         }
         return new CompositeIterator<>(iterators);
+    }
+
+    /**
+     * Marks the graph as changed and passes the mutation result through. The version is bumped even
+     * for failed mutations: over invalidation is cheap, a missed invalidation is a correctness bug.
+     */
+    private int bumped(int mutationResult) {
+        bumpVersion();
+        return mutationResult;
+    }
+
+    /**
+     * Same as {@link #bumped} but only advances the general version, leaving vertex only derived
+     * structures valid.
+     */
+    private int edgeBumped(int mutationResult) {
+        bumpEdgeVersion();
+        return mutationResult;
     }
 
     static class CompositeIterator<T> implements Iterator<T> {

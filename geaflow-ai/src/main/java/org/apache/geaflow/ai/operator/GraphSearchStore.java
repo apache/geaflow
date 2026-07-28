@@ -21,6 +21,7 @@ package org.apache.geaflow.ai.operator;
 
 import java.util.*;
 import java.util.stream.Collectors;
+import org.apache.geaflow.ai.common.model.ModelUtils;
 import org.apache.geaflow.ai.graph.GraphAccessor;
 import org.apache.geaflow.ai.graph.GraphEdge;
 import org.apache.geaflow.ai.graph.GraphEntity;
@@ -40,50 +41,101 @@ import org.apache.lucene.store.Directory;
 
 public class GraphSearchStore {
 
-    private SearchStore store;
+    private final SearchStore store;
     private long entityNum = 0L;
 
     public GraphSearchStore() {
         this.store = new SearchStore();
     }
 
-    public boolean indexVertex(GraphVertex graphVertex, List<IVector> indexVectors) {
-        Map<String, String> kv = new HashMap<>();
-        Vertex vertex = graphVertex.getVertex();
-        kv.put(SearchConstants.ID, vertex.getId());
-        kv.put(SearchConstants.LABEL, vertex.getLabel());
-        List<String> contents = new ArrayList<>(indexVectors.size());
-        for (IVector v : indexVectors) {
-            contents.add(v.toString());
-        }
-        String content = String.join(SearchConstants.DELIMITER, contents);
-        kv.put(SearchConstants.CONTENT, content);
-
+    /**
+     * Makes previously indexed entities searchable without discarding the index.
+     */
+    public void refresh() {
         try {
-            store.addDoc(kv);
+            store.refresh();
+        } catch (IndexNotFoundException notFoundException) {
+            // Nothing has been indexed yet, there is nothing to make visible.
         } catch (Throwable e) {
-            throw new RuntimeException("Cannot index vertex to search store", e);
+            throw new RuntimeException("Cannot refresh search store", e);
         }
-        addItem();
-        return true;
+    }
+
+    public boolean indexVertex(GraphVertex graphVertex, List<IVector> indexVectors) {
+        return writeDoc(vertexDoc(graphVertex, indexVectors), false);
+    }
+
+    /**
+     * Adds or replaces a vertex document in place, keyed by
+     * {@link ModelUtils#getGraphEntityKey}. Idempotent: calling it twice for the same vertex leaves
+     * a single document.
+     */
+    public boolean upsertVertex(GraphVertex graphVertex, List<IVector> indexVectors) {
+        return writeDoc(vertexDoc(graphVertex, indexVectors), true);
     }
 
     public boolean indexEdge(GraphEdge graphEdge, List<IVector> indexVectors) {
+        return writeDoc(edgeDoc(graphEdge, indexVectors), false);
+    }
+
+    public boolean upsertEdge(GraphEdge graphEdge, List<IVector> indexVectors) {
+        return writeDoc(edgeDoc(graphEdge, indexVectors), true);
+    }
+
+    /**
+     * Marks the entity's document as deleted. Lucene flips a bit in a per segment bitset, so the
+     * cost is independent of index size and no rebuild is needed.
+     */
+    public boolean removeEntity(GraphEntity entity) {
+        if (entity == null) {
+            return false;
+        }
+        try {
+            store.deleteDoc(SearchConstants.KEY, ModelUtils.getGraphEntityKey(entity));
+        } catch (Throwable e) {
+            throw new RuntimeException("Cannot remove entity from search store", e);
+        }
+        return true;
+    }
+
+    private Map<String, String> vertexDoc(GraphVertex graphVertex, List<IVector> indexVectors) {
+        Map<String, String> kv = new HashMap<>();
+        Vertex vertex = graphVertex.getVertex();
+        kv.put(SearchConstants.KEY, ModelUtils.getGraphEntityKey(graphVertex));
+        kv.put(SearchConstants.ID, vertex.getId());
+        kv.put(SearchConstants.LABEL, vertex.getLabel());
+        kv.put(SearchConstants.CONTENT, joinVectors(indexVectors));
+        return kv;
+    }
+
+    private Map<String, String> edgeDoc(GraphEdge graphEdge, List<IVector> indexVectors) {
         Map<String, String> kv = new HashMap<>();
         Edge edge = graphEdge.getEdge();
+        kv.put(SearchConstants.KEY, ModelUtils.getGraphEntityKey(graphEdge));
         kv.put(SearchConstants.SRC, edge.getSrcId());
         kv.put(SearchConstants.DST, edge.getDstId());
         kv.put(SearchConstants.LABEL, edge.getLabel());
+        kv.put(SearchConstants.CONTENT, joinVectors(indexVectors));
+        return kv;
+    }
+
+    private String joinVectors(List<IVector> indexVectors) {
         List<String> contents = new ArrayList<>(indexVectors.size());
         for (IVector v : indexVectors) {
             contents.add(v.toString());
         }
-        String content = String.join(SearchConstants.DELIMITER, contents);
-        kv.put(SearchConstants.CONTENT, content);
+        return String.join(SearchConstants.DELIMITER, contents);
+    }
+
+    private boolean writeDoc(Map<String, String> kv, boolean upsert) {
         try {
-            store.addDoc(kv);
+            if (upsert) {
+                store.updateDoc(SearchConstants.KEY, kv.get(SearchConstants.KEY), kv);
+            } else {
+                store.addDoc(kv, SearchConstants.KEY);
+            }
         } catch (Throwable e) {
-            throw new RuntimeException("Cannot index vertex to search store", e);
+            throw new RuntimeException("Cannot index entity to search store", e);
         }
         addItem();
         return true;

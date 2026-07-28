@@ -47,6 +47,16 @@ public class LocalMemoryGraphAccessor implements GraphAccessor {
     }
 
     @Override
+    public long getGraphVersion() {
+        return graph.getVersion();
+    }
+
+    @Override
+    public long getVertexVersion() {
+        return graph.getVertexVersion();
+    }
+
+    @Override
     public GraphSchema getGraphSchema() {
         return graph.getGraphSchema();
     }

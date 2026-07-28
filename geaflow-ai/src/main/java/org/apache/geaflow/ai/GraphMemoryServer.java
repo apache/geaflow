@@ -21,7 +21,9 @@ package org.apache.geaflow.ai;
 
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.apache.geaflow.ai.graph.GraphAccessor;
@@ -30,6 +32,7 @@ import org.apache.geaflow.ai.index.EmbeddingIndexStore;
 import org.apache.geaflow.ai.index.EntityAttributeIndexStore;
 import org.apache.geaflow.ai.index.IndexStore;
 import org.apache.geaflow.ai.operator.EmbeddingOperator;
+import org.apache.geaflow.ai.operator.ResidentSearchIndex;
 import org.apache.geaflow.ai.operator.SearchOperator;
 import org.apache.geaflow.ai.operator.SessionOperator;
 import org.apache.geaflow.ai.search.VectorSearch;
@@ -44,6 +47,12 @@ public class GraphMemoryServer {
     private final List<GraphAccessor> graphAccessors = new ArrayList<>();
     private final List<IndexStore> indexStores = new ArrayList<>();
 
+    /**
+     * Keyword indexes kept alive across queries, one per keyword index store. Without this the
+     * global keyword index would be rebuilt from a full graph scan on every single query.
+     */
+    private final Map<IndexStore, ResidentSearchIndex> residentIndexes = new IdentityHashMap<>();
+
     public void addGraphAccessor(GraphAccessor graph) {
         if (graph != null) {
             graphAccessors.add(graph);
@@ -57,6 +66,9 @@ public class GraphMemoryServer {
     public void addIndexStore(IndexStore indexStore) {
         if (indexStore != null) {
             indexStores.add(indexStore);
+            if (indexStore instanceof EntityAttributeIndexStore) {
+                residentIndexes.put(indexStore, new ResidentSearchIndex());
+            }
         }
     }
 
@@ -86,7 +98,8 @@ public class GraphMemoryServer {
         }
         for (IndexStore indexStore : indexStores) {
             if (indexStore instanceof EntityAttributeIndexStore) {
-                SessionOperator searchOperator = new SessionOperator(graphAccessors.get(0), indexStore);
+                SessionOperator searchOperator = new SessionOperator(graphAccessors.get(0),
+                    indexStore, residentIndexes.get(indexStore));
                 applySearch(sessionId, searchOperator, search);
             }
             if (indexStore instanceof EmbeddingIndexStore) {
@@ -119,6 +132,68 @@ public class GraphMemoryServer {
         }
         stringBuilder.append(verbalizationFunction.verbalizeGraphSchema());
         return new Context(stringBuilder.toString());
+    }
+
+    /**
+     * Applies written entities to the derived structures in place. Handles both new and rewritten
+     * entities, so callers do not need to distinguish them.
+     */
+    public void onEntitiesUpserted(List<GraphEntity> entities) {
+        if (entities == null || entities.isEmpty() || graphAccessors.isEmpty()) {
+            return;
+        }
+        for (IndexStore indexStore : indexStores) {
+            if (!(indexStore instanceof EntityAttributeIndexStore)) {
+                continue;
+            }
+            // Entity identity is label + id, so a rewritten entity may carry new content and its
+            // memoized verbalization must go before the index re-reads it.
+            for (GraphEntity entity : entities) {
+                ((EntityAttributeIndexStore) indexStore).invalidateCache(entity);
+            }
+            ResidentSearchIndex residentIndex = residentIndexes.get(indexStore);
+            if (residentIndex != null) {
+                residentIndex.onEntitiesUpserted(graphAccessors.get(0), entities, indexStore);
+            }
+        }
+    }
+
+    /**
+     * Applies removed entities to the derived structures in place.
+     */
+    public void onEntitiesRemoved(List<GraphEntity> entities) {
+        if (entities == null || entities.isEmpty() || graphAccessors.isEmpty()) {
+            return;
+        }
+        for (IndexStore indexStore : indexStores) {
+            if (!(indexStore instanceof EntityAttributeIndexStore)) {
+                continue;
+            }
+            for (GraphEntity entity : entities) {
+                ((EntityAttributeIndexStore) indexStore).invalidateCache(entity);
+            }
+            ResidentSearchIndex residentIndex = residentIndexes.get(indexStore);
+            if (residentIndex != null) {
+                residentIndex.onEntitiesRemoved(graphAccessors.get(0), entities);
+            }
+        }
+    }
+
+    /**
+     * Drops the derived structures wholesale. Used for changes that cannot be expressed per entity,
+     * such as a schema change altering how every entity is verbalized.
+     */
+    public void onSchemaChanged() {
+        for (IndexStore indexStore : indexStores) {
+            if (!(indexStore instanceof EntityAttributeIndexStore)) {
+                continue;
+            }
+            ((EntityAttributeIndexStore) indexStore).invalidateCache();
+            ResidentSearchIndex residentIndex = residentIndexes.get(indexStore);
+            if (residentIndex != null) {
+                residentIndex.invalidate();
+            }
+        }
     }
 
     public List<GraphEntity> getSessionEntities(String sessionId) {

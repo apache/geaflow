@@ -123,6 +123,11 @@ public class GeaFlowMemoryServer {
         } else {
             throw new RuntimeException("Cannot add schema: " + input);
         }
+        GraphMemoryServer schemaServer = CACHE.getServerByName(graphName);
+        if (schemaServer != null) {
+            // Verbalization is schema driven, so cached prompts and the index must be dropped.
+            schemaServer.onSchemaChanged();
+        }
         return "addSchema has been called, schemaName: " + schemaName;
     }
 
@@ -166,6 +171,8 @@ public class GeaFlowMemoryServer {
         }
         CACHE.getConsolidateServer().executeConsolidateTask(
             insertServer.getGraphAccessors().get(0), memoryMutableGraph);
+        // Maintain the resident keyword index in place instead of rebuilding it on next query.
+        insertServer.onEntitiesUpserted(graphEntities);
         return "Success to add entities, num: " + graphEntities.size();
     }
 
@@ -189,6 +196,11 @@ public class GeaFlowMemoryServer {
             } else {
                 memoryMutableGraph.removeEdge(((GraphEdge) entity).getEdge());
             }
+        }
+        GraphMemoryServer deleteServer = CACHE.getServerByName(graphName);
+        if (deleteServer != null) {
+            // Deletes are applied to the index in place, no rebuild needed.
+            deleteServer.onEntitiesRemoved(graphEntities);
         }
         return "Success to remove entities, num: " + graphEntities.size();
     }
