@@ -119,26 +119,49 @@ public class ClickHouseTableSink implements TableSink {
         if (bufferedRows == 0) {
             return;
         }
-        statement.executeBatch();
-        statement.clearBatch();
-        LOGGER.info("flushed {} rows to clickhouse table {}", bufferedRows, tableName);
-        bufferedRows = 0;
+        try {
+            statement.executeBatch();
+            LOGGER.info("flushed {} rows to clickhouse table {}", bufferedRows, tableName);
+        } finally {
+            // Always drop the buffered batch, even if executeBatch failed, so a failed flush is
+            // not silently re-sent (and re-counted) on the next flush or on close.
+            bufferedRows = 0;
+            try {
+                statement.clearBatch();
+            } catch (SQLException e) {
+                LOGGER.warn("failed to clear batch after flush", e);
+            }
+        }
     }
 
     @Override
     public void close() {
-        try {
-            if (this.statement != null) {
+        SQLException error = null;
+        if (this.statement != null) {
+            try {
                 this.statement.close();
+            } catch (SQLException e) {
+                error = e;
+            } finally {
                 this.statement = null;
             }
-            if (this.connection != null) {
+        }
+        // Close the connection even if closing the statement failed, so a statement-close error
+        // cannot leak the connection.
+        if (this.connection != null) {
+            try {
                 this.connection.close();
+            } catch (SQLException e) {
+                if (error == null) {
+                    error = e;
+                }
+            } finally {
                 this.connection = null;
             }
-            LOGGER.info("close clickhouse sink");
-        } catch (SQLException e) {
-            throw new GeaFlowDSLException("failed to close clickhouse sink", e);
+        }
+        LOGGER.info("close clickhouse sink");
+        if (error != null) {
+            throw new GeaFlowDSLException("failed to close clickhouse sink", error);
         }
     }
 }

@@ -96,16 +96,16 @@ public class ClickHouseUtils {
         }
         String selectQuery = String.format("SELECT * FROM %s %s ORDER BY %s LIMIT %s OFFSET %s",
             tableName, whereClause, orderByColumnName, windowSize, startOffset);
-        ResultSet resultSet = statement.executeQuery(selectQuery);
         List<Row> rowList = new ArrayList<>();
-        while (resultSet.next()) {
-            Object[] values = new Object[columnNum];
-            for (int i = 1; i <= columnNum; i++) {
-                values[i - 1] = resultSet.getObject(i);
+        try (ResultSet resultSet = statement.executeQuery(selectQuery)) {
+            while (resultSet.next()) {
+                Object[] values = new Object[columnNum];
+                for (int i = 1; i <= columnNum; i++) {
+                    values[i - 1] = resultSet.getObject(i);
+                }
+                rowList.add(ObjectRow.create(values));
             }
-            rowList.add(ObjectRow.create(values));
         }
-        resultSet.close();
         return rowList;
     }
 }

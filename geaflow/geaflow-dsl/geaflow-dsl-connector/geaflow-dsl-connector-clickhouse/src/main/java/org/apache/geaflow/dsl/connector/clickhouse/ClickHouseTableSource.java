@@ -116,7 +116,9 @@ public class ClickHouseTableSource implements TableSource {
         if (partitionNum == 1) {
             return Collections.singletonList(new ClickHousePartition(tableName, ""));
         }
-        long stride = upperBound / partitionNum - lowerBound / partitionNum;
+        // Split the range as a whole: dividing each bound separately (upperBound / partitionNum -
+        // lowerBound / partitionNum) rounds each term independently and yields an uneven stride.
+        long stride = (upperBound - lowerBound) / partitionNum;
         long currentValue = lowerBound;
         List<Partition> partitions = new ArrayList<>();
         for (long i = 0; i < partitionNum; ++i) {
