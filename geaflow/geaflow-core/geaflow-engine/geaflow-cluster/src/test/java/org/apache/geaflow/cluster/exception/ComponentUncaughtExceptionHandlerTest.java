@@ -19,52 +19,44 @@
 
 package org.apache.geaflow.cluster.exception;
 
+import static org.apache.geaflow.cluster.constants.ClusterConstants.EXIT_CODE;
+
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicBoolean;
-import org.apache.geaflow.cluster.util.SystemExitSignalCatcher;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.geaflow.common.utils.ThreadUtil;
 import org.testng.Assert;
-import org.testng.annotations.AfterClass;
-import org.testng.annotations.BeforeClass;
-import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
 public class ComponentUncaughtExceptionHandlerTest {
 
-    private static SecurityManager securityManager;
-    private static AtomicBoolean hasException = new AtomicBoolean(false);
-
-
-    @BeforeClass
-    public void before() {
-        securityManager = System.getSecurityManager();
-        System.setSecurityManager(new SystemExitSignalCatcher(hasException));
-    }
-
-    @AfterClass
-    public void after() {
-        System.setSecurityManager(securityManager);
-    }
-
-    @BeforeMethod
-    public void beforeMethod() {
-        hasException.set(false);
-    }
-
     @Test
     public void testHandleExceptionInThreadPool() throws InterruptedException {
 
-        ComponentExceptionSupervisor.getInstance();
+        AtomicInteger exitCode = new AtomicInteger();
+        CountDownLatch exitCalled = new CountDownLatch(1);
+        ComponentExceptionSupervisor supervisor = new ComponentExceptionSupervisor(code -> {
+            exitCode.set(code);
+            exitCalled.countDown();
+        });
+        ComponentExceptionSupervisor.setInstance(supervisor);
         ExecutorService executorService = Executors.newFixedThreadPool(2,
             ThreadUtil.namedThreadFactory(true, "test-handler", new ComponentUncaughtExceptionHandler()));
 
-        executorService.execute(() -> {
-            throw new RuntimeException("test exception");
-        });
-        executorService.execute(ComponentExceptionSupervisor.getInstance());
-        // wait async thread catch and handle exception
-        Thread.sleep(100);
-        Assert.assertTrue(hasException.get());
+        try {
+            executorService.execute(() -> {
+                throw new RuntimeException("test exception");
+            });
+            executorService.execute(supervisor);
+
+            Assert.assertTrue(exitCalled.await(1, TimeUnit.SECONDS));
+            Assert.assertEquals(exitCode.get(), EXIT_CODE);
+        } finally {
+            supervisor.shutdown();
+            executorService.shutdown();
+            executorService.awaitTermination(1, TimeUnit.SECONDS);
+        }
     }
 }

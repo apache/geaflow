@@ -21,6 +21,9 @@ package org.apache.geaflow.cluster.exception;
 
 import static org.apache.geaflow.cluster.constants.ClusterConstants.EXIT_CODE;
 
+import com.google.common.annotations.VisibleForTesting;
+import java.util.Objects;
+import java.util.function.IntConsumer;
 import org.apache.geaflow.cluster.task.runner.AbstractTaskRunner;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,6 +33,16 @@ public class ComponentExceptionSupervisor extends AbstractTaskRunner<ComponentEx
     private static final Logger LOGGER = LoggerFactory.getLogger(ComponentExceptionSupervisor.class);
 
     private static ComponentExceptionSupervisor INSTANCE;
+    private final IntConsumer processExit;
+
+    public ComponentExceptionSupervisor() {
+        this(System::exit);
+    }
+
+    @VisibleForTesting
+    protected ComponentExceptionSupervisor(IntConsumer processExit) {
+        this.processExit = Objects.requireNonNull(processExit);
+    }
 
     @Override
     protected void process(ExceptionElement exceptionElement) {
@@ -42,7 +55,7 @@ public class ComponentExceptionSupervisor extends AbstractTaskRunner<ComponentEx
         if (running) {
             LOGGER.error(String.format("%s occur fatal exception, exit process now",
                 exceptionElement.thread), exceptionElement.cause);
-            System.exit(EXIT_CODE);
+            processExit.accept(EXIT_CODE);
         } else {
             LOGGER.info("{} ignore exception because supervisor is shutdown", exceptionElement.thread);
         }
@@ -53,6 +66,11 @@ public class ComponentExceptionSupervisor extends AbstractTaskRunner<ComponentEx
             INSTANCE = new ComponentExceptionSupervisor();
         }
         return INSTANCE;
+    }
+
+    @VisibleForTesting
+    protected static synchronized void setInstance(ComponentExceptionSupervisor instance) {
+        INSTANCE = Objects.requireNonNull(instance);
     }
 
     @Override
