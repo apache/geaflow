@@ -20,16 +20,40 @@
 package org.apache.geaflow.dsl.connector.mongodb;
 
 import org.apache.geaflow.dsl.connector.api.Offset;
+import org.bson.BsonDocument;
+import org.bson.json.JsonMode;
+import org.bson.json.JsonWriterSettings;
 
 public class MongoOffset implements Offset {
 
+    static final String ID_FIELD = "_id";
+    static final String PARTITION_VALUE_FIELD = "partitionValue";
+
+    private static final JsonWriterSettings JSON_SETTINGS = JsonWriterSettings.builder()
+        .outputMode(JsonMode.EXTENDED)
+        .build();
+
     private final long offset;
+    private final String bookmark;
 
     public MongoOffset(long offset) {
+        this(offset, null);
+    }
+
+    MongoOffset(long offset, BsonDocument bookmark) {
         if (offset < 0) {
             throw new IllegalArgumentException("MongoDB offset must not be negative");
         }
         this.offset = offset;
+        this.bookmark = bookmark == null ? null : bookmark.toJson(JSON_SETTINGS);
+    }
+
+    boolean hasBookmark() {
+        return bookmark != null;
+    }
+
+    BsonDocument getBookmark() {
+        return bookmark == null ? null : BsonDocument.parse(bookmark);
     }
 
     @Override

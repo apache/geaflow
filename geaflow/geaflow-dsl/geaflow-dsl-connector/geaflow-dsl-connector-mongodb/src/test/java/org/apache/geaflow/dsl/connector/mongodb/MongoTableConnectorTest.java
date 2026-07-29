@@ -19,8 +19,10 @@
 
 package org.apache.geaflow.dsl.connector.mongodb;
 
+import com.mongodb.MongoClientSettings;
 import java.util.List;
 import org.apache.geaflow.common.config.Configuration;
+import org.apache.geaflow.common.serialize.SerializerFactory;
 import org.apache.geaflow.common.type.Types;
 import org.apache.geaflow.dsl.common.exception.GeaFlowDSLException;
 import org.apache.geaflow.dsl.common.types.TableField;
@@ -28,6 +30,10 @@ import org.apache.geaflow.dsl.common.types.TableSchema;
 import org.apache.geaflow.dsl.connector.api.Partition;
 import org.apache.geaflow.dsl.connector.api.TableConnector;
 import org.apache.geaflow.dsl.connector.api.util.ConnectorFactory;
+import org.bson.BsonDocument;
+import org.bson.BsonInt32;
+import org.bson.BsonString;
+import org.bson.conversions.Bson;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 
@@ -140,6 +146,46 @@ public class MongoTableConnectorTest {
         assertBounds((MongoPartition) partitions.get(1), 1L, 2L);
     }
 
+    @Test
+    public void testSinglePartitionBookmarkFilter() {
+        BsonDocument bookmark = new BsonDocument(MongoOffset.ID_FIELD,
+            new BsonString("record-1"));
+
+        Bson filter = MongoTableSource.createBookmarkFilter(
+            new MongoPartition("records", 0), bookmark);
+
+        Assert.assertEquals(toBsonDocument(filter),
+            BsonDocument.parse("{'_id': {'$gt': 'record-1'}}"));
+    }
+
+    @Test
+    public void testRangePartitionBookmarkFilter() {
+        BsonDocument bookmark = new BsonDocument(MongoOffset.ID_FIELD, new BsonString("z"))
+            .append(MongoOffset.PARTITION_VALUE_FIELD, new BsonInt32(3));
+        MongoPartition partition = new MongoPartition("records", 0, "id", 0L, 10L);
+
+        Bson filter = MongoTableSource.createBookmarkFilter(partition, bookmark);
+
+        Assert.assertEquals(toBsonDocument(filter), BsonDocument.parse(
+            "{'$or': [{'id': {'$gt': 3}}, {'$and': [{'id': 3}, "
+                + "{'_id': {'$gt': 'z'}}]}]}"));
+    }
+
+    @Test
+    public void testBookmarkOffsetSerialization() {
+        BsonDocument bookmark = new BsonDocument(MongoOffset.ID_FIELD,
+            new BsonString("record-1"))
+            .append(MongoOffset.PARTITION_VALUE_FIELD, new BsonInt32(3));
+        MongoOffset offset = new MongoOffset(5L, bookmark);
+
+        byte[] bytes = SerializerFactory.getKryoSerializer().serialize(offset);
+        MongoOffset restored = (MongoOffset) SerializerFactory.getKryoSerializer()
+            .deserialize(bytes);
+
+        Assert.assertEquals(restored.getOffset(), 5L);
+        Assert.assertEquals(restored.getBookmark(), bookmark);
+    }
+
     private static Configuration baseConfig() {
         Configuration conf = new Configuration();
         conf.put(MongoConfigKeys.GEAFLOW_DSL_MONGODB_URI, "mongodb://localhost:27017");
@@ -151,5 +197,10 @@ public class MongoTableConnectorTest {
     private static void assertBounds(MongoPartition partition, long lower, long upper) {
         Assert.assertEquals(partition.getLowerBound(), Long.valueOf(lower));
         Assert.assertEquals(partition.getUpperBound(), Long.valueOf(upper));
+    }
+
+    private static BsonDocument toBsonDocument(Bson filter) {
+        return filter.toBsonDocument(BsonDocument.class,
+            MongoClientSettings.getDefaultCodecRegistry());
     }
 }

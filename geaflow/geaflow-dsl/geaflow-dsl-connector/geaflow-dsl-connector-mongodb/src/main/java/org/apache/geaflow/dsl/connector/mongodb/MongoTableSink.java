@@ -19,6 +19,7 @@
 
 package org.apache.geaflow.dsl.connector.mongodb;
 
+import com.mongodb.MongoBulkWriteException;
 import com.mongodb.MongoException;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
@@ -104,6 +105,13 @@ public class MongoTableSink implements TableSink {
         try {
             collection.insertMany(batch, new InsertManyOptions().ordered(true));
             batch.clear();
+        } catch (MongoBulkWriteException e) {
+            String writeConcernError = e.getWriteConcernError() == null ? ""
+                : "; write concern error: " + e.getWriteConcernError();
+            throw new IOException("MongoDB bulk write failed for collection " + collectionName
+                + "; successful inserts in this batch: "
+                + e.getWriteResult().getInsertedCount() + "; write errors: "
+                + e.getWriteErrors() + writeConcernError, e);
         } catch (MongoException e) {
             throw new IOException("Failed to write MongoDB collection " + collectionName, e);
         }
