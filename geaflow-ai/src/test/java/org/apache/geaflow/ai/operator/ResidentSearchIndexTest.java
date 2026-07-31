@@ -26,9 +26,15 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.apache.geaflow.ai.graph.GraphEntity;
 import org.apache.geaflow.ai.graph.GraphVertex;
 import org.apache.geaflow.ai.graph.LocalMemoryGraphAccessor;
+import org.apache.geaflow.ai.graph.VertexVersionWindow;
 import org.apache.geaflow.ai.graph.io.Edge;
 import org.apache.geaflow.ai.graph.io.EdgeSchema;
 import org.apache.geaflow.ai.graph.io.EntityGroup;
@@ -253,6 +259,61 @@ public class ResidentSearchIndexTest {
         Assertions.assertEquals(2L, store.getCacheMiss());
     }
 
+    /**
+     * The verbalization cache takes no lock, so concurrent lookups must still be consistent: every
+     * caller sees the same content, every call is counted exactly once, and nothing is lost or
+     * duplicated in the map.
+     */
+    @Test
+    public void testConcurrentVerbalizationLookupsAreConsistent() throws Exception {
+        int entityNum = 200;
+        int threads = 8;
+        int roundsPerThread = 50;
+        LocalMemoryGraphAccessor accessor = buildGraph(entityNum);
+        EntityAttributeIndexStore store = newIndexStore(accessor);
+
+        List<GraphVertex> vertices = new ArrayList<>(entityNum);
+        Map<String, String> expected = new HashMap<>();
+        for (int i = 0; i < entityNum; i++) {
+            GraphVertex vertex = accessor.getVertex(LABEL, "id" + i);
+            vertices.add(vertex);
+            expected.put("id" + i, store.getEntityIndex(vertex).toString());
+        }
+        long baselineCalls = store.getCacheHit() + store.getCacheMiss();
+
+        ExecutorService pool = Executors.newFixedThreadPool(threads);
+        CountDownLatch start = new CountDownLatch(1);
+        List<Future<?>> futures = new ArrayList<>(threads);
+        for (int t = 0; t < threads; t++) {
+            futures.add(pool.submit(() -> {
+                start.await();
+                for (int r = 0; r < roundsPerThread; r++) {
+                    for (GraphVertex vertex : vertices) {
+                        String id = vertex.getVertex().getId();
+                        Assertions.assertEquals(expected.get(id),
+                            store.getEntityIndex(vertex).toString(),
+                            "concurrent lookup returned different content for " + id);
+                    }
+                }
+                return null;
+            }));
+        }
+        start.countDown();
+        try {
+            for (Future<?> future : futures) {
+                future.get(60, TimeUnit.SECONDS);
+            }
+        } finally {
+            pool.shutdownNow();
+        }
+
+        long calls = store.getCacheHit() + store.getCacheMiss() - baselineCalls;
+        Assertions.assertEquals((long) threads * roundsPerThread * entityNum, calls,
+            "every lookup must be counted exactly once");
+        Assertions.assertEquals(entityNum, store.getCacheSize(),
+            "the graph did not change, so there must be exactly one entry per entity");
+    }
+
     @Test
     public void testInsertIsSearchableWithoutRebuild() {
         LocalMemoryGraphAccessor accessor = buildGraph(200);
@@ -264,8 +325,8 @@ public class ResidentSearchIndexTest {
 
         Vertex fresh = new Vertex(LABEL, "id-fresh",
             Collections.singletonList("zebrafish appears only here"));
-        accessor.getMutableGraph().addVertex(fresh);
-        residentIndex.onEntitiesUpserted(accessor, entities(fresh), store);
+        VertexVersionWindow window = write(accessor, () -> accessor.getMutableGraph().addVertex(fresh));
+        residentIndex.onEntitiesUpserted(accessor, entities(fresh), store, window);
 
         Assertions.assertEquals(Collections.singleton("id-fresh"),
             idsOf(residentIndex.search("zebrafish", accessor)));
@@ -284,9 +345,9 @@ public class ResidentSearchIndexTest {
             idsOf(residentIndex.search("uniq7", accessor)));
 
         Vertex updated = new Vertex(LABEL, "id7", Collections.singletonList("narwhal now"));
-        accessor.getMutableGraph().updateVertex(updated);
-        store.invalidateCache(new GraphVertex(updated));
-        residentIndex.onEntitiesUpserted(accessor, entities(updated), store);
+        VertexVersionWindow window = write(accessor,
+            () -> accessor.getMutableGraph().updateVertex(updated));
+        residentIndex.onEntitiesUpserted(accessor, entities(updated), store, window);
 
         // New content is visible, the superseded document is gone, and the doc count is unchanged.
         Assertions.assertEquals(Collections.singleton("id7"),
@@ -307,8 +368,9 @@ public class ResidentSearchIndexTest {
             idsOf(residentIndex.search("uniq9", accessor)));
 
         Vertex removed = accessor.getVertex(LABEL, "id9").getVertex();
-        accessor.getMutableGraph().removeVertex(LABEL, "id9");
-        residentIndex.onEntitiesRemoved(accessor, entities(removed));
+        VertexVersionWindow window = write(accessor,
+            () -> accessor.getMutableGraph().removeVertex(LABEL, "id9"));
+        residentIndex.onEntitiesRemoved(accessor, entities(removed), window);
 
         Assertions.assertTrue(residentIndex.search("uniq9", accessor).isEmpty(),
             "the deleted document must no longer be searchable");
@@ -326,7 +388,9 @@ public class ResidentSearchIndexTest {
 
         Vertex existing = accessor.getVertex(LABEL, "id3").getVertex();
         for (int i = 0; i < 3; i++) {
-            residentIndex.onEntitiesUpserted(accessor, entities(existing), store);
+            // Replaying a batch that changed nothing: the window is empty but still valid.
+            residentIndex.onEntitiesUpserted(accessor, entities(existing), store,
+                write(accessor, () -> { }));
         }
 
         // Replaying the same write must not duplicate the document nor trigger a rebuild.
@@ -352,6 +416,72 @@ public class ResidentSearchIndexTest {
             idsOf(residentIndex.searchWithIndex(accessor, store, "okapi")));
         Assertions.assertEquals(2L, residentIndex.getBuildCount(),
             "the version guard must force a rebuild for unnotified mutations");
+    }
+
+    /**
+     * The version guard must survive a later reported write. Reading the current version after
+     * applying a batch would accept the unreported change as already applied, and the missing
+     * document would never come back.
+     */
+    @Test
+    public void testUnreportedMutationIsNotSwallowedByALaterReportedWrite() {
+        LocalMemoryGraphAccessor accessor = buildGraph(20);
+        EntityAttributeIndexStore store = newIndexStore(accessor);
+        ResidentSearchIndex residentIndex = new ResidentSearchIndex();
+        residentIndex.ensureGlobalIndex(accessor, store);
+        Assertions.assertEquals(1L, residentIndex.getBuildCount());
+
+        // Graph changed without telling the index.
+        accessor.getMutableGraph().addVertex(new Vertex(LABEL, "id-hidden",
+            Collections.singletonList("okapi appears only here")));
+
+        // An unrelated write that does get reported, covering only its own version range.
+        Vertex other = new Vertex(LABEL, "id-other", Collections.singletonList("lemur here"));
+        VertexVersionWindow window = write(accessor,
+            () -> accessor.getMutableGraph().addVertex(other));
+        residentIndex.onEntitiesUpserted(accessor, entities(other), store, window);
+
+        Assertions.assertEquals(Collections.singleton("id-hidden"),
+            idsOf(residentIndex.searchWithIndex(accessor, store, "okapi")),
+            "the unreported vertex must still be found");
+        Assertions.assertEquals(Collections.singleton("id-other"),
+            idsOf(residentIndex.searchWithIndex(accessor, store, "lemur")));
+        Assertions.assertEquals(2L, residentIndex.getBuildCount(),
+            "a batch that cannot be proven complete must fall back to a rebuild");
+        Assertions.assertEquals(22, residentIndex.getIndexedEntityNum());
+    }
+
+    /**
+     * A vertex verbalization depends on the vertex and the schema, not on edges, so writing edges
+     * must not cost the whole memoized set. Sharing one version for the entire cache would wipe it.
+     */
+    @Test
+    public void testEdgeWriteKeepsMemoizedVertexVerbalizations() {
+        LocalMemoryGraphAccessor accessor = buildGraph(20);
+        EntityAttributeIndexStore store = newIndexStore(accessor);
+        GraphVertex vertex = accessor.getVertex(LABEL, "id3");
+        store.getEntityIndex(vertex);
+        store.getEntityIndex(vertex);
+        Assertions.assertEquals(1L, store.getCacheMiss());
+        Assertions.assertEquals(1L, store.getCacheHit());
+
+        accessor.getMutableGraph().addEdgeSchema(
+            new EdgeSchema(EDGE_LABEL, "srcId", "dstId", Collections.singletonList("rel")));
+        for (int i = 0; i < 19; i++) {
+            accessor.getMutableGraph().addEdge(
+                new Edge(EDGE_LABEL, "id" + i, "id" + (i + 1), Collections.singletonList("linked")));
+        }
+
+        store.getEntityIndex(vertex);
+        Assertions.assertEquals(1L, store.getCacheMiss(), "edge writes must not evict vertex entries");
+        Assertions.assertEquals(2L, store.getCacheHit());
+
+        // A write to the vertex itself does evict it, and only it.
+        accessor.getMutableGraph().updateVertex(
+            new Vertex(LABEL, "id3", Collections.singletonList("rewritten")));
+        store.getEntityIndex(vertex);
+        Assertions.assertEquals(2L, store.getCacheMiss());
+        Assertions.assertEquals(1, store.getCacheSize());
     }
 
     @Test
@@ -403,9 +533,10 @@ public class ResidentSearchIndexTest {
                 Collections.singletonList("grp" + (i % GROUP_NUM) + " freshly written " + i));
             String query = "grp" + (i % GROUP_NUM);
 
-            inPlaceAccessor.getMutableGraph().addVertex(fresh);
+            VertexVersionWindow window = write(inPlaceAccessor,
+                () -> inPlaceAccessor.getMutableGraph().addVertex(fresh));
             long start = System.nanoTime();
-            inPlaceIndex.onEntitiesUpserted(inPlaceAccessor, entities(fresh), inPlaceStore);
+            inPlaceIndex.onEntitiesUpserted(inPlaceAccessor, entities(fresh), inPlaceStore, window);
             List<GraphEntity> inPlaceHit = inPlaceIndex.searchWithIndex(inPlaceAccessor,
                 inPlaceStore, query);
             inPlaceCost += System.nanoTime() - start;
@@ -435,6 +566,16 @@ public class ResidentSearchIndexTest {
             ms(invalidateCost), ms(invalidateCost / rounds), invalidateIndex.getBuildCount());
         LOGGER.info("[E] in place maintenance: total {} ms, avg {} ms/round, builds {}",
             ms(inPlaceCost), ms(inPlaceCost / rounds), inPlaceIndex.getBuildCount());
+    }
+
+    /**
+     * Runs a batch of graph writes inside a version window, the way a caller reporting the batch to
+     * the index is expected to.
+     */
+    private static VertexVersionWindow write(LocalMemoryGraphAccessor accessor, Runnable writes) {
+        VertexVersionWindow window = VertexVersionWindow.open(accessor);
+        writes.run();
+        return window.seal();
     }
 
     private static List<GraphEntity> entities(Vertex... vertices) {

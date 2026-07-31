@@ -56,12 +56,33 @@ public class MemoryGraph implements Graph {
         return vertexVersion.get();
     }
 
-    public void bumpVersion() {
+    /**
+     * Registers a vertex schema and its empty entity group. Callers are expected to have validated
+     * the label first. Advances the vertex version, since vertex verbalization is schema driven.
+     */
+    public void registerVertexSchema(VertexSchema vertexSchema) {
+        graphSchema.addVertex(vertexSchema);
+        entities.put(vertexSchema.getLabel(), new VertexGroup(vertexSchema, new ArrayList<>()));
+        bumpVersion();
+    }
+
+    /**
+     * Registers an edge schema and its empty entity group. Only the general version is advanced: an
+     * edge schema cannot change how an existing vertex is verbalized, so vertex only derived
+     * structures stay valid.
+     */
+    public void registerEdgeSchema(EdgeSchema edgeSchema) {
+        graphSchema.addEdge(edgeSchema);
+        entities.put(edgeSchema.getLabel(), new EdgeGroup(edgeSchema, new ArrayList<>()));
+        bumpEdgeVersion();
+    }
+
+    private void bumpVersion() {
         version.incrementAndGet();
         vertexVersion.incrementAndGet();
     }
 
-    public void bumpEdgeVersion() {
+    private void bumpEdgeVersion() {
         version.incrementAndGet();
     }
 

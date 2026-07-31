@@ -43,20 +43,26 @@ import org.apache.lucene.store.Directory;
  * A lightweight in-memory Lucene index wrapper.
  *
  * <p>The store is designed to be <b>long lived</b>: writes are made visible to readers via
- * {@link #refresh()} (commit + near-real-time reader reopen) instead of closing the writer.
+ * {@link #refresh()}, a near-real-time reader reopen, instead of closing the writer.
  * {@link #close()} is reserved for releasing the store for good.
+ *
+ * <p>Reader state is volatile so that searches may run concurrently with each other. Writes and
+ * {@link #refresh()} are not thread safe and must be serialized by the caller.
  */
 public class SearchStore {
 
     private final Directory directory = new ByteBuffersDirectory();
     private final Analyzer analyzer = new StandardAnalyzer();
-    private final IndexWriterConfig config = new IndexWriterConfig(analyzer);
     private IndexWriter writer;
-    private boolean writeStats = false;
-    private DirectoryReader reader;
-    private IndexSearcher searcher;
-    private boolean readStats = false;
-    private boolean pendingWrite = false;
+    private volatile boolean writeStats = false;
+    private volatile DirectoryReader reader;
+    private volatile IndexSearcher searcher;
+    private volatile boolean readStats = false;
+    private volatile boolean pendingWrite = false;
+    /**
+     * Whether {@link #reader} was opened from the writer, and can therefore be reopened from it.
+     */
+    private volatile boolean nearRealTimeReader = false;
 
     public SearchStore() {
     }
@@ -79,8 +85,9 @@ public class SearchStore {
     /**
      * Replaces the document identified by {@code keyField = keyValue}, or adds it when absent.
      *
-     * <p>Lucene implements this as「标记删除 + 新增」within one call, so the cost is proportional to
-     * the change, not to the index size. Repeated calls with the same key are idempotent.
+     * <p>Lucene implements this as a tombstone plus an insert within one call, so the cost is
+     * proportional to the change, not to the index size. Repeated calls with the same key are
+     * idempotent.
      */
     public void updateDoc(String keyField, String keyValue, Map<String, String> kv) throws IOException {
         initWriter();
@@ -111,35 +118,69 @@ public class SearchStore {
     }
 
     /**
-     * Commits pending writes and reopens the reader so that newly added documents become
-     * searchable. Safe to call repeatedly; it is a no-op when nothing changed.
+     * Makes pending writes searchable. Safe to call repeatedly; it is a no-op when nothing changed.
      *
      * <p>This replaces the previous pattern of calling {@link #close()} before searching, which
      * forced the index to be discarded and rebuilt for every query.
+     *
+     * <p>When a writer exists the reader is opened from it (near real time) rather than from the
+     * directory. That deliberately avoids {@code IndexWriter#commit}: the directory is in memory,
+     * so a commit point buys no durability and only costs work on every write batch.
      */
     public void refresh() throws IOException {
-        if (writeStats && pendingWrite) {
-            writer.commit();
+        if (writeStats) {
+            if (readStats && nearRealTimeReader) {
+                DirectoryReader newReader = DirectoryReader.openIfChanged(reader, writer, true);
+                if (newReader != null) {
+                    DirectoryReader old = reader;
+                    reader = newReader;
+                    searcher = new IndexSearcher(newReader);
+                    old.close();
+                }
+            } else {
+                final DirectoryReader old = readStats ? reader : null;
+                DirectoryReader newReader = DirectoryReader.open(writer);
+                reader = newReader;
+                searcher = new IndexSearcher(newReader);
+                readStats = true;
+                nearRealTimeReader = true;
+                if (old != null) {
+                    old.close();
+                }
+            }
             pendingWrite = false;
+            return;
         }
         if (!readStats) {
             reader = DirectoryReader.open(directory);
             searcher = new IndexSearcher(reader);
             readStats = true;
+            nearRealTimeReader = false;
             return;
         }
         DirectoryReader newReader = DirectoryReader.openIfChanged(reader);
         if (newReader != null) {
-            reader.close();
+            DirectoryReader old = reader;
             reader = newReader;
-            searcher = new IndexSearcher(reader);
+            searcher = new IndexSearcher(newReader);
+            old.close();
         }
+    }
+
+    /**
+     * Number of live documents currently visible to readers. Reflects the state as of the last
+     * {@link #refresh()}.
+     */
+    public int numDocs() throws IOException {
+        ensureSearcher();
+        return reader.numDocs();
     }
 
     public TopDocs searchDoc(String field, String content) throws ParseException, IOException {
         ensureSearcher();
+        IndexSearcher current = searcher;
         QueryParser parser = new QueryParser(field, analyzer);
-        return searcher.search(parser.parse(content), Constants.GRAPH_SEARCH_STORE_DEFAULT_TOPN);
+        return current.search(parser.parse(content), Constants.GRAPH_SEARCH_STORE_DEFAULT_TOPN);
     }
 
     public Document getDoc(int docId) {
@@ -151,15 +192,23 @@ public class SearchStore {
         }
     }
 
+    /**
+     * Opens a reader if one is missing or stale. A no-op once a batch of writes has been followed by
+     * {@link #refresh()}, which is what keeps concurrent searches from mutating the store.
+     */
     private void ensureSearcher() throws IOException {
         if (!readStats || pendingWrite) {
             refresh();
         }
     }
 
+    /**
+     * Opens the writer on first use. A fresh {@link IndexWriterConfig} is built every time, because
+     * Lucene rejects reusing a config that has already been handed to a writer.
+     */
     public void initWriter() throws IOException {
         if (!writeStats) {
-            writer = new IndexWriter(directory, config);
+            writer = new IndexWriter(directory, new IndexWriterConfig(analyzer));
             writeStats = true;
         }
     }
@@ -167,16 +216,18 @@ public class SearchStore {
     public void close() throws IOException {
         if (writeStats) {
             writer.close();
+            writer = null;
             writeStats = false;
             pendingWrite = false;
         }
         if (readStats) {
             reader.close();
+            reader = null;
             readStats = false;
+            nearRealTimeReader = false;
             searcher = null;
         }
     }
-
 
     public Directory getDirectory() {
         return directory;
@@ -184,9 +235,5 @@ public class SearchStore {
 
     public Analyzer getAnalyzer() {
         return analyzer;
-    }
-
-    public IndexWriterConfig getConfig() {
-        return config;
     }
 }

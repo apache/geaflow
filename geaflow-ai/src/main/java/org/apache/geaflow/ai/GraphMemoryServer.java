@@ -20,6 +20,7 @@
 package org.apache.geaflow.ai;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.List;
@@ -28,6 +29,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import org.apache.geaflow.ai.graph.GraphAccessor;
 import org.apache.geaflow.ai.graph.GraphEntity;
+import org.apache.geaflow.ai.graph.VertexVersionWindow;
 import org.apache.geaflow.ai.index.EmbeddingIndexStore;
 import org.apache.geaflow.ai.index.EntityAttributeIndexStore;
 import org.apache.geaflow.ai.index.IndexStore;
@@ -51,7 +53,8 @@ public class GraphMemoryServer {
      * Keyword indexes kept alive across queries, one per keyword index store. Without this the
      * global keyword index would be rebuilt from a full graph scan on every single query.
      */
-    private final Map<IndexStore, ResidentSearchIndex> residentIndexes = new IdentityHashMap<>();
+    private final Map<IndexStore, ResidentSearchIndex> residentIndexes =
+        Collections.synchronizedMap(new IdentityHashMap<>());
 
     public void addGraphAccessor(GraphAccessor graph) {
         if (graph != null) {
@@ -135,10 +138,25 @@ public class GraphMemoryServer {
     }
 
     /**
+     * Captures the vertex version before a batch of graph writes. Pass the sealed window to
+     * {@link #onEntitiesUpserted} / {@link #onEntitiesRemoved} so the derived structures can tell
+     * whether the reported entities really are everything that changed.
+     */
+    public VertexVersionWindow openVertexVersionWindow() {
+        return VertexVersionWindow.open(graphAccessors.isEmpty() ? null : graphAccessors.get(0));
+    }
+
+    /**
      * Applies written entities to the derived structures in place. Handles both new and rewritten
      * entities, so callers do not need to distinguish them.
+     *
+     * <p>Memoized verbalizations need no explicit invalidation here: every entry carries the source
+     * version it was computed from, so the write itself makes the affected entries stale.
+     *
+     * @param window version range the batch covers, obtained from
+     *     {@link #openVertexVersionWindow()} and sealed after the writes
      */
-    public void onEntitiesUpserted(List<GraphEntity> entities) {
+    public void onEntitiesUpserted(List<GraphEntity> entities, VertexVersionWindow window) {
         if (entities == null || entities.isEmpty() || graphAccessors.isEmpty()) {
             return;
         }
@@ -146,14 +164,10 @@ public class GraphMemoryServer {
             if (!(indexStore instanceof EntityAttributeIndexStore)) {
                 continue;
             }
-            // Entity identity is label + id, so a rewritten entity may carry new content and its
-            // memoized verbalization must go before the index re-reads it.
-            for (GraphEntity entity : entities) {
-                ((EntityAttributeIndexStore) indexStore).invalidateCache(entity);
-            }
             ResidentSearchIndex residentIndex = residentIndexes.get(indexStore);
             if (residentIndex != null) {
-                residentIndex.onEntitiesUpserted(graphAccessors.get(0), entities, indexStore);
+                residentIndex.onEntitiesUpserted(graphAccessors.get(0), entities, indexStore,
+                    window);
             }
         }
     }
@@ -161,7 +175,7 @@ public class GraphMemoryServer {
     /**
      * Applies removed entities to the derived structures in place.
      */
-    public void onEntitiesRemoved(List<GraphEntity> entities) {
+    public void onEntitiesRemoved(List<GraphEntity> entities, VertexVersionWindow window) {
         if (entities == null || entities.isEmpty() || graphAccessors.isEmpty()) {
             return;
         }
@@ -169,12 +183,9 @@ public class GraphMemoryServer {
             if (!(indexStore instanceof EntityAttributeIndexStore)) {
                 continue;
             }
-            for (GraphEntity entity : entities) {
-                ((EntityAttributeIndexStore) indexStore).invalidateCache(entity);
-            }
             ResidentSearchIndex residentIndex = residentIndexes.get(indexStore);
             if (residentIndex != null) {
-                residentIndex.onEntitiesRemoved(graphAccessors.get(0), entities);
+                residentIndex.onEntitiesRemoved(graphAccessors.get(0), entities, window);
             }
         }
     }

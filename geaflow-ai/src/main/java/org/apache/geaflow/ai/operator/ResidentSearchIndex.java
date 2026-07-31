@@ -24,9 +24,11 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import org.apache.geaflow.ai.graph.GraphAccessor;
 import org.apache.geaflow.ai.graph.GraphEntity;
 import org.apache.geaflow.ai.graph.GraphVertex;
+import org.apache.geaflow.ai.graph.VertexVersionWindow;
 import org.apache.geaflow.ai.index.IndexStore;
 import org.apache.geaflow.ai.index.vector.IVector;
 import org.slf4j.Logger;
@@ -39,57 +41,75 @@ import org.slf4j.LoggerFactory;
  * graph scan, paying index construction cost on the query path and discarding the result.
  *
  * <p><b>Maintenance model.</b> Follows the standard inverted index approach rather than
- * invalidate-and-rebuild: the index is built once, then writes are applied in place —
- * {@code upsert} maps to Lucene's update-by-term (标记删除 + 新增) and {@code remove} maps to
- * delete-by-term (per segment bitset). Cost is proportional to the change, not to graph size.
- * Because updates are keyed by {@code ModelUtils.getGraphEntityKey}, they are idempotent, so
- * callers do not need to supply an exact delta.
+ * invalidate-and-rebuild: the index is built once, then writes are applied in place. An upsert maps
+ * to Lucene's update-by-term (tombstone plus insert) and a remove maps to delete-by-term (a bit in
+ * a per segment bitset). Cost is proportional to the change, not to graph size. Because both are
+ * keyed by {@code ModelUtils.getGraphEntityKey}, they are idempotent, so callers do not need to
+ * supply an exact delta.
  *
  * <p><b>Document set equivalence.</b> The index contains exactly what a per-query global index
  * would contain: every vertex whose {@link IndexStore} entry is non-empty. Edges are excluded,
  * matching {@code searchWithGlobalGraph}, so recall is unchanged.
  *
  * <p><b>Version guard.</b> Validity is tracked against {@link GraphAccessor#getVertexVersion()}.
- * In-place maintenance keeps the accepted version in step, so the guard exists only to catch graph
- * mutations made outside this class (for example directly through {@code MemoryMutableGraph}),
- * which force a rebuild rather than serving stale results. Edge writes do not invalidate anything,
- * since the document set depends on vertices only.
+ * A write batch is applied in place only when its {@link VertexVersionWindow} proves it describes
+ * every vertex level change since the version this index last accepted. Anything else, including
+ * mutations made outside the reporting path (for example directly through
+ * {@code MemoryMutableGraph}), forces a rebuild rather than serving stale results. Edge writes do
+ * not invalidate anything, since the document set depends on vertices only.
+ *
+ * <p><b>Concurrency.</b> Searches take the read lock and run concurrently; building, invalidating
+ * and applying writes take the write lock.
  */
 public class ResidentSearchIndex {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ResidentSearchIndex.class);
 
-    private final Object lock = new Object();
+    private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 
-    private GraphSearchStore store;
-    private Set<GraphEntity> indexedEntities = new HashSet<>();
-    private boolean globalIndexBuilt = false;
-    private long builtVersion = GraphAccessor.VERSION_UNSUPPORTED;
+    private volatile GraphSearchStore store;
+    private volatile boolean globalIndexBuilt = false;
+    private volatile long builtVersion = GraphAccessor.VERSION_UNSUPPORTED;
 
-    private long buildCount = 0L;
-    private long upsertCount = 0L;
-    private long removeCount = 0L;
+    private volatile long buildCount = 0L;
+    private volatile long upsertCount = 0L;
+    private volatile long removeCount = 0L;
 
     /**
      * Builds the full graph keyword index if it is absent or has gone stale.
      */
     public void ensureGlobalIndex(GraphAccessor graphAccessor, IndexStore indexStore) {
-        synchronized (lock) {
+        lock.writeLock().lock();
+        try {
             ensureGlobalIndexLocked(graphAccessor, indexStore);
+        } finally {
+            lock.writeLock().unlock();
         }
     }
 
     /**
-     * Ensures the index is valid and searches it atomically.
+     * Ensures the index is valid and searches it.
      *
-     * <p>Doing both under one lock matters: with two separate calls a concurrent write could
-     * invalidate the index in between, leaving the query to fail on a missing index.
+     * <p>The fast path holds only the read lock, so concurrent queries do not serialize. Validation
+     * and search happen under the same lock acquisition: with two separate calls a concurrent write
+     * could invalidate the index in between, leaving the query to fail on a missing index.
      */
     public List<GraphEntity> searchWithIndex(GraphAccessor graphAccessor, IndexStore indexStore,
                                              String query) {
-        synchronized (lock) {
+        lock.readLock().lock();
+        try {
+            if (isUsableLocked(graphAccessor)) {
+                return store.search(query, graphAccessor);
+            }
+        } finally {
+            lock.readLock().unlock();
+        }
+        lock.writeLock().lock();
+        try {
             ensureGlobalIndexLocked(graphAccessor, indexStore);
             return store.search(query, graphAccessor);
+        } finally {
+            lock.writeLock().unlock();
         }
     }
 
@@ -98,26 +118,38 @@ public class ResidentSearchIndex {
      *
      * <p>Safe for both new and rewritten entities. No-op before the first build: the entities will
      * be picked up by it.
+     *
+     * @param window version range the batch claims to cover, see {@link VertexVersionWindow}
      */
     public void onEntitiesUpserted(GraphAccessor graphAccessor, List<GraphEntity> entities,
-                                   IndexStore indexStore) {
-        applyWrite(graphAccessor, entities, indexStore, false);
+                                   IndexStore indexStore, VertexVersionWindow window) {
+        applyWrite(graphAccessor, entities, indexStore, false, window);
     }
 
     /**
      * Applies removed entities to the index in place, without rebuilding it.
      */
-    public void onEntitiesRemoved(GraphAccessor graphAccessor, List<GraphEntity> entities) {
-        applyWrite(graphAccessor, entities, null, true);
+    public void onEntitiesRemoved(GraphAccessor graphAccessor, List<GraphEntity> entities,
+                                  VertexVersionWindow window) {
+        applyWrite(graphAccessor, entities, null, true, window);
     }
 
     private void applyWrite(GraphAccessor graphAccessor, List<GraphEntity> entities,
-                            IndexStore indexStore, boolean removed) {
+                            IndexStore indexStore, boolean removed, VertexVersionWindow window) {
         if (entities == null || entities.isEmpty()) {
             return;
         }
-        synchronized (lock) {
+        lock.writeLock().lock();
+        try {
             if (!globalIndexBuilt) {
+                return;
+            }
+            if (window == null || !window.covers(builtVersion)) {
+                // The batch cannot be proven to describe everything that changed, so applying it
+                // would leave the index quietly missing whatever else happened. Rebuild instead.
+                LOGGER.info("Resident keyword index cannot accept a write batch, window: {}, "
+                    + "accepted version: {}; rebuilding on next query", window, builtVersion);
+                invalidateLocked();
                 return;
             }
             boolean changed = false;
@@ -128,7 +160,6 @@ public class ResidentSearchIndex {
                 }
                 if (removed) {
                     store.removeEntity(entity);
-                    indexedEntities.remove(entity);
                     removeCount++;
                     changed = true;
                     continue;
@@ -136,14 +167,12 @@ public class ResidentSearchIndex {
                 List<IVector> vectors = indexStore.getEntityIndex(entity);
                 if (vectors == null || vectors.isEmpty()) {
                     // An entity without index content is not a document; drop any previous one.
-                    if (indexedEntities.remove(entity)) {
-                        store.removeEntity(entity);
-                        changed = true;
-                    }
+                    // Delete by term is idempotent, so there is no need to track what was indexed.
+                    store.removeEntity(entity);
+                    changed = true;
                     continue;
                 }
                 store.upsertVertex((GraphVertex) entity, vectors);
-                indexedEntities.add(entity);
                 upsertCount++;
                 changed = true;
             }
@@ -151,7 +180,9 @@ public class ResidentSearchIndex {
                 // One refresh per batch rather than per entity: each refresh opens a new segment.
                 store.refresh();
             }
-            builtVersion = graphAccessor.getVertexVersion();
+            builtVersion = window.getTo();
+        } finally {
+            lock.writeLock().unlock();
         }
     }
 
@@ -160,24 +191,28 @@ public class ResidentSearchIndex {
      * per entity, such as a schema change altering how every entity is verbalized.
      */
     public void invalidate() {
-        synchronized (lock) {
+        lock.writeLock().lock();
+        try {
             invalidateLocked();
+        } finally {
+            lock.writeLock().unlock();
         }
     }
 
     public List<GraphEntity> search(String query, GraphAccessor graphAccessor) {
-        synchronized (lock) {
+        lock.readLock().lock();
+        try {
             if (store == null) {
                 return Collections.emptyList();
             }
             return store.search(query, graphAccessor);
+        } finally {
+            lock.readLock().unlock();
         }
     }
 
     public boolean isGlobalIndexBuilt() {
-        synchronized (lock) {
-            return globalIndexBuilt;
-        }
+        return globalIndexBuilt;
     }
 
     /**
@@ -186,27 +221,37 @@ public class ResidentSearchIndex {
      * neither rebuilt per query nor per write.
      */
     public long getBuildCount() {
-        synchronized (lock) {
-            return buildCount;
-        }
+        return buildCount;
     }
 
     public long getUpsertCount() {
-        synchronized (lock) {
-            return upsertCount;
-        }
+        return upsertCount;
     }
 
     public long getRemoveCount() {
-        synchronized (lock) {
-            return removeCount;
+        return removeCount;
+    }
+
+    /**
+     * Number of documents currently in the index, read from Lucene rather than tracked separately.
+     */
+    public int getIndexedEntityNum() {
+        // Write lock rather than read: reading the document count may have to open a reader, which
+        // mutates the store.
+        lock.writeLock().lock();
+        try {
+            return store == null ? 0 : store.getDocNum();
+        } finally {
+            lock.writeLock().unlock();
         }
     }
 
-    public int getIndexedEntityNum() {
-        synchronized (lock) {
-            return indexedEntities.size();
+    private boolean isUsableLocked(GraphAccessor graphAccessor) {
+        if (!globalIndexBuilt || store == null) {
+            return false;
         }
+        long version = graphAccessor.getVertexVersion();
+        return version != GraphAccessor.VERSION_UNSUPPORTED && version == builtVersion;
     }
 
     private void ensureGlobalIndexLocked(GraphAccessor graphAccessor, IndexStore indexStore) {
@@ -215,29 +260,33 @@ public class ResidentSearchIndex {
             if (version != GraphAccessor.VERSION_UNSUPPORTED && version == builtVersion) {
                 return;
             }
-            // Either the graph changed outside this class, or it cannot report changes at all.
-            // Both force a rebuild, which degrades to per-query rebuild rather than stale results.
+            // Either the graph changed outside the reporting path, or it cannot report changes at
+            // all. Both force a rebuild, which degrades to per-query rebuild rather than stale
+            // results.
             invalidateLocked();
         }
         final long start = System.currentTimeMillis();
-        store = new GraphSearchStore();
-        indexedEntities = new HashSet<>();
+        GraphSearchStore built = new GraphSearchStore();
+        // Deduplication is only needed while scanning; unlike the index itself this set is not
+        // retained, so a resident index costs no per vertex heap of its own.
+        Set<GraphEntity> seen = new HashSet<>();
         for (Iterator<GraphVertex> it = graphAccessor.scanVertex(); it.hasNext(); ) {
             GraphVertex vertex = it.next();
             List<IVector> vectors = indexStore.getEntityIndex(vertex);
-            if (vectors == null || vectors.isEmpty() || !indexedEntities.add(vertex)) {
+            if (vectors == null || vectors.isEmpty() || !seen.add(vertex)) {
                 continue;
             }
             // Plain add during the build: the scan yields each vertex once, so no term lookup for
             // duplicate removal is needed and build cost stays as low as possible.
-            store.indexVertex(vertex, vectors);
+            built.indexVertex(vertex, vectors);
         }
-        store.refresh();
+        built.refresh();
+        store = built;
         globalIndexBuilt = true;
         builtVersion = version;
         buildCount++;
         LOGGER.info("Built resident keyword index, entities: {}, vertexVersion: {}, cost: {} ms",
-            indexedEntities.size(), version, System.currentTimeMillis() - start);
+            seen.size(), version, System.currentTimeMillis() - start);
     }
 
     private void invalidateLocked() {
@@ -249,7 +298,6 @@ public class ResidentSearchIndex {
             }
         }
         store = null;
-        indexedEntities = new HashSet<>();
         globalIndexBuilt = false;
         builtVersion = GraphAccessor.VERSION_UNSUPPORTED;
     }

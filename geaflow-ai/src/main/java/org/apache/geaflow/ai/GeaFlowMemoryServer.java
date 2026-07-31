@@ -155,9 +155,16 @@ public class GeaFlowMemoryServer {
         if (!(graph instanceof MemoryGraph)) {
             throw new RuntimeException("Graph cannot modify.");
         }
+        GraphMemoryServer insertServer = CACHE.getServerByName(graphName);
+        if (insertServer == null || insertServer.getGraphAccessors().isEmpty()) {
+            throw new RuntimeException("Server or graph accessor not available for graph: " + graphName);
+        }
         MemoryMutableGraph memoryMutableGraph = new MemoryMutableGraph((MemoryGraph) graph);
         List<GraphEntity> graphEntities = SeDeUtil.deserializeEntities(input);
 
+        // Opened before the writes and sealed right after them, so the resident index can verify
+        // that these entities really are every vertex level change it has not seen yet.
+        VertexVersionWindow window = insertServer.openVertexVersionWindow();
         for (GraphEntity entity : graphEntities) {
             if (entity instanceof GraphVertex) {
                 memoryMutableGraph.addVertex(((GraphVertex) entity).getVertex());
@@ -165,14 +172,10 @@ public class GeaFlowMemoryServer {
                 memoryMutableGraph.addEdge(((GraphEdge) entity).getEdge());
             }
         }
-        GraphMemoryServer insertServer = CACHE.getServerByName(graphName);
-        if (insertServer == null || insertServer.getGraphAccessors().isEmpty()) {
-            throw new RuntimeException("Server or graph accessor not available for graph: " + graphName);
-        }
+        // Maintain the resident keyword index in place instead of rebuilding it on next query.
+        insertServer.onEntitiesUpserted(graphEntities, window.seal());
         CACHE.getConsolidateServer().executeConsolidateTask(
             insertServer.getGraphAccessors().get(0), memoryMutableGraph);
-        // Maintain the resident keyword index in place instead of rebuilding it on next query.
-        insertServer.onEntitiesUpserted(graphEntities);
         return "Success to add entities, num: " + graphEntities.size();
     }
 
@@ -189,6 +192,9 @@ public class GeaFlowMemoryServer {
         }
         MemoryMutableGraph memoryMutableGraph = new MemoryMutableGraph((MemoryGraph) graph);
         List<GraphEntity> graphEntities = SeDeUtil.deserializeEntities(input);
+        GraphMemoryServer deleteServer = CACHE.getServerByName(graphName);
+        VertexVersionWindow window = deleteServer == null
+            ? null : deleteServer.openVertexVersionWindow();
         for (GraphEntity entity : graphEntities) {
             if (entity instanceof GraphVertex) {
                 memoryMutableGraph.removeVertex(entity.getLabel(),
@@ -197,10 +203,9 @@ public class GeaFlowMemoryServer {
                 memoryMutableGraph.removeEdge(((GraphEdge) entity).getEdge());
             }
         }
-        GraphMemoryServer deleteServer = CACHE.getServerByName(graphName);
         if (deleteServer != null) {
             // Deletes are applied to the index in place, no rebuild needed.
-            deleteServer.onEntitiesRemoved(graphEntities);
+            deleteServer.onEntitiesRemoved(graphEntities, window.seal());
         }
         return "Success to remove entities, num: " + graphEntities.size();
     }

@@ -37,6 +37,17 @@ public interface VerbalizationFunction {
         return GraphAccessor.VERSION_UNSUPPORTED;
     }
 
+    /**
+     * Like {@link #getSourceVersion()} but only advanced by changes that can affect how a vertex is
+     * rendered, see {@link GraphAccessor#getVertexVersion()}. Consumers memoizing vertex
+     * verbalizations watch this one so that edge writes do not invalidate them.
+     *
+     * @return current vertex source version, defaults to {@link #getSourceVersion()}
+     */
+    default long getSourceVertexVersion() {
+        return getSourceVersion();
+    }
+
     String verbalize(SubGraph subGraph);
 
     List<String> verbalize(GraphEntity entity);

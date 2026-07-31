@@ -244,13 +244,17 @@ public class EmbeddingIndexStore implements IndexStore {
     /**
      * The store knows exactly which entities it holds embeddings for, so retrieval does not need
      * to scan the whole graph to assemble the candidate set.
+     *
+     * <p>Returns a snapshot rather than a view of the live key set: callers iterate it while other
+     * requests may still be writing to the store, and a view would fail with
+     * {@link java.util.ConcurrentModificationException}.
      */
     @Override
     public Collection<GraphEntity> getIndexedEntities() {
         if (indexStoreMap == null) {
             return null;
         }
-        return Collections.unmodifiableSet(indexStoreMap.keySet());
+        return new ArrayList<>(indexStoreMap.keySet());
     }
 
     @Override

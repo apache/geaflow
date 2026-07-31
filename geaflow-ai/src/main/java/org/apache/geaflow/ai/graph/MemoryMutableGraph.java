@@ -19,7 +19,6 @@
 
 package org.apache.geaflow.ai.graph;
 
-import java.util.ArrayList;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.geaflow.ai.common.ErrorCode;
 import org.apache.geaflow.ai.graph.io.*;
@@ -80,9 +79,7 @@ public class MemoryMutableGraph implements MutableGraph {
         if (this.graph.entities.get(vertexSchema.getLabel()) != null) {
             return ErrorCode.GRAPH_ADD_VERTEX_SCHEMA_FAILED;
         }
-        this.graph.getGraphSchema().addVertex(vertexSchema);
-        this.graph.entities.put(vertexSchema.getLabel(), new VertexGroup(vertexSchema, new ArrayList<>()));
-        this.graph.bumpVersion();
+        this.graph.registerVertexSchema(vertexSchema);
         return ErrorCode.SUCCESS;
     }
 
@@ -104,9 +101,7 @@ public class MemoryMutableGraph implements MutableGraph {
         if (this.graph.entities.get(edgeSchema.getLabel()) != null) {
             return ErrorCode.GRAPH_ADD_EDGE_SCHEMA_FAILED;
         }
-        this.graph.getGraphSchema().addEdge(edgeSchema);
-        this.graph.entities.put(edgeSchema.getLabel(), new EdgeGroup(edgeSchema, new ArrayList<>()));
-        this.graph.bumpVersion();
+        this.graph.registerEdgeSchema(edgeSchema);
         return ErrorCode.SUCCESS;
     }
 }
