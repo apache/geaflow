@@ -40,6 +40,10 @@ public class ProxyBuilder {
                 return new SyncGraphLabelPartitionProxy<>(rocksdbClient, encoder, config);
             } else if (partitionType == PartitionType.DT) {
                 return new SyncGraphDtPartitionProxy<>(rocksdbClient, encoder, config);
+            } else if (partitionType == PartitionType.DT_LABEL) {
+                throw new GeaflowRuntimeException(
+                    "partition type DT_LABEL (partition by both timestamp and label) is not "
+                        + "supported yet");
             }
             throw new GeaflowRuntimeException("unexpected partition type: " + config.getString(
                 RocksdbConfigKeys.ROCKSDB_GRAPH_STORE_PARTITION_TYPE));

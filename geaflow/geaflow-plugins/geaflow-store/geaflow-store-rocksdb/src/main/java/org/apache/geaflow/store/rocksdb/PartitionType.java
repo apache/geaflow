@@ -24,9 +24,9 @@ import org.apache.geaflow.common.exception.GeaflowRuntimeException;
 // Partition type for rocksdb graph store
 public enum PartitionType {
     LABEL(false, true),
-    // TODO: Support dt partition
     DT(true, false),
-    // TODO: Support label dt partition
+    // NOTE: DT_LABEL (partition by both timestamp and label) is not supported yet.
+    // ProxyBuilder rejects it with an explicit error until a proxy implementation is added.
     DT_LABEL(true, true),
     NONE(false, false);
 
