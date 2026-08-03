@@ -23,47 +23,38 @@ import static org.apache.geaflow.common.config.keys.ExecutionConfigKeys.CLUSTER_
 import static org.apache.geaflow.common.config.keys.ExecutionConfigKeys.CONTAINER_DISPATCH_THREADS;
 import static org.apache.geaflow.common.config.keys.ExecutionConfigKeys.REPORTER_LIST;
 import static org.apache.geaflow.common.config.keys.ExecutionConfigKeys.RUN_LOCAL_MODE;
+import static org.apache.geaflow.cluster.constants.ClusterConstants.EXIT_CODE;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.IntConsumer;
+import org.apache.geaflow.cluster.exception.ComponentExceptionSupervisor;
 import org.apache.geaflow.cluster.exception.ExceptionCollectService;
 import org.apache.geaflow.cluster.protocol.EventType;
 import org.apache.geaflow.cluster.protocol.ICommand;
 import org.apache.geaflow.cluster.protocol.IExecutableCommand;
 import org.apache.geaflow.cluster.protocol.OpenContainerEvent;
 import org.apache.geaflow.cluster.task.ITaskContext;
-import org.apache.geaflow.cluster.util.SystemExitSignalCatcher;
 import org.apache.geaflow.common.config.Configuration;
 import org.apache.geaflow.common.utils.ReflectionUtil;
 import org.apache.geaflow.common.utils.SleepUtils;
 import org.apache.geaflow.ha.service.HAServiceFactory;
 import org.testng.Assert;
-import org.testng.annotations.AfterClass;
-import org.testng.annotations.BeforeClass;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
 public class ContainerTest {
 
+    private static final int EXIT_NOT_CALLED = Integer.MIN_VALUE;
     private static AtomicBoolean eventExecuted = new AtomicBoolean(false);
-    private static AtomicBoolean hasException = new AtomicBoolean(false);
-    private static SecurityManager securityManager;
-
-    @BeforeClass
-    public void before() {
-        securityManager = System.getSecurityManager();
-        System.setSecurityManager(new SystemExitSignalCatcher(hasException));
-    }
-
-    @AfterClass
-    public void after() {
-        System.setSecurityManager(securityManager);
-    }
+    private static AtomicInteger exitCode = new AtomicInteger(EXIT_NOT_CALLED);
 
     @BeforeMethod
     public void beforeMethod() {
-        hasException.set(false);
+        exitCode.set(EXIT_NOT_CALLED);
+        TestComponentExceptionSupervisor.install(exitCode::set);
     }
 
     @Test
@@ -83,12 +74,15 @@ public class ContainerTest {
         ReflectionUtil.setField(container, "containerContext", new ContainerContext(0, configuration));
         ReflectionUtil.setField(container, "exceptionCollectService", new ExceptionCollectService());
         container.open(new OpenContainerEvent(1));
-        container.process(new TestCreateTaskEvent());
-        container.process(new ExceptionCommandEvent());
+        try {
+            container.process(new TestCreateTaskEvent());
+            container.process(new ExceptionCommandEvent());
 
-        waitTestResult();
-        Assert.assertTrue(hasException.get());
-        container.close();
+            waitTestResult();
+            Assert.assertEquals(exitCode.get(), EXIT_CODE);
+        } finally {
+            container.close();
+        }
     }
 
     @Test
@@ -108,12 +102,15 @@ public class ContainerTest {
         ReflectionUtil.setField(container, "containerContext", new ContainerContext(0, configuration));
         ReflectionUtil.setField(container, "exceptionCollectService", new ExceptionCollectService());
         container.open(new OpenContainerEvent(1));
-        container.process(new TestCreateTaskEvent());
-        container.process(new ExceptionCommandEvent());
+        try {
+            container.process(new TestCreateTaskEvent());
+            container.process(new ExceptionCommandEvent());
 
-        waitTestResult();
-        Assert.assertTrue(hasException.get());
-        container.close();
+            waitTestResult();
+            Assert.assertEquals(exitCode.get(), EXIT_CODE);
+        } finally {
+            container.close();
+        }
     }
 
     private void waitTestResult() {
@@ -123,7 +120,7 @@ public class ContainerTest {
             retry--;
         }
         retry = 10;
-        while (!hasException.get() && retry > 0) {
+        while (exitCode.get() == EXIT_NOT_CALLED && retry > 0) {
             SleepUtils.sleepMilliSecond(100);
             retry--;
         }
@@ -163,6 +160,17 @@ public class ContainerTest {
         @Override
         public EventType getEventType() {
             return EventType.CREATE_TASK;
+        }
+    }
+
+    private static class TestComponentExceptionSupervisor extends ComponentExceptionSupervisor {
+
+        private TestComponentExceptionSupervisor(IntConsumer processExit) {
+            super(processExit);
+        }
+
+        private static void install(IntConsumer processExit) {
+            setInstance(new TestComponentExceptionSupervisor(processExit));
         }
     }
 }
