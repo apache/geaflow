@@ -22,22 +22,22 @@ package org.apache.geaflow.dsl.udf.table.other;
 import org.apache.geaflow.dsl.common.data.RowEdge;
 import org.apache.geaflow.dsl.common.data.RowVertex;
 import org.apache.geaflow.dsl.common.function.Description;
-import org.apache.geaflow.dsl.common.function.LabeledPredicateFunctions;
 import org.apache.geaflow.dsl.common.function.UDF;
 
 /**
  * UDF implementation for the ISO-GQL IS NOT LABELED predicate.
  *
- * <p>Implements ISO-GQL Section 19.9: &lt;labeled predicate&gt;
+ * <p>Implements ISO-GQL Section 19.9: &lt;labeled predicate&gt;. This is the negation of
+ * {@link IsLabeled} and delegates to it so the label-extraction logic lives in one place.
  *
  * <p><b>Syntax:</b></p>
  * <pre>
  *   IS_NOT_LABELED(element, label)
  * </pre>
  *
- * <p><b>Semantics:</b></p>
+ * <p><b>Semantics (ISO-GQL three-valued logic):</b></p>
  * Returns TRUE if the vertex or edge does NOT have the given label, FALSE if it does, or NULL
- * if either operand is NULL.
+ * if either operand is NULL (NOT Unknown = Unknown).
  *
  * <p><b>Example:</b></p>
  * <pre>
@@ -54,6 +54,8 @@ import org.apache.geaflow.dsl.common.function.UDF;
 )
 public class IsNotLabeled extends UDF {
 
+    private final IsLabeled isLabeled = new IsLabeled();
+
     /**
      * Evaluates the IS NOT LABELED predicate.
      *
@@ -63,20 +65,22 @@ public class IsNotLabeled extends UDF {
      *         if either operand is null
      */
     public Boolean eval(Object elementValue, Object labelValue) {
-        return LabeledPredicateFunctions.isNotLabeled(elementValue, labelValue);
+        Boolean result = isLabeled.eval(elementValue, labelValue);
+        // Three-valued logic: NOT Unknown = Unknown (null remains null).
+        return result == null ? null : !result;
     }
 
     /**
      * Type-specific overload for vertices.
      */
     public Boolean eval(RowVertex vertex, String label) {
-        return LabeledPredicateFunctions.isNotLabeled(vertex, label);
+        return eval((Object) vertex, label);
     }
 
     /**
      * Type-specific overload for edges.
      */
     public Boolean eval(RowEdge edge, String label) {
-        return LabeledPredicateFunctions.isNotLabeled(edge, label);
+        return eval((Object) edge, label);
     }
 }

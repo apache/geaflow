@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.geaflow.dsl.common.function;
+package org.apache.geaflow.dsl.udf.table.other;
 
 import org.apache.geaflow.dsl.common.data.RowEdge;
 import org.apache.geaflow.dsl.common.data.RowVertex;
@@ -26,7 +26,13 @@ import org.apache.geaflow.dsl.common.data.impl.types.ObjectVertex;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 
-public class LabeledPredicateFunctionsTest {
+/**
+ * Unit tests for the ISO-GQL labeled predicate UDFs {@link IsLabeled} / {@link IsNotLabeled}.
+ */
+public class LabeledPredicateTest {
+
+    private final IsLabeled isLabeled = new IsLabeled();
+    private final IsNotLabeled isNotLabeled = new IsNotLabeled();
 
     private RowVertex vertex(String label) {
         ObjectVertex vertex = new ObjectVertex(1L);
@@ -42,33 +48,33 @@ public class LabeledPredicateFunctionsTest {
 
     @Test
     public void testIsLabeledOnVertex() {
-        Assert.assertTrue(LabeledPredicateFunctions.isLabeled(vertex("person"), "person"));
-        Assert.assertFalse(LabeledPredicateFunctions.isLabeled(vertex("person"), "software"));
+        Assert.assertTrue(isLabeled.eval(vertex("person"), "person"));
+        Assert.assertFalse(isLabeled.eval(vertex("person"), "software"));
     }
 
     @Test
     public void testIsLabeledOnEdge() {
-        Assert.assertTrue(LabeledPredicateFunctions.isLabeled(edge("knows"), "knows"));
-        Assert.assertFalse(LabeledPredicateFunctions.isLabeled(edge("knows"), "created"));
+        Assert.assertTrue(isLabeled.eval(edge("knows"), "knows"));
+        Assert.assertFalse(isLabeled.eval(edge("knows"), "created"));
     }
 
     @Test
     public void testIsNotLabeled() {
-        Assert.assertFalse(LabeledPredicateFunctions.isNotLabeled(vertex("person"), "person"));
-        Assert.assertTrue(LabeledPredicateFunctions.isNotLabeled(vertex("person"), "software"));
+        Assert.assertFalse(isNotLabeled.eval(vertex("person"), "person"));
+        Assert.assertTrue(isNotLabeled.eval(vertex("person"), "software"));
     }
 
     @Test
     public void testThreeValuedLogicWithNullOperand() {
         // Null element or null label yields Unknown (null) for both predicates.
-        Assert.assertNull(LabeledPredicateFunctions.isLabeled(null, "person"));
-        Assert.assertNull(LabeledPredicateFunctions.isLabeled(vertex("person"), null));
-        Assert.assertNull(LabeledPredicateFunctions.isNotLabeled(null, "person"));
-        Assert.assertNull(LabeledPredicateFunctions.isNotLabeled(vertex("person"), null));
+        Assert.assertNull(isLabeled.eval((Object) null, "person"));
+        Assert.assertNull(isLabeled.eval(vertex("person"), null));
+        Assert.assertNull(isNotLabeled.eval((Object) null, "person"));
+        Assert.assertNull(isNotLabeled.eval(vertex("person"), null));
     }
 
     @Test(expectedExceptions = IllegalArgumentException.class)
     public void testNonGraphElementIsRejected() {
-        LabeledPredicateFunctions.isLabeled("not a graph element", "person");
+        isLabeled.eval("not a graph element", "person");
     }
 }
