@@ -19,12 +19,19 @@
 
 package org.apache.geaflow.store.rocksdb;
 
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
 import java.util.HashMap;
 import java.util.Map;
 import org.apache.geaflow.common.config.Configuration;
 import org.apache.geaflow.common.exception.GeaflowRuntimeException;
+import org.apache.geaflow.state.graph.encoder.IEdgeKVEncoder;
 import org.apache.geaflow.state.graph.encoder.IGraphKVEncoder;
+import org.apache.geaflow.state.graph.encoder.IVertexKVEncoder;
+import org.apache.geaflow.store.rocksdb.proxy.IGraphRocksdbProxy;
 import org.apache.geaflow.store.rocksdb.proxy.ProxyBuilder;
+import org.apache.geaflow.store.rocksdb.proxy.SyncGraphDtPartitionProxy;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 
@@ -73,19 +80,35 @@ public class PartitionTypeTest {
     }
 
     /**
-     * DT partition is implemented (see {@code SyncGraphDtPartitionProxy}), so {@link ProxyBuilder}
-     * must dispatch it to a real proxy instead of rejecting it. With a {@code null} client the
-     * proxy constructor fails with a {@link NullPointerException}, which confirms the builder got
-     * past partition-type dispatch rather than throwing a {@link GeaflowRuntimeException}.
+     * DT partition is implemented (see {@link SyncGraphDtPartitionProxy}), so {@link ProxyBuilder}
+     * must dispatch it to the DT proxy instead of rejecting it. We assert the concrete proxy type
+     * returned by the builder rather than inferring dispatch from an incidental
+     * {@link NullPointerException}, which is more explicit about what "dispatched to proxy" means.
      */
-    @Test(expectedExceptions = NullPointerException.class)
+    @Test
     public void testDtPartitionIsDispatchedToProxy() {
-        ProxyBuilder.build(newConfig("dt"), null, (IGraphKVEncoder<Object, Object, Object>) null);
+        IGraphRocksdbProxy<Object, Object, Object> proxy =
+            ProxyBuilder.build(newConfig("dt"), mockClient(), mockEncoder());
+        Assert.assertTrue(proxy instanceof SyncGraphDtPartitionProxy,
+            "DT partition should be dispatched to SyncGraphDtPartitionProxy, but was: "
+                + proxy.getClass().getName());
     }
 
     private Configuration newConfig(String partitionType) {
         Map<String, String> map = new HashMap<>();
         map.put(RocksdbConfigKeys.ROCKSDB_GRAPH_STORE_PARTITION_TYPE.getKey(), partitionType);
         return new Configuration(map);
+    }
+
+    @SuppressWarnings("unchecked")
+    private IGraphKVEncoder<Object, Object, Object> mockEncoder() {
+        IGraphKVEncoder<Object, Object, Object> encoder = mock(IGraphKVEncoder.class);
+        when(encoder.getVertexEncoder()).thenReturn(mock(IVertexKVEncoder.class));
+        when(encoder.getEdgeEncoder()).thenReturn(mock(IEdgeKVEncoder.class));
+        return encoder;
+    }
+
+    private RocksdbClient mockClient() {
+        return mock(RocksdbClient.class);
     }
 }
