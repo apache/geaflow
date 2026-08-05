@@ -35,7 +35,7 @@ public class PadTest {
         Assert.assertEquals(lPad.eval("hi", 5, "xy"), "xyxhi");
         Assert.assertEquals(lPad.eval("hello", 3, "x"), "hel");
         Assert.assertEquals(lPad.eval("hi", 0, "x"), "");
-        Assert.assertEquals(lPad.eval("hi", -1, "x"), "");
+        Assert.assertNull(lPad.eval("hi", -1, "x"));
         Assert.assertEquals(lPad.eval("hi", 5, ""), "hi");
         Assert.assertNull(lPad.eval((String) null, 5, "x"));
         Assert.assertNull(lPad.eval("hi", null, "x"));
@@ -43,6 +43,7 @@ public class PadTest {
 
         Assert.assertEquals(lPad.eval(BinaryString.fromString("hi"), 5, PAD),
             BinaryString.fromString("xyxhi"));
+        Assert.assertNull(lPad.eval(BinaryString.fromString("hi"), -1, PAD));
         Assert.assertNull(lPad.eval((BinaryString) null, 5, PAD));
     }
 
@@ -52,7 +53,7 @@ public class PadTest {
         Assert.assertEquals(rPad.eval("hi", 5, "xy"), "hixyx");
         Assert.assertEquals(rPad.eval("hello", 3, "x"), "hel");
         Assert.assertEquals(rPad.eval("hi", 0, "x"), "");
-        Assert.assertEquals(rPad.eval("hi", -1, "x"), "");
+        Assert.assertNull(rPad.eval("hi", -1, "x"));
         Assert.assertEquals(rPad.eval("hi", 5, ""), "hi");
         Assert.assertNull(rPad.eval((String) null, 5, "x"));
         Assert.assertNull(rPad.eval("hi", null, "x"));
@@ -60,6 +61,7 @@ public class PadTest {
 
         Assert.assertEquals(rPad.eval(BinaryString.fromString("hi"), 5, PAD),
             BinaryString.fromString("hixyx"));
+        Assert.assertNull(rPad.eval(BinaryString.fromString("hi"), -1, PAD));
         Assert.assertNull(rPad.eval((BinaryString) null, 5, PAD));
     }
 

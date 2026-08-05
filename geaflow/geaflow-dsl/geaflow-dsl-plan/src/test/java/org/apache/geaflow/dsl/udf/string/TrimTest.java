@@ -22,7 +22,6 @@ package org.apache.geaflow.dsl.udf.string;
 import org.apache.geaflow.common.binary.BinaryString;
 import org.apache.geaflow.dsl.udf.table.string.LTrim;
 import org.apache.geaflow.dsl.udf.table.string.RTrim;
-import org.apache.geaflow.dsl.udf.table.string.Trim;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 
@@ -43,18 +42,5 @@ public class TrimTest {
         Assert.assertEquals(rTrim.eval(BinaryString.fromString(" abc ")), BinaryString.fromString(" abc"));
         Assert.assertEquals(rTrim.eval(BinaryString.fromString("abc  ")), BinaryString.fromString("abc"));
         Assert.assertEquals(rTrim.eval(BinaryString.fromString("  ")), BinaryString.fromString(""));
-    }
-
-    @Test
-    public void testTrim() {
-        Trim trim = new Trim();
-        Assert.assertEquals(trim.eval("  abc  "), "abc");
-        Assert.assertEquals(trim.eval("\tabc\t"), "\tabc\t");
-        Assert.assertEquals(trim.eval(BinaryString.fromString("  abc  ")),
-            BinaryString.fromString("abc"));
-        Assert.assertEquals(trim.eval(BinaryString.fromString("\tabc\t")),
-            BinaryString.fromString("\tabc\t"));
-        Assert.assertNull(trim.eval((String) null));
-        Assert.assertNull(trim.eval((BinaryString) null));
     }
 }

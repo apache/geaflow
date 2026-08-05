@@ -35,7 +35,7 @@ public class RPad extends UDF {
         if (str == null || length == null || pad == null) {
             return null;
         }
-        return BinaryString.fromString(StringPadUtil.pad(
-            str.toString(), length, pad.toString(), false));
+        String result = StringPadUtil.pad(str.toString(), length, pad.toString(), false);
+        return result == null ? null : BinaryString.fromString(result);
     }
 }

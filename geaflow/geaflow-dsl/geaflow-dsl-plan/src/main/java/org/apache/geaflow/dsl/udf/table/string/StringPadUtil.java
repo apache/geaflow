@@ -28,7 +28,10 @@ final class StringPadUtil {
         if (str == null || length == null || pad == null) {
             return null;
         }
-        if (length <= 0) {
+        if (length < 0) {
+            return null;
+        }
+        if (length == 0) {
             return "";
         }
 

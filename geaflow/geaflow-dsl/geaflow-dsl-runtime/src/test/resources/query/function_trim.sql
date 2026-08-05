@@ -34,4 +34,4 @@ SELECT
     trim('world'),
     trim('  a b c  '),
     trim(cast(null as varchar)),
-    concat('x', trim(concat(ascii2string(9), 'hello', ascii2string(9))), 'x')
+    concat('x', trim(concat(ascii2str(9), 'hello', ascii2str(9))), 'x')

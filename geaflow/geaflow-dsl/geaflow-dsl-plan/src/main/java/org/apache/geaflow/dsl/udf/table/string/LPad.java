@@ -35,7 +35,7 @@ public class LPad extends UDF {
         if (str == null || length == null || pad == null) {
             return null;
         }
-        return BinaryString.fromString(StringPadUtil.pad(
-            str.toString(), length, pad.toString(), true));
+        String result = StringPadUtil.pad(str.toString(), length, pad.toString(), true);
+        return result == null ? null : BinaryString.fromString(result);
     }
 }

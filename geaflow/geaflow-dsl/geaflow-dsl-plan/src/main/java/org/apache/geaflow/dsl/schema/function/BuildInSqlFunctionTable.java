@@ -130,7 +130,6 @@ import org.apache.geaflow.dsl.udf.table.string.Reverse;
 import org.apache.geaflow.dsl.udf.table.string.Space;
 import org.apache.geaflow.dsl.udf.table.string.SplitEx;
 import org.apache.geaflow.dsl.udf.table.string.Substr;
-import org.apache.geaflow.dsl.udf.table.string.Trim;
 import org.apache.geaflow.dsl.udf.table.string.UrlDecode;
 import org.apache.geaflow.dsl.udf.table.string.UrlEncode;
 import org.apache.geaflow.dsl.util.FunctionUtil;
@@ -213,7 +212,6 @@ public class BuildInSqlFunctionTable extends ListSqlOperatorTable {
             .add(GeaFlowFunction.of(Space.class))
             .add(GeaFlowFunction.of(SplitEx.class))
             .add(GeaFlowFunction.of(Substr.class))
-            .add(GeaFlowFunction.of(Trim.class))
             .add(GeaFlowFunction.of(UrlDecode.class))
             .add(GeaFlowFunction.of(UrlEncode.class))
             .add(GeaFlowFunction.of(GetJsonObject.class))
