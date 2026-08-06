@@ -4,21 +4,16 @@
 
 The Apache Software Foundation takes security issues very seriously. We appreciate your efforts to responsibly disclose your findings.
 
-If you discover a security vulnerability in Apache GeaFlow (Incubating), please report it through one of the following methods:
+If you discover a security vulnerability in Apache GeaFlow (Incubating), please report it as follows:
 
 ### Email
 
-Please send your security vulnerability report to the Apache Security Team at:
-
-**[dev@geaflow.apache.org](mailto:dev@geaflow.apache.org)**
-
-You can also report to the GeaFlow project team directly at:
-
-**[private@geaflow.apache.org](mailto:private@geaflow.apache.org)**
+Please send your security vulnerability report to the Apache Security Team at
+[security@apache.org](mailto:security@apache.org?subject=%5BSECURITY%5D%20GeaFlow).
 
 ### What to Include
 
-When reporting a security vulnerability, please include the following information:
+When reporting a security vulnerability, please send one **plaintext** e-mail **per-finding** including the following information:
 
 - **Description**: A detailed description of the vulnerability
 - **Impact**: The potential impact and severity of the issue
@@ -27,12 +22,16 @@ When reporting a security vulnerability, please include the following informatio
 - **Proof of Concept**: If possible, provide a proof-of-concept or example code
 - **Suggested Fix**: If you have suggestions for fixing the issue, please include them
 
+See [reporting issues in ASF code](https://security.apache.org/report-code/) for more information.
+
 ### What to Expect
 
 - **Acknowledgment**: We will acknowledge receipt of your vulnerability report within 3 business days
 - **Updates**: We will send you updates on the progress of fixing the vulnerability
 - **Credit**: If you wish, we will credit you in the security advisory when the issue is fixed
 - **Timeline**: We aim to address critical security issues as quickly as possible, typically within 90 days
+
+See our [security handling policy](https://www.apache.org/security/committers.html#possible).
 
 ### Responsible Disclosure
 
