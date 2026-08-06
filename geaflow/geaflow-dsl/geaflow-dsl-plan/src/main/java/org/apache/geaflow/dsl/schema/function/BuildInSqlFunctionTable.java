@@ -114,9 +114,11 @@ import org.apache.geaflow.dsl.udf.table.string.IndexOf;
 import org.apache.geaflow.dsl.udf.table.string.Instr;
 import org.apache.geaflow.dsl.udf.table.string.IsBlank;
 import org.apache.geaflow.dsl.udf.table.string.KeyValue;
+import org.apache.geaflow.dsl.udf.table.string.LPad;
 import org.apache.geaflow.dsl.udf.table.string.LTrim;
 import org.apache.geaflow.dsl.udf.table.string.Length;
 import org.apache.geaflow.dsl.udf.table.string.Like;
+import org.apache.geaflow.dsl.udf.table.string.RPad;
 import org.apache.geaflow.dsl.udf.table.string.RTrim;
 import org.apache.geaflow.dsl.udf.table.string.RegExp;
 import org.apache.geaflow.dsl.udf.table.string.RegExpExtract;
@@ -196,6 +198,7 @@ public class BuildInSqlFunctionTable extends ListSqlOperatorTable {
             .add(GeaFlowFunction.of(KeyValue.class))
             .add(GeaFlowFunction.of(Length.class))
             .add(GeaFlowFunction.of(Like.class))
+            .add(GeaFlowFunction.of(LPad.class))
             .add(GeaFlowFunction.of(LTrim.class))
             .add(GeaFlowFunction.of(RegExp.class))
             .add(GeaFlowFunction.of(RegexpCount.class))
@@ -204,6 +207,7 @@ public class BuildInSqlFunctionTable extends ListSqlOperatorTable {
             .add(GeaFlowFunction.of(Repeat.class))
             .add(GeaFlowFunction.of(Replace.class))
             .add(GeaFlowFunction.of(Reverse.class))
+            .add(GeaFlowFunction.of(RPad.class))
             .add(GeaFlowFunction.of(RTrim.class))
             .add(GeaFlowFunction.of(Space.class))
             .add(GeaFlowFunction.of(SplitEx.class))
