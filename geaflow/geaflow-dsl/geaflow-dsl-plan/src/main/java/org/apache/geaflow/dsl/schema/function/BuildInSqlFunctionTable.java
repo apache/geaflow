@@ -35,6 +35,7 @@ import org.apache.geaflow.dsl.common.function.UDAF;
 import org.apache.geaflow.dsl.planner.GQLJavaTypeFactory;
 import org.apache.geaflow.dsl.schema.GeaFlowFunction;
 import org.apache.geaflow.dsl.udf.graph.AllSourceShortestPath;
+import org.apache.geaflow.dsl.udf.graph.BetweennessCentrality;
 import org.apache.geaflow.dsl.udf.graph.ClosenessCentrality;
 import org.apache.geaflow.dsl.udf.graph.ClusterCoefficient;
 import org.apache.geaflow.dsl.udf.graph.CommonNeighbors;
@@ -241,6 +242,7 @@ public class BuildInSqlFunctionTable extends ListSqlOperatorTable {
             .add(GeaFlowFunction.of(IncrementalKCore.class))
             .add(GeaFlowFunction.of(IncMinimumSpanningTree.class))
             .add(GeaFlowFunction.of(ClosenessCentrality.class))
+            .add(GeaFlowFunction.of(BetweennessCentrality.class))
             .add(GeaFlowFunction.of(WeakConnectedComponents.class))
             .add(GeaFlowFunction.of(TriangleCount.class))
             .add(GeaFlowFunction.of(ClusterCoefficient.class))
