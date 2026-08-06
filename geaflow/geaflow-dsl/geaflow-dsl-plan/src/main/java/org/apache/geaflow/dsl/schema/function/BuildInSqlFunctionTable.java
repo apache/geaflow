@@ -97,7 +97,9 @@ import org.apache.geaflow.dsl.udf.table.other.EdgeTimestamp;
 import org.apache.geaflow.dsl.udf.table.other.If;
 import org.apache.geaflow.dsl.udf.table.other.IsDecimal;
 import org.apache.geaflow.dsl.udf.table.other.IsDestinationOf;
+import org.apache.geaflow.dsl.udf.table.other.IsLabeled;
 import org.apache.geaflow.dsl.udf.table.other.IsNotDestinationOf;
+import org.apache.geaflow.dsl.udf.table.other.IsNotLabeled;
 import org.apache.geaflow.dsl.udf.table.other.IsNotSourceOf;
 import org.apache.geaflow.dsl.udf.table.other.IsSourceOf;
 import org.apache.geaflow.dsl.udf.table.other.Label;
@@ -226,6 +228,9 @@ public class BuildInSqlFunctionTable extends ListSqlOperatorTable {
             .add(GeaFlowFunction.of(IsNotSourceOf.class))
             .add(GeaFlowFunction.of(IsDestinationOf.class))
             .add(GeaFlowFunction.of(IsNotDestinationOf.class))
+            // ISO-GQL labeled predicate
+            .add(GeaFlowFunction.of(IsLabeled.class))
+            .add(GeaFlowFunction.of(IsNotLabeled.class))
             // ISO-GQL property exists predicate
             .add(GeaFlowFunction.of(PropertyExists.class))
             // UDAF
