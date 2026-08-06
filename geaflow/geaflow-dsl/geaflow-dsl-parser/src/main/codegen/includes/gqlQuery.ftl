@@ -22,18 +22,18 @@ SqlCall GQLMatchStatement() :
       SqlCall statement = null;
 }
 {
-      <MATCH> statement = SqlMatchPattern(statement)
+      statement = SqlMatchPattern(statement)
       (
         (
           statement = SqlLetStatement(statement) (<COMMA> statement = SqlLetStatement(statement))*
           [
-            [ <NEXT> ] <MATCH>
+            [ <NEXT> ]
             statement = SqlMatchPattern(statement)
           ]
         )
         |
         (
-           [ <NEXT> ] <MATCH>
+           [ <NEXT> ]
            statement = SqlMatchPattern(statement)
         )
       )*
@@ -385,8 +385,10 @@ SqlMatchPattern SqlMatchPattern(SqlNode preMatch) :
     SqlNode condition = null;
     SqlNodeList orderBy = null;
     SqlNode count = null;
+    boolean optional = false;
 }
 {
+    [ <OPTIONAL> { optional = true; } ] <MATCH>
     pathPattern = SqlUnionPathPattern()  { pathList.add(pathPattern); }
     ( <COMMA> pathPattern = SqlUnionPathPattern()  { pathList.add(pathPattern); } )*
 
@@ -406,7 +408,7 @@ SqlMatchPattern SqlMatchPattern(SqlNode preMatch) :
     ]
     {
         graphPattern = new SqlNodeList(pathList, s.addAll(pathList).pos());
-        return new SqlMatchPattern(s.end(this), preMatch, graphPattern, condition, orderBy, count);
+        return new SqlMatchPattern(s.end(this), preMatch, graphPattern, condition, orderBy, count, optional);
     }
 }
 

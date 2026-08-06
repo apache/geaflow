@@ -30,16 +30,16 @@ public class SqlMatchPatternOperator extends SqlOperator {
 
     private SqlMatchPatternOperator() {
         super("MatchPattern", SqlKind.OTHER, 2, true,
-            ReturnTypes.SCOPE, null, null);
+                ReturnTypes.SCOPE, null, null);
     }
 
     @Override
     public SqlCall createCall(
-        SqlLiteral functionQualifier,
-        SqlParserPos pos,
-        SqlNode... operands) {
+            SqlLiteral functionQualifier,
+            SqlParserPos pos,
+            SqlNode... operands) {
         return new SqlMatchPattern(pos, operands[0], (SqlNodeList) operands[1], operands[2],
-            (SqlNodeList) operands[3], operands[4]);
+                (SqlNodeList) operands[3], operands[4], false);
     }
 
     @Override
@@ -49,10 +49,10 @@ public class SqlMatchPatternOperator extends SqlOperator {
 
     @Override
     public void unparse(
-        SqlWriter writer,
-        SqlCall call,
-        int leftPrec,
-        int rightPrec) {
+            SqlWriter writer,
+            SqlCall call,
+            int leftPrec,
+            int rightPrec) {
         call.unparse(writer, leftPrec, rightPrec);
     }
 }
