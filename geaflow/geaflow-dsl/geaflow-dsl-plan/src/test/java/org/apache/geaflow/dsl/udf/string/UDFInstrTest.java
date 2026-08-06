@@ -50,6 +50,16 @@ public class UDFInstrTest {
         assertEquals(2, (long) udf.eval("s.taobao.com", ".", 1L));
 
         assertEquals(0, (long) udf.eval("s.taobao.com", "abc"));
+
+        assertEquals(4L, (long) udf.eval("abcabc", "a", -1L, 1L));
+
+        assertEquals(1L, (long) udf.eval("abcabc", "a", -1L, 2L));
+
+        assertEquals(3L, (long) udf.eval("abcabc", "c", -3L, 1L));
+
+        assertEquals(2L, (long) udf.eval("aaaa", "aa", -1L, 2L));
+
+        assertEquals(0L, (long) udf.eval("abcabc", "a", -7L, 1L));
     }
 
     @Test
@@ -75,5 +85,23 @@ public class UDFInstrTest {
         assertEquals(2, (long) udf.eval(BinaryString.fromString("s.taobao.com"), BinaryString.fromString("."), 1L));
 
         assertEquals(0, (long) udf.eval(BinaryString.fromString("s.taobao.com"), BinaryString.fromString("abc")));
+
+        assertEquals(4L, (long) udf.eval(BinaryString.fromString("abcabc"),
+            BinaryString.fromString("a"), -1L, 1L));
+
+        assertEquals(1L, (long) udf.eval(BinaryString.fromString("abcabc"),
+            BinaryString.fromString("a"), -1L, 2L));
+
+        assertEquals(3L, (long) udf.eval(BinaryString.fromString("abcabc"),
+            BinaryString.fromString("c"), -3L, 1L));
+
+        assertEquals(2L, (long) udf.eval(BinaryString.fromString("aaaa"),
+            BinaryString.fromString("aa"), -1L, 2L));
+
+        assertEquals(1L, (long) udf.eval(BinaryString.fromString("甲乙甲乙"),
+            BinaryString.fromString("甲"), -1L, 2L));
+
+        assertEquals(0L, (long) udf.eval(BinaryString.fromString("abcabc"),
+            BinaryString.fromString("a"), -7L, 1L));
     }
 }
