@@ -1,0 +1,9 @@
+1,node1
+2,node2
+3,node3
+4,node4
+5,node5
+6,node6
+7,node7
+8,isolated
+9,selfloop
