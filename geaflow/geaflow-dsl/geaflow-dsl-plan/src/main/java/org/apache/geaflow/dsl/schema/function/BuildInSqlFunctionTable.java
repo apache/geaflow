@@ -52,6 +52,9 @@ import org.apache.geaflow.dsl.udf.graph.PageRank;
 import org.apache.geaflow.dsl.udf.graph.SingleSourceShortestPath;
 import org.apache.geaflow.dsl.udf.graph.TriangleCount;
 import org.apache.geaflow.dsl.udf.graph.WeakConnectedComponents;
+import org.apache.geaflow.dsl.udf.table.agg.BitAndInteger;
+import org.apache.geaflow.dsl.udf.table.agg.BitOrInteger;
+import org.apache.geaflow.dsl.udf.table.agg.BoolAnd;
 import org.apache.geaflow.dsl.udf.table.agg.PercentileDouble;
 import org.apache.geaflow.dsl.udf.table.agg.PercentileInteger;
 import org.apache.geaflow.dsl.udf.table.agg.PercentileLong;
@@ -232,6 +235,9 @@ public class BuildInSqlFunctionTable extends ListSqlOperatorTable {
             .add(GeaFlowFunction.of(PercentileLong.class))
             .add(GeaFlowFunction.of(PercentileInteger.class))
             .add(GeaFlowFunction.of(PercentileDouble.class))
+            .add(GeaFlowFunction.of(BitAndInteger.class))
+            .add(GeaFlowFunction.of(BitOrInteger.class))
+            .add(GeaFlowFunction.of(BoolAnd.class))
             // UDGA
             .add(GeaFlowFunction.of(SingleSourceShortestPath.class))
             .add(GeaFlowFunction.of(AllSourceShortestPath.class))
