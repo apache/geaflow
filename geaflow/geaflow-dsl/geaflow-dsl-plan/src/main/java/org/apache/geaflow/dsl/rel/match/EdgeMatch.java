@@ -124,7 +124,8 @@ public class EdgeMatch extends AbstractRelNode implements SingleMatchNode, IMatc
             .item("input", input)
             .item("label", label)
             .item("edgeTypes", edgeTypes)
-            .item("direction", direction);
+            .item("direction", direction)
+            .item("pathType", pathType);
     }
 
     @Override

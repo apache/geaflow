@@ -61,7 +61,8 @@ public class ConnectedComponents implements AlgorithmUserFunction<Object, String
     @Override
     public void process(RowVertex vertex, Optional<Row> updatedValues, Iterator<String> messages) {
         updatedValues.ifPresent(vertex::setValue);
-        Stream<RowEdge> stream = context.loadEdges(EdgeDirection.IN).stream();
+        // Use BOTH direction for undirected graph semantics in connected components
+        Stream<RowEdge> stream = context.loadEdges(EdgeDirection.BOTH).stream();
         if (context.getCurrentIterationId() == 1L) {
             String initValue = String.valueOf(vertex.getId());
             sendMessageToNeighbors(stream, initValue);
@@ -71,14 +72,14 @@ public class ConnectedComponents implements AlgorithmUserFunction<Object, String
             String minComponent = null;
             while (messages.hasNext()) {
                 String next = messages.next();
-                if (minComponent == null || next.compareTo(minComponent) < 0) {
+                if (minComponent == null || compareComponentIds(next, minComponent) < 0) {
                     minComponent = next;
                 }
             }
 
             String currentValue = (String) vertex.getValue().getField(0, StringType.INSTANCE);
             // If found smaller component id, update and propagate
-            if (minComponent != null && minComponent.compareTo(currentValue) < 0) {
+            if (minComponent != null && compareComponentIds(minComponent, currentValue) < 0) {
                 sendMessageToNeighbors(stream, minComponent);
                 context.sendMessage(vertex.getId(), minComponent);
                 context.updateVertexValue(ObjectRow.create(minComponent));
@@ -103,5 +104,25 @@ public class ConnectedComponents implements AlgorithmUserFunction<Object, String
 
     private void sendMessageToNeighbors(Stream<RowEdge> edges, String message) {
         edges.forEach(rowEdge -> context.sendMessage(rowEdge.getTargetId(), message));
+    }
+
+    /**
+     * Compare two component IDs. If both are numeric strings, compare them as numbers.
+     * Otherwise, fall back to string comparison.
+     *
+     * @param a first component ID
+     * @param b second component ID
+     * @return negative if a < b, positive if a > b, zero if equal
+     */
+    private int compareComponentIds(String a, String b) {
+        // Try to compare as numbers first for correct numeric ordering
+        try {
+            long numA = Long.parseLong(a);
+            long numB = Long.parseLong(b);
+            return Long.compare(numA, numB);
+        } catch (NumberFormatException e) {
+            // Fall back to string comparison if not numeric
+            return a.compareTo(b);
+        }
     }
 }

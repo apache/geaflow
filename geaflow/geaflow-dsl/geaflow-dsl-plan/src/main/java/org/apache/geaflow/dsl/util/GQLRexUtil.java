@@ -469,8 +469,15 @@ public class GQLRexUtil {
     }
 
     private static boolean isIdField(VertexRecordType vertexRecordType, RexNode node) {
+        if (node instanceof RexCall && node.getKind() == SqlKind.CAST) {
+            return isIdField(vertexRecordType, ((RexCall) node).operands.get(0));
+        }
         if (node instanceof RexFieldAccess) {
             int index = ((RexFieldAccess) node).getField().getIndex();
+            return vertexRecordType.isId(index);
+        }
+        if (node instanceof RexInputRef) {
+            int index = ((RexInputRef) node).getIndex();
             return vertexRecordType.isId(index);
         }
         return false;
