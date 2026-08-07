@@ -48,6 +48,8 @@ import org.apache.geaflow.dsl.udf.table.date.UnixTimeStamp;
 import org.apache.geaflow.dsl.udf.table.date.UnixTimeStampMillis;
 import org.apache.geaflow.dsl.udf.table.date.WeekDay;
 import org.apache.geaflow.dsl.udf.table.date.WeekOfYear;
+import org.apache.geaflow.dsl.udf.table.date.Quarter;
+import org.apache.geaflow.dsl.udf.table.date.DayOfYear;
 import org.apache.geaflow.dsl.udf.table.date.Year;
 import org.testng.annotations.Test;
 

@@ -83,6 +83,8 @@ import org.apache.geaflow.dsl.udf.table.date.UnixTimeStamp;
 import org.apache.geaflow.dsl.udf.table.date.UnixTimeStampMillis;
 import org.apache.geaflow.dsl.udf.table.date.WeekDay;
 import org.apache.geaflow.dsl.udf.table.date.WeekOfYear;
+import org.apache.geaflow.dsl.udf.table.date.Quarter;
+import org.apache.geaflow.dsl.udf.table.date.DayOfYear;
 import org.apache.geaflow.dsl.udf.table.date.Year;
 import org.apache.geaflow.dsl.udf.table.math.Cbrt;
 import org.apache.geaflow.dsl.udf.table.math.E;
@@ -132,6 +134,7 @@ import org.apache.geaflow.dsl.udf.table.string.UrlDecode;
 import org.apache.geaflow.dsl.udf.table.string.UrlEncode;
 import org.apache.geaflow.dsl.util.FunctionUtil;
 
+
 /**
  * SQL build-in {@link SqlFunction}s.
  */
@@ -167,6 +170,8 @@ public class BuildInSqlFunctionTable extends ListSqlOperatorTable {
             .add(GeaFlowFunction.of(UnixTimeStampMillis.class))
             .add(GeaFlowFunction.of(WeekDay.class))
             .add(GeaFlowFunction.of(WeekOfYear.class))
+            .add(GeaFlowFunction.of(Quarter.class))
+            .add(GeaFlowFunction.of(DayOfYear.class))
             .add(GeaFlowFunction.of(Year.class))
 
             // udf.table.array
