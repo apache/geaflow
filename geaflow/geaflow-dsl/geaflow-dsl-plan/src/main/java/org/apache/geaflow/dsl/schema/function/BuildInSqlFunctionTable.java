@@ -39,6 +39,7 @@ import org.apache.geaflow.dsl.udf.graph.ClosenessCentrality;
 import org.apache.geaflow.dsl.udf.graph.ClusterCoefficient;
 import org.apache.geaflow.dsl.udf.graph.CommonNeighbors;
 import org.apache.geaflow.dsl.udf.graph.ConnectedComponents;
+import org.apache.geaflow.dsl.udf.graph.Degree;
 import org.apache.geaflow.dsl.udf.graph.IncKHopAlgorithm;
 import org.apache.geaflow.dsl.udf.graph.IncMinimumSpanningTree;
 import org.apache.geaflow.dsl.udf.graph.IncWeakConnectedComponents;
@@ -58,6 +59,9 @@ import org.apache.geaflow.dsl.udf.table.agg.PercentileLong;
 import org.apache.geaflow.dsl.udf.table.array.ArrayAppend;
 import org.apache.geaflow.dsl.udf.table.array.ArrayContains;
 import org.apache.geaflow.dsl.udf.table.array.ArrayDistinct;
+import org.apache.geaflow.dsl.udf.table.array.ArrayMax;
+import org.apache.geaflow.dsl.udf.table.array.ArrayMin;
+import org.apache.geaflow.dsl.udf.table.array.ArrayReverse;
 import org.apache.geaflow.dsl.udf.table.array.ArrayUnion;
 import org.apache.geaflow.dsl.udf.table.date.AddMonths;
 import org.apache.geaflow.dsl.udf.table.date.DateAdd;
@@ -173,6 +177,9 @@ public class BuildInSqlFunctionTable extends ListSqlOperatorTable {
             .add(GeaFlowFunction.of(ArrayAppend.class))
             .add(GeaFlowFunction.of(ArrayContains.class))
             .add(GeaFlowFunction.of(ArrayDistinct.class))
+            .add(GeaFlowFunction.of(ArrayMax.class))
+            .add(GeaFlowFunction.of(ArrayMin.class))
+            .add(GeaFlowFunction.of(ArrayReverse.class))
             .add(GeaFlowFunction.of(ArrayUnion.class))
 
             // udf.table.math
@@ -238,6 +245,7 @@ public class BuildInSqlFunctionTable extends ListSqlOperatorTable {
             .add(GeaFlowFunction.of(PageRank.class))
             .add(GeaFlowFunction.of(KHop.class))
             .add(GeaFlowFunction.of(KCore.class))
+            .add(GeaFlowFunction.of(Degree.class))
             .add(GeaFlowFunction.of(IncrementalKCore.class))
             .add(GeaFlowFunction.of(IncMinimumSpanningTree.class))
             .add(GeaFlowFunction.of(ClosenessCentrality.class))
