@@ -153,6 +153,16 @@ public class FrameworkConfigKeys implements Serializable {
         .noDefaultValue()
         .description("infer env conda url");
 
+    public static final ConfigKey INFER_ENV_USE_SYSTEM_PYTHON = ConfigKeys
+        .key("geaflow.infer.env.use.system.python")
+        .defaultValue(false)
+        .description("use system Python instead of creating virtual environment");
+
+    public static final ConfigKey INFER_ENV_SYSTEM_PYTHON_PATH = ConfigKeys
+        .key("geaflow.infer.env.system.python.path")
+        .noDefaultValue()
+        .description("path to system Python executable (e.g., /usr/bin/python3 or /opt/homebrew/bin/python3)");
+
     public static final ConfigKey ASP_ENABLE = ConfigKeys
         .key("geaflow.iteration.asp.enable")
         .defaultValue(false)
