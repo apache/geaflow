@@ -23,7 +23,6 @@ import sys
 import threading
 import time
 import traceback
-from inferSession import TorchInferSession
 from pickle_bridge import PicklerDataBridger
 
 class check_ppid(threading.Thread):
@@ -54,9 +53,30 @@ def get_user_define_class(class_name):
         raise ValueError("class name = {} not found".format(class_name))
 
 
-def start_infer_process(class_name, output_queue_shm_id, input_queue_shm_id):
+def _create_infer_session(framework, transform_class):
+    """
+    Factory: instantiate the appropriate BaseInferSession subclass based on *framework*.
+
+    Args:
+        framework: "TORCH" or "PADDLE" (case-insensitive).
+        transform_class: An initialised user-defined TransFormFunction instance.
+
+    Returns:
+        A BaseInferSession subclass instance ready to call .run().
+    """
+    framework_upper = (framework or "TORCH").upper()
+    if framework_upper == "PADDLE":
+        from paddleInferSession import PaddleInferSession
+        return PaddleInferSession(transform_class)
+    else:
+        # Default: PyTorch
+        from inferSession import TorchInferSession
+        return TorchInferSession(transform_class)
+
+
+def start_infer_process(class_name, output_queue_shm_id, input_queue_shm_id, framework="TORCH"):
     transform_class = get_user_define_class(class_name)
-    infer_session = TorchInferSession(transform_class)
+    infer_session = _create_infer_session(framework, transform_class)
     input_size = transform_class.input_size
     data_exchange = PicklerDataBridger(input_queue_shm_id, output_queue_shm_id, input_size)
     check_thread = check_ppid('check_process', True)
@@ -82,13 +102,23 @@ def start_infer_process(class_name, output_queue_shm_id, input_queue_shm_id):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+    # Legacy parameter name kept for backward compatibility.
     parser.add_argument("--tfClassName", type=str,
+                        help="user define transformer class name (legacy alias for --modelClassName)")
+    # Framework-agnostic alias for the class name parameter.
+    parser.add_argument("--modelClassName", type=str,
                         help="user define transformer class name")
-    parser.add_argument("--input_queue_shm_id", type=str, help="input queue "
-                                                               "share memory "
-                                                               "id")
-    parser.add_argument("--output_queue_shm_id", type=str,
-                        help="output queue share memory id")
+    parser.add_argument("--input_queue_shm_id", type=str, help="input queue share memory id")
+    parser.add_argument("--output_queue_shm_id", type=str, help="output queue share memory id")
+    # New: selects the deep-learning framework. Defaults to TORCH for full backward compatibility.
+    parser.add_argument("--framework", type=str, default="TORCH",
+                        help="inference framework type: TORCH (default) or PADDLE")
     args = parser.parse_args()
-    start_infer_process(args.tfClassName, args.output_queue_shm_id,
-                        args.input_queue_shm_id)
+
+    # Resolve class name: prefer --modelClassName, fall back to legacy --tfClassName.
+    class_name = args.modelClassName or args.tfClassName
+    if not class_name:
+        raise ValueError("Either --modelClassName or --tfClassName must be provided")
+
+    start_infer_process(class_name, args.output_queue_shm_id,
+                        args.input_queue_shm_id, args.framework)

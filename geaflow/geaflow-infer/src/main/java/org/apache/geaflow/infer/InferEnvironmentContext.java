@@ -23,6 +23,7 @@ import java.lang.management.ManagementFactory;
 import java.lang.management.RuntimeMXBean;
 import java.net.InetAddress;
 import org.apache.geaflow.common.config.Configuration;
+import org.apache.geaflow.common.config.keys.FrameworkConfigKeys;
 import org.apache.geaflow.common.exception.GeaflowRuntimeException;
 
 public class InferEnvironmentContext {
@@ -39,6 +40,10 @@ public class InferEnvironmentContext {
 
     // Start infer process parameter.
     private static final String TF_CLASSNAME_KEY = "--tfClassName=";
+
+    private static final String MODEL_CLASSNAME_KEY = "--modelClassName=";
+
+    private static final String FRAMEWORK_KEY = "--framework=";
 
     private static final String SHARE_MEMORY_INPUT_KEY = "--input_queue_shm_id=";
 
@@ -63,14 +68,53 @@ public class InferEnvironmentContext {
 
     public InferEnvironmentContext(String virtualEnvDirectory, String pythonFilesDirectory,
                                    Configuration configuration) {
-        this.virtualEnvDirectory = virtualEnvDirectory;
+        this.virtualEnvDirectory = virtualEnvDirectory != null ? virtualEnvDirectory : "";
         this.inferFilesDirectory = pythonFilesDirectory;
-        this.inferLibPath = virtualEnvDirectory + LIB_PATH;
-        this.pythonExec = virtualEnvDirectory + PYTHON_EXEC;
-        this.inferScript = pythonFilesDirectory + INFER_SCRIPT_FILE;
         this.roleNameIndex = queryRoleNameIndex();
         this.configuration = configuration;
         this.envFinished = false;
+        
+        // Check if using system Python
+        boolean useSystemPython = configuration.getBoolean(FrameworkConfigKeys.INFER_ENV_USE_SYSTEM_PYTHON);
+        if (useSystemPython) {
+            String systemPythonPath = configuration.getString(FrameworkConfigKeys.INFER_ENV_SYSTEM_PYTHON_PATH);
+            if (systemPythonPath != null && !systemPythonPath.isEmpty()) {
+                // Use system Python path directly
+                this.pythonExec = systemPythonPath;
+                // For lib path, try to detect it from the Python installation
+                this.inferLibPath = detectLibPath(systemPythonPath);
+            } else {
+                // Fallback to default
+                this.inferLibPath = virtualEnvDirectory + LIB_PATH;
+                this.pythonExec = virtualEnvDirectory + PYTHON_EXEC;
+            }
+        } else {
+            // Default behavior: use conda virtual environment structure
+            this.inferLibPath = virtualEnvDirectory + LIB_PATH;
+            this.pythonExec = virtualEnvDirectory + PYTHON_EXEC;
+        }
+        this.inferScript = pythonFilesDirectory + INFER_SCRIPT_FILE;
+    }
+    
+    private String detectLibPath(String pythonPath) {
+        // Try to detect lib path from Python installation
+        // For /opt/homebrew/bin/python3 -> /opt/homebrew/lib
+        // For /usr/bin/python3 -> /usr/lib
+        try {
+            java.io.File pythonFile = new java.io.File(pythonPath);
+            java.io.File binDir = pythonFile.getParentFile();
+            if (binDir != null && "bin".equals(binDir.getName())) {
+                java.io.File parentDir = binDir.getParentFile();
+                if (parentDir != null) {
+                    String libPath = parentDir.getAbsolutePath() + LIB_PATH;
+                    return libPath;
+                }
+            }
+        } catch (Exception e) {
+            // Ignore and use default fallback
+        }
+        // Fallback: use common lib paths
+        return "/usr/lib";
     }
 
     private String queryRoleNameIndex() {
@@ -128,6 +172,23 @@ public class InferEnvironmentContext {
 
     public String getInferTFClassNameParam(String udfClassName) {
         return TF_CLASSNAME_KEY + udfClassName;
+    }
+
+    /**
+     * Returns the --modelClassName parameter (framework-agnostic alias for --tfClassName).
+     * Prefer this method for new code; getInferTFClassNameParam is kept for backward compatibility.
+     */
+    public String getInferModelClassNameParam(String udfClassName) {
+        return MODEL_CLASSNAME_KEY + udfClassName;
+    }
+
+    /**
+     * Returns the --framework parameter to pass to infer_server.py.
+     *
+     * @param frameworkType "TORCH" or "PADDLE" (case-insensitive).
+     */
+    public String getInferFrameworkParam(String frameworkType) {
+        return FRAMEWORK_KEY + frameworkType;
     }
 
     public String getInferShareMemoryInputParam(String shareMemoryInputKey) {

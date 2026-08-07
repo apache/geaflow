@@ -28,8 +28,8 @@ from libc.stdint cimport *
 cdef extern from "MmapIPC.h":
     cdef cppclass MmapIPC:
         MmapIPC(char* , char*) except +
-        int readBytes(int) nogil except +
-        bool writeBytes(char *, int) nogil except +
+        int readBytes(int) except + nogil
+        bool writeBytes(char *, int) except + nogil
         bool ParseQueuePath(string, string, long *)
         uint8_t* getReadBufferPtr()
 

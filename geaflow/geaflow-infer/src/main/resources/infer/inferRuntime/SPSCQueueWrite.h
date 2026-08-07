@@ -60,7 +60,7 @@ class SPSCQueueWrite : public SPSCQueueBase
   public:
     SPSCQueueWrite(const char* fileName, int64_t len): SPSCQueueBase(mmap(fileName, len), len), toMove_(0) {}
 
-    ~SPSCQueueWrite() {}
+    virtual ~SPSCQueueWrite() {}
 
     static int64_t mmap(const char* fileName, int64_t len)
     {

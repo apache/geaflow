@@ -1,0 +1,6 @@
+1|shop_a
+2|restaurant_b
+3|park_c
+4|hotel_d
+5|museum_e
+

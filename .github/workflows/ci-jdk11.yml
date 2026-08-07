@@ -74,6 +74,18 @@ jobs:
         with:
           version: "21.7"
 
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+          cache: 'pip'
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r geaflow/geaflow-dsl/geaflow-dsl-plan/src/main/resources/requirements.txt
+          pip list | grep -i torch
+
       # Current hive connector is incompatible with jdk11, implement 4.0.0+ hive version in later.
       - name: Build and Test On JDK 11
         run: |
