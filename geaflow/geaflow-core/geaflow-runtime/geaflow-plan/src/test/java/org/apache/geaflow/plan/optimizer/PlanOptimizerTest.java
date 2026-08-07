@@ -150,7 +150,7 @@ public class PlanOptimizerTest {
         }
 
         PipelineGraphOptimizer optimizer = new PipelineGraphOptimizer();
-        optimizer.optimizePipelineGraph(pipelineGraph);
+        optimizer.optimizePipelineGraph(pipelineGraph, new Configuration());
         Assert.assertEquals(pipelineGraph.getVertexMap().size(), 1);
         PipelineVertex sourceVertex = pipelineGraph.getVertexMap().get(1);
         Assert.assertEquals(((AbstractOperator) sourceVertex.getOperator()).getNextOperators().size(), 1);

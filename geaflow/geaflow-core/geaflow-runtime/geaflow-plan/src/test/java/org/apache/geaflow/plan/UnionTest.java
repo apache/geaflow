@@ -70,7 +70,7 @@ public class UnionTest {
         Assert.assertEquals(vertexMap.size(), 6);
 
         PipelineGraphOptimizer optimizer = new PipelineGraphOptimizer();
-        optimizer.optimizePipelineGraph(pipelineGraph);
+        optimizer.optimizePipelineGraph(pipelineGraph, new Configuration());
         Assert.assertEquals(vertexMap.size(), 4);
     }
 
@@ -107,7 +107,7 @@ public class UnionTest {
         Assert.assertEquals(vertexMap.size(), 7);
 
         PipelineGraphOptimizer optimizer = new PipelineGraphOptimizer();
-        optimizer.optimizePipelineGraph(pipelineGraph);
+        optimizer.optimizePipelineGraph(pipelineGraph, new Configuration());
         Assert.assertEquals(vertexMap.size(), 5);
     }
 
@@ -138,7 +138,7 @@ public class UnionTest {
         Assert.assertEquals(vertexMap.size(), 6);
 
         PipelineGraphOptimizer optimizer = new PipelineGraphOptimizer();
-        optimizer.optimizePipelineGraph(pipelineGraph);
+        optimizer.optimizePipelineGraph(pipelineGraph, new Configuration());
         Assert.assertEquals(vertexMap.size(), 4);
     }
 
@@ -170,7 +170,7 @@ public class UnionTest {
         Assert.assertEquals(vertexMap.size(), 6);
 
         PipelineGraphOptimizer optimizer = new PipelineGraphOptimizer();
-        optimizer.optimizePipelineGraph(pipelineGraph);
+        optimizer.optimizePipelineGraph(pipelineGraph, new Configuration());
         Assert.assertEquals(vertexMap.size(), 4);
     }
 
