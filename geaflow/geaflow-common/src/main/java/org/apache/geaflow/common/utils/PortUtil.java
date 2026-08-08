@@ -43,7 +43,13 @@ public class PortUtil {
                 num++;
             }
         }
-        throw new RuntimeException(String.format("no available port in [%d,%d]", minPort, maxPort));
+        // Fallback to an ephemeral port chosen by OS when the configured range is unavailable
+        // (for example, in constrained CI/network environments).
+        try (ServerSocket serverSocket = new ServerSocket(0)) {
+            return serverSocket.getLocalPort();
+        } catch (Exception e) {
+            throw new RuntimeException(String.format("no available port in [%d,%d]", minPort, maxPort));
+        }
     }
 
     public static int getPort(int port) {

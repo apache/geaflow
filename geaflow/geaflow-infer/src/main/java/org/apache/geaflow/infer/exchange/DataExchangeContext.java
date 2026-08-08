@@ -24,6 +24,7 @@ import static org.apache.geaflow.common.config.keys.FrameworkConfigKeys.INFER_EN
 import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.commons.io.FileUtils;
 import org.apache.geaflow.common.config.Configuration;
 import org.apache.geaflow.common.exception.GeaflowRuntimeException;
@@ -48,6 +49,9 @@ public class DataExchangeContext implements Closeable {
 
     private final File receiveQueueFile;
     private final File sendQueueFile;
+    private final Thread queueEndpointCleanupHook;
+    private final AtomicBoolean closed = new AtomicBoolean(false);
+    private final AtomicBoolean queueEndpointFreed = new AtomicBoolean(false);
     private String receivePath;
     private String sendPath;
 
@@ -62,7 +66,8 @@ public class DataExchangeContext implements Closeable {
         int queueCapacity = config.getInteger(INFER_ENV_SHARE_MEMORY_QUEUE_SIZE);
         this.receiveQueue = new DataExchangeQueue(receivePath, queueCapacity, true);
         this.sendQueue = new DataExchangeQueue(sendPath, queueCapacity, true);
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> UnSafeUtils.UNSAFE.freeMemory(queueEndpoint)));
+        this.queueEndpointCleanupHook = new Thread(this::freeQueueEndpoint);
+        Runtime.getRuntime().addShutdownHook(queueEndpointCleanupHook);
     }
 
     public String getReceiveQueueKey() {
@@ -75,6 +80,10 @@ public class DataExchangeContext implements Closeable {
 
     @Override
     public synchronized void close() throws IOException {
+        if (!closed.compareAndSet(false, true)) {
+            return;
+        }
+        markFinished();
         if (receiveQueue != null) {
             receiveQueue.close();
         }
@@ -87,7 +96,12 @@ public class DataExchangeContext implements Closeable {
         if (sendQueueFile != null) {
             sendQueueFile.delete();
         }
-        UnSafeUtils.UNSAFE.freeMemory(this.queueEndpoint);
+        try {
+            Runtime.getRuntime().removeShutdownHook(queueEndpointCleanupHook);
+        } catch (IllegalStateException ignored) {
+            // Ignore shutdown-in-progress failures and rely on idempotent free.
+        }
+        freeQueueEndpoint();
         FileUtils.deleteQuietly(localDirectory);
     }
 
@@ -99,6 +113,15 @@ public class DataExchangeContext implements Closeable {
         return sendQueue;
     }
 
+    public void markFinished() {
+        if (receiveQueue != null) {
+            receiveQueue.markFinished();
+        }
+        if (sendQueue != null) {
+            sendQueue.markFinished();
+        }
+    }
+
     private File createTempFile(String prefix, String suffix) {
         try {
             if (!localDirectory.exists()) {
@@ -107,6 +130,12 @@ public class DataExchangeContext implements Closeable {
             return File.createTempFile(prefix, suffix, localDirectory);
         } catch (IOException e) {
             throw new GeaflowRuntimeException("create temp file on infer directory failed ", e);
+        }
+    }
+
+    private void freeQueueEndpoint() {
+        if (queueEndpointFreed.compareAndSet(false, true)) {
+            UnSafeUtils.UNSAFE.freeMemory(queueEndpoint);
         }
     }
 }

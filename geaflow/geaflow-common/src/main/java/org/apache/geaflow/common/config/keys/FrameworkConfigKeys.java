@@ -118,6 +118,16 @@ public class FrameworkConfigKeys implements Serializable {
         .defaultValue(true)
         .description("infer env suppress log enable, default is true");
 
+    public static final ConfigKey INFER_CONTEXT_POOL_MAX_SIZE = ConfigKeys
+        .key("geaflow.infer.context.pool.max.size")
+        .defaultValue(8)
+        .description("max infer context count for the same config key, default is 8");
+
+    public static final ConfigKey INFER_CONTEXT_POOL_BORROW_TIMEOUT_SEC = ConfigKeys
+        .key("geaflow.infer.context.pool.borrow.timeout.sec")
+        .defaultValue(30)
+        .description("max wait time for borrowing infer context, default is 30 seconds");
+
     public static final ConfigKey INFER_USER_DEFINE_LIB_PATH = ConfigKeys
         .key("geaflow.infer.user.define.lib.path")
         .noDefaultValue()
@@ -169,4 +179,3 @@ public class FrameworkConfigKeys implements Serializable {
         .description("in dynmic graph, whether udf function materialize graph in finish");
 
 }
-
