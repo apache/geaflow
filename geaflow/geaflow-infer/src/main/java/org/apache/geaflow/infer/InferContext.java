@@ -18,6 +18,12 @@
  */
 package org.apache.geaflow.infer;
 
+import static org.apache.geaflow.common.config.keys.FrameworkConfigKeys.INFER_ENV_HOT_RELOAD_BACKOFF_SEC;
+import static org.apache.geaflow.common.config.keys.FrameworkConfigKeys.INFER_ENV_HOT_RELOAD_ENABLE;
+import static org.apache.geaflow.common.config.keys.FrameworkConfigKeys.INFER_ENV_HOT_RELOAD_MODEL_PATH;
+import static org.apache.geaflow.common.config.keys.FrameworkConfigKeys.INFER_ENV_HOT_RELOAD_MODEL_VERSION_FILE;
+import static org.apache.geaflow.common.config.keys.FrameworkConfigKeys.INFER_ENV_HOT_RELOAD_POLL_INTERVAL_SEC;
+import static org.apache.geaflow.common.config.keys.FrameworkConfigKeys.INFER_ENV_HOT_RELOAD_WARMUP_ENABLE;
 import static org.apache.geaflow.common.config.keys.FrameworkConfigKeys.INFER_ENV_USER_TRANSFORM_CLASSNAME;
 
 import com.google.common.base.Preconditions;
@@ -90,6 +96,22 @@ public class InferContext<OUT> implements AutoCloseable {
         runCommands.add(inferEnvironmentContext.getInferTFClassNameParam(this.userDataTransformClass));
         runCommands.add(inferEnvironmentContext.getInferShareMemoryInputParam(receiveQueueKey));
         runCommands.add(inferEnvironmentContext.getInferShareMemoryOutputParam(sendQueueKey));
+
+        Configuration config = inferEnvironmentContext.getJobConfig();
+        String modelPath = config.getString(INFER_ENV_HOT_RELOAD_MODEL_PATH, "model.pt");
+        String modelVersionFile = config.getString(INFER_ENV_HOT_RELOAD_MODEL_VERSION_FILE,
+            "model.version");
+        double pollIntervalSec = config.getDouble(INFER_ENV_HOT_RELOAD_POLL_INTERVAL_SEC);
+        double backoffSec = config.getDouble(INFER_ENV_HOT_RELOAD_BACKOFF_SEC);
+        boolean warmupEnabled = config.getBoolean(INFER_ENV_HOT_RELOAD_WARMUP_ENABLE);
+        boolean hotReloadEnabled = config.getBoolean(INFER_ENV_HOT_RELOAD_ENABLE);
+
+        runCommands.add(inferEnvironmentContext.getInferModelPathParam(modelPath));
+        runCommands.add(inferEnvironmentContext.getInferModelVersionFileParam(modelVersionFile));
+        runCommands.add(inferEnvironmentContext.getInferPollIntervalSecParam(pollIntervalSec));
+        runCommands.add(inferEnvironmentContext.getInferBackoffSecParam(backoffSec));
+        runCommands.add(inferEnvironmentContext.getInferWarmupEnabledParam(warmupEnabled));
+        runCommands.add(inferEnvironmentContext.getInferHotReloadEnabledParam(hotReloadEnabled));
         inferTaskRunner.run(runCommands);
     }
 
