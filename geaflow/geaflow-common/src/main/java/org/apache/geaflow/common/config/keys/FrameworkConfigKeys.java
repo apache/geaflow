@@ -168,5 +168,24 @@ public class FrameworkConfigKeys implements Serializable {
         .defaultValue(false)
         .description("in dynmic graph, whether udf function materialize graph in finish");
 
+    // ------------------------------------------------------------------------
+    // async mode strategy configuration
+    // ------------------------------------------------------------------------
+
+    public static final ConfigKey ASYNC_MODE_STRATEGY = ConfigKeys
+        .key("geaflow.pipeline.async.strategy")
+        .defaultValue("config-based")
+        .description("Strategy for determining async mode. Available: config-based, resource-based, hybrid");
+
+    public static final ConfigKey ASYNC_RESOURCE_DRIVER_THRESHOLD = ConfigKeys
+        .key("geaflow.pipeline.async.resource.driver.threshold")
+        .defaultValue(2)
+        .description("Minimum number of drivers to trigger async mode in resource-based strategy");
+
+    public static final ConfigKey ASYNC_RESOURCE_CONTAINER_THRESHOLD = ConfigKeys
+        .key("geaflow.pipeline.async.resource.container.threshold")
+        .defaultValue(4)
+        .description("Minimum number of containers to trigger async mode in resource-based strategy");
+
 }
 
