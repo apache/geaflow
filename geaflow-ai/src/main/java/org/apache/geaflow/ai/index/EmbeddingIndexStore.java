@@ -47,7 +47,17 @@ public class EmbeddingIndexStore implements IndexStore {
     private VerbalizationFunction verbFunc;
     private String indexFilePath;
     private ModelConfig modelConfig;
-    private Map<GraphEntity, List<EmbeddingService.EmbeddingResult>> indexStoreMap;
+    /**
+     * Keyed by {@link ModelUtils#getGraphEntityKey}, the same string the index file is keyed by, so
+     * that one notion of which entity a vector belongs to serves both. Keying it by the entity would
+     * hand that decision to {@code GraphVertex.equals}, which answers on the id and the label and
+     * would take the index with it if it ever came to answer on the values as well.
+     *
+     * <p>Built aside and assigned once, so a reader during initStore sees the index it had before
+     * rather than one half way through being built, and empty until there has been one.
+     */
+    private volatile Map<String, List<EmbeddingService.EmbeddingResult>> indexStoreMap =
+            Collections.emptyMap();
 
     public void initStore(GraphAccessor graphAccessor, VerbalizationFunction func,
                           String indexFilePath, ModelConfig modelInfo) {
@@ -55,7 +65,7 @@ public class EmbeddingIndexStore implements IndexStore {
         this.verbFunc = func;
         this.indexFilePath = indexFilePath;
         this.modelConfig = modelInfo;
-        this.indexStoreMap = new HashMap<>();
+        Map<String, List<EmbeddingService.EmbeddingResult>> loading = new HashMap<>();
 
         //Read index items from indexFilePath
         Map<String, GraphEntity> key2EntityMap = new HashMap<>();
@@ -85,7 +95,14 @@ public class EmbeddingIndexStore implements IndexStore {
         }
 
 
+        // A record is accepted only when its fingerprint matches the text the entity would be
+        // embedded from now. The key tells which entity a vector belongs to but nothing about the
+        // value it came from, so without this an entity that kept its id and changed its value
+        // would count as indexed and keep the vector of the value it no longer has.
         long count = 0;
+        long staleRecords = 0;
+        long unversionedRecords = 0;
+        Map<String, String> key2Fingerprint = new HashMap<>();
         try (BufferedReader reader = new BufferedReader(
                 new InputStreamReader(
                         new FileInputStream(this.indexFilePath),
@@ -96,25 +113,46 @@ public class EmbeddingIndexStore implements IndexStore {
                 if (line.isEmpty()) {
                     continue;
                 }
+                EmbeddingService.EmbeddingResult embedding;
                 try {
-                    EmbeddingService.EmbeddingResult embedding =
-                            new Gson().fromJson(line, EmbeddingService.EmbeddingResult.class);
-                    String key = embedding.input;
-                    GraphEntity entity = key2EntityMap.get(key);
-                    if (entity != null) {
-                        this.indexStoreMap.computeIfAbsent(entity, k -> new ArrayList<>()).add(embedding);
-                    }
-                    count++;
+                    embedding = new Gson().fromJson(line, EmbeddingService.EmbeddingResult.class);
                 } catch (Throwable e) {
+                    // Only the parse is guarded. What follows verbalises the entity, and a
+                    // verbaliser that throws must not be reported as a malformed file.
                     LOGGER.info("Cannot parse embedding item: " + line);
+                    continue;
                 }
+                String key = embedding == null ? null : embedding.input;
+                GraphEntity entity = key == null ? null : key2EntityMap.get(key);
+                if (entity != null) {
+                    if (embedding.contentHash == null) {
+                        unversionedRecords++;
+                    } else if (embedding.contentHash.equals(
+                            currentFingerprint(key, entity, key2Fingerprint))) {
+                        loading.computeIfAbsent(key, k -> new ArrayList<>()).add(embedding);
+                    } else {
+                        staleRecords++;
+                    }
+                }
+                count++;
             }
         } catch (Throwable e) {
             throw new RuntimeException(e);
         }
 
         LOGGER.info("Success to read index store file. items num: " + count);
-        LOGGER.info("Success to rebuild index with file. index num: " + this.indexStoreMap.size());
+        if (staleRecords > 0) {
+            LOGGER.info("{} records were produced from text their entity no longer has. Not "
+                    + "loading them, so those entities are embedded again.", staleRecords);
+        }
+        if (unversionedRecords > 0) {
+            // Written before the fingerprint existed, so there is no way to tell whether they match
+            // the current value. Trusting them would keep exactly the staleness this check is for.
+            LOGGER.warn("{} records carry no fingerprint, so the text they were produced from "
+                    + "cannot be established. Not loading them, which costs one round of embedding, "
+                    + "after which they carry one.", unversionedRecords);
+        }
+        LOGGER.info("Success to rebuild index with file. index num: " + loading.size());
 
 
         //Scan entities in the graph, make new index items
@@ -123,21 +161,22 @@ public class EmbeddingIndexStore implements IndexStore {
 
         final int BATCH_SIZE = Constants.EMBEDDING_INDEX_STORE_BATCH_SIZE;
         List<GraphEntity> pendingEntities = new ArrayList<>(BATCH_SIZE);
-        Set<GraphEntity> batchEntitiesBuffer = new HashSet<>(BATCH_SIZE);
+        Set<String> batchEntitiesBuffer = new HashSet<>(BATCH_SIZE);
         List<String> result = new ArrayList<>();
         final int REPORT_SIZE = Constants.EMBEDDING_INDEX_STORE_REPORT_SIZE;
-        long reportedCount = this.indexStoreMap.size();
-        long addedCount = this.indexStoreMap.size();
+        long reportedCount = loading.size();
+        long addedCount = loading.size();
         for (Iterator<GraphVertex> itV = graphAccessor.scanVertex(); itV.hasNext(); ) {
             GraphVertex vertex = itV.next();
 
             // Scan vertices or edges, skip already indexed data,
             // add un-indexed data to batch processing collection
-            if (!indexStoreMap.containsKey(vertex) && !batchEntitiesBuffer.contains(vertex)) {
-                batchEntitiesBuffer.add(vertex);
+            String vertexKey = ModelUtils.getGraphEntityKey(vertex);
+            if (!loading.containsKey(vertexKey) && !batchEntitiesBuffer.contains(vertexKey)) {
+                batchEntitiesBuffer.add(vertexKey);
                 pendingEntities.add(vertex);
                 if (pendingEntities.size() >= BATCH_SIZE) {
-                    result.addAll(indexBatch(embeddingService, pendingEntities));
+                    result.addAll(indexBatch(embeddingService, pendingEntities, loading));
                     flushBatchIndex(result, false);
                     pendingEntities.clear();
                     batchEntitiesBuffer.clear();
@@ -147,11 +186,12 @@ public class EmbeddingIndexStore implements IndexStore {
 
             for (Iterator<GraphEdge> itE = graphAccessor.scanEdge(vertex); itE.hasNext(); ) {
                 GraphEdge edge = itE.next();
-                if (!indexStoreMap.containsKey(edge) && !batchEntitiesBuffer.contains(edge)) {
-                    batchEntitiesBuffer.add(edge);
+                String edgeKey = ModelUtils.getGraphEntityKey(edge);
+                if (!loading.containsKey(edgeKey) && !batchEntitiesBuffer.contains(edgeKey)) {
+                    batchEntitiesBuffer.add(edgeKey);
                     pendingEntities.add(edge);
                     if (pendingEntities.size() >= BATCH_SIZE) {
-                        result.addAll(indexBatch(embeddingService, pendingEntities));
+                        result.addAll(indexBatch(embeddingService, pendingEntities, loading));
                         flushBatchIndex(result, false);
                         pendingEntities.clear();
                         batchEntitiesBuffer.clear();
@@ -165,30 +205,55 @@ public class EmbeddingIndexStore implements IndexStore {
             }
         }
         if (pendingEntities.size() > 0) {
-            result.addAll(indexBatch(embeddingService, pendingEntities));
+            result.addAll(indexBatch(embeddingService, pendingEntities, loading));
             flushBatchIndex(result, true);
             addedCount += pendingEntities.size();
             pendingEntities.clear();
             batchEntitiesBuffer.clear();
         }
 
+        this.indexStoreMap = loading;
         LOGGER.info("Successfully added {} new index items. Total indexed: {}",
-                addedCount, indexStoreMap.size());
+                addedCount, loading.size());
     }
 
-    private List<String> indexBatch(EmbeddingService service, List<GraphEntity> pendingEntities) {
+    /**
+     * The fingerprint of what the entity would be embedded from now, worked out once per entity
+     * since one file holds every chunk of it as a record of its own. This takes
+     * {@link VerbalizationFunction#verbalize(GraphEntity)} to be a function of the entity alone: one
+     * that answers differently for an unchanged entity would have its vectors produced again on
+     * every run.
+     */
+    private String currentFingerprint(String key, GraphEntity entity, Map<String, String> memo) {
+        String fingerprint = memo.get(key);
+        if (fingerprint == null) {
+            fingerprint = ModelUtils.getEmbeddedTextFingerprint(embeddedChunks(this.verbFunc, entity));
+            memo.put(key, fingerprint);
+        }
+        return fingerprint;
+    }
+
+    /** The texts an entity is embedded from, which is also what its fingerprint covers. */
+    private static List<String> embeddedChunks(VerbalizationFunction func, GraphEntity entity) {
+        return ModelUtils.splitLongText(Constants.EMBEDDING_INDEX_STORE_SPLIT_TEXT_CHUNK_SIZE,
+                func.verbalize(entity).toArray(new String[0]));
+    }
+
+    private List<String> indexBatch(EmbeddingService service, List<GraphEntity> pendingEntities,
+                                    Map<String, List<EmbeddingService.EmbeddingResult>> loading) {
         if (pendingEntities == null || service == null || pendingEntities.isEmpty()) {
             return new ArrayList<>();
         }
         List<String> pendingTexts = new ArrayList<>(pendingEntities.size());
         Map<GraphEntity, Pair<Integer, Integer>> entity2StartEndPair = new HashMap<>();
+        Map<GraphEntity, String> entity2Fingerprint = new HashMap<>();
         for (GraphEntity e : pendingEntities) {
             Integer start = pendingTexts.size();
-            pendingTexts.addAll(ModelUtils.splitLongText(
-                Constants.EMBEDDING_INDEX_STORE_SPLIT_TEXT_CHUNK_SIZE,
-                    verbFunc.verbalize(e).toArray(new String[0])));
+            List<String> chunks = embeddedChunks(verbFunc, e);
+            pendingTexts.addAll(chunks);
             Integer end = pendingTexts.size();
             entity2StartEndPair.put(e, Pair.of(start, end));
+            entity2Fingerprint.put(e, ModelUtils.getEmbeddedTextFingerprint(chunks));
         }
 
         Gson gson = new Gson();
@@ -209,17 +274,19 @@ public class EmbeddingIndexStore implements IndexStore {
         List<String> formatResult = new ArrayList<>();
         for (Map.Entry<GraphEntity, Pair<Integer, Integer>> entry : entity2StartEndPair.entrySet()) {
             GraphEntity e = entry.getKey();
+            String key = ModelUtils.getGraphEntityKey(e);
             List<EmbeddingService.EmbeddingResult> embeddings = new ArrayList<>();
             for (int i = entry.getValue().getLeft(); i < entry.getValue().getRight(); i++) {
                 if (StringUtils.isNotBlank(result.get(i))) {
                     EmbeddingService.EmbeddingResult res = gson.fromJson(result.get(i),
                         EmbeddingService.EmbeddingResult.class);
-                    res.input = ModelUtils.getGraphEntityKey(e);
+                    res.input = key;
+                    res.contentHash = entity2Fingerprint.get(e);
                     formatResult.add(gson.toJson(res));
                     embeddings.add(res);
                 }
             }
-            indexStoreMap.put(e, embeddings);
+            loading.put(key, embeddings);
         }
         return formatResult;
     }
@@ -243,14 +310,18 @@ public class EmbeddingIndexStore implements IndexStore {
 
     @Override
     public List<IVector> getEntityIndex(GraphEntity entity) {
-        if (entity != null && indexStoreMap.get(entity) != null) {
-            List<EmbeddingService.EmbeddingResult> resultList = indexStoreMap.get(entity);
-            List<IVector> result = new ArrayList<>();
-            for (EmbeddingService.EmbeddingResult res : resultList) {
-                double[] embedding = res.embedding;
-                result.add(new EmbeddingVector(embedding));
+        if (entity != null) {
+            // Read once: the field is replaced wholesale when an index is built.
+            List<EmbeddingService.EmbeddingResult> resultList =
+                    indexStoreMap.get(ModelUtils.getGraphEntityKey(entity));
+            if (resultList != null) {
+                List<IVector> result = new ArrayList<>();
+                for (EmbeddingService.EmbeddingResult res : resultList) {
+                    double[] embedding = res.embedding;
+                    result.add(new EmbeddingVector(embedding));
+                }
+                return result;
             }
-            return result;
         }
         return Collections.emptyList();
     }

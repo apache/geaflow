@@ -50,6 +50,13 @@ public class EmbeddingService extends AbstractModelService {
     public static class EmbeddingResult {
         public String input;
         public double[] embedding;
+        /**
+         * Fingerprint of the text this vector was produced from, see
+         * {@link ModelUtils#getEmbeddedTextFingerprint}. It is set by whoever persists the result,
+         * so it is null on a result fresh from the model, and null on a record read from an index
+         * file written before the field existed.
+         */
+        public String contentHash;
 
         public EmbeddingResult(String input, double[] embedding) {
             this.input = input;
