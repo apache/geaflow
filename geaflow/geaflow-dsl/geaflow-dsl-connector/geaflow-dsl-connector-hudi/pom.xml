@@ -33,7 +33,7 @@
 
     <properties>
         <hudi.version>0.13.0</hudi.version>
-        <fasterxml.version>2.10.0</fasterxml.version>
+        <fasterxml.version>2.18.6</fasterxml.version>
     </properties>
 
     <dependencies>
