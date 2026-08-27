@@ -91,6 +91,9 @@ public class TypeCastUtil {
         if (sourceType == targetType) {
             return identityCast;
         }
+        if (sourceType.isArray() && targetType == String.class) {
+            return (ITypeCast<S, T>) new Array2String();
+        }
         if (sourceType.isArray() && targetType.isArray()) {
             ITypeCast componentTypeCast = getTypeCast(sourceType.getComponentType(), targetType.getComponentType());
             return (ITypeCast<S, T>) new ArrayCast(componentTypeCast, targetType.getComponentType());
@@ -176,6 +179,30 @@ public class TypeCastUtil {
                 Array.set(castArray, i, castObject);
             }
             return castArray;
+        }
+    }
+
+    private static class Array2String implements ITypeCast<Object, String> {
+
+        @Override
+        public String castTo(Object objects) {
+            if (objects == null) {
+                return null;
+            }
+            if (!objects.getClass().isArray()) {
+                return String.valueOf(objects);
+            }
+            int length = Array.getLength(objects);
+            StringBuilder builder = new StringBuilder();
+            builder.append('[');
+            for (int i = 0; i < length; i++) {
+                if (i > 0) {
+                    builder.append(", ");
+                }
+                builder.append(String.valueOf(Array.get(objects, i)));
+            }
+            builder.append(']');
+            return builder.toString();
         }
     }
 

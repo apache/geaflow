@@ -23,6 +23,7 @@ import com.google.common.base.Preconditions;
 import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
+import java.lang.reflect.Field;
 import java.nio.charset.Charset;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -149,14 +150,69 @@ public class QueryTester implements Serializable {
             graphDefinePath = this.graphDefinePath;
         }
         gqlPipeLine.setPipelineHook(new TestGQLPipelineHook(graphDefinePath, queryPath));
+        Throwable executeFailure = null;
         try {
             gqlPipeLine.execute();
+        } catch (Throwable t) {
+            executeFailure = t;
+            throw t;
         } finally {
-            environment.shutdown();
-            ClusterMetaStore.close();
-            ScheduledWorkerManagerFactory.clear();
+            Throwable shutdownFailure = null;
+            try {
+                environment.shutdown();
+            } catch (Throwable t) {
+                shutdownFailure = t;
+            }
+            try {
+                ClusterMetaStore.close();
+            } catch (Throwable t) {
+                if (shutdownFailure == null) {
+                    shutdownFailure = t;
+                }
+            }
+            try {
+                resetScheduledWorkerManagers();
+            } catch (Throwable t) {
+                if (shutdownFailure == null) {
+                    shutdownFailure = t;
+                }
+            }
+            if (executeFailure == null && shutdownFailure != null
+                && !isIgnorableShutdownFailure(shutdownFailure)) {
+                if (shutdownFailure instanceof Exception) {
+                    throw (Exception) shutdownFailure;
+                }
+                throw new RuntimeException(shutdownFailure);
+            }
         }
         return this;
+    }
+
+    private static boolean isIgnorableShutdownFailure(Throwable throwable) {
+        for (Throwable current = throwable; current != null; current = current.getCause()) {
+            String message = current.getMessage();
+            if (message == null) {
+                continue;
+            }
+            if (message.contains("channel pool is closed")
+                || message.contains("executor not accepting a task")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static void resetScheduledWorkerManagers() throws IllegalAccessException,
+        NoSuchFieldException {
+        resetScheduledWorkerManager("redoWorkerManager");
+        resetScheduledWorkerManager("checkpointWorkerManager");
+    }
+
+    private static void resetScheduledWorkerManager(String fieldName)
+        throws NoSuchFieldException, IllegalAccessException {
+        Field field = ScheduledWorkerManagerFactory.class.getDeclaredField(fieldName);
+        field.setAccessible(true);
+        field.set(null, null);
     }
 
     private void initResultDirectory() throws Exception {

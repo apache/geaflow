@@ -71,6 +71,10 @@ public class GeaFlowAlgorithmRuntimeContext implements AlgorithmRuntimeContext<O
         this.edgeQuery.withId(vertexId);
     }
 
+    public Object getVertexId() {
+        return vertexId;
+    }
+
     @SuppressWarnings("unchecked")
     @Override
     public List<RowEdge> loadEdges(EdgeDirection direction) {

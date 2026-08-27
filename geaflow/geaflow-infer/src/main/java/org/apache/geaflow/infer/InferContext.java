@@ -23,6 +23,8 @@ import static org.apache.geaflow.common.config.keys.FrameworkConfigKeys.INFER_EN
 import com.google.common.base.Preconditions;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.ReentrantLock;
 import org.apache.geaflow.common.config.Configuration;
 import org.apache.geaflow.common.exception.GeaflowRuntimeException;
 import org.apache.geaflow.infer.exchange.DataExchangeContext;
@@ -40,6 +42,9 @@ public class InferContext<OUT> implements AutoCloseable {
     private final String receiveQueueKey;
     private InferTaskRunImpl inferTaskRunner;
     private InferDataBridgeImpl<OUT> dataBridge;
+    private final ReentrantLock inferLock = new ReentrantLock();
+    private final AtomicBoolean closed = new AtomicBoolean(false);
+    private volatile boolean broken;
 
     public InferContext(Configuration config) {
         this.shareMemoryContext = new DataExchangeContext(config);
@@ -62,16 +67,21 @@ public class InferContext<OUT> implements AutoCloseable {
     }
 
     public OUT infer(Object... feature) throws Exception {
+        ensureAvailable();
+        inferLock.lock();
         try {
+            ensureAvailable();
             dataBridge.write(feature);
             return dataBridge.read();
         } catch (Exception e) {
-            inferTaskRunner.stop();
+            broken = true;
+            stopInferTask();
             LOGGER.error("model infer read result error, python process stopped", e);
             throw new GeaflowRuntimeException("receive infer result exception", e);
+        } finally {
+            inferLock.unlock();
         }
     }
-
 
     private InferEnvironmentContext getInferEnvironmentContext() {
         boolean initFinished = InferEnvironmentManager.checkInferEnvironmentStatus();
@@ -93,11 +103,44 @@ public class InferContext<OUT> implements AutoCloseable {
         inferTaskRunner.run(runCommands);
     }
 
-    @Override
-    public void close() {
+    public boolean isBroken() {
+        return broken;
+    }
+
+    private void ensureAvailable() {
+        if (closed.get()) {
+            throw new GeaflowRuntimeException("infer context already closed");
+        }
+        if (broken) {
+            throw new GeaflowRuntimeException("infer context is broken");
+        }
+    }
+
+    private void stopInferTask() {
         if (inferTaskRunner != null) {
             inferTaskRunner.stop();
+        }
+    }
+
+    @Override
+    public void close() {
+        if (!closed.compareAndSet(false, true)) {
+            return;
+        }
+        shareMemoryContext.markFinished();
+        stopInferTask();
+        inferLock.lock();
+        try {
+            if (dataBridge != null) {
+                dataBridge.close();
+                dataBridge = null;
+            }
+            shareMemoryContext.close();
             LOGGER.info("infer task stop after close");
+        } catch (Exception e) {
+            throw new GeaflowRuntimeException("close infer context failed", e);
+        } finally {
+            inferLock.unlock();
         }
     }
 }
