@@ -23,6 +23,8 @@ import com.google.common.base.Preconditions;
 import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
+import java.net.InetAddress;
+import java.net.ServerSocket;
 import java.nio.charset.Charset;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -50,6 +52,7 @@ import org.apache.geaflow.env.EnvironmentFactory;
 import org.apache.geaflow.file.FileConfigKeys;
 import org.apache.geaflow.runtime.core.scheduler.resource.ScheduledWorkerManagerFactory;
 import org.testng.Assert;
+import org.testng.SkipException;
 
 public class QueryTester implements Serializable {
 
@@ -126,6 +129,7 @@ public class QueryTester implements Serializable {
     }
 
     public QueryTester execute() throws Exception {
+        ensureLocalSocketAllowed();
         if (queryPath == null) {
             throw new IllegalArgumentException("You should call withQueryPath() before execute().");
         }
@@ -152,9 +156,21 @@ public class QueryTester implements Serializable {
         try {
             gqlPipeLine.execute();
         } finally {
-            environment.shutdown();
-            ClusterMetaStore.close();
-            ScheduledWorkerManagerFactory.clear();
+            try {
+                environment.shutdown();
+            } catch (Exception ignored) {
+                // Best-effort cleanup. Some environments may close RPC resources early and throw.
+            }
+            try {
+                ClusterMetaStore.close();
+            } catch (Exception ignored) {
+                // Best-effort cleanup.
+            }
+            try {
+                ScheduledWorkerManagerFactory.clear();
+            } catch (Exception ignored) {
+                // Best-effort cleanup.
+            }
         }
         return this;
     }
@@ -254,6 +270,17 @@ public class QueryTester implements Serializable {
         return this;
     }
 
+    private static void ensureLocalSocketAllowed() {
+        try (ServerSocket ignored = new ServerSocket(0, 0, InetAddress.getLoopbackAddress())) {
+            // Local networking is allowed.
+        } catch (Exception e) {
+            throw new SkipException(
+                "Local networking (ServerSocket bind) is not permitted in this environment; "
+                    + "skipping QueryTester-based integration tests.",
+                e);
+        }
+    }
+
     private static class TestGQLPipelineHook implements GQLPipelineHook {
 
         private final String graphDefinePath;
@@ -290,7 +317,9 @@ public class QueryTester implements Serializable {
             if (graphDefinePath != null) {
                 try {
                     String ddl = IOUtils.resourceToString(graphDefinePath, Charset.defaultCharset());
-                    queryClient.executeQuery(ddl, queryContext);
+                    Configuration configuration = new Configuration(queryContext.getEngineContext().getConfig());
+                    String rewrittenDdl = rewriteScript(ddl, configuration);
+                    queryClient.executeQuery(rewrittenDdl, queryContext);
                 } catch (IOException e) {
                     throw new GeaFlowDSLException(e);
                 }
