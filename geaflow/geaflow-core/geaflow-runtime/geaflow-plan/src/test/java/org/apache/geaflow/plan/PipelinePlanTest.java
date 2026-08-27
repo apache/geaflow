@@ -225,7 +225,7 @@ public class PipelinePlanTest extends BasePlanTest {
         PipelinePlanBuilder planBuilder = new PipelinePlanBuilder();
         PipelineGraph pipelineGraph = planBuilder.buildPlan(context);
         PipelineGraphOptimizer optimizer = new PipelineGraphOptimizer();
-        optimizer.optimizePipelineGraph(pipelineGraph);
+        optimizer.optimizePipelineGraph(pipelineGraph, new Configuration());
 
         Map<Integer, PipelineVertex> vertexMap = pipelineGraph.getVertexMap();
         if (backendType == BackendType.Paimon) {

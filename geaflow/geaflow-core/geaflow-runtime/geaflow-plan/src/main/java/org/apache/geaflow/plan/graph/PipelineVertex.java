@@ -35,6 +35,12 @@ public class PipelineVertex<OP extends Operator> implements Serializable {
     private AffinityLevel affinity;
     private boolean duplication;
     private VertexType chainTailType;
+    /**
+     * Co-location group ID for local shuffle optimization.
+     * Vertices with the same co-location group ID should be deployed on the same node
+     * to enable automatic local shuffle through LocalInputChannel.
+     */
+    private String coLocationGroup;
 
     public PipelineVertex(int vertexId, OP operator, int parallelism) {
         this.vertexId = vertexId;
@@ -137,6 +143,14 @@ public class PipelineVertex<OP extends Operator> implements Serializable {
 
     public void setChainTailType(VertexType chainTailType) {
         this.chainTailType = chainTailType;
+    }
+
+    public String getCoLocationGroup() {
+        return coLocationGroup;
+    }
+
+    public void setCoLocationGroup(String coLocationGroup) {
+        this.coLocationGroup = coLocationGroup;
     }
 
     public String getVertexString() {
