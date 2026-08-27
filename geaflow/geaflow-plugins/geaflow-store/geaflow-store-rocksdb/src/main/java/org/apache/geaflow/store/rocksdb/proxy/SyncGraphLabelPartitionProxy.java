@@ -20,6 +20,7 @@
 package org.apache.geaflow.store.rocksdb.proxy;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.apache.geaflow.common.config.Configuration;
@@ -30,12 +31,16 @@ import org.apache.geaflow.common.tuple.Tuple;
 import org.apache.geaflow.model.graph.IGraphElementWithLabelField;
 import org.apache.geaflow.model.graph.edge.IEdge;
 import org.apache.geaflow.model.graph.vertex.IVertex;
+import org.apache.geaflow.state.data.OneDegreeGraph;
 import org.apache.geaflow.state.graph.encoder.IGraphKVEncoder;
 import org.apache.geaflow.state.pushdown.IStatePushDown;
 import org.apache.geaflow.state.pushdown.filter.inner.FilterHelper;
 import org.apache.geaflow.state.pushdown.filter.inner.GraphFilter;
 import org.apache.geaflow.state.pushdown.filter.inner.IGraphFilter;
 import org.apache.geaflow.store.iterator.EdgeScanIterator;
+import org.apache.geaflow.store.iterator.MultiPartitionEdgeIterator;
+import org.apache.geaflow.store.iterator.MultiPartitionVertexIterator;
+import org.apache.geaflow.store.iterator.OneDegreeGraphScanIterator;
 import org.apache.geaflow.store.iterator.VertexScanIterator;
 import org.apache.geaflow.store.rocksdb.RocksdbClient;
 import org.apache.geaflow.store.rocksdb.RocksdbConfigKeys;
@@ -221,6 +226,66 @@ public class SyncGraphLabelPartitionProxy<K, VV, EV> extends SyncGraphRocksdbPro
         flush();
         return new EdgeScanIterator<>(getVertexOrEdgeIterator(edgeHandleMap, pushdown, false),
             pushdown, edgeEncoder::getEdge);
+    }
+
+    @Override
+    public CloseableIterator<OneDegreeGraph<K, VV, EV>> getOneDegreeGraphIterator(
+        IStatePushDown pushdown) {
+        flush();
+        
+        // Create multi-partition iterators for vertices and edges
+        Map<String, CloseableIterator<IVertex<K, VV>>> vertexPartitionIterators = new HashMap<>();
+        Map<String, CloseableIterator<IEdge<K, EV>>> edgePartitionIterators = new HashMap<>();
+        
+        IGraphFilter filter = (IGraphFilter) pushdown.getFilter();
+        List<String> labels = FilterHelper.parseLabel(filter, true);
+        
+        if (labels.isEmpty()) {
+            // Scan all partitions
+            for (Map.Entry<String, ColumnFamilyHandle> entry : vertexHandleMap.entrySet()) {
+                String partitionName = entry.getKey();
+                RocksdbIterator vertexIter = new RocksdbIterator(rocksdbClient.getIterator(entry.getValue()));
+                vertexPartitionIterators.put(partitionName, 
+                    new VertexScanIterator<>(vertexIter, pushdown, vertexEncoder::getVertex));
+            }
+            
+            for (Map.Entry<String, ColumnFamilyHandle> entry : edgeHandleMap.entrySet()) {
+                String partitionName = entry.getKey();
+                RocksdbIterator edgeIter = new RocksdbIterator(rocksdbClient.getIterator(entry.getValue()));
+                edgePartitionIterators.put(partitionName, 
+                    new EdgeScanIterator<>(edgeIter, pushdown, edgeEncoder::getEdge));
+            }
+        } else {
+            // Scan specific partitions based on labels
+            for (String label : labels) {
+                String vertexCfName = getColumnFamilyName(label, true);
+                String edgeCfName = getColumnFamilyName(label, false);
+                
+                if (vertexHandleMap.containsKey(vertexCfName)) {
+                    RocksdbIterator vertexIter = new RocksdbIterator(
+                        rocksdbClient.getIterator(vertexHandleMap.get(vertexCfName)));
+                    vertexPartitionIterators.put(vertexCfName, 
+                        new VertexScanIterator<>(vertexIter, pushdown, vertexEncoder::getVertex));
+                }
+                
+                if (edgeHandleMap.containsKey(edgeCfName)) {
+                    RocksdbIterator edgeIter = new RocksdbIterator(
+                        rocksdbClient.getIterator(edgeHandleMap.get(edgeCfName)));
+                    edgePartitionIterators.put(edgeCfName, 
+                        new EdgeScanIterator<>(edgeIter, pushdown, edgeEncoder::getEdge));
+                }
+            }
+        }
+        
+        // Create multi-partition iterators
+        MultiPartitionVertexIterator<K, VV> multiPartitionVertexIterator = 
+            new MultiPartitionVertexIterator<>(encoder.getKeyType(), vertexPartitionIterators);
+        MultiPartitionEdgeIterator<K, EV> multiPartitionEdgeIterator = 
+            new MultiPartitionEdgeIterator<>(encoder.getKeyType(), edgePartitionIterators);
+        
+        // Create partition-aware one degree graph iterator
+        return new OneDegreeGraphScanIterator<>(encoder.getKeyType(), 
+            multiPartitionVertexIterator, multiPartitionEdgeIterator, pushdown);
     }
 
     private CloseableIterator<Tuple<byte[], byte[]>> getVertexOrEdgeIterator(
