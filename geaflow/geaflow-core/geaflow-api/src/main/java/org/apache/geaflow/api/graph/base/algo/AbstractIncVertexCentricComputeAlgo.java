@@ -34,4 +34,37 @@ public abstract class AbstractIncVertexCentricComputeAlgo<K, VV, EV, M,
 
     public abstract FUNC getIncComputeFunction();
 
+    /**
+     * Returns the Python transform class name that this algorithm requires.
+     *
+     * <p>Override this method in subclasses to specify which Python UDF class
+     * should be loaded for inference, enabling multiple algorithms with different
+     * Python models to coexist in the same job without naming conflicts.
+     *
+     * <p>When this method returns a non-null value, the pipeline infrastructure
+     * will create a dedicated {@code InferContext} keyed to that class name,
+     * independent of the global {@code geaflow.infer.env.user.transform.classname}
+     * configuration. When it returns {@code null} (the default), the global
+     * configuration value is used.
+     *
+     * <p>Example:
+     * <pre>
+     *   // Using the default Python UDF specified in global config:
+     *   incGraphView.incrementalCompute(new GraphSAGECompute(10, 2))
+     *
+     *   // Explicitly specifying a Python UDF (code-based approach):
+     *   incGraphView.incrementalCompute(new GraphSAGECompute(10, 2, "GraphSAGETransFormFunction"))
+     *
+     *   // Two algorithms in the same job, each with its own Python UDF:
+     *   incGraphView.incrementalCompute(new GraphSAGECompute(10, 2, "GraphSAGETransFormFunction"))
+     *   incGraphView.incrementalCompute(new GCNCompute(64, "GCNTransFormFunction"))
+     * </pre>
+     *
+     * @return the Python transform class name, or {@code null} to fall back to
+     *         the global configuration
+     */
+    public String getPythonTransformClassName() {
+        return null;
+    }
+
 }
