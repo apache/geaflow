@@ -166,19 +166,82 @@ public class FullReplayOracleTest {
     }
 
     @Test
-    public void testRejectUnsupportedRetract() {
+    public void testRetractEventSplitsValidTimeAndClosesOldVersion() {
+        MemoryEvent add = addEvent(
+            "event-add",
+            "fact-name-alice",
+            "person:alice",
+            "Alice",
+            "2024-01-01T00:00:00Z",
+            "2024-03-01T00:00:00Z");
+        MemoryEvent retract = retractEvent(
+            "event-retract",
+            "fact-name-alice",
+            "2024-04-01T00:00:00Z",
+            "2024-09-01T00:00:00Z",
+            "2024-06-01T00:00:00Z");
+
+        List<MemoryFactVersion> versions =
+            oracle.replay(Arrays.asList(retract, add));
+
+        Assertions.assertEquals(3, versions.size());
+        assertVersion(
+            versions.get(0),
+            "event-add:version:0",
+            add.getFact().get(),
+            TimeInterval.unboundedFrom(
+                time("2024-01-01T00:00:00Z")),
+            interval(
+                "2024-03-01T00:00:00Z",
+                "2024-06-01T00:00:00Z"),
+            add.getEvidence());
+        assertVersion(
+            versions.get(1),
+            "event-retract:version:1",
+            add.getFact().get(),
+            interval(
+                "2024-01-01T00:00:00Z",
+                "2024-04-01T00:00:00Z"),
+            TimeInterval.unboundedFrom(
+                time("2024-06-01T00:00:00Z")),
+            add.getEvidence());
+        assertVersion(
+            versions.get(2),
+            "event-retract:version:2",
+            add.getFact().get(),
+            TimeInterval.unboundedFrom(
+                time("2024-09-01T00:00:00Z")),
+            TimeInterval.unboundedFrom(
+                time("2024-06-01T00:00:00Z")),
+            add.getEvidence());
+    }
+
+    @Test
+    public void testRetractWholeCurrentInterval() {
+        MemoryEvent add = addEvent(
+            "event-add",
+            "fact-name-alice",
+            "person:alice",
+            "Alice",
+            "2024-01-01T00:00:00Z",
+            "2024-03-01T00:00:00Z");
         MemoryEvent retract = MemoryEvent.retract(
             "event-retract",
             "fact-name-alice",
             TimeInterval.unboundedFrom(
-                time("2025-01-01T00:00:00Z")),
-            time("2025-02-01T00:00:00Z"),
+                time("2024-01-01T00:00:00Z")),
+            time("2024-06-01T00:00:00Z"),
             evidence("event-retract"));
 
-        Assertions.assertThrows(
-            UnsupportedOperationException.class,
-            () -> oracle.replay(
-                Collections.singletonList(retract)));
+        List<MemoryFactVersion> versions =
+            oracle.replay(Arrays.asList(add, retract));
+
+        Assertions.assertEquals(1, versions.size());
+        Assertions.assertEquals(
+            interval(
+                "2024-03-01T00:00:00Z",
+                "2024-06-01T00:00:00Z"),
+            versions.get(0).getTransactionTime());
     }
 
     @Test
@@ -323,6 +386,66 @@ public class FullReplayOracleTest {
     }
 
     @Test
+    public void testRetractAcrossCurrentFragments() {
+        MemoryEvent add = addEvent(
+            "event-add",
+            "fact-name-alice",
+            "person:alice",
+            "Alice",
+            "2024-01-01T00:00:00Z",
+            "2024-03-01T00:00:00Z");
+        MemoryEvent correction = correctEvent(
+            "event-correct",
+            "fact-name-alice",
+            "person:alice",
+            "Alice Smith",
+            "2024-04-01T00:00:00Z",
+            "2024-09-01T00:00:00Z",
+            "2024-06-01T00:00:00Z");
+        MemoryEvent retract = retractEvent(
+            "event-retract",
+            "fact-name-alice",
+            "2024-02-01T00:00:00Z",
+            "2024-10-01T00:00:00Z",
+            "2024-08-01T00:00:00Z");
+
+        List<MemoryFactVersion> versions = oracle.replay(
+            Arrays.asList(retract, correction, add));
+
+        List<MemoryFactVersion> current = new ArrayList<>();
+        for (MemoryFactVersion version : versions) {
+            if (!version.getTransactionTime()
+                .getEnd().isPresent()) {
+                current.add(version);
+            }
+        }
+
+        Assertions.assertEquals(6, versions.size());
+        Assertions.assertEquals(2, current.size());
+        Assertions.assertEquals(
+            "event-retract:version:1",
+            current.get(0).getId());
+        Assertions.assertEquals(
+            add.getFact().get(),
+            current.get(0).getFact());
+        Assertions.assertEquals(
+            interval(
+                "2024-01-01T00:00:00Z",
+                "2024-02-01T00:00:00Z"),
+            current.get(0).getValidTime());
+        Assertions.assertEquals(
+            "event-retract:version:2",
+            current.get(1).getId());
+        Assertions.assertEquals(
+            add.getFact().get(),
+            current.get(1).getFact());
+        Assertions.assertEquals(
+            TimeInterval.unboundedFrom(
+                time("2024-10-01T00:00:00Z")),
+            current.get(1).getValidTime());
+    }
+
+    @Test
     public void testRejectCorrectionWithoutFullCoverage() {
         MemoryEvent add = addEvent(
             "event-add",
@@ -344,6 +467,28 @@ public class FullReplayOracleTest {
             IllegalArgumentException.class,
             () -> oracle.replay(
                 Arrays.asList(add, correction)));
+    }
+
+    @Test
+    public void testRejectRetractionWithoutFullCoverage() {
+        MemoryEvent add = addEvent(
+            "event-add",
+            "fact-name-alice",
+            "person:alice",
+            "Alice",
+            "2024-01-01T00:00:00Z",
+            "2024-03-01T00:00:00Z");
+        MemoryEvent retract = retractEvent(
+            "event-retract",
+            "fact-name-alice",
+            "2023-12-01T00:00:00Z",
+            "2024-02-01T00:00:00Z",
+            "2024-06-01T00:00:00Z");
+
+        Assertions.assertThrows(
+            IllegalArgumentException.class,
+            () -> oracle.replay(
+                Arrays.asList(add, retract)));
     }
 
     @Test
@@ -422,6 +567,20 @@ public class FullReplayOracleTest {
         return MemoryEvent.correct(
             eventId,
             fact,
+            interval(validStart, validEnd),
+            time(transactionTime),
+            evidence(eventId));
+    }
+
+    private static MemoryEvent retractEvent(
+        String eventId,
+        String factId,
+        String validStart,
+        String validEnd,
+        String transactionTime) {
+        return MemoryEvent.retract(
+            eventId,
+            factId,
             interval(validStart, validEnd),
             time(transactionTime),
             evidence(eventId));

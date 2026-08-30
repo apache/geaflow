@@ -77,15 +77,16 @@ public final class FullReplayOracle {
 
         List<MemoryFactVersion> versions = new ArrayList<>();
         for (MemoryEvent event : orderedEvents) {
-            if (event.getOperation() == MemoryEventOperation.ADD) {
+            MemoryEventOperation operation = event.getOperation();
+            if (operation == MemoryEventOperation.ADD) {
                 replayAdd(event, versions);
-            } else if (event.getOperation()
-                == MemoryEventOperation.CORRECT) {
-                replayCorrect(event, versions);
+            } else if (operation == MemoryEventOperation.CORRECT
+                || operation == MemoryEventOperation.RETRACT) {
+                replayChange(event, versions);
             } else {
                 throw new UnsupportedOperationException(
                     "Unsupported memory event operation: "
-                        + event.getOperation());
+                        + operation);
             }
         }
 
@@ -116,7 +117,7 @@ public final class FullReplayOracle {
             event.getEvidence()));
     }
 
-    private static void replayCorrect(
+    private static void replayChange(
         MemoryEvent event,
         List<MemoryFactVersion> versions) {
         List<MemoryFactVersion> affected = new ArrayList<>();
@@ -134,7 +135,7 @@ public final class FullReplayOracle {
 
         if (!isFullyCovered(event.getValidTime(), affected)) {
             throw new IllegalArgumentException(
-                "Correction interval is not fully covered for fact id: "
+                "Event interval is not fully covered for fact id: "
                     + event.getFactId());
         }
 
@@ -168,13 +169,15 @@ public final class FullReplayOracle {
             }
         }
 
-        versions.add(new MemoryFactVersion(
-            event.getId() + ":version:0",
-            event.getFact().get(),
-            event.getValidTime(),
-            TimeInterval.unboundedFrom(
-                event.getTransactionTime()),
-            event.getEvidence()));
+        if (event.getOperation() == MemoryEventOperation.CORRECT) {
+            versions.add(new MemoryFactVersion(
+                event.getId() + ":version:0",
+                event.getFact().get(),
+                event.getValidTime(),
+                TimeInterval.unboundedFrom(
+                    event.getTransactionTime()),
+                event.getEvidence()));
+        }
     }
 
     private static boolean isFullyCovered(
