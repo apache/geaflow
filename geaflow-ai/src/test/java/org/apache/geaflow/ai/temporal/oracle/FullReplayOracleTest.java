@@ -166,21 +166,7 @@ public class FullReplayOracleTest {
     }
 
     @Test
-    public void testRejectUnsupportedOperations() {
-        MemoryFact correctedFact = MemoryFact.attribute(
-            "fact-name-alice",
-            new MemoryEntity("person:alice", "person"),
-            "name",
-            "Alice Smith");
-
-        MemoryEvent correct = MemoryEvent.correct(
-            "event-correct",
-            correctedFact,
-            TimeInterval.unboundedFrom(
-                time("2024-01-01T00:00:00Z")),
-            time("2024-06-01T00:00:00Z"),
-            evidence("event-correct"));
-
+    public void testRejectUnsupportedRetract() {
         MemoryEvent retract = MemoryEvent.retract(
             "event-retract",
             "fact-name-alice",
@@ -192,11 +178,194 @@ public class FullReplayOracleTest {
         Assertions.assertThrows(
             UnsupportedOperationException.class,
             () -> oracle.replay(
-                Collections.singletonList(correct)));
-        Assertions.assertThrows(
-            UnsupportedOperationException.class,
-            () -> oracle.replay(
                 Collections.singletonList(retract)));
+    }
+
+    @Test
+    public void testCorrectEventSplitsValidTimeAndClosesOldVersion() {
+        MemoryEvent add = addEvent(
+            "event-add",
+            "fact-name-alice",
+            "person:alice",
+            "Alice",
+            "2024-01-01T00:00:00Z",
+            "2024-03-01T00:00:00Z");
+        MemoryEvent correction = correctEvent(
+            "event-correct",
+            "fact-name-alice",
+            "person:alice",
+            "Alice Smith",
+            "2024-04-01T00:00:00Z",
+            "2024-09-01T00:00:00Z",
+            "2024-06-01T00:00:00Z");
+
+        List<MemoryFactVersion> versions =
+            oracle.replay(Arrays.asList(correction, add));
+
+        Assertions.assertEquals(4, versions.size());
+
+        assertVersion(
+            versions.get(0),
+            "event-add:version:0",
+            add.getFact().get(),
+            TimeInterval.unboundedFrom(
+                time("2024-01-01T00:00:00Z")),
+            interval(
+                "2024-03-01T00:00:00Z",
+                "2024-06-01T00:00:00Z"),
+            add.getEvidence());
+        assertVersion(
+            versions.get(1),
+            "event-correct:version:1",
+            add.getFact().get(),
+            interval(
+                "2024-01-01T00:00:00Z",
+                "2024-04-01T00:00:00Z"),
+            TimeInterval.unboundedFrom(
+                time("2024-06-01T00:00:00Z")),
+            add.getEvidence());
+        assertVersion(
+            versions.get(2),
+            "event-correct:version:0",
+            correction.getFact().get(),
+            interval(
+                "2024-04-01T00:00:00Z",
+                "2024-09-01T00:00:00Z"),
+            TimeInterval.unboundedFrom(
+                time("2024-06-01T00:00:00Z")),
+            correction.getEvidence());
+        assertVersion(
+            versions.get(3),
+            "event-correct:version:2",
+            add.getFact().get(),
+            TimeInterval.unboundedFrom(
+                time("2024-09-01T00:00:00Z")),
+            TimeInterval.unboundedFrom(
+                time("2024-06-01T00:00:00Z")),
+            add.getEvidence());
+    }
+
+    @Test
+    public void testCorrectAcrossCurrentFragments() {
+        MemoryEvent add = addEvent(
+            "event-add",
+            "fact-name-alice",
+            "person:alice",
+            "Alice",
+            "2024-01-01T00:00:00Z",
+            "2024-03-01T00:00:00Z");
+        MemoryEvent firstCorrection = correctEvent(
+            "event-correct-1",
+            "fact-name-alice",
+            "person:alice",
+            "Alice Smith",
+            "2024-04-01T00:00:00Z",
+            "2024-09-01T00:00:00Z",
+            "2024-06-01T00:00:00Z");
+        MemoryEvent secondCorrection = correctEvent(
+            "event-correct-2",
+            "fact-name-alice",
+            "person:alice",
+            "Alice Jones",
+            "2024-02-01T00:00:00Z",
+            "2024-10-01T00:00:00Z",
+            "2024-08-01T00:00:00Z");
+
+        List<MemoryFactVersion> versions = oracle.replay(
+            Arrays.asList(
+                secondCorrection,
+                add,
+                firstCorrection));
+
+        List<MemoryFactVersion> current = new ArrayList<>();
+        for (MemoryFactVersion version : versions) {
+            if (!version.getTransactionTime()
+                .getEnd().isPresent()) {
+                current.add(version);
+            }
+        }
+
+        Assertions.assertEquals(3, current.size());
+        Assertions.assertEquals(
+            "event-correct-2:version:1",
+            current.get(0).getId());
+        Assertions.assertEquals(
+            add.getFact().get(),
+            current.get(0).getFact());
+        Assertions.assertEquals(
+            interval(
+                "2024-01-01T00:00:00Z",
+                "2024-02-01T00:00:00Z"),
+            current.get(0).getValidTime());
+
+        Assertions.assertEquals(
+            "event-correct-2:version:0",
+            current.get(1).getId());
+        Assertions.assertEquals(
+            secondCorrection.getFact().get(),
+            current.get(1).getFact());
+        Assertions.assertEquals(
+            interval(
+                "2024-02-01T00:00:00Z",
+                "2024-10-01T00:00:00Z"),
+            current.get(1).getValidTime());
+
+        Assertions.assertEquals(
+            "event-correct-2:version:2",
+            current.get(2).getId());
+        Assertions.assertEquals(
+            add.getFact().get(),
+            current.get(2).getFact());
+        Assertions.assertEquals(
+            TimeInterval.unboundedFrom(
+                time("2024-10-01T00:00:00Z")),
+            current.get(2).getValidTime());
+    }
+
+    @Test
+    public void testRejectCorrectionWithoutFullCoverage() {
+        MemoryEvent add = addEvent(
+            "event-add",
+            "fact-name-alice",
+            "person:alice",
+            "Alice",
+            "2024-01-01T00:00:00Z",
+            "2024-03-01T00:00:00Z");
+        MemoryEvent correction = correctEvent(
+            "event-correct",
+            "fact-name-alice",
+            "person:alice",
+            "Alice Smith",
+            "2023-12-01T00:00:00Z",
+            "2024-02-01T00:00:00Z",
+            "2024-06-01T00:00:00Z");
+
+        Assertions.assertThrows(
+            IllegalArgumentException.class,
+            () -> oracle.replay(
+                Arrays.asList(add, correction)));
+    }
+
+    @Test
+    public void testRejectOverlappingAddForSameFact() {
+        MemoryEvent first = addEvent(
+            "event-1",
+            "fact-name-alice",
+            "person:alice",
+            "Alice",
+            "2024-01-01T00:00:00Z",
+            "2024-03-01T00:00:00Z");
+        MemoryEvent second = addEvent(
+            "event-2",
+            "fact-name-alice",
+            "person:alice",
+            "Alice Smith",
+            "2024-02-01T00:00:00Z",
+            "2024-04-01T00:00:00Z");
+
+        Assertions.assertThrows(
+            IllegalArgumentException.class,
+            () -> oracle.replay(Arrays.asList(first, second)));
     }
 
     @Test
@@ -234,6 +403,56 @@ public class FullReplayOracleTest {
             TimeInterval.unboundedFrom(time(validStart)),
             time(transactionTime),
             evidence(eventId));
+    }
+
+    private static MemoryEvent correctEvent(
+        String eventId,
+        String factId,
+        String subjectId,
+        String literalValue,
+        String validStart,
+        String validEnd,
+        String transactionTime) {
+        MemoryFact fact = MemoryFact.attribute(
+            factId,
+            new MemoryEntity(subjectId, "person"),
+            "name",
+            literalValue);
+
+        return MemoryEvent.correct(
+            eventId,
+            fact,
+            interval(validStart, validEnd),
+            time(transactionTime),
+            evidence(eventId));
+    }
+
+    private static void assertVersion(
+        MemoryFactVersion actual,
+        String expectedId,
+        MemoryFact expectedFact,
+        TimeInterval expectedValidTime,
+        TimeInterval expectedTransactionTime,
+        List<Evidence> expectedEvidence) {
+        Assertions.assertEquals(expectedId, actual.getId());
+        Assertions.assertEquals(
+            expectedFact,
+            actual.getFact());
+        Assertions.assertEquals(
+            expectedValidTime,
+            actual.getValidTime());
+        Assertions.assertEquals(
+            expectedTransactionTime,
+            actual.getTransactionTime());
+        Assertions.assertEquals(
+            expectedEvidence,
+            actual.getEvidence());
+    }
+
+    private static TimeInterval interval(
+        String start,
+        String end) {
+        return new TimeInterval(time(start), time(end));
     }
 
     private static List<Evidence> evidence(String eventId) {

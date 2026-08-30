@@ -40,6 +40,20 @@ public final class FullReplayOracle {
         Comparator.comparing(MemoryEvent::getTransactionTime)
             .thenComparing(MemoryEvent::getId);
 
+    private static final Comparator<MemoryFactVersion> VERSION_ORDER =
+        Comparator.comparing(
+            (MemoryFactVersion version) ->
+                version.getTransactionTime().getStart())
+            .thenComparing(
+                version -> version.getValidTime().getStart())
+            .thenComparing(MemoryFactVersion::getId);
+
+    private static final Comparator<MemoryFactVersion> VALID_TIME_ORDER =
+        Comparator.comparing(
+            (MemoryFactVersion version) ->
+                version.getValidTime().getStart())
+            .thenComparing(MemoryFactVersion::getId);
+
     public List<MemoryFactVersion> replay(
         List<MemoryEvent> events) {
         Objects.requireNonNull(events, "events");
@@ -61,28 +75,134 @@ public final class FullReplayOracle {
             new ArrayList<>(uniqueEvents.values());
         Collections.sort(orderedEvents, EVENT_ORDER);
 
-        List<MemoryFactVersion> versions =
-            new ArrayList<>(orderedEvents.size());
+        List<MemoryFactVersion> versions = new ArrayList<>();
         for (MemoryEvent event : orderedEvents) {
-            if (event.getOperation() != MemoryEventOperation.ADD) {
+            if (event.getOperation() == MemoryEventOperation.ADD) {
+                replayAdd(event, versions);
+            } else if (event.getOperation()
+                == MemoryEventOperation.CORRECT) {
+                replayCorrect(event, versions);
+            } else {
                 throw new UnsupportedOperationException(
                     "Unsupported memory event operation: "
                         + event.getOperation());
             }
-            versions.add(replayAdd(event));
         }
 
+        Collections.sort(versions, VERSION_ORDER);
         return Collections.unmodifiableList(versions);
     }
 
-    private static MemoryFactVersion replayAdd(
-        MemoryEvent event) {
-        return new MemoryFactVersion(
+    private static void replayAdd(
+        MemoryEvent event,
+        List<MemoryFactVersion> versions) {
+        for (MemoryFactVersion version : versions) {
+            if (isCurrent(version)
+                && version.getFact().getId().equals(event.getFactId())
+                && version.getValidTime().overlaps(
+                    event.getValidTime())) {
+                throw new IllegalArgumentException(
+                    "Overlapping add for fact id: "
+                        + event.getFactId());
+            }
+        }
+
+        versions.add(new MemoryFactVersion(
             event.getId() + ":version:0",
             event.getFact().get(),
             event.getValidTime(),
             TimeInterval.unboundedFrom(
                 event.getTransactionTime()),
-            event.getEvidence());
+            event.getEvidence()));
+    }
+
+    private static void replayCorrect(
+        MemoryEvent event,
+        List<MemoryFactVersion> versions) {
+        List<MemoryFactVersion> affected = new ArrayList<>();
+
+        for (MemoryFactVersion version : versions) {
+            if (isCurrent(version)
+                && version.getFact().getId().equals(event.getFactId())
+                && version.getValidTime().overlaps(
+                    event.getValidTime())) {
+                affected.add(version);
+            }
+        }
+
+        Collections.sort(affected, VALID_TIME_ORDER);
+
+        if (!isFullyCovered(event.getValidTime(), affected)) {
+            throw new IllegalArgumentException(
+                "Correction interval is not fully covered for fact id: "
+                    + event.getFactId());
+        }
+
+        versions.removeAll(affected);
+
+        int fragmentIndex = 1;
+        for (MemoryFactVersion version : affected) {
+            if (version.getTransactionTime().getStart()
+                .isBefore(event.getTransactionTime())) {
+                versions.add(new MemoryFactVersion(
+                    version.getId(),
+                    version.getFact(),
+                    version.getValidTime(),
+                    new TimeInterval(
+                        version.getTransactionTime().getStart(),
+                        event.getTransactionTime()),
+                    version.getEvidence()));
+            }
+
+            for (TimeInterval remaining :
+                version.getValidTime().subtract(
+                    event.getValidTime())) {
+                versions.add(new MemoryFactVersion(
+                    event.getId() + ":version:"
+                        + fragmentIndex++,
+                    version.getFact(),
+                    remaining,
+                    TimeInterval.unboundedFrom(
+                        event.getTransactionTime()),
+                    version.getEvidence()));
+            }
+        }
+
+        versions.add(new MemoryFactVersion(
+            event.getId() + ":version:0",
+            event.getFact().get(),
+            event.getValidTime(),
+            TimeInterval.unboundedFrom(
+                event.getTransactionTime()),
+            event.getEvidence()));
+    }
+
+    private static boolean isFullyCovered(
+        TimeInterval target,
+        List<MemoryFactVersion> coveringVersions) {
+        List<TimeInterval> uncovered = new ArrayList<>();
+        uncovered.add(target);
+
+        for (MemoryFactVersion version : coveringVersions) {
+            List<TimeInterval> remaining = new ArrayList<>();
+
+            for (TimeInterval interval : uncovered) {
+                remaining.addAll(
+                    interval.subtract(version.getValidTime()));
+            }
+
+            uncovered = remaining;
+            if (uncovered.isEmpty()) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static boolean isCurrent(
+        MemoryFactVersion version) {
+        return !version.getTransactionTime()
+            .getEnd().isPresent();
     }
 }
