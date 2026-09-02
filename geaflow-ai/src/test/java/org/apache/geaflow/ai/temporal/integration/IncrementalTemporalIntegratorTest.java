@@ -240,6 +240,44 @@ public class IncrementalTemporalIntegratorTest {
     }
 
     @Test
+    public void testEventSnapshotIsDeterministicAndImmutable() {
+        MemoryEvent tieLater = addEvent(
+            "event-b",
+            "fact-bob-city",
+            "person:bob",
+            "Paris",
+            "2024-01-01T00:00:00Z",
+            "2024-04-01T00:00:00Z");
+        MemoryEvent early = addEvent(
+            "event-c",
+            "fact-carol-city",
+            "person:carol",
+            "Rome",
+            "2024-01-01T00:00:00Z",
+            "2024-03-01T00:00:00Z");
+        MemoryEvent tieEarlier = addEvent(
+            "event-a",
+            "fact-alice-city",
+            "person:alice",
+            "Beijing",
+            "2024-01-01T00:00:00Z",
+            "2024-04-01T00:00:00Z");
+
+        integrator.apply(tieLater);
+        integrator.apply(early);
+        integrator.apply(tieEarlier);
+        integrator.apply(tieLater);
+        List<MemoryEvent> snapshot = integrator.eventSnapshot();
+
+        Assertions.assertEquals(
+            Arrays.asList(early, tieEarlier, tieLater),
+            snapshot);
+        Assertions.assertThrows(
+            UnsupportedOperationException.class,
+            () -> snapshot.clear());
+    }
+
+    @Test
     public void testEmptyAndNullInput() {
         Assertions.assertTrue(integrator.snapshot().isEmpty());
         Assertions.assertThrows(

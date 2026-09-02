@@ -117,6 +117,13 @@ public final class IncrementalTemporalIntegrator {
         return Collections.unmodifiableList(snapshot);
     }
 
+    List<MemoryEvent> eventSnapshot() {
+        List<MemoryEvent> snapshot =
+            new ArrayList<>(eventsById.values());
+        Collections.sort(snapshot, EVENT_ORDER);
+        return Collections.unmodifiableList(snapshot);
+    }
+
     private static List<MemoryFactVersion> replayFact(
         List<MemoryEvent> events) {
         List<MemoryFactVersion> versions = new ArrayList<>();
