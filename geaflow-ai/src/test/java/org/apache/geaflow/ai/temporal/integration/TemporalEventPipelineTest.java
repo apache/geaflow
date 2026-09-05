@@ -32,6 +32,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Stream;
 import org.apache.geaflow.ai.temporal.model.Evidence;
 import org.apache.geaflow.ai.temporal.model.MemoryEntity;
 import org.apache.geaflow.ai.temporal.model.MemoryEvent;
@@ -47,16 +48,22 @@ import org.apache.geaflow.api.function.io.SinkFunction;
 import org.apache.geaflow.api.pdata.stream.window.PWindowSource;
 import org.apache.geaflow.api.window.impl.SizeTumblingWindow;
 import org.apache.geaflow.cluster.system.ClusterMetaStore;
+import org.apache.geaflow.common.config.keys.ExecutionConfigKeys;
+import org.apache.geaflow.common.config.keys.FrameworkConfigKeys;
 import org.apache.geaflow.env.Environment;
 import org.apache.geaflow.env.EnvironmentFactory;
+import org.apache.geaflow.file.FileConfigKeys;
 import org.apache.geaflow.pipeline.IPipelineResult;
 import org.apache.geaflow.pipeline.Pipeline;
 import org.apache.geaflow.pipeline.PipelineFactory;
 import org.apache.geaflow.pipeline.task.IPipelineTaskContext;
 import org.apache.geaflow.pipeline.task.PipelineTask;
 import org.apache.geaflow.runtime.core.scheduler.resource.ScheduledWorkerManagerFactory;
+import org.apache.geaflow.state.StoreType;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
 public class TemporalEventPipelineTest {
@@ -69,12 +76,39 @@ public class TemporalEventPipelineTest {
     @Test
     public void testKeyedIncrementalAggregationAcrossWindows()
         throws Exception {
+        assertPipelineResults(
+            Collections.emptyMap(),
+            "temporal-results.txt");
+    }
+
+    @Test
+    @DisabledOnOs(
+        value = OS.WINDOWS,
+        disabledReason = "GeaFlow LOCAL persistence requires Hadoop winutils.exe")
+    public void testKeyedAggregationCreatesRocksdbCheckpoints()
+        throws Exception {
+        Path checkpointRoot = tempDirectory.resolve("checkpoints");
+        assertPipelineResults(
+            checkpointConfiguration(checkpointRoot),
+            "temporal-checkpoint-results.txt");
+
+        Assertions.assertTrue(Files.exists(checkpointRoot));
+        try (Stream<Path> paths = Files.walk(checkpointRoot)) {
+            Assertions.assertTrue(paths.anyMatch(path ->
+                "_commit".equals(path.getFileName().toString())));
+        }
+    }
+
+    private void assertPipelineResults(
+        Map<String, String> config,
+        String outputFileName) throws Exception {
         List<MemoryEvent> events = pipelineEvents();
-        Path output = tempDirectory.resolve("temporal-results.txt");
+        Path output = tempDirectory.resolve(outputFileName);
         Environment environment = null;
 
         try {
             environment = EnvironmentFactory.onLocalEnvironment();
+            environment.getEnvironmentContext().withConfig(config);
             Pipeline pipeline =
                 PipelineFactory.buildPipeline(environment);
             pipeline.submit(new TemporalPipelineTask(
@@ -100,6 +134,30 @@ public class TemporalEventPipelineTest {
             ClusterMetaStore.close();
             ScheduledWorkerManagerFactory.clear();
         }
+    }
+
+    private Map<String, String> checkpointConfiguration(
+        Path checkpointRoot) {
+        Map<String, String> config = new HashMap<>();
+        config.put(
+            FrameworkConfigKeys.SYSTEM_STATE_BACKEND_TYPE.getKey(),
+            StoreType.ROCKSDB.name());
+        config.put(
+            FrameworkConfigKeys.BATCH_NUMBER_PER_CHECKPOINT.getKey(),
+            "1");
+        config.put(
+            ExecutionConfigKeys.JOB_APP_NAME.getKey(),
+            "TemporalEventPipelineCheckpointTest");
+        config.put(
+            ExecutionConfigKeys.JOB_WORK_PATH.getKey(),
+            tempDirectory.resolve("work").toString());
+        config.put(
+            FileConfigKeys.PERSISTENT_TYPE.getKey(),
+            "LOCAL");
+        config.put(
+            FileConfigKeys.ROOT.getKey(),
+            checkpointRoot.toString());
+        return config;
     }
 
     private static List<MemoryEvent> pipelineEvents() {
