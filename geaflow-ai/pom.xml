@@ -121,6 +121,11 @@
         <artifactId>geaflow-api</artifactId>
         <version>${project.version}</version>
       </dependency>
+      <dependency>
+        <groupId>org.apache.geaflow</groupId>
+        <artifactId>geaflow-dsl-common</artifactId>
+        <version>${project.version}</version>
+      </dependency>
 
         <!-- test -->
         <dependency>
@@ -132,6 +137,12 @@
         <dependency>
             <groupId>org.apache.geaflow</groupId>
             <artifactId>geaflow-on-local</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.geaflow</groupId>
+            <artifactId>geaflow-dsl-runtime</artifactId>
             <version>${project.version}</version>
             <scope>test</scope>
         </dependency>
