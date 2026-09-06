@@ -31,6 +31,7 @@ public final class MemoryFactVersion {
 
     private final String id;
     private final MemoryFact fact;
+    private final MemoryFactVersionStatus status;
     private final TimeInterval validTime;
     private final TimeInterval transactionTime;
     private final List<Evidence> evidence;
@@ -41,8 +42,25 @@ public final class MemoryFactVersion {
         TimeInterval validTime,
         TimeInterval transactionTime,
         List<Evidence> evidence) {
+        this(
+            id,
+            fact,
+            MemoryFactVersionStatus.ACTIVE,
+            validTime,
+            transactionTime,
+            evidence);
+    }
+
+    public MemoryFactVersion(
+        String id,
+        MemoryFact fact,
+        MemoryFactVersionStatus status,
+        TimeInterval validTime,
+        TimeInterval transactionTime,
+        List<Evidence> evidence) {
         this.id = requireText(id);
         this.fact = Objects.requireNonNull(fact, "fact");
+        this.status = Objects.requireNonNull(status, "status");
         this.validTime = Objects.requireNonNull(validTime, "validTime");
         this.transactionTime =
             Objects.requireNonNull(transactionTime, "transactionTime");
@@ -65,6 +83,10 @@ public final class MemoryFactVersion {
 
     public MemoryFact getFact() {
         return fact;
+    }
+
+    public MemoryFactVersionStatus getStatus() {
+        return status;
     }
 
     public TimeInterval getValidTime() {
@@ -99,6 +121,7 @@ public final class MemoryFactVersion {
         MemoryFactVersion that = (MemoryFactVersion) object;
         return id.equals(that.id)
             && fact.equals(that.fact)
+            && status == that.status
             && validTime.equals(that.validTime)
             && transactionTime.equals(that.transactionTime)
             && evidence.equals(that.evidence);
@@ -109,6 +132,7 @@ public final class MemoryFactVersion {
         return Objects.hash(
             id,
             fact,
+            status,
             validTime,
             transactionTime,
             evidence);

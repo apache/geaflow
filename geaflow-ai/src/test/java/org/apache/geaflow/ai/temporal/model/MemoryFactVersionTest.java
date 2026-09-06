@@ -147,6 +147,52 @@ public class MemoryFactVersionTest {
     }
 
     @Test
+    public void testStatusDefaultsToActiveAndAffectsValueSemantics() {
+        MemoryFact fact = fact("Alice");
+        TimeInterval validTime = TimeInterval.unboundedFrom(
+            time("2024-01-01T00:00:00Z"));
+        TimeInterval transactionTime = TimeInterval.unboundedFrom(
+            time("2024-03-01T00:00:00Z"));
+        List<Evidence> evidence = Collections.singletonList(
+            evidence("evidence-1", "Alice is the recorded name"));
+        MemoryFactVersion active = new MemoryFactVersion(
+            "version-1",
+            fact,
+            validTime,
+            transactionTime,
+            evidence);
+        MemoryFactVersion explicitActive = new MemoryFactVersion(
+            "version-1",
+            fact,
+            MemoryFactVersionStatus.ACTIVE,
+            validTime,
+            transactionTime,
+            evidence);
+        MemoryFactVersion retracted = new MemoryFactVersion(
+            "version-1",
+            fact,
+            MemoryFactVersionStatus.RETRACTED,
+            validTime,
+            transactionTime,
+            evidence);
+
+        Assertions.assertEquals(
+            MemoryFactVersionStatus.ACTIVE,
+            active.getStatus());
+        Assertions.assertEquals(active, explicitActive);
+        Assertions.assertNotEquals(active, retracted);
+        Assertions.assertThrows(
+            NullPointerException.class,
+            () -> new MemoryFactVersion(
+                "version-1",
+                fact,
+                null,
+                validTime,
+                transactionTime,
+                evidence));
+    }
+
+    @Test
     public void testRejectInvalidVersion() {
         MemoryFact fact = fact("Alice");
         TimeInterval validTime = TimeInterval.unboundedFrom(
