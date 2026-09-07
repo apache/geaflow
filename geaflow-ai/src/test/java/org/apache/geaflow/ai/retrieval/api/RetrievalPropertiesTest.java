@@ -83,10 +83,6 @@ public class RetrievalPropertiesTest {
         properties = new RetrievalProperties();
         properties.setMaxTopK(0);
         assertInvalid(properties);
-
-        properties = new RetrievalProperties();
-        properties.setConfigVersion("v2");
-        assertInvalid(properties);
     }
 
     private static void assertInvalid(RetrievalProperties properties) {

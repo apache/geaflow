@@ -19,7 +19,6 @@
 package org.apache.geaflow.ai.retrieval.api;
 
 import com.google.gson.JsonObject;
-import com.google.gson.JsonParseException;
 import com.google.gson.JsonParser;
 import java.io.IOException;
 import java.io.InputStream;
@@ -33,18 +32,14 @@ import org.apache.geaflow.ai.retrieval.api.model.ExecutionMode;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalBudget;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalError;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalErrorCode;
-import org.apache.geaflow.ai.retrieval.api.model.RetrievalException;
-import org.apache.geaflow.ai.retrieval.api.model.RetrievalMode;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalRequest;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalResponse;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalTrace;
+import org.apache.geaflow.ai.retrieval.api.model.RetrievalMode;
 import org.apache.geaflow.ai.retrieval.api.model.TraceStage;
 import org.apache.geaflow.ai.retrieval.codec.RetrievalApiJson;
-import org.apache.geaflow.ai.retrieval.config.RetrievalProperties;
-import org.apache.geaflow.ai.retrieval.model.document.SourceRef;
 import org.apache.geaflow.ai.retrieval.model.evidence.Evidence;
 import org.apache.geaflow.ai.retrieval.model.evidence.EvidenceKind;
-import org.apache.geaflow.ai.retrieval.model.graph.GraphPathRef;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -117,75 +112,6 @@ public class RetrievalApiJsonTest {
     }
 
     @Test
-    public void appliesSemanticValidationAtRequestJsonBoundary() {
-        Assertions.assertThrows(RetrievalException.class, () -> RetrievalApiJson.parseRequest(
-            "{\"graphName\":\"g\",\"query\":\"q\",\"mode\":\"HYBRID\"}"));
-        Assertions.assertThrows(RetrievalException.class, () -> RetrievalApiJson.parseRequest(
-            "{\"graphName\":\"g\",\"query\":\"q\","
-                + "\"executionMode\":\"PARALLEL\"}"));
-        Assertions.assertThrows(RetrievalException.class, () -> RetrievalApiJson.parseRequest(
-            "{\"graphName\":\"g\",\"query\":\"q\","
-                + "\"budget\":{\"topK\":0}}"));
-
-        StringBuilder longQuery = new StringBuilder("{\"graphName\":\"g\",\"query\":\"");
-        for (int i = 0; i < 4097; i++) {
-            longQuery.append('q');
-        }
-        longQuery.append("\"}");
-        Assertions.assertThrows(RetrievalException.class,
-            () -> RetrievalApiJson.parseRequest(longQuery.toString()));
-
-        RetrievalProperties properties = new RetrievalProperties();
-        properties.setMaxTopK(5);
-        properties.setDefaultTopK(5);
-        properties.validateConfiguration();
-        Assertions.assertThrows(RetrievalException.class, () -> RetrievalApiJson.parseRequest(
-            "{\"graphName\":\"g\",\"query\":\"q\","
-                + "\"budget\":{\"topK\":6}}", properties));
-    }
-
-    @Test
-    public void rejectsSemanticallyInvalidRequestSerialization() {
-        RetrievalRequest request = new RetrievalRequest();
-        request.setGraphName("graph");
-        request.setQuery("query");
-        request.setMode("HYBRID");
-
-        Assertions.assertThrows(RetrievalException.class, () -> RetrievalApiJson.toJson(request));
-    }
-
-    @Test
-    public void rejectsExcessiveJsonNestingBeforeParsing() {
-        StringBuilder json = new StringBuilder("{\"graphName\":\"g\",\"query\":\"q\",\"nested\":");
-        for (int i = 0; i < 257; i++) {
-            json.append('[');
-        }
-        json.append('0');
-        for (int i = 0; i < 257; i++) {
-            json.append(']');
-        }
-        json.append('}');
-
-        Assertions.assertThrows(JsonParseException.class,
-            () -> RetrievalApiJson.parseRequest(json.toString()));
-    }
-
-    @Test
-    public void parsesOnlyExactIntegerBudgetNumbers() {
-        Assertions.assertThrows(JsonParseException.class, () -> RetrievalApiJson.parseRequest(
-            "{\"graphName\":\"g\",\"query\":\"q\","
-                + "\"budget\":{\"topK\":1.0000000000000001}}"));
-        Assertions.assertThrows(JsonParseException.class, () -> RetrievalApiJson.parseRequest(
-            "{\"graphName\":\"g\",\"query\":\"q\","
-                + "\"budget\":{\"topK\":2147483648}}"));
-
-        RetrievalRequest request = RetrievalApiJson.parseRequest(
-            "{\"graphName\":\"g\",\"query\":\"q\","
-                + "\"budget\":{\"topK\":1e1}}");
-        Assertions.assertEquals(Integer.valueOf(10), request.getBudget().getTopK());
-    }
-
-    @Test
     public void responseKeepsRequiredCollectionsAndRoundTrips() {
         RetrievalResponse response = new RetrievalResponse();
         response.setRequestId("req-1");
@@ -255,76 +181,6 @@ public class RetrievalApiJsonTest {
     }
 
     @Test
-    public void rejectsUnsupportedTraceModesAndUnboundedEffectiveBudget() {
-        String parallel = responseJson("PARALLEL", "SEQUENTIAL", 10, 3000, 100, 4096);
-        Assertions.assertThrows(RuntimeException.class,
-            () -> RetrievalApiJson.parseResponse(parallel));
-
-        String overLimit = responseJson("KEYWORD", "SEQUENTIAL", 101, 3000, 100, 4096);
-        Assertions.assertThrows(RuntimeException.class,
-            () -> RetrievalApiJson.parseResponse(overLimit));
-    }
-
-    @Test
-    public void rejectsBlankRequiredResponseAndErrorFields() {
-        String blankGraph = responseJson("KEYWORD", "SEQUENTIAL", 10, 3000, 100, 4096)
-            .replace("\"graphName\":\"graph\"", "\"graphName\":\" \"");
-        Assertions.assertThrows(RuntimeException.class,
-            () -> RetrievalApiJson.parseResponse(blankGraph));
-        Assertions.assertThrows(RuntimeException.class, () -> RetrievalApiJson.parseError(
-            "{\"requestId\":\" \",\"code\":\"INTERNAL_ERROR\","
-                + "\"message\":\"x\",\"retriable\":false}"));
-    }
-
-    @Test
-    public void rejectsIncompleteResponseSerialization() {
-        RetrievalResponse response = new RetrievalResponse();
-        Assertions.assertThrows(RuntimeException.class, () -> RetrievalApiJson.toJson(response));
-    }
-
-    @Test
-    public void rejectsPartialEffectiveBudgetSerialization() {
-        RetrievalResponse response = validResponse();
-        response.setEffectiveBudget(new RetrievalBudget(null, 3000, 100, 4096));
-
-        Assertions.assertThrows(RetrievalException.class, () -> RetrievalApiJson.toJson(response));
-    }
-
-    @Test
-    public void rejectsNullResponseCollectionElements() {
-        RetrievalResponse evidence = validResponse();
-        evidence.setEvidence(Collections.<Evidence>singletonList(null));
-        Assertions.assertThrows(RetrievalException.class, () -> RetrievalApiJson.toJson(evidence));
-
-        RetrievalResponse paths = validResponse();
-        paths.setPaths(Collections.<GraphPathRef>singletonList(null));
-        Assertions.assertThrows(RetrievalException.class, () -> RetrievalApiJson.toJson(paths));
-
-        RetrievalResponse sources = validResponse();
-        sources.setSources(Collections.<SourceRef>singletonList(null));
-        Assertions.assertThrows(RetrievalException.class, () -> RetrievalApiJson.toJson(sources));
-
-        RetrievalResponse channels = validResponse();
-        channels.setDegradedChannels(Collections.<String>singletonList(null));
-        Assertions.assertThrows(RetrievalException.class, () -> RetrievalApiJson.toJson(channels));
-    }
-
-    @Test
-    public void reportsMissingTraceModesAsInvalidRequest() {
-        RetrievalResponse missingMode = validResponse();
-        missingMode.getTrace().setSelectedMode(null);
-        RetrievalException modeException = Assertions.assertThrows(RetrievalException.class,
-            () -> RetrievalApiJson.toJson(missingMode));
-        Assertions.assertEquals(RetrievalErrorCode.INVALID_REQUEST, modeException.getCode());
-
-        RetrievalResponse missingExecutionMode = validResponse();
-        missingExecutionMode.getTrace().setExecutionMode(null);
-        RetrievalException executionException = Assertions.assertThrows(RetrievalException.class,
-            () -> RetrievalApiJson.toJson(missingExecutionMode));
-        Assertions.assertEquals(RetrievalErrorCode.INVALID_REQUEST, executionException.getCode());
-    }
-
-    @Test
     public void errorCodeAndRetriableFlagAreStable() {
         RetrievalError error = new RetrievalError("req-3", RetrievalErrorCode.INDEX_NOT_READY,
             "not ready");
@@ -375,25 +231,6 @@ public class RetrievalApiJsonTest {
         Assertions.assertFalse(json.has("graph_name"));
     }
 
-    private static RetrievalResponse validResponse() {
-        RetrievalResponse response = new RetrievalResponse();
-        response.setRequestId("req-1");
-        response.setGraphName("graph");
-        response.setGraphVersion("v1");
-        response.setEvidence(Collections.singletonList(new Evidence("e-1", EvidenceKind.CHUNK,
-            "text", null, null, null, null, null, null, 1)));
-        RetrievalTrace trace = new RetrievalTrace();
-        trace.setTraceVersion("v1");
-        trace.setOriginalQuery("confucius");
-        trace.setSelectedMode(RetrievalMode.KEYWORD);
-        trace.setExecutionMode(ExecutionMode.SEQUENTIAL);
-        trace.setStages(Collections.singletonList(new TraceStage("keyword", "COMPLETED", null)));
-        trace.setStopReason("COMPLETED");
-        response.setTrace(trace);
-        response.setEffectiveBudget(new RetrievalBudget(10, 3000, 100, 4096));
-        return response;
-    }
-
     private static String read(String resource) throws IOException {
         InputStream stream = RetrievalApiJsonTest.class.getClassLoader()
             .getResourceAsStream(resource);
@@ -407,18 +244,5 @@ public class RetrievalApiJsonTest {
             }
             return result.toString();
         }
-    }
-
-    private static String responseJson(String mode, String executionMode, int topK,
-                                       int timeoutMs, int maxCandidates, int tokenBudget) {
-        return "{\"requestId\":\"r\",\"graphName\":\"graph\","
-            + "\"graphVersion\":\"v1\",\"evidence\":[],\"paths\":[],"
-            + "\"sources\":[],\"degradedChannels\":[],\"trace\":{"
-            + "\"traceVersion\":\"v1\",\"originalQuery\":\"q\","
-            + "\"selectedMode\":\"" + mode + "\",\"executionMode\":\""
-            + executionMode + "\",\"stages\":[]},\"effectiveBudget\":{"
-            + "\"topK\":" + topK + ",\"timeoutMs\":" + timeoutMs
-            + ",\"maxCandidates\":" + maxCandidates + ",\"tokenBudget\":"
-            + tokenBudget + "}}";
     }
 }

@@ -19,7 +19,6 @@
 package org.apache.geaflow.ai.retrieval.service;
 
 import java.util.List;
-import java.util.Objects;
 import org.apache.geaflow.ai.retrieval.api.model.ExecutionMode;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalBudget;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalCommand;
@@ -37,8 +36,7 @@ public class RetrievalRequestValidator {
     private final RetrievalProperties properties;
 
     public RetrievalRequestValidator(RetrievalProperties properties) {
-        this.properties = Objects.requireNonNull(properties, "properties");
-        this.properties.validateConfiguration();
+        this.properties = properties;
     }
 
     public RetrievalCommand validate(RetrievalRequest request) {
@@ -57,10 +55,23 @@ public class RetrievalRequestValidator {
         }
 
         RetrievalBudget input = request.getBudget();
-        final RetrievalBudget effectiveBudget = RetrievalBudgetValidator.validate(input,
-            properties, false);
+        final int topK = valueOrDefault(input == null ? null : input.getTopK(),
+            properties.getDefaultTopK());
+        final int timeoutMs = valueOrDefault(input == null ? null : input.getTimeoutMs(),
+            properties.getDefaultTimeoutMs());
+        final int maxCandidates = valueOrDefault(input == null ? null : input.getMaxCandidates(),
+            properties.getDefaultMaxCandidates());
+        final int tokenBudget = valueOrDefault(input == null ? null : input.getTokenBudget(),
+            properties.getDefaultTokenBudget());
+        range("topK", topK, properties.getMaxTopK());
+        range("timeoutMs", timeoutMs, properties.getMaxTimeoutMs());
+        range("maxCandidates", maxCandidates, properties.getMaxCandidates());
+        range("tokenBudget", tokenBudget, properties.getMaxTokenBudget());
+        if (topK > maxCandidates) {
+            throw invalid("topK must not exceed maxCandidates");
+        }
         return new RetrievalCommand(graphName, query, mode, executionMode,
-            effectiveBudget);
+            new RetrievalBudget(topK, timeoutMs, maxCandidates, tokenBudget));
     }
 
     private static String trimmed(String value, String name, int maxLength) {
@@ -93,6 +104,16 @@ public class RetrievalRequestValidator {
             return mode;
         } catch (IllegalArgumentException e) {
             throw unsupported("unsupported execution mode: " + value);
+        }
+    }
+
+    private static int valueOrDefault(Integer value, int defaultValue) {
+        return value == null ? defaultValue : value;
+    }
+
+    private static void range(String name, int value, int max) {
+        if (value < 1 || value > max) {
+            throw invalid(name + " must be between 1 and " + max);
         }
     }
 

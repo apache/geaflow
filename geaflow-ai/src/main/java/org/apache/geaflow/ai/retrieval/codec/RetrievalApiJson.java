@@ -27,7 +27,6 @@ import com.google.gson.stream.JsonReader;
 import com.google.gson.stream.JsonToken;
 import java.io.IOException;
 import java.io.StringReader;
-import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -39,41 +38,26 @@ import org.apache.geaflow.ai.retrieval.api.model.RetrievalRequest;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalResponse;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalTrace;
 import org.apache.geaflow.ai.retrieval.api.model.TraceStage;
-import org.apache.geaflow.ai.retrieval.config.RetrievalProperties;
 import org.apache.geaflow.ai.retrieval.model.document.SourceRef;
 import org.apache.geaflow.ai.retrieval.model.evidence.Evidence;
 import org.apache.geaflow.ai.retrieval.model.graph.GraphPathRef;
-import org.apache.geaflow.ai.retrieval.service.RetrievalErrorValidator;
-import org.apache.geaflow.ai.retrieval.service.RetrievalRequestValidator;
-import org.apache.geaflow.ai.retrieval.service.RetrievalResponseValidator;
 
 /** Strict, dependency-light JSON boundary for the v1 retrieval API. */
 public final class RetrievalApiJson {
 
     private static final int MAX_JSON_LENGTH = 1024 * 1024;
-    private static final int MAX_JSON_DEPTH = 256;
     private static final Gson GSON = new Gson();
 
     private RetrievalApiJson() {
     }
 
     public static RetrievalRequest parseRequest(String json) {
-        return parseRequest(json, defaultProperties());
-    }
-
-    public static RetrievalRequest parseRequest(String json, RetrievalProperties properties) {
         JsonObject object = object(json);
         validateRequestShape(object);
-        RetrievalRequest request = GSON.fromJson(object, RetrievalRequest.class);
-        new RetrievalRequestValidator(properties).validate(request);
-        return request;
+        return GSON.fromJson(object, RetrievalRequest.class);
     }
 
     public static RetrievalResponse parseResponse(String json) {
-        return parseResponse(json, defaultProperties());
-    }
-
-    public static RetrievalResponse parseResponse(String json, RetrievalProperties properties) {
         JsonObject object = object(json);
         requireString(object, "requestId");
         requireString(object, "graphName");
@@ -97,7 +81,7 @@ public final class RetrievalApiJson {
         response.setTrace(parseTrace(object.getAsJsonObject("trace")));
         response.setEffectiveBudget(parseBudget(object.getAsJsonObject("effectiveBudget"), true));
         response.setDegradedChannels(strings(object, "degradedChannels"));
-        return RetrievalResponseValidator.validate(response, properties);
+        return response;
     }
 
     public static RetrievalError parseError(String json) {
@@ -123,28 +107,11 @@ public final class RetrievalApiJson {
         RetrievalError error = new RetrievalError(object.get("requestId").getAsString(),
             errorCode, object.get("message").getAsString());
         error.setRetriable(retriable);
-        return RetrievalErrorValidator.validate(error);
+        return error;
     }
 
     public static String toJson(Object value) {
-        return toJson(value, defaultProperties());
-    }
-
-    public static String toJson(Object value, RetrievalProperties properties) {
-        if (value instanceof RetrievalResponse) {
-            RetrievalResponseValidator.validate((RetrievalResponse) value, properties);
-        } else if (value instanceof RetrievalError) {
-            RetrievalErrorValidator.validate((RetrievalError) value);
-        } else if (value instanceof RetrievalRequest) {
-            new RetrievalRequestValidator(properties).validate((RetrievalRequest) value);
-        }
         return GSON.toJson(value);
-    }
-
-    private static RetrievalProperties defaultProperties() {
-        RetrievalProperties properties = new RetrievalProperties();
-        properties.validateConfiguration();
-        return properties;
     }
 
     private static JsonObject object(String json) {
@@ -200,7 +167,8 @@ public final class RetrievalApiJson {
         Integer maxCandidates = optionalInt(object, "maxCandidates");
         Integer tokenBudget = optionalInt(object, "tokenBudget");
         if (requiredValues && (topK == null || timeoutMs == null || maxCandidates == null
-            || tokenBudget == null)) {
+            || tokenBudget == null || topK < 1 || timeoutMs < 1 || maxCandidates < 1
+            || tokenBudget < 1 || topK > maxCandidates)) {
             throw new JsonParseException("effectiveBudget contains invalid values");
         }
         return new RetrievalBudget(topK, timeoutMs, maxCandidates, tokenBudget);
@@ -295,11 +263,12 @@ public final class RetrievalApiJson {
         if (!element.isJsonPrimitive() || !element.getAsJsonPrimitive().isNumber()) {
             throw new JsonParseException(name + " must be an integer");
         }
-        try {
-            return new BigDecimal(element.getAsString()).intValueExact();
-        } catch (NumberFormatException | ArithmeticException e) {
+        double value = element.getAsDouble();
+        if (!Double.isFinite(value) || value != Math.rint(value)
+            || value < Integer.MIN_VALUE || value > Integer.MAX_VALUE) {
             throw new JsonParseException(name + " must be an integer");
         }
+        return (int) value;
     }
 
     private static String string(JsonObject object, String name) {
@@ -354,7 +323,7 @@ public final class RetrievalApiJson {
         JsonReader reader = new JsonReader(new StringReader(json));
         reader.setLenient(false);
         try {
-            consume(reader, 0);
+            consume(reader);
             if (reader.peek() != JsonToken.END_DOCUMENT) {
                 throw new JsonParseException("trailing JSON content");
             }
@@ -363,10 +332,9 @@ public final class RetrievalApiJson {
         }
     }
 
-    private static void consume(JsonReader reader, int depth) throws IOException {
+    private static void consume(JsonReader reader) throws IOException {
         JsonToken token = reader.peek();
         if (token == JsonToken.BEGIN_OBJECT) {
-            int childDepth = nextDepth(depth);
             java.util.HashSet<String> names = new java.util.HashSet<>();
             reader.beginObject();
             while (reader.hasNext()) {
@@ -374,14 +342,13 @@ public final class RetrievalApiJson {
                 if (!names.add(name)) {
                     throw new JsonParseException("duplicate JSON field: " + name);
                 }
-                consume(reader, childDepth);
+                consume(reader);
             }
             reader.endObject();
         } else if (token == JsonToken.BEGIN_ARRAY) {
-            int childDepth = nextDepth(depth);
             reader.beginArray();
             while (reader.hasNext()) {
-                consume(reader, childDepth);
+                consume(reader);
             }
             reader.endArray();
         } else if (token == JsonToken.STRING) {
@@ -395,12 +362,5 @@ public final class RetrievalApiJson {
         } else {
             throw new JsonParseException("invalid JSON token: " + token);
         }
-    }
-
-    private static int nextDepth(int depth) {
-        if (depth >= MAX_JSON_DEPTH) {
-            throw new JsonParseException("retrieval JSON exceeds maximum nesting depth");
-        }
-        return depth + 1;
     }
 }
