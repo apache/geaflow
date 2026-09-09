@@ -26,6 +26,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import org.apache.geaflow.ai.temporal.model.MemoryFactVersion;
+import org.apache.geaflow.ai.temporal.model.MemoryFactVersionStatus;
 
 /**
  * Selects memory fact versions visible at two temporal points.
@@ -49,7 +50,9 @@ public final class BitemporalQuery {
         List<MemoryFactVersion> matches = new ArrayList<>();
         for (MemoryFactVersion version : versions) {
             Objects.requireNonNull(version, "version");
-            if (version.getValidTime().contains(validAt)
+            if (version.getStatus()
+                == MemoryFactVersionStatus.ACTIVE
+                && version.getValidTime().contains(validAt)
                 && version.getTransactionTime().contains(
                     transactionAt)) {
                 matches.add(version);

@@ -282,7 +282,7 @@ public class IncrementalTemporalIntegratorTest {
         Assertions.assertTrue(integrator.snapshot().isEmpty());
         Assertions.assertThrows(
             NullPointerException.class,
-            () -> integrator.apply(null));
+            () -> integrator.apply((MemoryEvent) null));
         Assertions.assertTrue(integrator.snapshot().isEmpty());
     }
 
