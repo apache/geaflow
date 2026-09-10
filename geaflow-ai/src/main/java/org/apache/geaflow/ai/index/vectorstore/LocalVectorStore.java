@@ -80,6 +80,10 @@ public class LocalVectorStore implements VectorStore {
     private void processLine(String line) {
         try {
             JsonObject json = new JsonParser().parse(line).getAsJsonObject();
+            if (!json.has("__checksum")) {
+                quarantineLine(line);
+                return;
+            }
             String expectedChecksum = json.get("__checksum").getAsString();
             
             JsonObject dataForChecksum = new JsonParser().parse(line).getAsJsonObject();
@@ -110,7 +114,7 @@ public class LocalVectorStore implements VectorStore {
             Files.write(quarantinePath, (line + System.lineSeparator()).getBytes(StandardCharsets.UTF_8), 
                     StandardOpenOption.CREATE, StandardOpenOption.APPEND);
         } catch (IOException e) {
-            LOGGER.warn("Ignoring quarantine IOException");
+            LOGGER.warn("Failed to write to quarantine file: {}", quarantinePath, e);
         }
     }
 
@@ -133,7 +137,7 @@ public class LocalVectorStore implements VectorStore {
     }
 
     @Override
-    public void upsert(VectorRecord record) {
+    public synchronized void upsert(VectorRecord record) {
         if (record.getEmbedding().length != metadata.getDimension()) {
             throw new VectorStoreException(VectorStoreException.ErrorCode.DIMENSION_MISMATCH,
                     "Expected dimension " + metadata.getDimension() + ", got " + record.getEmbedding().length);
@@ -152,7 +156,7 @@ public class LocalVectorStore implements VectorStore {
     }
 
     @Override
-    public void upsertBatch(List<VectorRecord> records) {
+    public synchronized void upsertBatch(List<VectorRecord> records) {
         for (VectorRecord record : records) {
             if (record.getEmbedding().length != metadata.getDimension()) {
                 throw new VectorStoreException(VectorStoreException.ErrorCode.DIMENSION_MISMATCH,
@@ -190,9 +194,16 @@ public class LocalVectorStore implements VectorStore {
                     if (entry.getKey().equals("model_name")) {
                         continue;
                     }
-                    if (!Objects.equals(record.getMetadata().get(entry.getKey()), entry.getValue()) && !Objects.equals(record.getSourceType(), entry.getValue())) {
-                        match = false;
-                        break;
+                    if (entry.getKey().equals("_source_type")) {
+                        if (!Objects.equals(record.getSourceType(), entry.getValue())) {
+                            match = false;
+                            break;
+                        }
+                    } else {
+                        if (!Objects.equals(record.getMetadata().get(entry.getKey()), entry.getValue())) {
+                            match = false;
+                            break;
+                        }
                     }
                 }
                 if (match) {
@@ -217,7 +228,7 @@ public class LocalVectorStore implements VectorStore {
     }
 
     @Override
-    public void markDeleted(String vectorId) {
+    public synchronized void markDeleted(String vectorId) {
         if (!store.containsKey(vectorId)) {
             throw new VectorStoreException(VectorStoreException.ErrorCode.RECORD_NOT_FOUND,
                     "Record not found: " + vectorId);
@@ -243,7 +254,7 @@ public class LocalVectorStore implements VectorStore {
     }
 
     @Override
-    public void close() {
+    public synchronized void close() {
         try {
             if (writer != null) {
                 writer.close();

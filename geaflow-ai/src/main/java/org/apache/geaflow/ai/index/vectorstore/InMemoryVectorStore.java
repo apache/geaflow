@@ -71,9 +71,16 @@ public class InMemoryVectorStore implements VectorStore {
                     if (entry.getKey().equals("model_name")) {
                         continue;
                     }
-                    if (!Objects.equals(record.getMetadata().get(entry.getKey()), entry.getValue()) && !Objects.equals(record.getSourceType(), entry.getValue())) {
-                        match = false;
-                        break;
+                    if (entry.getKey().equals("_source_type")) {
+                        if (!Objects.equals(record.getSourceType(), entry.getValue())) {
+                            match = false;
+                            break;
+                        }
+                    } else {
+                        if (!Objects.equals(record.getMetadata().get(entry.getKey()), entry.getValue())) {
+                            match = false;
+                            break;
+                        }
                     }
                 }
                 if (match) {

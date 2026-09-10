@@ -18,6 +18,7 @@
 package org.apache.geaflow.ai.index.vectorstore;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 
 public class VectorQuery {
@@ -32,13 +33,13 @@ public class VectorQuery {
         if (topK <= 0) {
             throw new IllegalArgumentException("topK must be greater than 0");
         }
-        this.queryVector = queryVector;
+        this.queryVector = queryVector.clone();
         this.topK = topK;
-        this.filterMetadata = filterMetadata == null ? Collections.emptyMap() : filterMetadata;
+        this.filterMetadata = filterMetadata == null ? Collections.emptyMap() : Collections.unmodifiableMap(new HashMap<>(filterMetadata));
     }
 
     public double[] getQueryVector() {
-        return queryVector;
+        return queryVector.clone();
     }
 
     public int getTopK() {

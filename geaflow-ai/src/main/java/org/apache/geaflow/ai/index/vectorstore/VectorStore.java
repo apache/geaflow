@@ -19,7 +19,7 @@ package org.apache.geaflow.ai.index.vectorstore;
 
 import java.util.List;
 
-public interface VectorStore {
+public interface VectorStore extends AutoCloseable {
 
     /**
      * Insert or update a single vector record.

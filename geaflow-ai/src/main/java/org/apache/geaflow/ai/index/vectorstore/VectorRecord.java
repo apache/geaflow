@@ -18,6 +18,7 @@
 package org.apache.geaflow.ai.index.vectorstore;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 
 public class VectorRecord {
@@ -41,10 +42,10 @@ public class VectorRecord {
             throw new IllegalArgumentException("sourceId cannot be null or empty");
         }
         this.vectorId = vectorId;
-        this.embedding = embedding;
+        this.embedding = embedding.clone();
         this.sourceType = sourceType;
         this.sourceId = sourceId;
-        this.metadata = metadata == null ? Collections.emptyMap() : metadata;
+        this.metadata = metadata == null ? Collections.emptyMap() : Collections.unmodifiableMap(new HashMap<>(metadata));
     }
 
     public String getVectorId() {
@@ -52,7 +53,7 @@ public class VectorRecord {
     }
 
     public double[] getEmbedding() {
-        return embedding;
+        return embedding.clone();
     }
 
     public String getSourceType() {

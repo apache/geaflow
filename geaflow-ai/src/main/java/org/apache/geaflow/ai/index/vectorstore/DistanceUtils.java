@@ -24,6 +24,11 @@ public class DistanceUtils {
             throw new VectorStoreException(VectorStoreException.ErrorCode.DIMENSION_MISMATCH,
                 "Vector lengths differ: " + a.length + " vs " + b.length);
         }
+
+        if (metric == null) {
+            throw new IllegalArgumentException("Metric cannot be null");
+        }
+        
         switch (metric) {
             case COSINE:
                 return cosineSimilarity(a, b);

@@ -108,4 +108,115 @@ public class VectorStoreTest {
         
         store.close();
     }
+
+    @Test
+    public void testMetadataFiltering() {
+        VectorStore store = new InMemoryVectorStore(metadata);
+        double[] embedding = new double[128];
+        
+        VectorRecord record1 = new VectorRecord("v1", embedding, "chunk", "c1", Collections.singletonMap("author", "Alice"));
+        VectorRecord record2 = new VectorRecord("v2", embedding, "entity", "e1", Collections.singletonMap("author", "Bob"));
+        
+        store.upsertBatch(java.util.Arrays.asList(record1, record2));
+        
+        // Filter by author=Alice
+        VectorQuery query1 = new VectorQuery(embedding, 10, Collections.singletonMap("author", "Alice"));
+        List<VectorHit> hits1 = store.search(query1);
+        assertEquals(1, hits1.size());
+        assertEquals("v1", hits1.get(0).getVectorId());
+        
+        // Filter by _source_type=entity
+        VectorQuery query2 = new VectorQuery(embedding, 10, Collections.singletonMap("_source_type", "entity"));
+        List<VectorHit> hits2 = store.search(query2);
+        assertEquals(1, hits2.size());
+        assertEquals("v2", hits2.get(0).getVectorId());
+        
+        store.close();
+    }
+
+    @Test
+    public void testChecksumQuarantine() throws IOException {
+        String validLine = "{\"vectorId\":\"v1\",\"embedding\":[1.0],\"sourceType\":\"chunk\",\"sourceId\":\"c1\",\"metadata\":{},\"__checksum\":\"valid_checksum\"}";
+        String invalidLine = "{\"vectorId\":\"v2\",\"embedding\":[1.0],\"sourceType\":\"chunk\",\"sourceId\":\"c2\",\"metadata\":{},\"__checksum\":\"wrong_checksum\"}";
+        String legacyLine = "{\"vectorId\":\"v3\",\"embedding\":[1.0],\"sourceType\":\"chunk\",\"sourceId\":\"c3\",\"metadata\":{}}";
+
+        Files.write(tempFile, java.util.Arrays.asList(validLine, invalidLine, legacyLine));
+        
+        VectorStore store = new LocalVectorStore(metadata, tempFile);
+        VectorQuery query = new VectorQuery(new double[128], 10, Collections.emptyMap());
+        List<VectorHit> hits = store.search(query);
+        
+        Path quarantinePath = tempFile.resolveSibling(tempFile.getFileName() + ".quarantine");
+        List<String> quarantineLines = Files.readAllLines(quarantinePath);
+        
+        assertEquals(3, quarantineLines.size());
+        
+        store.close();
+    }
+
+    @Test
+    public void testDistanceMetricsAndGetters() {
+        // Test DistanceMetrics
+        double[] v1 = {1.0, 0.0};
+        double[] v2 = {0.0, 1.0};
+        
+        double dot = DistanceUtils.compute(v1, v2, DistanceMetric.DOT_PRODUCT);
+        assertEquals(0.0, dot, 0.001);
+
+        double l2 = DistanceUtils.compute(v1, v2, DistanceMetric.L2);
+        
+        assertEquals(1.0 / (1.0 + Math.sqrt(2)), l2, 0.001);
+        
+        assertThrows(IllegalArgumentException.class, () -> {
+            DistanceUtils.compute(v1, v2, null);
+        });
+
+        VectorRecord record = new VectorRecord("v1", v1, "chunk", "c1", Collections.emptyMap());
+        VectorHit hit = new VectorHit("v1", 0.9, record);
+        assertEquals("v1", hit.getVectorId());
+        assertEquals(0.9, hit.getScore());
+        assertEquals(record, hit.getRecord());
+        
+        VectorQuery query = new VectorQuery(v1, 5, Collections.emptyMap());
+        assertEquals(5, query.getTopK());
+        assertEquals(0, query.getFilterMetadata().size());
+        
+        assertEquals(128, metadata.getDimension());
+        assertEquals(DistanceMetric.COSINE, metadata.getDistance());
+        assertEquals(1, metadata.getFormatVersion());
+        assertEquals("test_model", metadata.getModelName());
+    }
+
+    @Test
+    public void testLocalVectorStoreBatchAndExceptions() throws IOException {
+        VectorStore store = new LocalVectorStore(metadata, tempFile);
+        
+        // Test getMetadata
+        assertEquals(metadata.getDimension(), store.getMetadata().getDimension());
+        
+        double[] embedding = new double[128];
+        VectorRecord r1 = new VectorRecord("v1", embedding, "chunk", "c1", Collections.emptyMap());
+        VectorRecord r2 = new VectorRecord("v2", embedding, "chunk", "c2", Collections.emptyMap());
+        
+        store.upsertBatch(java.util.Arrays.asList(r1, r2));
+        
+        List<VectorHit> hits = store.search(new VectorQuery(embedding, 10, Collections.emptyMap()));
+        assertEquals(2, hits.size());
+        
+        double[] badEmbedding = new double[64];
+        VectorRecord badR = new VectorRecord("v3", badEmbedding, "chunk", "c3", Collections.emptyMap());
+        
+        VectorStoreException ex = assertThrows(VectorStoreException.class, () -> {
+            store.upsertBatch(java.util.Arrays.asList(badR));
+        });
+        assertEquals(VectorStoreException.ErrorCode.DIMENSION_MISMATCH, ex.getErrorCode());
+        
+        // Mark deleted unknown record
+        VectorStoreException ex2 = assertThrows(VectorStoreException.class, () -> {
+            store.markDeleted("unknown_id");
+        });
+        assertEquals(VectorStoreException.ErrorCode.RECORD_NOT_FOUND, ex2.getErrorCode());
+        
+        store.close();
+    }
 }
