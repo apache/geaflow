@@ -51,14 +51,8 @@ public final class RetrievalResponseValidator {
         }
         required(trace.getTraceVersion(), "traceVersion");
         required(trace.getOriginalQuery(), "originalQuery");
-        if (trace.getSelectedMode() == null) {
-            throw invalid("selectedMode is required");
-        }
         if (trace.getSelectedMode() != RetrievalMode.KEYWORD) {
             throw unsupported("unsupported retrieval mode in trace");
-        }
-        if (trace.getExecutionMode() == null) {
-            throw invalid("executionMode is required");
         }
         if (trace.getExecutionMode() != ExecutionMode.SEQUENTIAL) {
             throw unsupported("unsupported execution mode in trace");
@@ -75,10 +69,8 @@ public final class RetrievalResponseValidator {
             required(stage.getStatus(), "stage.status");
         }
         if (response.getEvidence() == null || response.getPaths() == null
-            || response.getSources() == null || response.getDegradedChannels() == null
-            || response.getEvidence().contains(null) || response.getPaths().contains(null)
-            || response.getSources().contains(null) || response.getDegradedChannels().contains(null)) {
-            throw invalid("response collections are required and must not contain null");
+            || response.getSources() == null || response.getDegradedChannels() == null) {
+            throw invalid("response collections are required");
         }
         RetrievalBudget effectiveBudget = response.getEffectiveBudget();
         RetrievalBudgetValidator.validate(effectiveBudget, properties, true);

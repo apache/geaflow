@@ -181,6 +181,34 @@ public class RetrievalApiJsonTest {
     }
 
     @Test
+    public void rejectsUnsupportedTraceModesAndUnboundedEffectiveBudget() {
+        String parallel = responseJson("PARALLEL", "SEQUENTIAL", 10, 3000, 100, 4096);
+        Assertions.assertThrows(RuntimeException.class,
+            () -> RetrievalApiJson.parseResponse(parallel));
+
+        String overLimit = responseJson("KEYWORD", "SEQUENTIAL", 101, 3000, 100, 4096);
+        Assertions.assertThrows(RuntimeException.class,
+            () -> RetrievalApiJson.parseResponse(overLimit));
+    }
+
+    @Test
+    public void rejectsBlankRequiredResponseAndErrorFields() {
+        String blankGraph = responseJson("KEYWORD", "SEQUENTIAL", 10, 3000, 100, 4096)
+            .replace("\"graphName\":\"graph\"", "\"graphName\":\" \"");
+        Assertions.assertThrows(RuntimeException.class,
+            () -> RetrievalApiJson.parseResponse(blankGraph));
+        Assertions.assertThrows(RuntimeException.class, () -> RetrievalApiJson.parseError(
+            "{\"requestId\":\" \",\"code\":\"INTERNAL_ERROR\","
+                + "\"message\":\"x\",\"retriable\":false}"));
+    }
+
+    @Test
+    public void rejectsIncompleteResponseSerialization() {
+        RetrievalResponse response = new RetrievalResponse();
+        Assertions.assertThrows(RuntimeException.class, () -> RetrievalApiJson.toJson(response));
+    }
+
+    @Test
     public void errorCodeAndRetriableFlagAreStable() {
         RetrievalError error = new RetrievalError("req-3", RetrievalErrorCode.INDEX_NOT_READY,
             "not ready");
@@ -244,5 +272,18 @@ public class RetrievalApiJsonTest {
             }
             return result.toString();
         }
+    }
+
+    private static String responseJson(String mode, String executionMode, int topK,
+                                       int timeoutMs, int maxCandidates, int tokenBudget) {
+        return "{\"requestId\":\"r\",\"graphName\":\"graph\","
+            + "\"graphVersion\":\"v1\",\"evidence\":[],\"paths\":[],"
+            + "\"sources\":[],\"degradedChannels\":[],\"trace\":{"
+            + "\"traceVersion\":\"v1\",\"originalQuery\":\"q\","
+            + "\"selectedMode\":\"" + mode + "\",\"executionMode\":\""
+            + executionMode + "\",\"stages\":[]},\"effectiveBudget\":{"
+            + "\"topK\":" + topK + ",\"timeoutMs\":" + timeoutMs
+            + ",\"maxCandidates\":" + maxCandidates + ",\"tokenBudget\":"
+            + tokenBudget + "}}";
     }
 }

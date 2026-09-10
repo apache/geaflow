@@ -38,9 +38,12 @@ import org.apache.geaflow.ai.retrieval.api.model.RetrievalRequest;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalResponse;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalTrace;
 import org.apache.geaflow.ai.retrieval.api.model.TraceStage;
+import org.apache.geaflow.ai.retrieval.config.RetrievalProperties;
 import org.apache.geaflow.ai.retrieval.model.document.SourceRef;
 import org.apache.geaflow.ai.retrieval.model.evidence.Evidence;
 import org.apache.geaflow.ai.retrieval.model.graph.GraphPathRef;
+import org.apache.geaflow.ai.retrieval.service.RetrievalErrorValidator;
+import org.apache.geaflow.ai.retrieval.service.RetrievalResponseValidator;
 
 /** Strict, dependency-light JSON boundary for the v1 retrieval API. */
 public final class RetrievalApiJson {
@@ -58,6 +61,10 @@ public final class RetrievalApiJson {
     }
 
     public static RetrievalResponse parseResponse(String json) {
+        return parseResponse(json, defaultProperties());
+    }
+
+    public static RetrievalResponse parseResponse(String json, RetrievalProperties properties) {
         JsonObject object = object(json);
         requireString(object, "requestId");
         requireString(object, "graphName");
@@ -81,7 +88,7 @@ public final class RetrievalApiJson {
         response.setTrace(parseTrace(object.getAsJsonObject("trace")));
         response.setEffectiveBudget(parseBudget(object.getAsJsonObject("effectiveBudget"), true));
         response.setDegradedChannels(strings(object, "degradedChannels"));
-        return response;
+        return RetrievalResponseValidator.validate(response, properties);
     }
 
     public static RetrievalError parseError(String json) {
@@ -107,11 +114,26 @@ public final class RetrievalApiJson {
         RetrievalError error = new RetrievalError(object.get("requestId").getAsString(),
             errorCode, object.get("message").getAsString());
         error.setRetriable(retriable);
-        return error;
+        return RetrievalErrorValidator.validate(error);
     }
 
     public static String toJson(Object value) {
+        return toJson(value, defaultProperties());
+    }
+
+    public static String toJson(Object value, RetrievalProperties properties) {
+        if (value instanceof RetrievalResponse) {
+            RetrievalResponseValidator.validate((RetrievalResponse) value, properties);
+        } else if (value instanceof RetrievalError) {
+            RetrievalErrorValidator.validate((RetrievalError) value);
+        }
         return GSON.toJson(value);
+    }
+
+    private static RetrievalProperties defaultProperties() {
+        RetrievalProperties properties = new RetrievalProperties();
+        properties.validateConfiguration();
+        return properties;
     }
 
     private static JsonObject object(String json) {
@@ -167,8 +189,7 @@ public final class RetrievalApiJson {
         Integer maxCandidates = optionalInt(object, "maxCandidates");
         Integer tokenBudget = optionalInt(object, "tokenBudget");
         if (requiredValues && (topK == null || timeoutMs == null || maxCandidates == null
-            || tokenBudget == null || topK < 1 || timeoutMs < 1 || maxCandidates < 1
-            || tokenBudget < 1 || topK > maxCandidates)) {
+            || tokenBudget == null)) {
             throw new JsonParseException("effectiveBudget contains invalid values");
         }
         return new RetrievalBudget(topK, timeoutMs, maxCandidates, tokenBudget);

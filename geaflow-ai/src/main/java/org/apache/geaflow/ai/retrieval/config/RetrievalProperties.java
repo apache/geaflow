@@ -56,10 +56,10 @@ public class RetrievalProperties {
 
     @Init
     public void validateConfiguration() {
-        if (blank(configVersion) || blank(readyGraphName)) {
+        if (!"v1".equals(configVersion) || blank(readyGraphName)) {
             throw new RetrievalException(
                 org.apache.geaflow.ai.retrieval.api.model.RetrievalErrorCode.INVALID_REQUEST,
-                "retrieval config-version and ready-graph-name are required");
+                "retrieval config-version must be v1 and ready-graph-name is required");
         }
         if (!RetrievalMode.KEYWORD.name().equals(defaultMode)) {
             throw invalid("default-mode must be KEYWORD");
