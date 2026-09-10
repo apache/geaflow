@@ -18,3 +18,4 @@
    10.udc.md
    11.doris.md
    12.mongodb.md
+   13.clickhouse.md

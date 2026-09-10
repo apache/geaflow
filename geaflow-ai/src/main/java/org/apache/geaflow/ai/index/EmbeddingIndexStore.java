@@ -172,8 +172,16 @@ public class EmbeddingIndexStore implements IndexStore {
             batchEntitiesBuffer.clear();
         }
 
-        LOGGER.info("Successfully added {} new index items. Total indexed: {}",
-                addedCount, indexStoreMap.size());
+        // Count entries that actually carry vectors, not entities that were queued: an entity with
+        // no embeddable text is registered with an empty list and must not be reported as indexed.
+        long withVectors = 0;
+        for (List<EmbeddingService.EmbeddingResult> vectors : indexStoreMap.values()) {
+            if (vectors != null && !vectors.isEmpty()) {
+                withVectors++;
+            }
+        }
+        LOGGER.info("Successfully added {} new index items. Entities holding vectors: {} of {}",
+                addedCount, withVectors, indexStoreMap.size());
     }
 
     private List<String> indexBatch(EmbeddingService service, List<GraphEntity> pendingEntities) {
@@ -182,13 +190,24 @@ public class EmbeddingIndexStore implements IndexStore {
         }
         List<String> pendingTexts = new ArrayList<>(pendingEntities.size());
         Map<GraphEntity, Pair<Integer, Integer>> entity2StartEndPair = new HashMap<>();
+        List<GraphEntity> withoutText = new ArrayList<>();
         for (GraphEntity e : pendingEntities) {
             Integer start = pendingTexts.size();
             pendingTexts.addAll(ModelUtils.splitLongText(
                 Constants.EMBEDDING_INDEX_STORE_SPLIT_TEXT_CHUNK_SIZE,
                     verbFunc.verbalize(e).toArray(new String[0])));
             Integer end = pendingTexts.size();
+            if (start.equals(end)) {
+                withoutText.add(e);
+            }
             entity2StartEndPair.put(e, Pair.of(start, end));
+        }
+        if (!withoutText.isEmpty()) {
+            // Say so rather than reporting these as indexed. An entity whose values are all
+            // ignorable yields no text, so it gets an empty vector list and can never be recalled.
+            LOGGER.warn("{} of {} entities have no embeddable text and will hold no vectors, "
+                    + "for example {}", withoutText.size(), pendingEntities.size(),
+                ModelUtils.getGraphEntityKey(withoutText.get(0)));
         }
 
         Gson gson = new Gson();
@@ -243,15 +262,24 @@ public class EmbeddingIndexStore implements IndexStore {
 
     @Override
     public List<IVector> getEntityIndex(GraphEntity entity) {
-        if (entity != null && indexStoreMap.get(entity) != null) {
-            List<EmbeddingService.EmbeddingResult> resultList = indexStoreMap.get(entity);
-            List<IVector> result = new ArrayList<>();
-            for (EmbeddingService.EmbeddingResult res : resultList) {
-                double[] embedding = res.embedding;
-                result.add(new EmbeddingVector(embedding));
-            }
-            return result;
+        if (entity == null) {
+            return Collections.emptyList();
         }
-        return Collections.emptyList();
+        List<EmbeddingService.EmbeddingResult> resultList = indexStoreMap.get(entity);
+        if (resultList == null) {
+            return Collections.emptyList();
+        }
+        if (resultList.isEmpty()) {
+            // An entity that was looked at but held no embeddable text is indistinguishable from an
+            // entity nobody has looked at yet, since both give an empty result. Say which it was.
+            LOGGER.debug("Entity {} was checked and holds no embeddable text",
+                    ModelUtils.getGraphEntityKey(entity));
+            return Collections.emptyList();
+        }
+        List<IVector> result = new ArrayList<>(resultList.size());
+        for (EmbeddingService.EmbeddingResult res : resultList) {
+            result.add(new EmbeddingVector(res.embedding));
+        }
+        return result;
     }
 }

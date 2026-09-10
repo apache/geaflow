@@ -29,7 +29,7 @@ import org.apache.geaflow.api.graph.function.vc.VertexCentricTraversalFunction.T
 import org.apache.geaflow.api.graph.function.vc.VertexCentricTraversalFunction.TraversalVertexQuery;
 import org.apache.geaflow.common.config.Configuration;
 import org.apache.geaflow.common.iterator.CloseableIterator;
-import org.apache.geaflow.dsl.common.algo.AlgorithmRuntimeContext;
+import org.apache.geaflow.dsl.common.algo.AlgorithmSamplingRuntimeContext;
 import org.apache.geaflow.dsl.common.data.Row;
 import org.apache.geaflow.dsl.common.data.RowEdge;
 import org.apache.geaflow.dsl.common.exception.GeaFlowDSLException;
@@ -46,7 +46,7 @@ import org.apache.geaflow.state.pushdown.filter.IFilter;
 import org.apache.geaflow.state.pushdown.filter.InEdgeFilter;
 import org.apache.geaflow.state.pushdown.filter.OutEdgeFilter;
 
-public class GeaFlowAlgorithmDynamicRuntimeContext implements AlgorithmRuntimeContext<Object, Object> {
+public class GeaFlowAlgorithmDynamicRuntimeContext implements AlgorithmSamplingRuntimeContext<Object, Object> {
 
     private final IncVertexCentricTraversalFuncContext<Object, Row, Row, Object, Row> incVCTraversalCtx;
 
@@ -173,6 +173,16 @@ public class GeaFlowAlgorithmDynamicRuntimeContext implements AlgorithmRuntimeCo
             default:
                 throw new GeaFlowDSLException("Illegal edge direction: " + direction);
         }
+    }
+
+    @Override
+    public long getSamplingSnapshotVersion() {
+        return incVCTraversalCtx.getRuntimeContext().getWindowId();
+    }
+
+    @Override
+    public long getNeighborhoodChangeVersion(Object vertexId) {
+        return traversalFunction.getNeighborhoodChangeVersion(vertexId);
     }
 
     @Override

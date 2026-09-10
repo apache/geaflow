@@ -31,17 +31,17 @@ public class SearchUtils {
             '*', '#', '-', '?', '`', '{', '}', '[', ']', '(', ')', '>', '<', ':', '/', '.'
     ));
 
-    // Set of allowed characters for validation in isAllAllowedChars
-    // Includes: digits (0-9), and some common safe symbols
-    private static final Set<Character> IGNORE_CHARS = buildIgnoredChars();
+    // Characters that carry no meaning on their own: digits and a few common symbols.
+    // A value made up entirely of these is not worth indexing or embedding.
+    private static final Set<Character> IGNORABLE_CHARS = buildIgnorableChars();
 
     /**
-     * Builds the set of allowed characters for input validation.
-     * Includes alphanumeric characters and selected common symbols.
+     * Builds the set of characters that carry no meaning on their own.
+     * Digits and a few common symbols.
      *
-     * @return an unmodifiable set of ignored characters
+     * @return an unmodifiable set of ignorable characters
      */
-    private static Set<Character> buildIgnoredChars() {
+    private static Set<Character> buildIgnorableChars() {
         Set<Character> ignored = new HashSet<>(32);
         // Add digits
         for (char c = '0'; c <= '9'; c++) {
@@ -87,18 +87,30 @@ public class SearchUtils {
     }
 
     /**
-     * Checks whether all characters in the given string are within the allowed character set.
-     * Useful for validating usernames, identifiers, or safe input formats.
+     * Whether the given value consists entirely of characters that carry no meaning on their own,
+     * and therefore has nothing worth indexing or embedding. A bare id, a date or a run of
+     * punctuation is ignorable; anything containing a letter or a CJK character is not.
      *
-     * @param str the string to validate
-     * @return true if all characters are allowed; false otherwise
+     * <p>Callers use this to skip values, so an empty or absent value is ignorable too: there is
+     * nothing in it to index.
+     *
+     * <p>This replaces {@code isAllAllowedChars}, whose loop returned on the first character
+     * <em>inside</em> the set rather than the first one outside it, making it the negation of both
+     * its own name and its own documentation. The practical effect was that ordinary prose was
+     * discarded while digit-only noise was kept, so an embedding store silently produced nothing
+     * for text that happened to contain no digit. The method is renamed rather than corrected in
+     * place, so that any caller depending on the previous meaning fails to compile instead of
+     * silently flipping behaviour.
+     *
+     * @param str the value to check
+     * @return true if every character is ignorable, or the value is null or empty
      */
-    public static boolean isAllAllowedChars(String str) {
+    public static boolean isAllIgnorableChars(String str) {
         if (str == null || str.isEmpty()) {
-            return false; // Consider empty/null invalid; adjust based on use case
+            return true;
         }
         for (char c : str.toCharArray()) {
-            if (IGNORE_CHARS.contains(c)) {
+            if (!IGNORABLE_CHARS.contains(c)) {
                 return false;
             }
         }
