@@ -19,212 +19,93 @@
 
 package org.apache.geaflow.ai;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import com.google.gson.Gson;
-import java.io.IOException;
-import java.util.*;
-import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
-import okhttp3.*;
-import org.apache.geaflow.ai.common.config.Constants;
-import org.apache.geaflow.ai.graph.io.*;
-import org.junit.jupiter.api.*;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import org.apache.geaflow.ai.graph.io.Vertex;
+import org.apache.geaflow.ai.retrieval.support.HttpTestClient;
+import org.apache.geaflow.ai.retrieval.support.HttpTestResponse;
+import org.apache.geaflow.ai.retrieval.support.RetrievalTestFixture;
+import org.junit.jupiter.api.Test;
 import org.noear.solon.test.SolonTest;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 @SolonTest(GeaFlowMemoryServer.class)
 public class MemoryServerTest {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(MemoryServerTest.class);
-    private static final String BASE_URL = "http://localhost:8080";
-    private static final String GRAPH_NAME = "Confucius";
-    private static OkHttpClient client;
+    @Test
+    void legacyWorkflow() {
+        RetrievalTestFixture fixture = new RetrievalTestFixture();
+        Gson gson = new Gson();
+        Map<String, String> graph = Collections.singletonMap("graphName", RetrievalTestFixture.GRAPH_NAME);
+        try (HttpTestClient client = new HttpTestClient("http://localhost:8080")) {
+            HttpTestResponse health = client.get("/health");
+            success(health);
+            assertTrue(health.getContentType().startsWith("application/json"));
+            JsonObject body = new JsonParser().parse(health.getBody()).getAsJsonObject();
+            assertEquals("UP", body.get("status").getAsString());
+            assertEquals("geaflow-memory-server", body.get("service").getAsString());
 
-    @BeforeEach
-    void setUp() {
-        LOGGER.info("Setting up test environment...");
-        if (client == null) {
-            OkHttpClient.Builder builder = new OkHttpClient.Builder();
-            builder.callTimeout(Constants.HTTP_CALL_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-            builder.connectTimeout(Constants.HTTP_CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-            builder.readTimeout(Constants.HTTP_READ_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-            builder.writeTimeout(Constants.HTTP_WRITE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-            client = builder.build();
-        }
-        LOGGER.info("Test HTTP client initialized, base URL: {}", BASE_URL);
-    }
-
-    @AfterEach
-    void tearDown() {
-        LOGGER.info("Cleaning up test environment...");
-    }
-
-    private String get(String useApi) {
-        String url = BASE_URL + useApi;
-        Request request = new Request.Builder().url(url).get().build();
-        try (okhttp3.Response response = client.newCall(request).execute()) {
-            return response.body().string();
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    private String post(String useApi, String bodyJson) {
-        return post(useApi, bodyJson, Collections.emptyMap());
-    }
-
-    private String post(String useApi, String bodyJson, Map<String, String> queryParams) {
-        RequestBody requestBody = RequestBody.create(
-            MediaType.parse("application/json; charset=utf-8"), bodyJson);
-        String url = BASE_URL + useApi;
-        HttpUrl.Builder urlBuilder = HttpUrl.parse(url).newBuilder();
-        if (queryParams != null) {
-            for (Map.Entry<String, String> entry : queryParams.entrySet()) {
-                urlBuilder.addQueryParameter(entry.getKey(), entry.getValue());
+            HttpTestResponse created = client.post("/graph/create", gson.toJson(fixture.graphSchema()), Collections.emptyMap());
+            success(created);
+            assertTrue(created.getBody().contains(RetrievalTestFixture.GRAPH_NAME));
+            HttpTestResponse schema = client.post("/graph/addEntitySchema", gson.toJson(fixture.vertexSchema()), graph);
+            success(schema);
+            assertTrue(schema.getBody().contains("chunk"));
+            HttpTestResponse graphSchema = client.post("/graph/getGraphSchema", "", graph);
+            success(graphSchema);
+            assertTrue(graphSchema.getBody().contains("week1-keyword-graph"));
+            for (Vertex vertex : fixture.vertices()) {
+                HttpTestResponse inserted = client.post("/graph/insertEntity", gson.toJson(vertex), graph);
+                success(inserted);
+                assertEquals("Success to add entities, num: 1", inserted.getBody());
             }
-        }
-        Request request = new Request.Builder().url(urlBuilder.build()).post(requestBody).build();
-        try (okhttp3.Response response = client.newCall(request).execute()) {
-            return response.body().string();
-        } catch (IOException e) {
-            throw new RuntimeException(e);
+
+            HttpTestResponse context = client.post("/query/context", "", graph);
+            success(context);
+            assertFalse(context.getBody().trim().isEmpty());
+            Map<String, String> session = Collections.singletonMap("sessionId", context.getBody());
+            HttpTestResponse query = client.post("/query/exec", "Confucius", session);
+            success(query);
+            assertTrue(query.getBody().contains("Confucius"), query.getBody());
+            HttpTestResponse result = client.post("/query/result", "", session);
+            success(result);
+            assertTrue(result.getBody().contains("confucius-1"), result.getBody());
+            assertTrue(result.getBody().contains("Confucius taught ethics."), result.getBody());
         }
     }
 
     @Test
-    void testMain() throws Exception {
-        testServerHealth();
-        testCreateGraph();
-        testAddEntities();
-        testQueries();
-    }
-
-    void testServerHealth() throws Exception {
-        LOGGER.info("Testing server health endpoint...");
-        String api = "/";
-        String response = get(api);
-        LOGGER.info("API: {} Response: {}", api, response);
-        api = "/health";
-        response = get(api);
-        LOGGER.info("API: {} Response: {}", api, response);
-        api = "/api/test";
-        response = get(api);
-        LOGGER.info("API: {} Response: {}", api, response);
-    }
-
-    void testCreateGraph() throws Exception {
-        LOGGER.info("Testing server create graph...");
+    void fixtureIsDeterministicAndIndependent() {
         Gson gson = new Gson();
-        String api = "/graph/create";
-        GraphSchema testGraph = new GraphSchema();
-        String graphName = GRAPH_NAME;
-        testGraph.setName(graphName);
-        String response = post(api, gson.toJson(testGraph));
-        LOGGER.info("API: {} Response: {}", api, response);
-
-        api = "/graph/getGraphSchema";
-        Map<String, String> queryParams = new HashMap<>();
-        queryParams.put("graphName", graphName);
-        response = post(api, "", queryParams);
-        LOGGER.info("API: {} Response: {}", api, response);
-        Assertions.assertEquals(gson.toJson(testGraph), response);
-
-        VertexSchema vertexSchema = new VertexSchema("chunk", "id",
-            Collections.singletonList("text"));
-        EdgeSchema edgeSchema = new EdgeSchema("relation", "srcId", "dstId",
-            Collections.singletonList("rel"));
-        testGraph.addVertex(vertexSchema);
-        testGraph.addEdge(edgeSchema);
-
-        api = "/graph/addEntitySchema";
-        queryParams = new HashMap<>();
-        queryParams.put("graphName", graphName);
-        response = post(api, gson.toJson(vertexSchema), queryParams);
-        LOGGER.info("API: {} Response: {}", api, response);
-
-        api = "/graph/addEntitySchema";
-        queryParams = new HashMap<>();
-        queryParams.put("graphName", graphName);
-        response = post(api, gson.toJson(edgeSchema), queryParams);
-        LOGGER.info("API: {} Response: {}", api, response);
-
-        api = "/graph/getGraphSchema";
-        queryParams = new HashMap<>();
-        queryParams.put("graphName", graphName);
-        response = post(api, "", queryParams);
-        LOGGER.info("API: {} Response: {}", api, response);
-        Assertions.assertEquals(gson.toJson(testGraph), response);
+        RetrievalTestFixture first = new RetrievalTestFixture();
+        RetrievalTestFixture second = new RetrievalTestFixture();
+        assertEquals(gson.toJson(first.graphSchema()), gson.toJson(second.graphSchema()));
+        assertEquals(gson.toJson(first.vertexSchema()), gson.toJson(second.vertexSchema()));
+        List<Vertex> firstVertices = first.vertices();
+        List<Vertex> secondVertices = second.vertices();
+        assertEquals(gson.toJson(firstVertices), gson.toJson(secondVertices));
+        assertEquals(RetrievalTestFixture.CONFUCIUS_ID, firstVertices.get(0).getId());
+        assertEquals(RetrievalTestFixture.ASTRONOMY_ID, firstVertices.get(1).getId());
+        assertNotSame(first.graphSchema(), second.graphSchema());
+        assertNotSame(first.vertexSchema(), second.vertexSchema());
+        assertNotSame(firstVertices, secondVertices);
+        assertNotSame(firstVertices.get(0), secondVertices.get(0));
+        first.graphSchema().setName("changed");
+        assertEquals(RetrievalTestFixture.GRAPH_NAME, second.graphSchema().getName());
     }
 
-    void testAddEntities() throws Exception {
-        LOGGER.info("Testing server add entities...");
-        Gson gson = new Gson();
-        String graphName = GRAPH_NAME;
-
-        String api = "/graph/getGraphSchema";
-        Map<String, String> queryParams = new HashMap<>();
-        queryParams.put("graphName", graphName);
-        String response = post(api, "", queryParams);
-        LOGGER.info("API: {} Response: {}", api, response);
-
-        TextFileReader textFileReader = new TextFileReader(10000);
-        textFileReader.readFile("text/Confucius");
-        List<String> chunks = IntStream.range(0, textFileReader.getRowCount())
-            .mapToObj(textFileReader::getRow)
-            .map(String::trim).collect(Collectors.toList());
-        for(String chunk : chunks) {
-            String vid = UUID.randomUUID().toString().replace("-", "");
-            Vertex chunkVertex = new Vertex("chunk", vid, Collections.singletonList(chunk));
-            api = "/graph/insertEntity";
-            queryParams = new HashMap<>();
-            queryParams.put("graphName", graphName);
-            response = post(api, gson.toJson(chunkVertex), queryParams);
-            LOGGER.info("API: {} Response: {}", api, response);
-        }
+    private static void success(HttpTestResponse response) {
+        assertEquals(200, response.getStatus(), response.getBody());
+        assertNotNull(response.getHeaders().get("Content-Type"));
+        assertNotNull(response.getBody());
     }
-
-    void testQueries() throws Exception {
-        LOGGER.info("Testing server queries...");
-        String graphName = GRAPH_NAME;
-        String sessionId = null;
-        String api = "/query/context";
-        Map<String, String> queryParams = new HashMap<>();
-        queryParams.put("graphName", graphName);
-        String response = post(api, "", queryParams);
-        LOGGER.info("API: {} Response: {}", api, response);
-        Assertions.assertNotNull(response);
-        sessionId = response;
-
-        api = "/query/exec";
-        queryParams = new HashMap<>();
-        queryParams.put("sessionId", sessionId);
-        queryParams.put("query", "Who is Confucius?");
-        response = post(api, "", queryParams);
-        LOGGER.info("API: {} Response: {}", api, response);
-        Assertions.assertNotNull(response);
-
-        api = "/query/result";
-        queryParams = new HashMap<>();
-        queryParams.put("sessionId", sessionId);
-        response = post(api, "", queryParams);
-        LOGGER.info("API: {} Response: {}", api, response);
-        Assertions.assertNotNull(response);
-
-        api = "/query/exec";
-        queryParams = new HashMap<>();
-        queryParams.put("sessionId", sessionId);
-        queryParams.put("query", "What did he say?");
-        response = post(api, "", queryParams);
-        LOGGER.info("API: {} Response: {}", api, response);
-        Assertions.assertNotNull(response);
-
-        api = "/query/result";
-        queryParams = new HashMap<>();
-        queryParams.put("sessionId", sessionId);
-        response = post(api, "", queryParams);
-        LOGGER.info("API: {} Response: {}", api, response);
-        Assertions.assertNotNull(response);
-    }
-
 }

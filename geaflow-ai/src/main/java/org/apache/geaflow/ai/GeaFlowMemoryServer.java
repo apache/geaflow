@@ -57,7 +57,7 @@ public class GeaFlowMemoryServer {
                 ctx.output("GeaFlow AI Server is running...");
             });
             app.get("/health", ctx -> {
-                ctx.output("{\"status\":\"UP\",\"service\":\"" + SERVER_NAME + "\"}");
+                ctx.outputAsJson("{\"status\":\"UP\",\"service\":\"" + SERVER_NAME + "\"}");
             });
         });
     }
