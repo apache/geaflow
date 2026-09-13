@@ -89,13 +89,13 @@ public class EventNormalizerTest {
             Optional.of(FactValue.entityReference("city:b\u00e9ijing")),
             normalized.getFactValue());
         Assertions.assertEquals(
-            time("2024-01-01T00:00:00.123Z"),
+            time("2024-01-01T00:00:00.123456789Z"),
             normalized.getValidTime().getStart());
         Assertions.assertEquals(
-            Optional.of(time("2025-01-01T00:00:00.987Z")),
+            Optional.of(time("2025-01-01T00:00:00.987654321Z")),
             normalized.getValidTime().getEnd());
         Assertions.assertEquals(
-            time("2024-03-01T00:00:00.456Z"),
+            time("2024-03-01T00:00:00.456789123Z"),
             normalized.getRecordedAt());
         Assertions.assertEquals(
             Arrays.asList("evidence-a", "evidence-b"),
@@ -154,6 +154,13 @@ public class EventNormalizerTest {
                 "2024-04-01T00:00:00Z",
                 Arrays.asList(first, second)),
             key);
+        NormalizedMemoryEvent differentRecordedAtNanos = normalizer.normalize(
+            addEvent(
+                "event-1",
+                "Beijing",
+                "2024-03-01T00:00:00.000000001Z",
+                Arrays.asList(first, second)),
+            key);
         NormalizedMemoryEvent differentScope = normalizer.normalize(
             addEvent(
                 "event-1",
@@ -174,6 +181,9 @@ public class EventNormalizerTest {
         Assertions.assertNotEquals(
             original.getPayloadHash(),
             differentRecordedAt.getPayloadHash());
+        Assertions.assertNotEquals(
+            original.getPayloadHash(),
+            differentRecordedAtNanos.getPayloadHash());
         Assertions.assertNotEquals(
             original.getPayloadHash(),
             differentScope.getPayloadHash());
@@ -202,7 +212,7 @@ public class EventNormalizerTest {
             Optional.empty(),
             normalized.getFactValue());
         Assertions.assertEquals(
-            time("2024-06-01T00:00:00.987Z"),
+            time("2024-06-01T00:00:00.987654321Z"),
             normalized.getRecordedAt());
         Assertions.assertThrows(
             IllegalArgumentException.class,

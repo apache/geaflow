@@ -158,7 +158,7 @@ public final class EventNormalizer {
     }
 
     private static Instant normalizeTime(Instant time) {
-        return Instant.ofEpochMilli(time.toEpochMilli());
+        return time;
     }
 
     private static String normalizeText(String value) {
@@ -259,15 +259,15 @@ public final class EventNormalizer {
             digest,
             fact != null && fact.isRelationship()
                 ? fact.getTarget().get().getLabel() : null);
-        updateLong(
+        updateTime(
             digest,
-            event.getValidTime().getStart().toEpochMilli());
+            event.getValidTime().getStart());
         updateOptionalTime(
             digest,
             event.getValidTime().getEnd());
-        updateLong(
+        updateTime(
             digest,
-            event.getTransactionTime().toEpochMilli());
+            event.getTransactionTime());
         updateInt(digest, event.getEvidence().size());
         for (Evidence evidence : event.getEvidence()) {
             updateText(digest, evidence.getId());
@@ -306,10 +306,17 @@ public final class EventNormalizer {
         Optional<Instant> time) {
         if (time.isPresent()) {
             digest.update((byte) 1);
-            updateLong(digest, time.get().toEpochMilli());
+            updateTime(digest, time.get());
         } else {
             digest.update((byte) 0);
         }
+    }
+
+    private static void updateTime(
+        MessageDigest digest,
+        Instant time) {
+        updateLong(digest, time.getEpochSecond());
+        updateInt(digest, time.getNano());
     }
 
     private static void updateInt(
