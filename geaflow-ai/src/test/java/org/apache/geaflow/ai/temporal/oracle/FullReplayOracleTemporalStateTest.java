@@ -276,6 +276,59 @@ public class FullReplayOracleTemporalStateTest {
     }
 
     @Test
+    public void testPartialChangesAddConflictsForResidualVersions() {
+        NormalizedMemoryEvent first = add(
+            "event-first",
+            KEY,
+            "Beijing",
+            interval(
+                "2024-01-01T00:00:00Z",
+                "2024-10-01T00:00:00Z"),
+            "2024-03-01T00:00:00Z");
+        NormalizedMemoryEvent conflict = add(
+            "event-conflict",
+            KEY,
+            "Shanghai",
+            interval(
+                "2024-05-01T00:00:00Z",
+                "2025-01-01T00:00:00Z"),
+            "2024-04-01T00:00:00Z");
+        NormalizedMemoryEvent retraction = retract(
+            "event-retract",
+            KEY,
+            interval(
+                "2024-01-01T00:00:00Z",
+                "2024-05-01T00:00:00Z"),
+            "2024-06-01T00:00:00Z");
+        NormalizedMemoryEvent correction = correct(
+            "event-correct",
+            KEY,
+            "Rome",
+            retraction.getValidTime(),
+            "2024-06-01T00:00:00Z");
+
+        TemporalState state = oracle.replayNormalized(
+            Arrays.asList(retraction, conflict, first));
+
+        Assertions.assertTrue(state.getRelations().contains(relation(
+            VersionRelationType.CONFLICTS_WITH,
+            "event-conflict:version:0",
+            "event-first:version:0")));
+        Assertions.assertTrue(state.getRelations().contains(relation(
+            VersionRelationType.CONFLICTS_WITH,
+            "event-conflict:version:0",
+            "event-retract:version:1")));
+
+        TemporalState correctedState = oracle.replayNormalized(
+            Arrays.asList(correction, conflict, first));
+        Assertions.assertTrue(correctedState.getRelations().contains(
+            relation(
+                VersionRelationType.CONFLICTS_WITH,
+                "event-conflict:version:0",
+                "event-correct:version:1")));
+    }
+
+    @Test
     public void testLedgerNoopAndEventIdReuse() {
         NormalizedMemoryEvent original = add(
             "event-1",

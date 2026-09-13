@@ -409,6 +409,36 @@ public final class IncrementalTemporalIntegrator {
                     relations);
             }
         }
+
+        addCurrentConflicts(versions, relations);
+    }
+
+    private static void addCurrentConflicts(
+        List<MemoryFactVersion> versions,
+        List<VersionRelation> relations) {
+        for (int leftIndex = 0;
+            leftIndex < versions.size(); leftIndex++) {
+            MemoryFactVersion left = versions.get(leftIndex);
+            if (!isCurrentActive(left)) {
+                continue;
+            }
+            for (int rightIndex = leftIndex + 1;
+                rightIndex < versions.size(); rightIndex++) {
+                MemoryFactVersion right = versions.get(rightIndex);
+                if (isCurrentActive(right)
+                    && left.getValidTime().overlaps(
+                        right.getValidTime())
+                    && !factValue(left.getFact()).equals(
+                        factValue(right.getFact()))) {
+                    addRelation(
+                        relations,
+                        new VersionRelation(
+                            VersionRelationType.CONFLICTS_WITH,
+                            left.getId(),
+                            right.getId()));
+                }
+            }
+        }
     }
 
     private static int addTombstones(

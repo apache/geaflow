@@ -33,6 +33,8 @@ import org.apache.geaflow.ai.temporal.model.MemoryFactVersion;
 import org.apache.geaflow.ai.temporal.model.MemoryFactVersionStatus;
 import org.apache.geaflow.ai.temporal.model.Source;
 import org.apache.geaflow.ai.temporal.model.TimeInterval;
+import org.apache.geaflow.ai.temporal.model.VersionRelation;
+import org.apache.geaflow.ai.temporal.model.VersionRelationType;
 import org.apache.geaflow.ai.temporal.oracle.FullReplayOracle;
 import org.apache.geaflow.ai.temporal.semantics.EventNormalizer;
 import org.apache.geaflow.ai.temporal.semantics.NormalizedMemoryEvent;
@@ -121,6 +123,68 @@ public class IncrementalTemporalStateTest {
             MemoryFactVersionStatus.RETRACTED,
             version(state, "event-alice-retract:version:0")
                 .getStatus());
+    }
+
+    @Test
+    public void testPartialChangesAddConflictsForResidualVersions() {
+        IncrementalTemporalIntegrator integrator =
+            new IncrementalTemporalIntegrator();
+        NormalizedMemoryEvent first = add(
+            "event-first",
+            ALICE_KEY,
+            "Beijing",
+            interval(
+                "2024-01-01T00:00:00Z",
+                "2024-10-01T00:00:00Z"),
+            "2024-03-01T00:00:00Z");
+        NormalizedMemoryEvent conflict = add(
+            "event-conflict",
+            ALICE_KEY,
+            "Shanghai",
+            interval(
+                "2024-05-01T00:00:00Z",
+                "2025-01-01T00:00:00Z"),
+            "2024-04-01T00:00:00Z");
+        NormalizedMemoryEvent correction = correct(
+            "event-correct",
+            ALICE_KEY,
+            "Rome",
+            interval(
+                "2024-01-01T00:00:00Z",
+                "2024-05-01T00:00:00Z"),
+            "2024-06-01T00:00:00Z");
+        NormalizedMemoryEvent retraction = retract(
+            "event-retract",
+            ALICE_KEY,
+            correction.getValidTime(),
+            "2024-06-01T00:00:00Z");
+
+        integrator.apply(first);
+        integrator.apply(conflict);
+        integrator.apply(correction);
+
+        List<VersionRelation> relations =
+            integrator.stateSnapshot().getRelations();
+        Assertions.assertTrue(relations.contains(new VersionRelation(
+            VersionRelationType.CONFLICTS_WITH,
+            "event-conflict:version:0",
+            "event-first:version:0")));
+        Assertions.assertTrue(relations.contains(new VersionRelation(
+            VersionRelationType.CONFLICTS_WITH,
+            "event-conflict:version:0",
+            "event-correct:version:1")));
+
+        IncrementalTemporalIntegrator retractingIntegrator =
+            new IncrementalTemporalIntegrator();
+        retractingIntegrator.apply(first);
+        retractingIntegrator.apply(conflict);
+        retractingIntegrator.apply(retraction);
+        Assertions.assertTrue(
+            retractingIntegrator.stateSnapshot().getRelations().contains(
+                new VersionRelation(
+                    VersionRelationType.CONFLICTS_WITH,
+                    "event-conflict:version:0",
+                    "event-retract:version:1")));
     }
 
     @Test
