@@ -255,6 +255,65 @@ public class MemoryGraphAdapterTest {
             () -> adapter.fromGraph(null));
     }
 
+    @Test
+    public void testOrphanVerticesAreRejected() {
+        MemoryGraphAdapter adapter = new MemoryGraphAdapter();
+
+        MemoryGraph entityGraph = emptyGraph(adapter);
+        entityGraph.addVertex(new Vertex(
+            "entity",
+            "entity:orphan",
+            Collections.singletonList("person")));
+        IllegalArgumentException entityError = Assertions.assertThrows(
+            IllegalArgumentException.class,
+            () -> adapter.fromGraph(entityGraph));
+        Assertions.assertEquals(
+            "Orphan entity vertex: entity:orphan",
+            entityError.getMessage());
+
+        MemoryGraph evidenceGraph = emptyGraph(adapter);
+        evidenceGraph.addVertex(new Vertex(
+            "source",
+            "source:orphan-evidence-source",
+            Collections.singletonList("Orphan evidence source")));
+        evidenceGraph.addVertex(new Vertex(
+            "evidence",
+            "evidence:orphan",
+            Collections.singletonList("Unreferenced evidence")));
+        evidenceGraph.addEdge(new Edge(
+            "from_source",
+            "evidence:orphan",
+            "source:orphan-evidence-source",
+            Collections.emptyList()));
+        IllegalArgumentException evidenceError = Assertions.assertThrows(
+            IllegalArgumentException.class,
+            () -> adapter.fromGraph(evidenceGraph));
+        Assertions.assertEquals(
+            "Orphan evidence vertex: evidence:orphan",
+            evidenceError.getMessage());
+
+        MemoryGraph sourceGraph = emptyGraph(adapter);
+        sourceGraph.addVertex(new Vertex(
+            "source",
+            "source:orphan",
+            Collections.singletonList("Unreferenced source")));
+        IllegalArgumentException sourceError = Assertions.assertThrows(
+            IllegalArgumentException.class,
+            () -> adapter.fromGraph(sourceGraph));
+        Assertions.assertEquals(
+            "Orphan source vertex: source:orphan",
+            sourceError.getMessage());
+    }
+
+    private static MemoryGraph emptyGraph(MemoryGraphAdapter adapter) {
+        return adapter.toGraph(new CanonicalSnapshot(
+            new TemporalState(
+                Collections.emptyMap(),
+                Collections.emptyList()),
+            Collections.emptyList(),
+            Collections.emptyMap()));
+    }
+
     private CanonicalSnapshot completeSnapshot() {
         Source registry = new Source("registry", "Registry");
         Source analyst = new Source("analyst", "Analyst notes");

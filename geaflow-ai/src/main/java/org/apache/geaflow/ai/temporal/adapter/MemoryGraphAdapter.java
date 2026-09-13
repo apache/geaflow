@@ -323,6 +323,12 @@ public final class MemoryGraphAdapter {
             evidenceByOwner,
             edges.get(SUBJECT),
             edges.get(OBJECT));
+        validateNoOrphanVertices(
+            memoryEntities,
+            evidence,
+            sources,
+            events,
+            versions);
         Map<String, String> generating = readGeneratingEvents(
             edges.get(GENERATES),
             events,
@@ -930,6 +936,56 @@ public final class MemoryGraphAdapter {
                 "Multiple " + relationName + " targets");
         }
         return result;
+    }
+
+    private static void validateNoOrphanVertices(
+        Map<String, MemoryEntity> entities,
+        Map<String, Evidence> evidence,
+        Map<String, Source> sources,
+        Map<String, NormalizedMemoryEvent> events,
+        Map<FactKey, List<MemoryFactVersion>> versions) {
+        Map<String, MemoryEntity> referencedEntities = new TreeMap<>();
+        Map<String, Evidence> referencedEvidence = new TreeMap<>();
+        Map<String, Source> referencedSources = new TreeMap<>();
+        for (NormalizedMemoryEvent event : events.values()) {
+            collectEventEntities(event, referencedEntities);
+            collectEvidence(
+                event.getEvidence(),
+                referencedEvidence,
+                referencedSources);
+        }
+        for (List<MemoryFactVersion> factVersions : versions.values()) {
+            for (MemoryFactVersion version : factVersions) {
+                MemoryFact fact = version.getFact();
+                collectEntity(referencedEntities, fact.getSubject());
+                if (fact.isRelationship()) {
+                    collectEntity(
+                        referencedEntities,
+                        fact.getTarget().get());
+                }
+                collectEvidence(
+                    version.getEvidence(),
+                    referencedEvidence,
+                    referencedSources);
+            }
+        }
+        requireAllReferenced(
+            entities, referencedEntities, ENTITY_PREFIX, "entity");
+        requireAllReferenced(
+            evidence, referencedEvidence, EVIDENCE_PREFIX, "evidence");
+        requireAllReferenced(
+            sources, referencedSources, SOURCE_PREFIX, "source");
+    }
+
+    private static void requireAllReferenced(
+        Map<String, ?> graphValues,
+        Map<String, ?> referencedValues,
+        String prefix,
+        String type) {
+        for (String graphId : graphValues.keySet()) {
+            require(referencedValues.containsKey(rawId(graphId, prefix)),
+                "Orphan " + type + " vertex: " + graphId);
+        }
     }
 
     private static Map<String, String> readGeneratingEvents(
