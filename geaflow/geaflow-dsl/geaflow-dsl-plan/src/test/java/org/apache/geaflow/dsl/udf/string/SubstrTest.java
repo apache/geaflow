@@ -43,4 +43,17 @@ public class SubstrTest {
         Assert.assertEquals(sb.eval(BinaryString.fromString("Facebook"), -5).toString(), "ebook");
         Assert.assertEquals(sb.eval(BinaryString.fromString("Facebook"), 5, 1).toString(), "b");
     }
+
+    @Test
+    public void testIntegerMinValue() {
+        Substr sb = new Substr();
+
+        // Test Integer.MIN_VALUE for String version
+        Assert.assertEquals(sb.eval("hello", Integer.MIN_VALUE, 1), "hello");
+        Assert.assertEquals(sb.eval("hello", Integer.MIN_VALUE), "hello");
+
+        // Test Integer.MIN_VALUE for BinaryString version
+        Assert.assertNull(sb.eval(BinaryString.fromString("hello"), Integer.MIN_VALUE, 1));
+        Assert.assertNull(sb.eval(BinaryString.fromString("hello"), Integer.MIN_VALUE));
+    }
 }
