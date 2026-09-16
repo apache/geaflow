@@ -1,0 +1,11 @@
+{
+  "documentId": "doc-20260822-001",
+  "chunkId": "chunk-000012",
+  "sourceSpan": {
+    "chunkId": "chunk-000012",
+    "startOffset": 48,
+    "endOffset": 132
+  },
+  "extractorVersion": "fake-extractor-1.0.0",
+  "schemaVersion": "extraction-schema-1.0.0"
+}
