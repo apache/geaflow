@@ -25,6 +25,34 @@ import org.apache.geaflow.ai.graph.io.GraphSchema;
 
 public interface GraphAccessor {
 
+    /**
+     * Returned by {@link #getGraphVersion()} when the accessor cannot report content changes.
+     * Callers must then treat every read as potentially different and skip caching.
+     */
+    long VERSION_UNSUPPORTED = -1L;
+
+    /**
+     * A monotonically increasing counter bumped on every content or schema change of the underlying
+     * graph. Derived structures (verbalization caches, keyword indexes) compare it to decide whether
+     * they are still valid, so that direct mutations of the graph cannot silently go unnoticed.
+     *
+     * @return current graph version, or {@link #VERSION_UNSUPPORTED} if change tracking is not
+     *     available for this accessor
+     */
+    default long getGraphVersion() {
+        return VERSION_UNSUPPORTED;
+    }
+
+    /**
+     * Like {@link #getGraphVersion()} but only advanced by vertex and schema changes. Structures
+     * derived from vertices alone can watch this and survive edge writes.
+     *
+     * @return current vertex version, defaults to {@link #getGraphVersion()}
+     */
+    default long getVertexVersion() {
+        return getGraphVersion();
+    }
+
     GraphSchema getGraphSchema();
 
     GraphVertex getVertex(String label, String id);

@@ -36,9 +36,21 @@ public class SessionOperator implements SearchOperator {
     private final GraphAccessor graphAccessor;
     private final IndexStore indexStore;
 
+    /**
+     * Graph scoped keyword index reused across queries. When {@code null} the operator falls back
+     * to building a throw-away index per query, which is only kept for backward compatibility and
+     * for equivalence testing.
+     */
+    private final ResidentSearchIndex residentIndex;
+
     public SessionOperator(GraphAccessor accessor, IndexStore store) {
+        this(accessor, store, null);
+    }
+
+    public SessionOperator(GraphAccessor accessor, IndexStore store, ResidentSearchIndex residentIndex) {
         this.graphAccessor = Objects.requireNonNull(accessor);
         this.indexStore = Objects.requireNonNull(store);
+        this.residentIndex = residentIndex;
     }
 
     @Override
@@ -55,8 +67,8 @@ public class SessionOperator implements SearchOperator {
             contents.add(v.toString());
         }
         String query = String.join(SearchConstants.DELIMITER, contents);
-        List<GraphEntity> globalResults = searchWithGlobalGraph(query);
         if (subGraphList == null || subGraphList.isEmpty()) {
+            List<GraphEntity> globalResults = searchWithGlobalGraph(query);
             List<GraphVertex> startVertices = new ArrayList<>();
             for (GraphEntity resEntity : globalResults) {
                 if (resEntity instanceof GraphVertex) {
@@ -79,10 +91,11 @@ public class SessionOperator implements SearchOperator {
                     extendEntityIndexMap.put(extendEntity, entityIndex);
                 }
             }
-            //recall compute
+            //recall compute, the candidate set is bounded by the subgraph expansion
             GraphSearchStore searchStore = initSearchStore(extendEntityIndexMap);
-            searchStore.close();
+            searchStore.refresh();
             List<GraphEntity> matchEntities = searchStore.search(query, graphAccessor);
+            closeQuietly(searchStore);
             Set<GraphEntity> matchEntitiesSet = new HashSet<>(matchEntities);
 
             //Apply to subgraph
@@ -113,6 +126,17 @@ public class SessionOperator implements SearchOperator {
     }
 
     private List<GraphEntity> searchWithGlobalGraph(String query) {
+        if (residentIndex != null) {
+            return residentIndex.searchWithIndex(graphAccessor, indexStore, query);
+        }
+        return searchWithGlobalGraphByRebuild(query);
+    }
+
+    /**
+     * Legacy behaviour: scan the whole graph, build a throw-away index, search it, drop it.
+     * Retained as the reference implementation for equivalence tests.
+     */
+    List<GraphEntity> searchWithGlobalGraphByRebuild(String query) {
         Map<GraphEntity, List<IVector>> entityIndexMap = new HashMap<>();
         Iterator<GraphVertex> vertexIterator = graphAccessor.scanVertex();
         while (vertexIterator.hasNext()) {
@@ -123,8 +147,10 @@ public class SessionOperator implements SearchOperator {
         }
         //recall compute
         GraphSearchStore searchStore = initSearchStore(entityIndexMap);
-        searchStore.close();
-        return searchStore.search(query, graphAccessor);
+        searchStore.refresh();
+        List<GraphEntity> result = searchStore.search(query, graphAccessor);
+        closeQuietly(searchStore);
+        return result;
     }
 
     private GraphSearchStore initSearchStore(Map<GraphEntity, List<IVector>> entityIndexMap) {
@@ -139,5 +165,13 @@ public class SessionOperator implements SearchOperator {
             }
         }
         return searchStore;
+    }
+
+    private void closeQuietly(GraphSearchStore searchStore) {
+        try {
+            searchStore.close();
+        } catch (Throwable ignored) {
+            // A throw-away store leaking is not worth failing the query for.
+        }
     }
 }

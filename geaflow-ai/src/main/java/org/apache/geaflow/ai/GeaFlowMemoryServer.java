@@ -23,6 +23,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.apache.geaflow.ai.common.ErrorCode;
+import org.apache.geaflow.ai.common.model.ModelUtils;
 import org.apache.geaflow.ai.common.util.SeDeUtil;
 import org.apache.geaflow.ai.graph.*;
 import org.apache.geaflow.ai.graph.io.*;
@@ -123,6 +125,11 @@ public class GeaFlowMemoryServer {
         } else {
             throw new RuntimeException("Cannot add schema: " + input);
         }
+        GraphMemoryServer schemaServer = CACHE.getServerByName(graphName);
+        if (schemaServer != null) {
+            // Verbalization is schema driven, so cached prompts and the index must be dropped.
+            schemaServer.onSchemaChanged();
+        }
         return "addSchema has been called, schemaName: " + schemaName;
     }
 
@@ -150,23 +157,41 @@ public class GeaFlowMemoryServer {
         if (!(graph instanceof MemoryGraph)) {
             throw new RuntimeException("Graph cannot modify.");
         }
-        MemoryMutableGraph memoryMutableGraph = new MemoryMutableGraph((MemoryGraph) graph);
-        List<GraphEntity> graphEntities = SeDeUtil.deserializeEntities(input);
-
-        for (GraphEntity entity : graphEntities) {
-            if (entity instanceof GraphVertex) {
-                memoryMutableGraph.addVertex(((GraphVertex) entity).getVertex());
-            } else {
-                memoryMutableGraph.addEdge(((GraphEdge) entity).getEdge());
-            }
-        }
         GraphMemoryServer insertServer = CACHE.getServerByName(graphName);
         if (insertServer == null || insertServer.getGraphAccessors().isEmpty()) {
             throw new RuntimeException("Server or graph accessor not available for graph: " + graphName);
         }
+        MemoryMutableGraph memoryMutableGraph = new MemoryMutableGraph((MemoryGraph) graph);
+        List<GraphEntity> graphEntities = SeDeUtil.deserializeEntities(input);
+
+        // Opened before the writes and sealed right after them, so the resident index can verify
+        // that these entities really are every vertex level change it has not seen yet.
+        VertexVersionWindow window = insertServer.openVertexVersionWindow();
+        // Only entities the graph actually accepted may be reported. A rejected write (a duplicate
+        // id, for instance) leaves the graph holding the previous entity, so reporting the request
+        // object would index content the graph does not have.
+        List<GraphEntity> written = new ArrayList<>(graphEntities.size());
+        List<GraphEntity> rejected = new ArrayList<>();
+        for (GraphEntity entity : graphEntities) {
+            int code = entity instanceof GraphVertex
+                ? memoryMutableGraph.addVertex(((GraphVertex) entity).getVertex())
+                : memoryMutableGraph.addEdge(((GraphEdge) entity).getEdge());
+            if (code == ErrorCode.SUCCESS) {
+                written.add(entity);
+            } else {
+                rejected.add(entity);
+                LOGGER.warn("Rejected entity {} on graph {}, code: {}",
+                    ModelUtils.getGraphEntityKey(entity), graphName, code);
+            }
+        }
+        // Maintain the resident keyword index in place instead of rebuilding it on next query.
+        insertServer.onEntitiesUpserted(written, window.seal());
         CACHE.getConsolidateServer().executeConsolidateTask(
             insertServer.getGraphAccessors().get(0), memoryMutableGraph);
-        return "Success to add entities, num: " + graphEntities.size();
+        if (rejected.isEmpty()) {
+            return "Success to add entities, num: " + written.size();
+        }
+        return "Added entities, num: " + written.size() + ", rejected: " + rejected.size();
     }
 
     @Post
@@ -182,15 +207,34 @@ public class GeaFlowMemoryServer {
         }
         MemoryMutableGraph memoryMutableGraph = new MemoryMutableGraph((MemoryGraph) graph);
         List<GraphEntity> graphEntities = SeDeUtil.deserializeEntities(input);
+        GraphMemoryServer deleteServer = CACHE.getServerByName(graphName);
+        VertexVersionWindow window = deleteServer == null
+            ? null : deleteServer.openVertexVersionWindow();
+        // Same reasoning as on the insert path, mirrored: a rejected delete leaves the entity in the
+        // graph, and reporting it would drop a document that is still supposed to be searchable.
+        List<GraphEntity> removed = new ArrayList<>(graphEntities.size());
+        List<GraphEntity> rejected = new ArrayList<>();
         for (GraphEntity entity : graphEntities) {
-            if (entity instanceof GraphVertex) {
-                memoryMutableGraph.removeVertex(entity.getLabel(),
-                    ((GraphVertex) entity).getVertex().getId());
+            int code = entity instanceof GraphVertex
+                ? memoryMutableGraph.removeVertex(entity.getLabel(),
+                    ((GraphVertex) entity).getVertex().getId())
+                : memoryMutableGraph.removeEdge(((GraphEdge) entity).getEdge());
+            if (code == ErrorCode.SUCCESS) {
+                removed.add(entity);
             } else {
-                memoryMutableGraph.removeEdge(((GraphEdge) entity).getEdge());
+                rejected.add(entity);
+                LOGGER.warn("Rejected removal of entity {} on graph {}, code: {}",
+                    ModelUtils.getGraphEntityKey(entity), graphName, code);
             }
         }
-        return "Success to remove entities, num: " + graphEntities.size();
+        if (deleteServer != null) {
+            // Deletes are applied to the index in place, no rebuild needed.
+            deleteServer.onEntitiesRemoved(removed, window.seal());
+        }
+        if (rejected.isEmpty()) {
+            return "Success to remove entities, num: " + removed.size();
+        }
+        return "Removed entities, num: " + removed.size() + ", rejected: " + rejected.size();
     }
 
     @Post

@@ -55,8 +55,8 @@ public class EmbeddingOperator implements SearchOperator {
             }
             return new ArrayList<>(subGraphList);
         }
-        List<GraphEntity> globalResults = searchWithGlobalGraph(queryEmbeddingVectors);
         if (subGraphList == null || subGraphList.isEmpty()) {
+            List<GraphEntity> globalResults = searchWithGlobalGraph(queryEmbeddingVectors);
             List<GraphVertex> startVertices = new ArrayList<>();
             for (GraphEntity resEntity : globalResults) {
                 if (resEntity instanceof GraphVertex) {
@@ -111,7 +111,37 @@ public class EmbeddingOperator implements SearchOperator {
     }
 
     private List<GraphEntity> searchWithGlobalGraph(List<IVector> queryEmbeddingVectors) {
+        return searchEmbeddings(queryEmbeddingVectors, collectGlobalCandidates());
+    }
+
+    /**
+     * Collects the global candidate set.
+     *
+     * <p>Only vertices that actually carry an embedding can be recalled, because
+     * {@link #searchEmbeddings} skips entities without vectors. So when the index store can
+     * enumerate what it holds, iterate that instead of scanning the whole graph: the candidate set
+     * is identical, but the graph scan and the per-vertex wrapper allocation disappear.
+     */
+    private Map<GraphEntity, List<IVector>> collectGlobalCandidates() {
         Map<GraphEntity, List<IVector>> entityIndexMap = new HashMap<>();
+        Collection<GraphEntity> indexedEntities = indexStore.getIndexedEntities();
+        if (indexedEntities != null) {
+            for (GraphEntity entity : indexedEntities) {
+                if (!(entity instanceof GraphVertex)) {
+                    continue;
+                }
+                // The index store is not notified about deletes, so it can still hold entries for
+                // vertices the graph no longer has. Resolving each one keeps the candidate set
+                // identical to the graph scan and yields the current vertex object.
+                GraphVertex current = graphAccessor.getVertex(entity.getLabel(),
+                    ((GraphVertex) entity).getVertex().getId());
+                if (current == null) {
+                    continue;
+                }
+                entityIndexMap.put(current, indexStore.getEntityIndex(entity));
+            }
+            return entityIndexMap;
+        }
         Iterator<GraphVertex> vertexIterator = graphAccessor.scanVertex();
         while (vertexIterator.hasNext()) {
             GraphVertex vertex = vertexIterator.next();
@@ -119,8 +149,7 @@ public class EmbeddingOperator implements SearchOperator {
             List<IVector> vertexIndex = indexStore.getEntityIndex(vertex);
             entityIndexMap.put(vertex, vertexIndex);
         }
-        //recall compute
-        return searchEmbeddings(queryEmbeddingVectors, entityIndexMap);
+        return entityIndexMap;
     }
 
     private List<GraphEntity> searchEmbeddings(List<IVector> queryEmbeddingVectors,

@@ -59,15 +59,24 @@ public class EmbeddingIndexStore implements IndexStore {
 
         //Read index items from indexFilePath
         Map<String, GraphEntity> key2EntityMap = new HashMap<>();
+        // Files written before the entity key became collision free are still readable: the legacy
+        // key is accepted as a fallback, so upgrading does not silently drop every embedding.
+        // Legacy keys that two entities share cannot be resolved and are dropped instead of guessed.
+        Map<String, GraphEntity> legacyKey2EntityMap = new HashMap<>();
+        Set<String> ambiguousLegacyKeys = new HashSet<>();
         for (Iterator<GraphVertex> itV = this.graphAccessor.scanVertex(); itV.hasNext(); ) {
             GraphVertex vertex = itV.next();
-            key2EntityMap.put(ModelUtils.getGraphEntityKey(vertex), vertex);
+            registerEntityKeys(key2EntityMap, legacyKey2EntityMap, ambiguousLegacyKeys, vertex);
             for (Iterator<GraphEdge> itE = this.graphAccessor.scanEdge(vertex); itE.hasNext(); ) {
                 GraphEdge edge = itE.next();
-                key2EntityMap.put(ModelUtils.getGraphEntityKey(edge), edge);
+                registerEntityKeys(key2EntityMap, legacyKey2EntityMap, ambiguousLegacyKeys, edge);
             }
         }
         LOGGER.info("Success to scan entities. total entities num: " + key2EntityMap.size());
+        if (!ambiguousLegacyKeys.isEmpty()) {
+            LOGGER.warn("{} legacy entity keys are ambiguous and will not be matched against index "
+                + "files written before the key encoding was fixed", ambiguousLegacyKeys.size());
+        }
 
         try {
             File indexFile = new File(this.indexFilePath);
@@ -86,6 +95,7 @@ public class EmbeddingIndexStore implements IndexStore {
 
 
         long count = 0;
+        long legacyMatched = 0;
         try (BufferedReader reader = new BufferedReader(
                 new InputStreamReader(
                         new FileInputStream(this.indexFilePath),
@@ -101,6 +111,12 @@ public class EmbeddingIndexStore implements IndexStore {
                             new Gson().fromJson(line, EmbeddingService.EmbeddingResult.class);
                     String key = embedding.input;
                     GraphEntity entity = key2EntityMap.get(key);
+                    if (entity == null && !ambiguousLegacyKeys.contains(key)) {
+                        entity = legacyKey2EntityMap.get(key);
+                        if (entity != null) {
+                            legacyMatched++;
+                        }
+                    }
                     if (entity != null) {
                         this.indexStoreMap.computeIfAbsent(entity, k -> new ArrayList<>()).add(embedding);
                     }
@@ -115,6 +131,10 @@ public class EmbeddingIndexStore implements IndexStore {
 
         LOGGER.info("Success to read index store file. items num: " + count);
         LOGGER.info("Success to rebuild index with file. index num: " + this.indexStoreMap.size());
+        if (legacyMatched > 0) {
+            LOGGER.info("{} index items were matched by their legacy entity key; they will be "
+                + "rewritten with the current key the next time they are indexed", legacyMatched);
+        }
 
 
         //Scan entities in the graph, make new index items
@@ -182,6 +202,17 @@ public class EmbeddingIndexStore implements IndexStore {
         }
         LOGGER.info("Successfully added {} new index items. Entities holding vectors: {} of {}",
                 addedCount, withVectors, indexStoreMap.size());
+    }
+
+    private static void registerEntityKeys(Map<String, GraphEntity> key2EntityMap,
+                                           Map<String, GraphEntity> legacyKey2EntityMap,
+                                           Set<String> ambiguousLegacyKeys, GraphEntity entity) {
+        key2EntityMap.put(ModelUtils.getGraphEntityKey(entity), entity);
+        String legacyKey = ModelUtils.getLegacyGraphEntityKey(entity);
+        GraphEntity previous = legacyKey2EntityMap.put(legacyKey, entity);
+        if (previous != null && !previous.equals(entity)) {
+            ambiguousLegacyKeys.add(legacyKey);
+        }
     }
 
     private List<String> indexBatch(EmbeddingService service, List<GraphEntity> pendingEntities) {
@@ -258,6 +289,22 @@ public class EmbeddingIndexStore implements IndexStore {
             }
             newItemStrings.clear();
         }
+    }
+
+    /**
+     * The store knows exactly which entities it holds embeddings for, so retrieval does not need
+     * to scan the whole graph to assemble the candidate set.
+     *
+     * <p>Returns a snapshot rather than a view of the live key set: callers iterate it while other
+     * requests may still be writing to the store, and a view would fail with
+     * {@link java.util.ConcurrentModificationException}.
+     */
+    @Override
+    public Collection<GraphEntity> getIndexedEntities() {
+        if (indexStoreMap == null) {
+            return null;
+        }
+        return new ArrayList<>(indexStoreMap.keySet());
     }
 
     @Override

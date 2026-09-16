@@ -21,6 +21,12 @@ package org.apache.geaflow.ai.operator;
 
 public class SearchConstants {
 
+    /**
+     * Non analyzed unique document key, holding {@code ModelUtils.getGraphEntityKey(entity)}.
+     * Having an exact term per entity is what lets Lucene express updates and deletes in place
+     * instead of forcing the whole index to be rebuilt.
+     */
+    public static String KEY = "key";
     public static String LABEL = "label";
     public static String ID = "id";
     public static String SRC = "src";

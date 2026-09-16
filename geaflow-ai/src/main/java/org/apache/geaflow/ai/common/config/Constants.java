@@ -47,6 +47,9 @@ public class Constants {
     public static int EMBEDDING_OPERATE_DEFAULT_TOPN = 50;
     public static int GRAPH_SEARCH_STORE_DEFAULT_TOPN = 30;
 
+    // Max number of memoized entity verbalizations kept by EntityAttributeIndexStore.
+    public static int ENTITY_ATTRIBUTE_INDEX_CACHE_MAX_SIZE = 200000;
+
     public static String CONSOLIDATE_KEYWORD_RELATION_LABEL = "consolidate_keyword_edge";
     public static String PREFIX_COMMON_KEYWORDS = "common_keywords";
 }
