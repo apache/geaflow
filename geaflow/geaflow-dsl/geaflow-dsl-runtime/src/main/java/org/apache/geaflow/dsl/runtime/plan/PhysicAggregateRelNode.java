@@ -66,6 +66,9 @@ import org.apache.geaflow.dsl.schema.function.GeaFlowUserDefinedAggFunction;
 import org.apache.geaflow.dsl.udf.table.agg.AvgDouble;
 import org.apache.geaflow.dsl.udf.table.agg.AvgInteger;
 import org.apache.geaflow.dsl.udf.table.agg.AvgLong;
+import org.apache.geaflow.dsl.udf.table.agg.BitAndInteger;
+import org.apache.geaflow.dsl.udf.table.agg.BitOrInteger;
+import org.apache.geaflow.dsl.udf.table.agg.BoolAnd;
 import org.apache.geaflow.dsl.udf.table.agg.Count;
 import org.apache.geaflow.dsl.udf.table.agg.MaxBinaryString;
 import org.apache.geaflow.dsl.udf.table.agg.MaxDouble;
@@ -101,6 +104,12 @@ public class PhysicAggregateRelNode extends Aggregate implements PhysicRelNode<R
     public static final String UDAF_STDDEV_SAMP = "STDDEV_SAMP";
 
     public static final String UDAF_PERCENTILE = "PERCENTILE";
+
+    public static final String UDAF_BIT_AND = "BIT_AND";
+
+    public static final String UDAF_BIT_OR = "BIT_OR";
+
+    public static final String UDAF_BOOL_AND = "BOOL_AND";
 
 
     public PhysicAggregateRelNode(
@@ -455,6 +464,15 @@ public class PhysicAggregateRelNode extends Aggregate implements PhysicRelNode<R
                     aggClasses.add(PercentileLong.class);
                     aggClasses.add(PercentileInteger.class);
                     aggClasses.add(PercentileDouble.class);
+                    break;
+                case UDAF_BIT_AND:
+                    aggClasses.add(BitAndInteger.class);
+                    break;
+                case UDAF_BIT_OR:
+                    aggClasses.add(BitOrInteger.class);
+                    break;
+                case UDAF_BOOL_AND:
+                    aggClasses.add(BoolAnd.class);
                     break;
                 default:
                     throw new GeaFlowDSLException("Not support aggregate function " + aggName);

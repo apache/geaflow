@@ -132,6 +132,15 @@ public class AggregateTest {
     }
 
     @Test
+    public void testAggregate_013() throws Exception {
+        QueryTester
+            .build()
+            .withQueryPath("/query/aggregate_013.sql")
+            .execute()
+            .checkSinkResult();
+    }
+
+    @Test
     public void testStreamAggregate_001() throws Exception {
         QueryTester
             .build()
