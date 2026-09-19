@@ -41,14 +41,32 @@ public class Instr extends UDF {
         if (nth <= 0) {
             return null;
         }
-        int fromIndex = from.intValue() - 1;
-        if (fromIndex < 0) {
+        if (from > 0) {
+            int fromIndex = from.intValue() - 1;
+            for (int i = 0; i < nth; ++i) {
+                fromIndex = str.indexOf(target, fromIndex) + 1;
+            }
+            return (long) fromIndex;
+        }
+        if (from == 0) {
             return null;
         }
-        for (int i = 0; i < nth; ++i) {
-            fromIndex = str.indexOf(target, fromIndex) + 1;
+
+        long fromIndex = str.length() + from;
+        if (fromIndex < 0) {
+            return 0L;
         }
-        return (long) fromIndex;
+        int index = (int) fromIndex;
+        for (int i = 0; i < nth; ++i) {
+            index = str.lastIndexOf(target, index);
+            if (index < 0) {
+                return 0L;
+            }
+            if (i < nth - 1) {
+                index--;
+            }
+        }
+        return (long) index + 1;
     }
 
     public Long eval(BinaryString str, BinaryString target) {
@@ -66,13 +84,48 @@ public class Instr extends UDF {
         if (nth <= 0) {
             return null;
         }
-        int fromIndex = from.intValue() - 1;
-        if (fromIndex < 0) {
+        if (from > 0) {
+            int fromIndex = from.intValue() - 1;
+            for (int i = 0; i < nth; ++i) {
+                fromIndex = str.indexOf(target, fromIndex) + 1;
+            }
+            return (long) fromIndex;
+        }
+        if (from == 0) {
             return null;
         }
-        for (int i = 0; i < nth; ++i) {
-            fromIndex = str.indexOf(target, fromIndex) + 1;
+
+        long fromIndex = str.getLength() + from;
+        if (fromIndex < 0) {
+            return 0L;
         }
-        return (long) fromIndex;
+        int index = (int) fromIndex;
+        for (int i = 0; i < nth; ++i) {
+            index = lastIndexOf(str, target, index);
+            if (index < 0) {
+                return 0L;
+            }
+            if (i < nth - 1) {
+                index--;
+            }
+        }
+        return (long) index + 1;
+    }
+
+    private int lastIndexOf(BinaryString str, BinaryString target, int fromIndex) {
+        if (target.getLength() == 0) {
+            return fromIndex;
+        }
+        int index = -1;
+        int searchFrom = 0;
+        while (searchFrom <= fromIndex) {
+            int nextIndex = str.indexOf(target, searchFrom);
+            if (nextIndex < 0 || nextIndex > fromIndex) {
+                break;
+            }
+            index = nextIndex;
+            searchFrom = nextIndex + 1;
+        }
+        return index;
     }
 }
