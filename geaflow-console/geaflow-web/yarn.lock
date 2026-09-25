@@ -4014,7 +4014,6 @@ dagre@^0.8.5:
 
 "dark@link:@/themes/dark":
   version "0.0.0"
-  uid ""
 
 data-uri-to-buffer@^4.0.0:
   version "4.0.1"
@@ -5979,7 +5978,6 @@ less@4.1.3:
 
 "light@link:@/themes/light":
   version "0.0.0"
-  uid ""
 
 lightningcss-darwin-arm64@1.19.0:
   version "1.19.0"
@@ -6105,10 +6103,10 @@ lodash.tonumber@^4.0.3:
   resolved "https://registry.npmmirror.com/lodash.tonumber/-/lodash.tonumber-4.0.3.tgz#0b96b31b35672793eb7f5a63ee791f1b9e9025d9"
   integrity sha512-SY0SwuPOHRwKcCNTdsntPYb+Zddz5mDUIVFABzRMqmAiL41pMeyoQFGxYAw5zdc9NnH4pbJqiqqp5ckfxa+zSA==
 
-lodash@^4.0.1, lodash@^4.17.11, lodash@^4.17.15, lodash@^4.17.20, lodash@^4.17.21, lodash@^4.17.4:
-  version "4.17.21"
-  resolved "https://registry.npmmirror.com/lodash/-/lodash-4.17.21.tgz#679591c564c3bffaae8454cf0b3df370c3d6911c"
-  integrity sha512-v2kDEe57lecTulaDIuNTPy3Ry4gLGJ6Z1O3vE1krgXZNrsQ+LFTGHVxVjcXPs17LhbZVGedAJv8XZ1tvj5FvSg==
+lodash@^4.0.1, lodash@^4.17.11, lodash@^4.17.15, lodash@^4.17.20, lodash@^4.17.21, lodash@^4.17.23, lodash@^4.17.4:
+  version "4.17.23"
+  resolved "https://registry.npmmirror.com/lodash/-/lodash-4.17.23.tgz#f113b0378386103be4f6893388c73d0bde7f2c5a"
+  integrity sha512-LgVTMpQtIopCi79SJeDiP0TfWi5CNEc/L/aRdTh3yIvmZXTnheWpKjSZhnvMl8iXbC1tFg9gdHHDMLoV7CnG+w==
 
 longest@^1.0.1:
   version "1.0.1"
@@ -8464,7 +8462,6 @@ repeat-string@^1.5.2:
 
 "request@link:@/request":
   version "0.0.0"
-  uid ""
 
 requests@^0.3.0:
   version "0.3.0"
@@ -9177,7 +9174,6 @@ test-exclude@^6.0.0:
 
 "themes@link:@/themes":
   version "0.0.0"
-  uid ""
 
 thread-stream@^0.15.1:
   version "0.15.2"
