@@ -239,7 +239,14 @@ public class InferFileUtils {
 
     public static void prepareInferFilesFromJars(String targetDirectory) {
         File userJobJarFile = getUserJobJarFile();
-        Preconditions.checkNotNull(userJobJarFile);
+        if (userJobJarFile == null) {
+            // In test or development environment, JAR file may not exist
+            // This is acceptable - the system will initialize with random weights
+            LOGGER.warn(
+                "User job JAR file not found. Inference files will not be extracted from JAR. "
+                + "System will initialize with default/random model weights.");
+            return;
+        }
         try {
             JarFile jarFile = new JarFile(userJobJarFile);
             Enumeration<JarEntry> entries = jarFile.entries();

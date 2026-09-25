@@ -22,10 +22,18 @@
 CURRENT_DIR="$(cd "$1" && pwd)"
 REQUIREMENTS_PATH=$2
 MINICOMDA_OSS_URL=$3
+# $4: Framework type: TORCH (default) or PADDLE
+FRAMEWORK_TYPE="${4:-TORCH}"
+# $5: Whether to enable GPU for Paddle: true or false (default false)
+PADDLE_GPU_ENABLE="${5:-false}"
+# $6: CUDA version for Paddle GPU wheel selection (default 11.7)
+PADDLE_CUDA_VERSION="${6:-11.7}"
+
 PYTHON_EXEC=$CURRENT_DIR/conda/bin/python3
 
 echo "execute shell at path ${CURRENT_DIR}"
 echo "install requirements path ${REQUIREMENTS_PATH}"
+echo "framework type: ${FRAMEWORK_TYPE}"
 
 MINICONDA_INSTALL=$CURRENT_DIR/miniconda.sh
 [ ! -e $MINICONDA_INSTALL ] && touch $MINICONDA_INSTALL
@@ -100,6 +108,44 @@ function install_requirements() {
     fi
 }
 
+# Install PaddlePaddle framework (CPU or GPU) before installing pgl/paddlespatial.
+# This function is invoked only when FRAMEWORK_TYPE=PADDLE.
+function install_paddlepaddle() {
+    print_function "STEP" "installing PaddlePaddle (gpu=${PADDLE_GPU_ENABLE}, cuda=${PADDLE_CUDA_VERSION})..."
+    source $CURRENT_DIR/conda/bin/activate
+
+    max_retry_times=3
+    retry_times=0
+
+    if [[ "${PADDLE_GPU_ENABLE}" == "true" ]]; then
+        # Derive wheel post-fix from CUDA version: "11.7" -> "117", "12.0" -> "120"
+        cuda_postfix=$(echo "${PADDLE_CUDA_VERSION}" | tr -d '.')
+        PADDLE_WHEEL="paddlepaddle-gpu==2.6.0.post${cuda_postfix}"
+        echo "Installing GPU PaddlePaddle: ${PADDLE_WHEEL}"
+    else
+        PADDLE_WHEEL="paddlepaddle==2.6.0"
+        echo "Installing CPU PaddlePaddle: ${PADDLE_WHEEL}"
+    fi
+
+    PADDLE_INSTALL_CMD="conda run -p $CURRENT_DIR/conda $PYTHON_EXEC -m pip install ${PADDLE_WHEEL} \
+        -i https://pypi.tuna.tsinghua.edu.cn/simple"
+
+    ${PADDLE_INSTALL_CMD} >/dev/null 2>&1
+    status=$?
+    while [[ ${status} -ne 0 ]] && [[ ${retry_times} -lt ${max_retry_times} ]]; do
+        retry_times=$((retry_times + 1))
+        sleep 3
+        echo "PaddlePaddle install retrying ${retry_times}/${max_retry_times}"
+        ${PADDLE_INSTALL_CMD} >/dev/null 2>&1
+        status=$?
+    done
+    if [[ ${status} -ne 0 ]]; then
+        echo "PaddlePaddle installation failed after ${max_retry_times} retries."
+        exit 1
+    fi
+    print_function "STEP" "PaddlePaddle installed... [SUCCESS]"
+}
+
 function print_function() {
     local STAGE_LENGTH=48
     local left_edge_len=
@@ -142,6 +188,13 @@ if [ $STEP -lt 1 ]; then
   install_miniconda
   STEP=1
   print_function "STEP" "install miniconda... [SUCCESS]"
+fi
+
+# For PADDLE framework, install PaddlePaddle BEFORE the requirements.txt
+# because pgl and paddlespatial depend on paddlepaddle being present first.
+if [[ "${FRAMEWORK_TYPE}" == "PADDLE" ]]; then
+  install_paddlepaddle
+  print_function "STEP" "install paddlepaddle... [SUCCESS]"
 fi
 
 if [ $STEP -lt 2 ]; then
