@@ -55,7 +55,7 @@
     "codemirror": "^5.57.0",
     "http-proxy-middleware": "^2.0.6",
     "js-yaml": "^4.1.0",
-    "lodash": "^4.17.21",
+    "lodash": "^4.17.23",
     "moment": "^2.29.4",
     "omit.js": "^2.0.2",
     "rc-menu": "^9.8.2",
