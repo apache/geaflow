@@ -259,7 +259,7 @@ class SourceLoader:
         if not isinstance(answers, list) or any(not isinstance(answer, str) for answer in answers):
             raise SourceError("%s/%s record %d field answer has invalid shape" % (
                 manifest.dataset, manifest.split, number))
-        return {
+        canonical = {
             "dataset": manifest.dataset,
             "dataset_release": manifest.dataset_release,
             "split": manifest.split,
@@ -270,3 +270,7 @@ class SourceLoader:
             "paragraphs": paragraphs,
             "supporting_facts": raw.get("supporting_facts") or raw.get("evidence") or [],
         }
+        canonical["source_hash"] = hashlib.sha256(
+            json.dumps(canonical, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
+        return canonical

@@ -24,6 +24,16 @@ class NormalizeTest(unittest.TestCase):
             self.assertEqual(document["document_id"], chunk["document_id"])
             self.assertEqual(chunk["text"], document["text"][chunk["start_offset"]:chunk["end_offset"]])
 
+    def test_offsets_use_utf16_units_for_non_bmp_text(self):
+        record = {
+            "dataset": "d", "dataset_release": "r", "split": "dev", "document_id": "x",
+            "question": "q", "paragraphs": [{"title": "T", "text": "a😀b"}],
+        }
+        document = list(documents([record]))[0]
+        chunk = chunk_document(document, ChunkingConfig(size=20, overlap=0))[0]
+        self.assertEqual(0, chunk["start_offset"])
+        self.assertEqual(6, chunk["end_offset"])
+
     def test_rejects_invalid_overlap(self):
         with self.assertRaises(ValueError):
             ChunkingConfig(size=10, overlap=10)

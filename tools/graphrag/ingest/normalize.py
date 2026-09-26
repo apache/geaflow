@@ -33,6 +33,10 @@ def normalize_text(value: str) -> str:
     return "\n".join(line for line in lines if line)
 
 
+def _utf16_length(value: str) -> int:
+    return len(value.encode("utf-16-le")) // 2
+
+
 def documents(records: Iterable[Dict[str, Any]]) -> Iterator[Dict[str, Any]]:
     for record in records:
         paragraphs = record["paragraphs"]
@@ -41,16 +45,17 @@ def documents(records: Iterable[Dict[str, Any]]) -> Iterator[Dict[str, Any]]:
         text = normalize_text((title + "\n\n" + body) if title else body)
         if not text:
             raise ValueError("record %s normalizes to an empty document" % record["document_id"])
-        encoded = text.encode("utf-8")
-        digest = hashlib.sha256(encoded).hexdigest()
-        source_id = "%s:%s:%s" % (record["dataset"], record["split"], record["document_id"])
+        digest = record.get("source_hash")
+        if not digest:
+            digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
         yield {
-            "document_id": source_id,
+            "document_id": record["document_id"],
             "dataset": record["dataset"],
             "dataset_release": record["dataset_release"],
             "split": record["split"],
             "title": title,
             "source_hash": digest,
+            "text_hash": hashlib.sha256(text.encode("utf-8")).hexdigest(),
             "text": text,
             "question": normalize_text(record["question"]),
             "answers": record.get("answers", []),
@@ -83,8 +88,8 @@ def chunk_document(document: Dict[str, Any], config: ChunkingConfig) -> List[Dic
                 "chunk_id": chunk_id,
                 "document_id": document["document_id"],
                 "chunk_index": index,
-                "start_offset": actual_start,
-                "end_offset": actual_end,
+                "start_offset": _utf16_length(text[:actual_start]),
+                "end_offset": _utf16_length(text[:actual_end]),
                 "token_estimate": (len(chunk_text) + config.token_characters - 1)
                     // config.token_characters,
                 "text": chunk_text,
