@@ -95,7 +95,11 @@ public final class LuceneBm25IndexBuilder implements Bm25IndexBuilder {
                 new IndexVersion(INDEX_NAME, version, version), INDEX_NAME, BUILDER_VERSION,
                 published.toString(), true), published);
         }
-        Files.move(staging, published, StandardCopyOption.ATOMIC_MOVE);
+        try {
+            Files.move(staging, published, StandardCopyOption.ATOMIC_MOVE);
+        } catch (java.nio.file.AtomicMoveNotSupportedException unsupported) {
+            Files.move(staging, published);
+        }
         IndexVersion indexVersion = new IndexVersion(INDEX_NAME, version, version);
         IndexBuildMetadata metadata = new IndexBuildMetadata(context.getGraphVersion(), indexVersion,
             INDEX_NAME, BUILDER_VERSION, published.toString(), true);
@@ -118,8 +122,11 @@ public final class LuceneBm25IndexBuilder implements Bm25IndexBuilder {
 
         @Override
         public void close() throws IOException {
-            if (!Files.exists(path.resolve("segments.gen")) && !Files.exists(path.resolve("segments_1"))) {
-                throw new IOException("BM25 artifact is not readable: " + path);
+            try (Directory directory = FSDirectory.open(path);
+                 DirectoryReader ignored = DirectoryReader.open(directory)) {
+                if (ignored.numDocs() < 0) {
+                    throw new IOException("BM25 artifact is not readable: " + path);
+                }
             }
         }
     }

@@ -51,7 +51,8 @@ def run_import(manifest: SourceManifest, output_directory: Path, loader: SourceL
         metadata.update({
             "state": "READY", "documents": len(normalized), "chunks": len(normalized_chunks),
             "vertices": len(vertices), "edges": len(edges), "graph_manifest": "graph/manifest.json",
-            "bm25_artifact": Path(bm25_path).name, "vector_artifact": Path(vector_path).name,
+            "bm25_artifact": str(Path(bm25_path).relative_to(staging)),
+            "vector_artifact": str(Path(vector_path).relative_to(staging)),
         })
         for relative in (metadata["graph_manifest"], metadata["bm25_artifact"], metadata["vector_artifact"]):
             if not (staging / relative).exists():

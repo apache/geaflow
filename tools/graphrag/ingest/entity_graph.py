@@ -75,7 +75,7 @@ def graph_record_stream(records: Iterable[Dict[str, Any]],
                 edge_id = stable_id("mentions", vertex_id, entity_id)
                 yield (None, {
                     "edge_id": edge_id, "source_vertex_id": vertex_id,
-                    "target_vertex_id": entity_id, "relation_type": "MENTIONS",
+                    "target_vertex_id": entity_id, "relation_type": "mentions",
                     "source_chunk_ids": [chunk["chunk_id"]], "source_document_ids": [document_id],
                 })
         facts = record.get("evidences", []) or record.get("supporting_facts", [])
@@ -123,7 +123,14 @@ def graph_records(records: Iterable[Dict[str, Any]],
                 existing["source_document_ids"] = sorted(set(existing["source_document_ids"])
                                                            | set(vertex["source_document_ids"]))
         if edge is not None:
-            edges[edge["edge_id"]] = edge
+            existing_edge = edges.get(edge["edge_id"])
+            if existing_edge is None:
+                edges[edge["edge_id"]] = edge
+            else:
+                existing_edge["source_document_ids"] = sorted(
+                    set(existing_edge["source_document_ids"]) | set(edge["source_document_ids"]))
+                existing_edge["source_chunk_ids"] = sorted(
+                    set(existing_edge["source_chunk_ids"]) | set(edge["source_chunk_ids"]))
     return ([vertices[key] for key in sorted(vertices)], [edges[key] for key in sorted(edges)])
 
 
@@ -131,6 +138,7 @@ def write_graph_artifact(directory: Path, graph_version: str,
                          vertices: Iterable[Dict[str, Any]],
                          edges: Iterable[Dict[str, Any]]) -> Path:
     """Write immutable vertex/edge JSONL and publish a manifest last."""
+    directory.mkdir(parents=True, exist_ok=True)
     target = directory / graph_version
     if target.exists():
         raise FileExistsError("graph version already exists: %s" % graph_version)

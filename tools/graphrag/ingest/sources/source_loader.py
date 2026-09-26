@@ -12,6 +12,7 @@ import json
 import os
 import tempfile
 import urllib.request
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, Iterator, List, Optional
@@ -138,6 +139,25 @@ class SourceLoader:
 
     @staticmethod
     def _records(path: Path) -> Iterable[Any]:
+        if path.suffix == ".zip":
+            try:
+                with zipfile.ZipFile(path) as archive:
+                    names = sorted(name for name in archive.namelist()
+                                   if name.endswith((".json", ".jsonl", ".json.gz", ".jsonl.gz")))
+                    if len(names) != 1:
+                        raise SourceError("ZIP source %s must contain exactly one JSON data file" % path)
+                    descriptor, temporary_name = tempfile.mkstemp(suffix=Path(names[0]).suffix)
+                    os.close(descriptor)
+                    extracted = Path(temporary_name)
+                    try:
+                        with archive.open(names[0]) as source, extracted.open("wb") as target:
+                            target.write(source.read())
+                        yield from SourceLoader._records(extracted)
+                    finally:
+                        extracted.unlink(missing_ok=True)
+                return
+            except (OSError, zipfile.BadZipFile) as exc:
+                raise SourceError("cannot parse ZIP source %s: %s" % (path, exc)) from exc
         opener = gzip.open if path.suffix == ".gz" else open
         try:
             with opener(path, "rt", encoding="utf-8") as stream:
@@ -263,7 +283,6 @@ class SourceLoader:
             "dataset": manifest.dataset,
             "dataset_release": manifest.dataset_release,
             "split": manifest.split,
-            "record_number": number,
             "document_id": str(document_id),
             "question": question,
             "answers": answers,

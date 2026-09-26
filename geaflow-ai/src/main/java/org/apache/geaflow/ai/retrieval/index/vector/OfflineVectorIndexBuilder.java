@@ -87,7 +87,11 @@ public final class OfflineVectorIndexBuilder implements VectorIndexBuilder {
                 BUILDER_VERSION + ":" + vectorSource + ":" + vectorVersion,
                 published.toString(), true), published);
         }
-        Files.move(staging, published);
+        try {
+            Files.move(staging, published, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+        } catch (java.nio.file.AtomicMoveNotSupportedException unsupported) {
+            Files.move(staging, published);
+        }
         IndexVersion indexVersion = new IndexVersion(INDEX_NAME,
             context.getGraphVersion().getVersion(), context.getGraphVersion().getVersion());
         IndexBuildMetadata metadata = new IndexBuildMetadata(context.getGraphVersion(), indexVersion,
@@ -161,6 +165,13 @@ public final class OfflineVectorIndexBuilder implements VectorIndexBuilder {
             try (DataInputStream input = new DataInputStream(Files.newInputStream(path))) {
                 if (!"GEAFLOW-VECTOR-1".equals(input.readUTF())) {
                     throw new IOException("invalid vector artifact header");
+                }
+                input.readUTF();
+                input.readUTF();
+                int dimensions = input.readInt();
+                int count = input.readInt();
+                if (dimensions <= 0 || count <= 0) {
+                    throw new IOException("invalid vector artifact dimensions/count");
                 }
             }
         }
