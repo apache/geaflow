@@ -269,6 +269,7 @@ class SourceLoader:
             "answers": answers,
             "paragraphs": paragraphs,
             "supporting_facts": raw.get("supporting_facts") or raw.get("evidence") or [],
+            "evidences": raw.get("evidences") or [],
         }
         canonical["source_hash"] = hashlib.sha256(
             json.dumps(canonical, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")

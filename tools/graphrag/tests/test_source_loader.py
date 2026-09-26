@@ -13,7 +13,8 @@ class SourceLoaderTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / "records.jsonl"
             records = [
-                {"id": "a", "question": "q1", "context": [["T", ["text"]]], "answer": "a1"},
+                {"id": "a", "question": "q1", "context": [["T", ["text"]]], "answer": "a1",
+                 "evidences": [["T", "rel", "U"]]},
                 {"id": "b", "question": "q2", "context": [{"title": "U", "text": "text"}], "answer": ["a2"]},
             ]
             source.write_text("\n".join(json.dumps(record) for record in records), encoding="utf-8")
@@ -21,6 +22,7 @@ class SourceLoaderTest(unittest.TestCase):
             manifest = SourceManifest("d", "r", "s", None, str(source), checksum, "p")
             batches = list(SourceLoader(batch_size=1).load_batches(manifest))
             self.assertEqual([["a"], ["b"]], [[item["document_id"] for item in batch] for batch in batches])
+            self.assertEqual([["T", "rel", "U"]], batches[0][0]["evidences"])
 
     def test_checksum_mismatch_fails_before_parsing(self):
         with tempfile.TemporaryDirectory() as directory:
