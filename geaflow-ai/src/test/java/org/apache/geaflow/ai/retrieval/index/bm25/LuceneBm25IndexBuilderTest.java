@@ -39,7 +39,7 @@ class LuceneBm25IndexBuilderTest {
         GraphVersion version = new GraphVersion("g", "v1");
         DatasetManifest manifest = new DatasetManifest("v1", "d", "r", "dev", null,
             "cache", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-            "p", new ChunkingConfiguration(100, 10), "graph-v1", "offline", "v1", 1L);
+            "p", new ChunkingConfiguration("chunk-v1", 100, 10), "graph-v1", "offline", "v1", 1L);
         IngestionContext context = new IngestionContext(manifest, version, "test");
         TextChunk first = new TextChunk("b", "doc", 1, 2, 3, 1, "beta", "p", "hash-b");
         TextChunk second = new TextChunk("a", "doc", 0, 0, 2, 1, "alpha", "p", "hash-a");

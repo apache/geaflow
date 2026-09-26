@@ -52,7 +52,7 @@ class OfflineVectorIndexBuilderTest {
     private static IngestionContext context() {
         DatasetManifest manifest = new DatasetManifest("v1", "d", "r", "dev", null,
             "cache", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-            "p", new ChunkingConfiguration(100, 10), "graph-v1", "fixture", "v1", 1L);
+            "p", new ChunkingConfiguration("chunk-v1", 100, 10), "graph-v1", "fixture", "v1", 1L);
         return new IngestionContext(manifest, new GraphVersion("g", "v1"), "test");
     }
 }
