@@ -36,6 +36,10 @@ class SourceManifest:
             raw = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as exc:
             raise SourceError("cannot read manifest %s: %s" % (path, exc)) from exc
+        if not isinstance(raw, dict):
+            raise SourceError("manifest %s must contain a JSON object" % path)
+        raw = {key: os.path.expandvars(value) if isinstance(value, str) else value
+               for key, value in raw.items()}
         required = ("dataset", "dataset_release", "split", "sha256", "parser_version")
         missing = [key for key in required if not str(raw.get(key, "")).strip()]
         if missing:
@@ -94,9 +98,15 @@ class SourceLoader:
             )
         target = Path(os.path.expandvars(manifest.cache_path or Path(manifest.source_uri).name)).expanduser()
         target.parent.mkdir(parents=True, exist_ok=True)
+        temporary = target.with_name(target.name + ".part")
         try:
-            urllib.request.urlretrieve(manifest.source_uri, target)
+            urllib.request.urlretrieve(manifest.source_uri, temporary)
+            temporary.replace(target)
         except OSError as exc:
+            try:
+                temporary.unlink()
+            except OSError:
+                pass
             raise SourceError("download failed for %s/%s: %s" % (manifest.dataset, manifest.split, exc)) from exc
         return target
 
@@ -125,10 +135,7 @@ class SourceLoader:
                 first = stream.read(1)
                 stream.seek(0)
                 if first == "[":
-                    values = json.load(stream)
-                    if not isinstance(values, list):
-                        raise SourceError("JSON source %s must contain an array" % path)
-                    yield from values
+                    yield from SourceLoader._array_records(stream, path)
                 else:
                     for line_number, line in enumerate(stream, start=1):
                         if line.strip():
@@ -141,6 +148,47 @@ class SourceLoader:
             raise
         except (OSError, json.JSONDecodeError) as exc:
             raise SourceError("cannot parse source %s: %s" % (path, exc)) from exc
+
+    @staticmethod
+    def _array_records(stream: Any, path: Path) -> Iterator[Any]:
+        decoder = json.JSONDecoder()
+        buffer = ""
+        first = True
+        while True:
+            chunk = stream.read(64 * 1024)
+            if chunk:
+                buffer += chunk
+            end = not chunk
+            while True:
+                buffer = buffer.lstrip()
+                if first:
+                    if not buffer:
+                        break
+                    if buffer[0] != "[":
+                        raise SourceError("JSON source %s must contain an array" % path)
+                    buffer = buffer[1:]
+                    first = False
+                buffer = buffer.lstrip()
+                if not buffer:
+                    break
+                if buffer[0] == "]":
+                    return
+                try:
+                    value, consumed = decoder.raw_decode(buffer)
+                except json.JSONDecodeError:
+                    if end:
+                        raise SourceError("truncated JSON array in %s" % path)
+                    break
+                yield value
+                buffer = buffer[consumed:].lstrip()
+                if buffer.startswith(","):
+                    buffer = buffer[1:]
+                elif buffer.startswith("]"):
+                    return
+                elif buffer and end:
+                    raise SourceError("invalid JSON array separator in %s" % path)
+            if end:
+                raise SourceError("unterminated JSON array in %s" % path)
 
     @staticmethod
     def _canonical_record(manifest: SourceManifest, number: int, raw: Any) -> Dict[str, Any]:

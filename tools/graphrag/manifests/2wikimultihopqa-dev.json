@@ -2,8 +2,8 @@
   "dataset": "2wikimultihopqa",
   "dataset_release": "official",
   "split": "dev",
-  "source_uri": null,
+  "source_uri": "https://www.dropbox.com/s/npidmtadreo6df2/data.zip?dl=1",
   "cache_path": "${GRAPH_RAG_CACHE}/2wikimultihopqa-dev.json",
-  "sha256": "REPLACE_WITH_OFFICIAL_SHA256",
+  "sha256": "${TWIKIMULTIHOPQA_DEV_SHA256}",
   "parser_version": "2wikimultihopqa-parser-v1"
 }

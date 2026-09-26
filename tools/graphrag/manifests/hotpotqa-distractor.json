@@ -2,8 +2,8 @@
   "dataset": "hotpotqa",
   "dataset_release": "official-distractor",
   "split": "distractor",
-  "source_uri": null,
+  "source_uri": "http://curtis.ml.cmu.edu/datasets/hotpot/hotpot_dev_distractor_v1.json",
   "cache_path": "${GRAPH_RAG_CACHE}/hotpotqa-distractor.json",
-  "sha256": "REPLACE_WITH_OFFICIAL_SHA256",
+  "sha256": "${HOTPOTQA_DISTRACTOR_SHA256}",
   "parser_version": "hotpotqa-parser-v1"
 }
