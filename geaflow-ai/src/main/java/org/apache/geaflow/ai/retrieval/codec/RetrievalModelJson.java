@@ -130,7 +130,8 @@ public final class RetrievalModelJson {
                 optionalString(object, "text"), models(object, "chunks", TextChunk.class),
                 models(object, "entities", EntityRef.class), models(object, "paths", GraphPathRef.class),
                 models(object, "sources", SourceRef.class), scores(object),
-                optionalDouble(object, "fusedScore"), optionalInt(object, "rank"));
+                optionalDouble(object, "fusedScore"), optionalDouble(object, "finalScore"),
+                optionalInt(object, "rank"));
         }
         throw new JsonParseException("unsupported retrieval model: " + type.getName());
     }

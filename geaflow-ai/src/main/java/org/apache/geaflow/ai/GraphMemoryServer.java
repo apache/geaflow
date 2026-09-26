@@ -26,10 +26,13 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import org.apache.geaflow.ai.graph.GraphAccessor;
 import org.apache.geaflow.ai.graph.GraphEntity;
+import org.apache.geaflow.ai.graph.GraphVertex;
 import org.apache.geaflow.ai.index.EmbeddingIndexStore;
 import org.apache.geaflow.ai.index.EntityAttributeIndexStore;
 import org.apache.geaflow.ai.index.IndexStore;
 import org.apache.geaflow.ai.operator.EmbeddingOperator;
+import org.apache.geaflow.ai.operator.GraphSearchStore;
+import org.apache.geaflow.ai.operator.GraphSearchStore.ScoredGraphEntity;
 import org.apache.geaflow.ai.operator.SearchOperator;
 import org.apache.geaflow.ai.operator.SessionOperator;
 import org.apache.geaflow.ai.search.VectorSearch;
@@ -62,6 +65,55 @@ public class GraphMemoryServer {
 
     public List<IndexStore> getIndexStores() {
         return indexStores;
+    }
+
+    /** Executes bounded keyword retrieval without creating a session. */
+    public List<ScoredGraphEntity> searchKeyword(String query, int topK, int maxCandidates,
+                                                 long deadlineNanos) {
+        if (graphAccessors.isEmpty()) {
+            throw new IllegalStateException("No graph accessor available");
+        }
+        for (IndexStore indexStore : indexStores) {
+            if (indexStore instanceof EntityAttributeIndexStore) {
+                EntityAttributeIndexStore keywordIndex = (EntityAttributeIndexStore) indexStore;
+                if (!keywordIndex.isInitialized()) {
+                    throw new IllegalStateException("Keyword index is not initialized");
+                }
+                GraphAccessor accessor = graphAccessors.get(0);
+                GraphSearchStore store = new GraphSearchStore();
+                try {
+                    java.util.Iterator<GraphVertex> vertices = accessor.scanVertex();
+                    int candidates = 0;
+                    while (vertices.hasNext()) {
+                        if (candidates >= maxCandidates || System.nanoTime() > deadlineNanos) {
+                            if (System.nanoTime() > deadlineNanos) {
+                                throw new org.apache.geaflow.ai.retrieval.api.model.RetrievalException(
+                                    org.apache.geaflow.ai.retrieval.api.model.RetrievalErrorCode.RETRIEVAL_TIMEOUT,
+                                    "retrieval deadline exceeded");
+                            }
+                            break;
+                        }
+                        candidates++;
+                        GraphVertex vertex = vertices.next();
+                        List<org.apache.geaflow.ai.index.vector.IVector> vectors =
+                            keywordIndex.getEntityIndex(vertex);
+                        if (vectors != null && !vectors.isEmpty()) {
+                            store.indexVertex(vertex, vectors);
+                        }
+                    }
+                    if (System.nanoTime() > deadlineNanos) {
+                        throw new org.apache.geaflow.ai.retrieval.api.model.RetrievalException(
+                            org.apache.geaflow.ai.retrieval.api.model.RetrievalErrorCode.RETRIEVAL_TIMEOUT,
+                            "retrieval deadline exceeded");
+                    }
+                    store.finishWriting();
+                    return store.searchScored(query, accessor, topK, maxCandidates, deadlineNanos);
+                } finally {
+                    store.close();
+                }
+            }
+        }
+        throw new IllegalStateException("Keyword index is not available");
     }
 
     public String createSession() {

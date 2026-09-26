@@ -60,6 +60,8 @@ public final class Evidence {
     private final Map<String, ChannelScore> stageScores;
     @SerializedName("fusedScore")
     private final Double fusedScore;
+    @SerializedName("finalScore")
+    private final Double finalScore;
     @SerializedName("rank")
     private final Integer rank;
 
@@ -73,12 +75,21 @@ public final class Evidence {
         this.sources = Collections.emptyList();
         this.stageScores = Collections.emptyMap();
         this.fusedScore = null;
+        this.finalScore = null;
         this.rank = null;
     }
 
     public Evidence(String evidenceId, EvidenceKind kind, String text, List<TextChunk> chunks,
                     List<EntityRef> entities, List<GraphPathRef> paths, List<SourceRef> sources,
                     Map<String, ChannelScore> stageScores, Double fusedScore, Integer rank) {
+        this(evidenceId, kind, text, chunks, entities, paths, sources, stageScores, fusedScore,
+            null, rank);
+    }
+
+    public Evidence(String evidenceId, EvidenceKind kind, String text, List<TextChunk> chunks,
+                    List<EntityRef> entities, List<GraphPathRef> paths, List<SourceRef> sources,
+                    Map<String, ChannelScore> stageScores, Double fusedScore, Double finalScore,
+                    Integer rank) {
         this.evidenceId = ModelValidation.optionalNonBlank(evidenceId, "evidenceId");
         this.kind = Objects.requireNonNull(kind, "kind");
         this.text = ModelValidation.optional(text);
@@ -96,6 +107,7 @@ public final class Evidence {
             }
         }
         this.fusedScore = ModelValidation.optionalScore(fusedScore, "fusedScore");
+        this.finalScore = finalScore == null ? null : ModelValidation.finite(finalScore, "finalScore");
         this.rank = ModelValidation.optionalRank(rank, "rank");
     }
 
@@ -119,6 +131,11 @@ public final class Evidence {
         return Collections.unmodifiableList(entities == null ? Collections.emptyList() : entities);
     }
 
+    /** Returns the primary entity identifier for entity evidence, when present. */
+    public String getEntityId() {
+        return entities == null || entities.isEmpty() ? null : entities.get(0).getEntityId();
+    }
+
     public List<GraphPathRef> getPaths() {
         return Collections.unmodifiableList(paths == null ? Collections.emptyList() : paths);
     }
@@ -134,6 +151,10 @@ public final class Evidence {
 
     public Double getFusedScore() {
         return fusedScore;
+    }
+
+    public Double getFinalScore() {
+        return finalScore;
     }
 
     public Integer getRank() {
@@ -201,12 +222,13 @@ public final class Evidence {
             && Objects.equals(sources, that.sources)
             && Objects.equals(stageScores, that.stageScores)
             && Objects.equals(fusedScore, that.fusedScore)
+            && Objects.equals(finalScore, that.finalScore)
             && Objects.equals(rank, that.rank);
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(evidenceId, kind, text, chunks, entities, paths, sources,
-            stageScores, fusedScore, rank);
+            stageScores, fusedScore, finalScore, rank);
     }
 }

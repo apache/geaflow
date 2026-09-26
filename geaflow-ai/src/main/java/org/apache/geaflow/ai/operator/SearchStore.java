@@ -62,13 +62,20 @@ public class SearchStore {
     }
 
     public TopDocs searchDoc(String field, String content) throws ParseException, IOException {
+        return searchDoc(field, content, Constants.GRAPH_SEARCH_STORE_DEFAULT_TOPN);
+    }
+
+    public TopDocs searchDoc(String field, String content, int topN) throws ParseException, IOException {
+        if (topN < 1) {
+            throw new IllegalArgumentException("topN must be positive");
+        }
         if (!readStats) {
             reader = DirectoryReader.open(directory);
             searcher = new IndexSearcher(reader);
             readStats = true;
         }
         QueryParser parser = new QueryParser(field, analyzer);
-        return searcher.search(parser.parse(content), Constants.GRAPH_SEARCH_STORE_DEFAULT_TOPN);
+        return searcher.search(parser.parse(content), topN);
     }
 
     public Document getDoc(int docId) {
@@ -93,13 +100,19 @@ public class SearchStore {
     }
 
     public void close() throws IOException {
-        if (writeStats) {
-            writer.close();
-            writeStats = false;
-        }
+        finishWriting();
         if (readStats) {
             reader.close();
             readStats = false;
+        }
+        directory.close();
+        analyzer.close();
+    }
+
+    public void finishWriting() throws IOException {
+        if (writeStats) {
+            writer.close();
+            writeStats = false;
         }
     }
 

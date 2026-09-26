@@ -23,11 +23,18 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 import org.apache.geaflow.ai.common.util.SeDeUtil;
 import org.apache.geaflow.ai.graph.*;
 import org.apache.geaflow.ai.graph.io.*;
 import org.apache.geaflow.ai.index.EntityAttributeIndexStore;
 import org.apache.geaflow.ai.index.vector.KeywordVector;
+import org.apache.geaflow.ai.retrieval.api.model.RetrievalError;
+import org.apache.geaflow.ai.retrieval.api.model.RetrievalException;
+import org.apache.geaflow.ai.retrieval.codec.RetrievalApiJson;
+import org.apache.geaflow.ai.retrieval.config.RetrievalProperties;
+import org.apache.geaflow.ai.retrieval.service.RetrievalMetrics;
+import org.apache.geaflow.ai.retrieval.service.RetrievalService;
 import org.apache.geaflow.ai.search.VectorSearch;
 import org.apache.geaflow.ai.service.ServerMemoryCache;
 import org.apache.geaflow.ai.verbalization.Context;
@@ -44,22 +51,51 @@ public class GeaFlowMemoryServer {
 
     private static final String SERVER_NAME = "geaflow-memory-server";
     private static final int DEFAULT_PORT = 8080;
+    private static final Pattern SAFE_REQUEST_ID = Pattern.compile("[A-Za-z0-9._:-]{1,128}");
 
-    private static final ServerMemoryCache CACHE = new ServerMemoryCache();
+    private static final ServerMemoryCache FALLBACK_CACHE = new ServerMemoryCache();
+    private static final RetrievalMetrics FALLBACK_METRICS = new RetrievalMetrics();
+
+    @Inject
+    private ServerMemoryCache cache;
+
+    @Inject
+    private RetrievalMetrics metrics;
+
+    @Inject
+    private RetrievalProperties retrievalProperties;
+
+    @Inject
+    private RetrievalService retrievalService;
+
+    private static final RetrievalService FALLBACK_SERVICE = new RetrievalService(
+        FALLBACK_CACHE, new RetrievalProperties(), FALLBACK_METRICS);
 
     public static void main(String[] args) {
         System.setProperty("solon.app.name", SERVER_NAME);
+        int port = configuredPort();
+        System.setProperty("server.port", String.valueOf(port));
         Solon.start(GeaFlowMemoryServer.class, args, app -> {
             app.cfg().loadAdd("application.yml");
-            int port = app.cfg().getInt("server.port", DEFAULT_PORT);
+            app.cfg().put("server.port", port);
             LOGGER.info("Starting {} on port {}", SERVER_NAME, port);
             app.get("/", ctx -> {
                 ctx.output("GeaFlow AI Server is running...");
             });
-            app.get("/health", ctx -> {
-                ctx.outputAsJson("{\"status\":\"UP\",\"service\":\"" + SERVER_NAME + "\"}");
-            });
         });
+    }
+
+    private static int configuredPort() {
+        String environmentPort = System.getenv("GEAFLOW_SERVER_PORT");
+        if (environmentPort == null || environmentPort.trim().isEmpty()) {
+            return DEFAULT_PORT;
+        }
+        try {
+            return Integer.parseInt(environmentPort.trim());
+        } catch (NumberFormatException ignored) {
+            LOGGER.warn("Ignoring invalid GEAFLOW_SERVER_PORT: {}", environmentPort);
+            return DEFAULT_PORT;
+        }
     }
 
     @Get
@@ -69,11 +105,120 @@ public class GeaFlowMemoryServer {
     }
 
     @Post
+    @Mapping("/api/v1/retrievals")
+    public String retrieve(org.noear.solon.core.handle.Context ctx, @Body String input) {
+        String requestId = resolveRequestId(ctx.header("X-Request-Id"));
+        long startedAt = System.nanoTime();
+        ctx.headerSet("X-Request-Id", requestId);
+        ctx.contentType("application/json; charset=utf-8");
+        try {
+            String body = RetrievalApiJson.toJson(
+                runtimeRetrievalService().retrieve(RetrievalApiJson.parseRequest(input), requestId));
+            ctx.status(200);
+            return body;
+        } catch (RetrievalException exception) {
+            ctx.status(exception.getCode().getHttpStatus());
+            RetrievalError error = new RetrievalError(requestId, exception.getCode(),
+                exception.getMessage());
+            return RetrievalApiJson.toJson(error);
+        } catch (com.google.gson.JsonParseException exception) {
+            ctx.status(400);
+            runtimeMetrics().recordFailure(
+                org.apache.geaflow.ai.retrieval.api.model.RetrievalErrorCode.INVALID_REQUEST,
+                elapsedMs(startedAt));
+            RetrievalError error = new RetrievalError(requestId,
+                org.apache.geaflow.ai.retrieval.api.model.RetrievalErrorCode.INVALID_REQUEST,
+                "Malformed JSON request");
+            return RetrievalApiJson.toJson(error);
+        } catch (RuntimeException exception) {
+            ctx.status(500);
+            runtimeMetrics().recordFailure(
+                org.apache.geaflow.ai.retrieval.api.model.RetrievalErrorCode.INTERNAL_ERROR,
+                elapsedMs(startedAt));
+            RetrievalError error = new RetrievalError(requestId,
+                org.apache.geaflow.ai.retrieval.api.model.RetrievalErrorCode.INTERNAL_ERROR,
+                "internal retrieval error");
+            return RetrievalApiJson.toJson(error);
+        }
+    }
+
+    static String resolveRequestId(String requestedId) {
+        if (requestedId == null) {
+            return java.util.UUID.randomUUID().toString();
+        }
+        String trimmed = requestedId.trim();
+        if (!SAFE_REQUEST_ID.matcher(trimmed).matches()) {
+            return java.util.UUID.randomUUID().toString();
+        }
+        return trimmed;
+    }
+
+    private static long elapsedMs(long startedAt) {
+        return (System.nanoTime() - startedAt) / 1_000_000L;
+    }
+
+    @Get
+    @Mapping("/health")
+    public String health(org.noear.solon.core.handle.Context ctx) {
+        ctx.status(200);
+        ctx.contentType("application/json; charset=utf-8");
+        return "{\"status\":\"UP\",\"service\":\"" + SERVER_NAME + "\"}";
+    }
+
+    @Get
+    @Mapping("/ready")
+    public String ready(org.noear.solon.core.handle.Context ctx) {
+        RetrievalProperties properties = properties();
+        ServerMemoryCache.ReadinessStatus status;
+        try {
+            properties.validateConfiguration();
+            status = runtimeCache().keywordReadiness(properties.getReadyGraphName());
+        } catch (RetrievalException exception) {
+            status = new ServerMemoryCache.ReadinessStatus(false, null, null,
+                "INVALID_CONFIGURATION");
+        }
+        ctx.status(status.isReady() ? 200 : 503);
+        ctx.contentType("application/json; charset=utf-8");
+        return "{\"status\":\"" + (status.isReady() ? "READY" : "NOT_READY")
+            + "\",\"graphName\":\"" + String.valueOf(status.getGraphName())
+            + "\",\"graphVersion\":\"" + String.valueOf(status.getGraphVersion())
+            + "\",\"reason\":\"" + status.getReason() + "\"}";
+    }
+
+    @Get
+    @Mapping("/metrics/retrieval")
+    public String metrics(org.noear.solon.core.handle.Context ctx) {
+        RetrievalMetrics.Snapshot snapshot = runtimeMetrics().snapshot();
+        ctx.status(200);
+        ctx.contentType("application/json; charset=utf-8");
+        return "{\"total\":" + snapshot.getTotal() + ",\"success\":"
+            + snapshot.getSuccess() + ",\"timeout\":" + snapshot.getTimeout()
+            + ",\"failure\":" + snapshot.getFailure() + ",\"totalElapsedMs\":"
+            + snapshot.getTotalElapsedMs() + "}";
+    }
+
+    private RetrievalProperties properties() {
+        return retrievalProperties == null ? new RetrievalProperties() : retrievalProperties;
+    }
+
+    private ServerMemoryCache runtimeCache() {
+        return cache == null ? FALLBACK_CACHE : cache;
+    }
+
+    private RetrievalMetrics runtimeMetrics() {
+        return metrics == null ? FALLBACK_METRICS : metrics;
+    }
+
+    private RetrievalService runtimeRetrievalService() {
+        return retrievalService == null ? FALLBACK_SERVICE : retrievalService;
+    }
+
+    @Post
     @Mapping("/graph/create")
     public String createGraph(@Body String input) {
         GraphSchema graphSchema = SeDeUtil.deserializeGraphSchema(input);
         String graphName = graphSchema.getName();
-        if (graphName == null || CACHE.getGraphByName(graphName) != null) {
+        if (graphName == null || runtimeCache().getGraphByName(graphName) != null) {
             throw new RuntimeException("Cannot create graph name: " + graphName);
         }
         Map<String, EntityGroup> entities = new HashMap<>();
@@ -84,7 +229,6 @@ public class GeaFlowMemoryServer {
             entities.put(edgeSchema.getName(), new EdgeGroup(edgeSchema, new ArrayList<>()));
         }
         MemoryGraph graph = new MemoryGraph(graphSchema, entities);
-        CACHE.putGraph(graph);
         LocalMemoryGraphAccessor graphAccessor = new LocalMemoryGraphAccessor(graph);
         LOGGER.info("Success to init empty graph.");
 
@@ -96,7 +240,8 @@ public class GeaFlowMemoryServer {
         server.addGraphAccessor(graphAccessor);
         server.addIndexStore(indexStore);
         LOGGER.info("Success to init GraphMemoryServer.");
-        CACHE.putServer(server);
+        runtimeCache().putGraph(graph);
+        runtimeCache().putServer(server);
 
         LOGGER.info("Success to init graph. SCHEMA: {}", graphSchema);
         return "createGraph has been called, graphName: " + graphName;
@@ -106,7 +251,7 @@ public class GeaFlowMemoryServer {
     @Mapping("/graph/addEntitySchema")
     public String addSchema(@Param("graphName") String graphName,
                             @Body String input) {
-        Graph graph = CACHE.getGraphByName(graphName);
+        Graph graph = runtimeCache().getGraphByName(graphName);
         if (graph == null) {
             throw new RuntimeException("Graph not exist.");
         }
@@ -123,13 +268,14 @@ public class GeaFlowMemoryServer {
         } else {
             throw new RuntimeException("Cannot add schema: " + input);
         }
+        runtimeCache().markGraphUpdated(graphName);
         return "addSchema has been called, schemaName: " + schemaName;
     }
 
     @Post
     @Mapping("/graph/getGraphSchema")
     public String getSchema(@Param("graphName") String graphName) {
-        Graph graph = CACHE.getGraphByName(graphName);
+        Graph graph = runtimeCache().getGraphByName(graphName);
         if (graph == null) {
             throw new RuntimeException("Graph not exist.");
         }
@@ -143,7 +289,7 @@ public class GeaFlowMemoryServer {
     @Mapping("/graph/insertEntity")
     public String addEntity(@Param("graphName") String graphName,
                             @Body String input) {
-        Graph graph = CACHE.getGraphByName(graphName);
+        Graph graph = runtimeCache().getGraphByName(graphName);
         if (graph == null) {
             throw new RuntimeException("Graph not exist.");
         }
@@ -160,12 +306,13 @@ public class GeaFlowMemoryServer {
                 memoryMutableGraph.addEdge(((GraphEdge) entity).getEdge());
             }
         }
-        GraphMemoryServer insertServer = CACHE.getServerByName(graphName);
+        GraphMemoryServer insertServer = runtimeCache().getServerByName(graphName);
         if (insertServer == null || insertServer.getGraphAccessors().isEmpty()) {
             throw new RuntimeException("Server or graph accessor not available for graph: " + graphName);
         }
-        CACHE.getConsolidateServer().executeConsolidateTask(
+        runtimeCache().getConsolidateServer().executeConsolidateTask(
             insertServer.getGraphAccessors().get(0), memoryMutableGraph);
+        runtimeCache().markGraphUpdated(graphName);
         return "Success to add entities, num: " + graphEntities.size();
     }
 
@@ -173,7 +320,7 @@ public class GeaFlowMemoryServer {
     @Mapping("/graph/delEntity")
     public String deleteEntity(@Param("graphName") String graphName,
                                @Body String input) {
-        Graph graph = CACHE.getGraphByName(graphName);
+        Graph graph = runtimeCache().getGraphByName(graphName);
         if (graph == null) {
             throw new RuntimeException("Graph not exist.");
         }
@@ -190,18 +337,19 @@ public class GeaFlowMemoryServer {
                 memoryMutableGraph.removeEdge(((GraphEdge) entity).getEdge());
             }
         }
+        runtimeCache().markGraphUpdated(graphName);
         return "Success to remove entities, num: " + graphEntities.size();
     }
 
     @Post
     @Mapping("/query/context")
     public String createContext(@Param("graphName") String graphName) {
-        GraphMemoryServer server = CACHE.getServerByName(graphName);
+        GraphMemoryServer server = runtimeCache().getServerByName(graphName);
         if (server == null) {
             throw new RuntimeException("Server not exist.");
         }
         String sessionId = server.createSession();
-        CACHE.putSession(server, sessionId);
+        runtimeCache().putSession(server, sessionId);
         return sessionId;
     }
 
@@ -209,11 +357,11 @@ public class GeaFlowMemoryServer {
     @Mapping("/query/exec")
     public String execQuery(@Param("sessionId") String sessionId,
                             @Body String query) {
-        String graphName = CACHE.getGraphNameBySession(sessionId);
+        String graphName = runtimeCache().getGraphNameBySession(sessionId);
         if (graphName == null) {
             throw new RuntimeException("Graph not exist.");
         }
-        GraphMemoryServer server = CACHE.getServerByName(graphName);
+        GraphMemoryServer server = runtimeCache().getServerByName(graphName);
         VectorSearch search = new VectorSearch(null, sessionId);
         search.addVector(new KeywordVector(query));
         server.search(search);
@@ -228,11 +376,11 @@ public class GeaFlowMemoryServer {
     @Post
     @Mapping("/query/result")
     public String getResult(@Param("sessionId") String sessionId) {
-        String graphName = CACHE.getGraphNameBySession(sessionId);
+        String graphName = runtimeCache().getGraphNameBySession(sessionId);
         if (graphName == null) {
             throw new RuntimeException("Graph not exist.");
         }
-        GraphMemoryServer server = CACHE.getServerByName(graphName);
+        GraphMemoryServer server = runtimeCache().getServerByName(graphName);
         List<GraphEntity> result = server.getSessionEntities(sessionId);
         return result.toString();
     }

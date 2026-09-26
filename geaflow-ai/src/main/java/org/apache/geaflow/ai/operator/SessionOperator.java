@@ -81,8 +81,13 @@ public class SessionOperator implements SearchOperator {
             }
             //recall compute
             GraphSearchStore searchStore = initSearchStore(extendEntityIndexMap);
-            searchStore.close();
-            List<GraphEntity> matchEntities = searchStore.search(query, graphAccessor);
+            searchStore.finishWriting();
+            List<GraphEntity> matchEntities;
+            try {
+                matchEntities = searchStore.search(query, graphAccessor);
+            } finally {
+                searchStore.close();
+            }
             Set<GraphEntity> matchEntitiesSet = new HashSet<>(matchEntities);
 
             //Apply to subgraph
@@ -123,8 +128,12 @@ public class SessionOperator implements SearchOperator {
         }
         //recall compute
         GraphSearchStore searchStore = initSearchStore(entityIndexMap);
-        searchStore.close();
-        return searchStore.search(query, graphAccessor);
+        searchStore.finishWriting();
+        try {
+            return searchStore.search(query, graphAccessor);
+        } finally {
+            searchStore.close();
+        }
     }
 
     private GraphSearchStore initSearchStore(Map<GraphEntity, List<IVector>> entityIndexMap) {

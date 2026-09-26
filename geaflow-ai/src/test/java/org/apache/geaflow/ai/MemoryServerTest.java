@@ -32,6 +32,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import org.apache.geaflow.ai.graph.io.Vertex;
+import org.apache.geaflow.ai.retrieval.api.model.RetrievalResponse;
+import org.apache.geaflow.ai.retrieval.codec.RetrievalApiJson;
 import org.apache.geaflow.ai.retrieval.support.HttpTestClient;
 import org.apache.geaflow.ai.retrieval.support.HttpTestResponse;
 import org.apache.geaflow.ai.retrieval.support.RetrievalTestFixture;
@@ -46,7 +48,9 @@ public class MemoryServerTest {
         RetrievalTestFixture fixture = new RetrievalTestFixture();
         Gson gson = new Gson();
         Map<String, String> graph = Collections.singletonMap("graphName", RetrievalTestFixture.GRAPH_NAME);
-        try (HttpTestClient client = new HttpTestClient("http://localhost:8080")) {
+        String port = System.getProperty("server.port",
+            System.getenv().getOrDefault("GEAFLOW_SERVER_PORT", "8080"));
+        try (HttpTestClient client = new HttpTestClient("http://localhost:" + port)) {
             HttpTestResponse health = client.get("/health");
             success(health);
             assertTrue(health.getContentType().startsWith("application/json"));
@@ -80,6 +84,42 @@ public class MemoryServerTest {
             success(result);
             assertTrue(result.getBody().contains("confucius-1"), result.getBody());
             assertTrue(result.getBody().contains("Confucius taught ethics."), result.getBody());
+
+            HttpTestResponse ready = client.get("/ready");
+            assertEquals(503, ready.getStatus(), ready.getBody());
+            assertTrue(ready.getBody().contains("GRAPH_NOT_LOADED"), ready.getBody());
+
+            String request = "{\"graphName\":\"" + RetrievalTestFixture.GRAPH_NAME
+                + "\",\"query\":\"Confucius\",\"budget\":{\"topK\":1,"
+                + "\"timeoutMs\":3000,\"maxCandidates\":10,\"tokenBudget\":4096}}";
+            HttpTestResponse retrieval = client.postWithHeaders("/api/v1/retrievals", request,
+                Collections.singletonMap("X-Request-Id", "request-1"));
+            assertEquals(200, retrieval.getStatus(), retrieval.getBody());
+            assertEquals("request-1", retrieval.getHeaders().get("X-Request-Id"));
+            RetrievalResponse response = RetrievalApiJson.parseResponse(retrieval.getBody());
+            assertEquals("request-1", response.getRequestId());
+            assertEquals("v4", response.getGraphVersion());
+            assertEquals(1, response.getEvidence().size());
+            assertTrue(response.getEvidence().get(0).getFinalScore() > 0);
+            assertTrue(response.getEvidence().get(0).getStageScores().containsKey("keyword"));
+
+            HttpTestResponse noMatch = client.post("/api/v1/retrievals",
+                request.replace("Confucius", "not-present"));
+            assertEquals(200, noMatch.getStatus(), noMatch.getBody());
+            assertEquals(0, RetrievalApiJson.parseResponse(noMatch.getBody()).getEvidence().size());
+
+            HttpTestResponse missing = client.post("/api/v1/retrievals",
+                request.replace(RetrievalTestFixture.GRAPH_NAME, "missing-graph"));
+            assertEquals(404, missing.getStatus(), missing.getBody());
+            assertTrue(missing.getBody().contains("GRAPH_NOT_FOUND"), missing.getBody());
+
+            HttpTestResponse malformed = client.post("/api/v1/retrievals", "{");
+            assertEquals(400, malformed.getStatus(), malformed.getBody());
+            assertTrue(malformed.getBody().contains("Malformed JSON request"), malformed.getBody());
+
+            HttpTestResponse metrics = client.get("/metrics/retrieval");
+            assertEquals(200, metrics.getStatus(), metrics.getBody());
+            assertTrue(metrics.getBody().contains("\"success\":"), metrics.getBody());
         }
     }
 
