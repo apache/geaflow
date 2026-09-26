@@ -39,6 +39,27 @@ class SourceLoaderTest(unittest.TestCase):
             with self.assertRaisesRegex(SourceError, "d/dev record 1 field question"):
                 list(SourceLoader().load(manifest))
 
+    def test_streams_json_array(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "records.json"
+            records = [{"id": str(index), "question": "q", "context": [["T", ["x"]]]}
+                       for index in range(1200)]
+            source.write_text(json.dumps(records), encoding="utf-8")
+            checksum = hashlib.sha256(source.read_bytes()).hexdigest()
+            manifest = SourceManifest("d", "r", "s", None, str(source), checksum, "p")
+            batches = list(SourceLoader(batch_size=100).load_batches(manifest))
+            self.assertEqual([100] * 12, [len(batch) for batch in batches])
+
+    def test_rejects_trailing_comma_and_trailing_data(self):
+        for contents in ("[{} ,]", "[{}]garbage"):
+            with self.subTest(contents=contents), tempfile.TemporaryDirectory() as directory:
+                source = Path(directory) / "records.json"
+                source.write_text(contents, encoding="utf-8")
+                checksum = hashlib.sha256(source.read_bytes()).hexdigest()
+                manifest = SourceManifest("d", "r", "s", None, str(source), checksum, "p")
+                with self.assertRaises(SourceError):
+                    list(SourceLoader().load(manifest))
+
 
 if __name__ == "__main__":
     unittest.main()

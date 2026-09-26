@@ -10,6 +10,7 @@ import gzip
 import hashlib
 import json
 import os
+import tempfile
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
@@ -49,6 +50,8 @@ class SourceManifest:
         checksum = str(raw["sha256"]).lower()
         if len(checksum) != 64 or any(char not in "0123456789abcdef" for char in checksum):
             raise SourceError("manifest %s has invalid sha256" % path)
+        if raw.get("dataset") == "2wikimultihopqa" and raw.get("split") not in ("dev", "test"):
+            raise SourceError("2wikimultihopqa manifest split must be dev or test")
         return cls(
             dataset=str(raw["dataset"]),
             dataset_release=str(raw["dataset_release"]),
@@ -98,15 +101,21 @@ class SourceLoader:
             )
         target = Path(os.path.expandvars(manifest.cache_path or Path(manifest.source_uri).name)).expanduser()
         target.parent.mkdir(parents=True, exist_ok=True)
-        temporary = target.with_name(target.name + ".part")
+        descriptor, temporary_name = tempfile.mkstemp(prefix=target.name + ".", suffix=".part",
+                                                       dir=str(target.parent))
+        os.close(descriptor)
+        temporary = Path(temporary_name)
         try:
             urllib.request.urlretrieve(manifest.source_uri, temporary)
+            self._verify_checksum(temporary, manifest)
             temporary.replace(target)
-        except OSError as exc:
+        except (OSError, SourceError) as exc:
             try:
                 temporary.unlink()
             except OSError:
                 pass
+            if isinstance(exc, SourceError):
+                raise
             raise SourceError("download failed for %s/%s: %s" % (manifest.dataset, manifest.split, exc)) from exc
         return target
 
@@ -153,7 +162,10 @@ class SourceLoader:
     def _array_records(stream: Any, path: Path) -> Iterator[Any]:
         decoder = json.JSONDecoder()
         buffer = ""
-        first = True
+        opened = False
+        expect_value = True
+        after_comma = False
+        closed = False
         while True:
             chunk = stream.read(64 * 1024)
             if chunk:
@@ -161,18 +173,35 @@ class SourceLoader:
             end = not chunk
             while True:
                 buffer = buffer.lstrip()
-                if first:
+                if closed:
+                    if buffer:
+                        raise SourceError("trailing data after JSON array in %s" % path)
+                    break
+                if not opened:
                     if not buffer:
                         break
                     if buffer[0] != "[":
                         raise SourceError("JSON source %s must contain an array" % path)
                     buffer = buffer[1:]
-                    first = False
+                    opened = True
                 buffer = buffer.lstrip()
                 if not buffer:
                     break
-                if buffer[0] == "]":
-                    return
+                if expect_value and buffer[0] == "]" and not after_comma:
+                    buffer = buffer[1:]
+                    closed = True
+                    continue
+                if not expect_value:
+                    if buffer[0] != ",":
+                        if buffer[0] == "]":
+                            buffer = buffer[1:]
+                            closed = True
+                            continue
+                        raise SourceError("invalid JSON array separator in %s" % path)
+                    buffer = buffer[1:]
+                    expect_value = True
+                    after_comma = True
+                    continue
                 try:
                     value, consumed = decoder.raw_decode(buffer)
                 except json.JSONDecodeError:
@@ -180,14 +209,12 @@ class SourceLoader:
                         raise SourceError("truncated JSON array in %s" % path)
                     break
                 yield value
-                buffer = buffer[consumed:].lstrip()
-                if buffer.startswith(","):
-                    buffer = buffer[1:]
-                elif buffer.startswith("]"):
-                    return
-                elif buffer and end:
-                    raise SourceError("invalid JSON array separator in %s" % path)
+                buffer = buffer[consumed:]
+                expect_value = False
+                after_comma = False
             if end:
+                if closed:
+                    return
                 raise SourceError("unterminated JSON array in %s" % path)
 
     @staticmethod
