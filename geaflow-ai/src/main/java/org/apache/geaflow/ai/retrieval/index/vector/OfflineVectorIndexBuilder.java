@@ -19,6 +19,7 @@
 
 package org.apache.geaflow.ai.retrieval.index.vector;
 
+import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -59,7 +60,7 @@ public final class OfflineVectorIndexBuilder implements VectorIndexBuilder {
         Objects.requireNonNull(chunks, "chunks");
         List<TextChunk> ordered = new ArrayList<>(chunks);
         ordered.sort(Comparator.comparing(TextChunk::getChunkId));
-        int dimensions = validate(ordered);
+        int dimensions = validate(context, ordered);
         Files.createDirectories(outputDirectory);
         Path staging = Files.createTempFile(outputDirectory, INDEX_NAME + "-", ".tmp");
         Path published = outputDirectory.resolve(INDEX_NAME + "-" + context.getGraphVersion().getVersion() + ".bin");
@@ -71,6 +72,7 @@ public final class OfflineVectorIndexBuilder implements VectorIndexBuilder {
             output.writeInt(ordered.size());
             for (TextChunk chunk : ordered) {
                 output.writeUTF(chunk.getChunkId());
+                output.writeUTF(chunk.getDocumentId());
                 float[] vector = vectors.get(chunk.getChunkId());
                 for (float value : vector) {
                     output.writeFloat(value);
@@ -79,7 +81,11 @@ public final class OfflineVectorIndexBuilder implements VectorIndexBuilder {
         }
         if (Files.exists(published)) {
             Files.deleteIfExists(staging);
-            throw new IOException("vector artifact already exists: " + published);
+            return new VectorArtifact(new IndexBuildMetadata(context.getGraphVersion(),
+                new IndexVersion(INDEX_NAME, context.getGraphVersion().getVersion(),
+                    context.getGraphVersion().getVersion()), INDEX_NAME,
+                BUILDER_VERSION + ":" + vectorSource + ":" + vectorVersion,
+                published.toString(), true), published);
         }
         Files.move(staging, published);
         IndexVersion indexVersion = new IndexVersion(INDEX_NAME,
@@ -90,9 +96,20 @@ public final class OfflineVectorIndexBuilder implements VectorIndexBuilder {
         return new VectorArtifact(metadata, published);
     }
 
-    private int validate(List<TextChunk> chunks) throws IOException {
+    private int validate(IngestionContext context, List<TextChunk> chunks) throws IOException {
+        if (!vectorSource.equals(context.getManifest().getVectorSource())
+            || !vectorVersion.equals(context.getManifest().getVectorVersion())) {
+            throw new IOException("vector source/version does not match manifest");
+        }
+        if (chunks.isEmpty()) {
+            throw new IOException("vector artifact cannot be empty");
+        }
         int dimensions = -1;
+        java.util.Set<String> chunkIds = new java.util.HashSet<>();
         for (TextChunk chunk : chunks) {
+            if (!chunkIds.add(chunk.getChunkId())) {
+                throw new IOException("duplicate chunk ID " + chunk.getChunkId());
+            }
             float[] vector = vectors.get(chunk.getChunkId());
             if (vector == null) {
                 throw new IOException("missing vector for chunk " + chunk.getChunkId());
@@ -140,6 +157,11 @@ public final class OfflineVectorIndexBuilder implements VectorIndexBuilder {
         public void close() throws IOException {
             if (!Files.isRegularFile(path) || Files.size(path) == 0) {
                 throw new IOException("vector artifact is not readable: " + path);
+            }
+            try (DataInputStream input = new DataInputStream(Files.newInputStream(path))) {
+                if (!"GEAFLOW-VECTOR-1".equals(input.readUTF())) {
+                    throw new IOException("invalid vector artifact header");
+                }
             }
         }
     }

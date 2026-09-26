@@ -149,11 +149,15 @@ def write_graph_artifact(directory: Path, graph_version: str,
             staged.append((temp_path, temporary_directory / name))
         for temporary, final in staged:
             os.replace(temporary, final)
+        with (temporary_directory / "vertices.jsonl").open(encoding="utf-8") as vertices_file:
+            vertex_count = sum(1 for _ in vertices_file)
+        with (temporary_directory / "edges.jsonl").open(encoding="utf-8") as edges_file:
+            edge_count = sum(1 for _ in edges_file)
         manifest = {
             "graph_version": graph_version, "schema_version": GRAPH_SCHEMA_VERSION,
             "extractor_version": EXTRACTOR_VERSION,
-            "vertex_count": sum(1 for _ in (temporary_directory / "vertices.jsonl").open(encoding="utf-8")),
-            "edge_count": sum(1 for _ in (temporary_directory / "edges.jsonl").open(encoding="utf-8")),
+            "vertex_count": vertex_count,
+            "edge_count": edge_count,
         }
         manifest_path = temporary_directory / "manifest.json"
         temporary = temporary_directory / "manifest.json.tmp"

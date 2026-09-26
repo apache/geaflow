@@ -36,6 +36,7 @@ import org.apache.geaflow.ai.retrieval.model.version.IndexVersion;
 import org.apache.lucene.analysis.standard.StandardAnalyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
+import org.apache.lucene.document.StoredField;
 import org.apache.lucene.document.StringField;
 import org.apache.lucene.document.TextField;
 import org.apache.lucene.index.DirectoryReader;
@@ -61,6 +62,7 @@ public final class LuceneBm25IndexBuilder implements Bm25IndexBuilder {
         Objects.requireNonNull(chunks, "chunks");
         List<TextChunk> ordered = new ArrayList<>(chunks);
         ordered.sort(Comparator.comparing(TextChunk::getChunkId));
+        Files.createDirectories(outputDirectory);
         String version = context.getGraphVersion().getVersion();
         Path staging = Files.createTempDirectory(outputDirectory, INDEX_NAME + "-" + version + "-");
         Path published = outputDirectory.resolve(INDEX_NAME + "-" + version);
@@ -75,7 +77,9 @@ public final class LuceneBm25IndexBuilder implements Bm25IndexBuilder {
                     document.add(new TextField("text", chunk.getText(), Field.Store.YES));
                     document.add(new StoredField("startOffset", chunk.getStartOffset()));
                     document.add(new StoredField("endOffset", chunk.getEndOffset()));
-                    document.add(new StoredField("textHash", chunk.getTextHash()));
+                    if (chunk.getTextHash() != null) {
+                        document.add(new StoredField("textHash", chunk.getTextHash()));
+                    }
                     writer.addDocument(document);
                 }
                 writer.commit();
@@ -87,7 +91,9 @@ public final class LuceneBm25IndexBuilder implements Bm25IndexBuilder {
             }
         }
         if (Files.exists(published)) {
-            throw new IOException("BM25 artifact already exists: " + published);
+            return new LuceneIndexArtifact(new IndexBuildMetadata(context.getGraphVersion(),
+                new IndexVersion(INDEX_NAME, version, version), INDEX_NAME, BUILDER_VERSION,
+                published.toString(), true), published);
         }
         Files.move(staging, published, StandardCopyOption.ATOMIC_MOVE);
         IndexVersion indexVersion = new IndexVersion(INDEX_NAME, version, version);
