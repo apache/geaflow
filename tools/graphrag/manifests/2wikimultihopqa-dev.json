@@ -1,0 +1,9 @@
+{
+  "dataset": "2wikimultihopqa",
+  "dataset_release": "official",
+  "split": "dev",
+  "source_uri": null,
+  "cache_path": "${GRAPH_RAG_CACHE}/2wikimultihopqa-dev.json",
+  "sha256": "REPLACE_WITH_OFFICIAL_SHA256",
+  "parser_version": "2wikimultihopqa-parser-v1"
+}
