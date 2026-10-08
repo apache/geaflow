@@ -25,8 +25,11 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
+import org.apache.geaflow.ai.retrieval.index.ArtifactIdentity;
 import org.apache.geaflow.ai.retrieval.index.Bm25IndexBuilder;
 import org.apache.geaflow.ai.retrieval.index.IndexArtifact;
 import org.apache.geaflow.ai.retrieval.ingest.IngestionContext;
@@ -62,48 +65,107 @@ public final class LuceneBm25IndexBuilder implements Bm25IndexBuilder {
         Objects.requireNonNull(chunks, "chunks");
         List<TextChunk> ordered = new ArrayList<>(chunks);
         ordered.sort(Comparator.comparing(TextChunk::getChunkId));
-        Files.createDirectories(outputDirectory);
+        Set<String> chunkIds = new HashSet<>();
+        for (TextChunk chunk : ordered) {
+            if (!chunkIds.add(chunk.getChunkId())) {
+                throw new IOException("duplicate chunk ID " + chunk.getChunkId());
+            }
+        }
         String version = context.getGraphVersion().getVersion();
+        Path published = ArtifactIdentity.resolveVersionedPath(outputDirectory, INDEX_NAME + "-", version, "");
+        Files.createDirectories(outputDirectory);
         Path staging = Files.createTempDirectory(outputDirectory, INDEX_NAME + "-" + version + "-");
-        Path published = outputDirectory.resolve(INDEX_NAME + "-" + version);
-        try (Directory directory = FSDirectory.open(staging)) {
-            IndexWriterConfig config = new IndexWriterConfig(new StandardAnalyzer());
-            config.setSimilarity(new org.apache.lucene.search.similarities.BM25Similarity());
-            try (IndexWriter writer = new IndexWriter(directory, config)) {
-                for (TextChunk chunk : ordered) {
-                    Document document = new Document();
-                    document.add(new StringField("chunkId", chunk.getChunkId(), Field.Store.YES));
-                    document.add(new StringField("documentId", chunk.getDocumentId(), Field.Store.YES));
-                    document.add(new TextField("text", chunk.getText(), Field.Store.YES));
-                    document.add(new StoredField("startOffset", chunk.getStartOffset()));
-                    document.add(new StoredField("endOffset", chunk.getEndOffset()));
-                    if (chunk.getTextHash() != null) {
-                        document.add(new StoredField("textHash", chunk.getTextHash()));
-                    }
-                    writer.addDocument(document);
-                }
-                writer.commit();
-            }
-            try (DirectoryReader reader = DirectoryReader.open(directory)) {
-                if (reader.numDocs() != ordered.size()) {
-                    throw new IOException("BM25 document count mismatch");
-                }
-            }
-        }
-        if (Files.exists(published)) {
-            return new LuceneIndexArtifact(new IndexBuildMetadata(context.getGraphVersion(),
-                new IndexVersion(INDEX_NAME, version, version), INDEX_NAME, BUILDER_VERSION,
-                published.toString(), true), published);
-        }
+        boolean publishedStaging = false;
         try {
-            Files.move(staging, published, StandardCopyOption.ATOMIC_MOVE);
-        } catch (java.nio.file.AtomicMoveNotSupportedException unsupported) {
-            Files.move(staging, published);
+            try (Directory directory = FSDirectory.open(staging)) {
+                IndexWriterConfig config = new IndexWriterConfig(new StandardAnalyzer());
+                config.setSimilarity(new org.apache.lucene.search.similarities.BM25Similarity());
+                try (IndexWriter writer = new IndexWriter(directory, config)) {
+                    for (TextChunk chunk : ordered) {
+                        Document document = new Document();
+                        document.add(new StringField("chunkId", chunk.getChunkId(), Field.Store.YES));
+                        document.add(new StringField("documentId", chunk.getDocumentId(), Field.Store.YES));
+                        document.add(new TextField("text", chunk.getText(), Field.Store.YES));
+                        document.add(new StoredField("startOffset", chunk.getStartOffset()));
+                        document.add(new StoredField("endOffset", chunk.getEndOffset()));
+                        if (chunk.getTextHash() != null) {
+                            document.add(new StoredField("textHash", chunk.getTextHash()));
+                        }
+                        writer.addDocument(document);
+                    }
+                    writer.setLiveCommitData(new ArtifactIdentity(context.getGraphVersion().getGraphName(),
+                        version, version, ArtifactIdentity.fingerprint(ordered)).toMap().entrySet());
+                    writer.commit();
+                }
+                try (DirectoryReader reader = DirectoryReader.open(directory)) {
+                    if (reader.numDocs() != ordered.size()) {
+                        throw new IOException("BM25 document count mismatch");
+                    }
+                }
+            }
+            if (Files.exists(published)) {
+                validateExisting(published, ordered, context);
+                return new LuceneIndexArtifact(new IndexBuildMetadata(context.getGraphVersion(),
+                    new IndexVersion(INDEX_NAME, version, version), INDEX_NAME, BUILDER_VERSION,
+                    published.toString(), true), published);
+            }
+            try {
+                Files.move(staging, published, StandardCopyOption.ATOMIC_MOVE);
+            } catch (java.nio.file.AtomicMoveNotSupportedException unsupported) {
+                Files.move(staging, published);
+            }
+            publishedStaging = true;
+            IndexVersion indexVersion = new IndexVersion(INDEX_NAME, version, version);
+            IndexBuildMetadata metadata = new IndexBuildMetadata(context.getGraphVersion(), indexVersion,
+                INDEX_NAME, BUILDER_VERSION, published.toString(), true);
+            return new LuceneIndexArtifact(metadata, published);
+        } finally {
+            if (!publishedStaging) {
+                deleteRecursively(staging);
+            }
         }
-        IndexVersion indexVersion = new IndexVersion(INDEX_NAME, version, version);
-        IndexBuildMetadata metadata = new IndexBuildMetadata(context.getGraphVersion(), indexVersion,
-            INDEX_NAME, BUILDER_VERSION, published.toString(), true);
-        return new LuceneIndexArtifact(metadata, published);
+    }
+
+    private static void deleteRecursively(Path path) {
+        if (!Files.exists(path)) {
+            return;
+        }
+        try (java.util.stream.Stream<Path> paths = Files.walk(path)) {
+            paths.sorted(Comparator.reverseOrder()).forEach(candidate -> {
+                try {
+                    Files.deleteIfExists(candidate);
+                } catch (IOException ignored) {
+                    // Best-effort cleanup must not hide the original build failure.
+                }
+            });
+        } catch (IOException ignored) {
+            // Best-effort cleanup must not hide the original build failure.
+        }
+    }
+
+    private static void validateExisting(Path path, List<TextChunk> chunks, IngestionContext context) throws IOException {
+        try (Directory directory = FSDirectory.open(path);
+             DirectoryReader reader = DirectoryReader.open(directory)) {
+            ArtifactIdentity.fromMap(reader.getIndexCommit().getUserData()).validate(
+                context.getGraphVersion().getGraphName(), context.getGraphVersion().getVersion(),
+                context.getGraphVersion().getVersion(), chunks);
+            if (reader.numDocs() != chunks.size()) {
+                throw new IOException("existing BM25 document count mismatch");
+            }
+            for (TextChunk chunk : chunks) {
+                org.apache.lucene.search.IndexSearcher searcher = new org.apache.lucene.search.IndexSearcher(reader);
+                org.apache.lucene.search.TopDocs found = searcher.search(new org.apache.lucene.search.TermQuery(
+                    new org.apache.lucene.index.Term("chunkId", chunk.getChunkId())), 2);
+                if (found.totalHits.value != 1) {
+                    throw new IOException("existing BM25 chunk mismatch: " + chunk.getChunkId());
+                }
+                Document document = searcher.doc(found.scoreDocs[0].doc);
+                if (!chunk.getDocumentId().equals(document.get("documentId"))
+                    || !chunk.getText().equals(document.get("text"))) {
+                    throw new IOException("existing BM25 content mismatch: " + chunk.getChunkId());
+                }
+            }
+        }
     }
 
     private static final class LuceneIndexArtifact implements IndexArtifact {

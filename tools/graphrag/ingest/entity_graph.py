@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import tempfile
 import unicodedata
 from pathlib import Path
@@ -138,8 +139,13 @@ def write_graph_artifact(directory: Path, graph_version: str,
                          vertices: Iterable[Dict[str, Any]],
                          edges: Iterable[Dict[str, Any]]) -> Path:
     """Write immutable vertex/edge JSONL and publish a manifest last."""
+    if not isinstance(graph_version, str) or not re.fullmatch(r"[A-Za-z0-9._-]{1,128}", graph_version):
+        raise ValueError("graph_version contains unsafe path characters")
     directory.mkdir(parents=True, exist_ok=True)
+    root = directory.resolve()
     target = directory / graph_version
+    if target.resolve().parent != root:
+        raise ValueError("graph_version must remain within output directory")
     if target.exists():
         raise FileExistsError("graph version already exists: %s" % graph_version)
     temporary_directory = Path(tempfile.mkdtemp(prefix=graph_version + ".", dir=directory))

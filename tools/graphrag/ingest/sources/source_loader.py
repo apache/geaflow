@@ -67,17 +67,29 @@ class SourceManifest:
 class SourceLoader:
     """Loads and validates one manifest without exposing dataset-specific records."""
 
-    def __init__(self, allow_download: bool = False, batch_size: int = 256):
+    def __init__(self, allow_download: bool = False, batch_size: int = 256,
+                 max_download_bytes: int = 1024 * 1024 * 1024,
+                 max_uncompressed_bytes: int = 1024 * 1024 * 1024,
+                 max_zip_entries: int = 16, timeout: float = 30.0):
         if batch_size < 1:
             raise ValueError("batch_size must be positive")
+        if min(max_download_bytes, max_uncompressed_bytes, max_zip_entries) < 1 or timeout <= 0:
+            raise ValueError("source limits must be positive")
         self.allow_download = allow_download
         self.batch_size = batch_size
+        self.max_download_bytes = max_download_bytes
+        self.max_uncompressed_bytes = max_uncompressed_bytes
+        self.max_zip_entries = max_zip_entries
+        self.timeout = timeout
 
     def load_batches(self, manifest: SourceManifest) -> Iterator[List[Dict[str, Any]]]:
         path = self._resolve_source(manifest)
         self._verify_checksum(path, manifest)
         batch: List[Dict[str, Any]] = []
-        for number, raw in enumerate(self._records(path), start=1):
+        if path.stat().st_size > self.max_download_bytes:
+            raise SourceError("source exceeds configured size limit: %s" % path)
+        for number, raw in enumerate(self._records(path, self.max_uncompressed_bytes,
+                                                   self.max_zip_entries), start=1):
             batch.append(self._canonical_record(manifest, number, raw))
             if len(batch) == self.batch_size:
                 yield batch
@@ -107,7 +119,17 @@ class SourceLoader:
         os.close(descriptor)
         temporary = Path(temporary_name)
         try:
-            urllib.request.urlretrieve(manifest.source_uri, temporary)
+            request = urllib.request.Request(manifest.source_uri)
+            total = 0
+            with urllib.request.urlopen(request, timeout=self.timeout) as response, temporary.open("wb") as output:
+                while True:
+                    block = response.read(1024 * 1024)
+                    if not block:
+                        break
+                    total += len(block)
+                    if total > self.max_download_bytes:
+                        raise SourceError("download exceeds configured size limit")
+                    output.write(block)
             self._verify_checksum(temporary, manifest)
             temporary.replace(target)
         except (OSError, SourceError) as exc:
@@ -138,27 +160,66 @@ class SourceLoader:
             )
 
     @staticmethod
-    def _records(path: Path) -> Iterable[Any]:
+    def _records(path: Path, max_uncompressed_bytes: int = 1024 * 1024 * 1024,
+                 max_zip_entries: int = 16) -> Iterable[Any]:
         if path.suffix == ".zip":
             try:
                 with zipfile.ZipFile(path) as archive:
                     names = sorted(name for name in archive.namelist()
                                    if name.endswith((".json", ".jsonl", ".json.gz", ".jsonl.gz")))
+                    if len(archive.namelist()) > max_zip_entries:
+                        raise SourceError("ZIP source %s has too many entries" % path)
                     if len(names) != 1:
                         raise SourceError("ZIP source %s must contain exactly one JSON data file" % path)
                     descriptor, temporary_name = tempfile.mkstemp(suffix=Path(names[0]).suffix)
                     os.close(descriptor)
                     extracted = Path(temporary_name)
                     try:
+                        total = 0
                         with archive.open(names[0]) as source, extracted.open("wb") as target:
-                            target.write(source.read())
-                        yield from SourceLoader._records(extracted)
+                            while True:
+                                block = source.read(1024 * 1024)
+                                if not block:
+                                    break
+                                total += len(block)
+                                if total > max_uncompressed_bytes:
+                                    raise SourceError("ZIP entry exceeds configured size limit")
+                                target.write(block)
+                        yield from SourceLoader._records(extracted, max_uncompressed_bytes, max_zip_entries)
                     finally:
                         extracted.unlink(missing_ok=True)
                 return
             except (OSError, zipfile.BadZipFile) as exc:
                 raise SourceError("cannot parse ZIP source %s: %s" % (path, exc)) from exc
-        opener = gzip.open if path.suffix == ".gz" else open
+        if path.suffix == ".gz":
+            descriptor, temporary_name = tempfile.mkstemp(suffix=".jsonl")
+            os.close(descriptor)
+            extracted = Path(temporary_name)
+            try:
+                total = 0
+                with gzip.open(path, "rb") as source, extracted.open("wb") as target:
+                    while True:
+                        block = source.read(1024 * 1024)
+                        if not block:
+                            break
+                        total += len(block)
+                        if total > max_uncompressed_bytes:
+                            raise SourceError("gzip source exceeds configured size limit")
+                        target.write(block)
+                yield from SourceLoader._records(extracted, max_uncompressed_bytes, max_zip_entries)
+            except SourceError:
+                raise
+            except (OSError, gzip.BadGzipFile) as exc:
+                raise SourceError("cannot parse gzip source %s: %s" % (path, exc)) from exc
+            finally:
+                extracted.unlink(missing_ok=True)
+            return
+        try:
+            if path.stat().st_size > max_uncompressed_bytes:
+                raise SourceError("source exceeds configured uncompressed size limit: %s" % path)
+        except OSError as exc:
+            raise SourceError("cannot stat source %s: %s" % (path, exc)) from exc
+        opener = open
         try:
             with opener(path, "rt", encoding="utf-8") as stream:
                 first = stream.read(1)

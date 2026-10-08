@@ -1,4 +1,5 @@
 import hashlib
+import gzip
 import json
 import tempfile
 import unittest
@@ -61,6 +62,27 @@ class SourceLoaderTest(unittest.TestCase):
                 manifest = SourceManifest("d", "r", "s", None, str(source), checksum, "p")
                 with self.assertRaises(SourceError):
                     list(SourceLoader().load(manifest))
+
+    def test_limits_uncompressed_plain_source(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "records.jsonl"
+            source.write_text(json.dumps({"id": "a", "question": "q", "context": []}),
+                              encoding="utf-8")
+            checksum = hashlib.sha256(source.read_bytes()).hexdigest()
+            manifest = SourceManifest("d", "r", "s", None, str(source), checksum, "p")
+            with self.assertRaisesRegex(SourceError, "uncompressed size limit"):
+                list(SourceLoader(max_uncompressed_bytes=1).load(manifest))
+
+    def test_limits_uncompressed_gzip_source(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "records.jsonl.gz"
+            contents = json.dumps({"id": "a", "question": "q", "context": []})
+            with gzip.open(source, "wt", encoding="utf-8") as stream:
+                stream.write(contents)
+            checksum = hashlib.sha256(source.read_bytes()).hexdigest()
+            manifest = SourceManifest("d", "r", "s", None, str(source), checksum, "p")
+            with self.assertRaisesRegex(SourceError, "gzip source exceeds"):
+                list(SourceLoader(max_uncompressed_bytes=len(contents) - 1).load(manifest))
 
 
 if __name__ == "__main__":

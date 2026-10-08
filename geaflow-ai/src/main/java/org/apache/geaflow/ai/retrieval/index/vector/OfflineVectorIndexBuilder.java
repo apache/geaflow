@@ -26,9 +26,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import org.apache.geaflow.ai.retrieval.index.ArtifactIdentity;
 import org.apache.geaflow.ai.retrieval.index.IndexArtifact;
 import org.apache.geaflow.ai.retrieval.index.VectorIndexBuilder;
 import org.apache.geaflow.ai.retrieval.ingest.IngestionContext;
@@ -40,7 +43,7 @@ import org.apache.geaflow.ai.retrieval.model.version.IndexVersion;
 public final class OfflineVectorIndexBuilder implements VectorIndexBuilder {
 
     private static final String INDEX_NAME = "vector";
-    private static final String BUILDER_VERSION = "offline-vector-v1";
+    private static final String BUILDER_VERSION = "offline-vector-v2";
     private final Path outputDirectory;
     private final Map<String, float[]> vectors;
     private final String vectorSource;
@@ -58,46 +61,63 @@ public final class OfflineVectorIndexBuilder implements VectorIndexBuilder {
     public IndexArtifact build(IngestionContext context, List<TextChunk> chunks) throws IOException {
         Objects.requireNonNull(context, "context");
         Objects.requireNonNull(chunks, "chunks");
+        String version = context.getGraphVersion().getVersion();
+        Path published = ArtifactIdentity.resolveVersionedPath(outputDirectory, INDEX_NAME + "-", version, ".bin");
         List<TextChunk> ordered = new ArrayList<>(chunks);
         ordered.sort(Comparator.comparing(TextChunk::getChunkId));
         int dimensions = validate(context, ordered);
         Files.createDirectories(outputDirectory);
         Path staging = Files.createTempFile(outputDirectory, INDEX_NAME + "-", ".tmp");
-        Path published = outputDirectory.resolve(INDEX_NAME + "-" + context.getGraphVersion().getVersion() + ".bin");
-        try (DataOutputStream output = new DataOutputStream(Files.newOutputStream(staging))) {
-            output.writeUTF("GEAFLOW-VECTOR-1");
-            output.writeUTF(vectorSource);
-            output.writeUTF(vectorVersion);
-            output.writeInt(dimensions);
-            output.writeInt(ordered.size());
-            for (TextChunk chunk : ordered) {
-                output.writeUTF(chunk.getChunkId());
-                output.writeUTF(chunk.getDocumentId());
-                float[] vector = vectors.get(chunk.getChunkId());
-                for (float value : vector) {
-                    output.writeFloat(value);
+        boolean publishedStaging = false;
+        try {
+            try (DataOutputStream output = new DataOutputStream(Files.newOutputStream(staging))) {
+                output.writeUTF("GEAFLOW-VECTOR-2");
+                output.writeUTF(context.getGraphVersion().getGraphName());
+                output.writeUTF(context.getGraphVersion().getVersion());
+                output.writeUTF(context.getGraphVersion().getVersion());
+                output.writeUTF(ArtifactIdentity.fingerprint(ordered));
+                output.writeUTF(vectorSource);
+                output.writeUTF(vectorVersion);
+                output.writeInt(dimensions);
+                output.writeInt(ordered.size());
+                for (TextChunk chunk : ordered) {
+                    output.writeUTF(chunk.getChunkId());
+                    output.writeUTF(chunk.getDocumentId());
+                    float[] vector = vectors.get(chunk.getChunkId());
+                    for (float value : vector) {
+                        output.writeFloat(value);
+                    }
+                }
+            }
+            if (Files.exists(published)) {
+                VectorArtifact.validateArtifact(published, ordered, dimensions, vectorSource, vectorVersion, context, vectors);
+                return new VectorArtifact(new IndexBuildMetadata(context.getGraphVersion(),
+                    new IndexVersion(INDEX_NAME, context.getGraphVersion().getVersion(),
+                        context.getGraphVersion().getVersion()), INDEX_NAME,
+                    BUILDER_VERSION + ":" + vectorSource + ":" + vectorVersion,
+                    published.toString(), true), published);
+            }
+            try {
+                Files.move(staging, published, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+            } catch (java.nio.file.AtomicMoveNotSupportedException unsupported) {
+                Files.move(staging, published);
+            }
+            publishedStaging = true;
+            IndexVersion indexVersion = new IndexVersion(INDEX_NAME,
+                context.getGraphVersion().getVersion(), context.getGraphVersion().getVersion());
+            IndexBuildMetadata metadata = new IndexBuildMetadata(context.getGraphVersion(), indexVersion,
+                INDEX_NAME, BUILDER_VERSION + ":" + vectorSource + ":" + vectorVersion,
+                published.toString(), true);
+            return new VectorArtifact(metadata, published);
+        } finally {
+            if (!publishedStaging) {
+                try {
+                    Files.deleteIfExists(staging);
+                } catch (IOException ignored) {
+                    // Best-effort cleanup must not hide the original build failure.
                 }
             }
         }
-        if (Files.exists(published)) {
-            Files.deleteIfExists(staging);
-            return new VectorArtifact(new IndexBuildMetadata(context.getGraphVersion(),
-                new IndexVersion(INDEX_NAME, context.getGraphVersion().getVersion(),
-                    context.getGraphVersion().getVersion()), INDEX_NAME,
-                BUILDER_VERSION + ":" + vectorSource + ":" + vectorVersion,
-                published.toString(), true), published);
-        }
-        try {
-            Files.move(staging, published, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
-        } catch (java.nio.file.AtomicMoveNotSupportedException unsupported) {
-            Files.move(staging, published);
-        }
-        IndexVersion indexVersion = new IndexVersion(INDEX_NAME,
-            context.getGraphVersion().getVersion(), context.getGraphVersion().getVersion());
-        IndexBuildMetadata metadata = new IndexBuildMetadata(context.getGraphVersion(), indexVersion,
-            INDEX_NAME, BUILDER_VERSION + ":" + vectorSource + ":" + vectorVersion,
-            published.toString(), true);
-        return new VectorArtifact(metadata, published);
     }
 
     private int validate(IngestionContext context, List<TextChunk> chunks) throws IOException {
@@ -124,10 +144,15 @@ public final class OfflineVectorIndexBuilder implements VectorIndexBuilder {
             if (vector.length != dimensions || vector.length == 0) {
                 throw new IOException("vector dimensions do not align for chunk " + chunk.getChunkId());
             }
+            double normSquared = 0.0;
             for (float value : vector) {
+                normSquared += (double) value * value;
                 if (Float.isNaN(value) || Float.isInfinite(value)) {
                     throw new IOException("non-finite vector value for chunk " + chunk.getChunkId());
                 }
+            }
+            if (normSquared == 0.0) {
+                throw new IOException("zero-norm vector for chunk " + chunk.getChunkId());
             }
         }
         if (vectors.size() != chunks.size()) {
@@ -163,15 +188,72 @@ public final class OfflineVectorIndexBuilder implements VectorIndexBuilder {
                 throw new IOException("vector artifact is not readable: " + path);
             }
             try (DataInputStream input = new DataInputStream(Files.newInputStream(path))) {
-                if (!"GEAFLOW-VECTOR-1".equals(input.readUTF())) {
+                if (!"GEAFLOW-VECTOR-2".equals(input.readUTF())) {
                     throw new IOException("invalid vector artifact header");
                 }
-                input.readUTF();
-                input.readUTF();
+                for (int field = 0; field < 6; field++) {
+                    input.readUTF();
+                }
                 int dimensions = input.readInt();
                 int count = input.readInt();
                 if (dimensions <= 0 || count <= 0) {
                     throw new IOException("invalid vector artifact dimensions/count");
+                }
+                for (int index = 0; index < count; index++) {
+                    input.readUTF();
+                    input.readUTF();
+                    for (int dimension = 0; dimension < dimensions; dimension++) {
+                        float value = input.readFloat();
+                        if (Float.isNaN(value) || Float.isInfinite(value)) {
+                            throw new IOException("invalid vector value");
+                        }
+                    }
+                }
+                if (input.read() != -1) {
+                    throw new IOException("trailing data in vector artifact");
+                }
+            }
+        }
+
+        private static void validateArtifact(Path artifact, List<TextChunk> chunks, int dimensions,
+                                             String expectedSource, String expectedVersion, IngestionContext context,
+                                             Map<String, float[]> vectors) throws IOException {
+            try (DataInputStream input = new DataInputStream(Files.newInputStream(artifact))) {
+                if (!"GEAFLOW-VECTOR-2".equals(input.readUTF())) {
+                    throw new IOException("legacy vector artifact; rebuild index");
+                }
+                new ArtifactIdentity(input.readUTF(), input.readUTF(), input.readUTF(), input.readUTF()).validate(
+                    context.getGraphVersion().getGraphName(), context.getGraphVersion().getVersion(),
+                    context.getGraphVersion().getVersion(), chunks);
+                if (!expectedSource.equals(input.readUTF()) || !expectedVersion.equals(input.readUTF())) {
+                    throw new IOException("vector artifact metadata mismatch");
+                }
+                if (input.readInt() != dimensions || input.readInt() != chunks.size()) {
+                    throw new IOException("vector artifact shape mismatch");
+                }
+                Map<String, TextChunk> expectedChunks = new java.util.HashMap<>();
+                Set<String> expected = new HashSet<>();
+                for (TextChunk chunk : chunks) {
+                    expected.add(chunk.getChunkId());
+                    expectedChunks.put(chunk.getChunkId(), chunk);
+                }
+                Set<String> actual = new HashSet<>();
+                for (int index = 0; index < chunks.size(); index++) {
+                    String chunkId = input.readUTF();
+                    String documentId = input.readUTF();
+                    if (!actual.add(chunkId) || !expected.contains(chunkId)
+                        || !expectedChunks.get(chunkId).getDocumentId().equals(documentId)) {
+                        throw new IOException("vector artifact chunk mismatch");
+                    }
+                    for (int dimension = 0; dimension < dimensions; dimension++) {
+                        float value = input.readFloat();
+                        if (Float.compare(value, vectors.get(chunkId)[dimension]) != 0) {
+                            throw new IOException("existing vector content mismatch");
+                        }
+                    }
+                }
+                if (!actual.equals(expected) || input.read() != -1) {
+                    throw new IOException("vector artifact content mismatch");
                 }
             }
         }

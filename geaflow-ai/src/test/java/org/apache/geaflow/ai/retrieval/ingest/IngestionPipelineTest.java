@@ -24,6 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.ByteArrayInputStream;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -35,9 +36,11 @@ import org.apache.geaflow.ai.retrieval.metadata.ChunkingConfiguration;
 import org.apache.geaflow.ai.retrieval.metadata.DatasetManifest;
 import org.apache.geaflow.ai.retrieval.metadata.GraphBuildMetadata;
 import org.apache.geaflow.ai.retrieval.metadata.ImportMetadata;
+import org.apache.geaflow.ai.retrieval.metadata.ImportState;
+import org.apache.geaflow.ai.retrieval.metadata.IndexBuildMetadata;
+import org.apache.geaflow.ai.retrieval.metadata.InMemoryMetadataStore;
 import org.apache.geaflow.ai.retrieval.metadata.MetadataException;
 import org.apache.geaflow.ai.retrieval.metadata.QualityCounters;
-import org.apache.geaflow.ai.retrieval.metadata.IndexBuildMetadata;
 import org.apache.geaflow.ai.retrieval.model.document.SourceDocument;
 import org.apache.geaflow.ai.retrieval.model.document.TextChunk;
 import org.apache.geaflow.ai.retrieval.model.graph.EntityRef;
@@ -161,6 +164,40 @@ public class IngestionPipelineTest {
         assertTrue(bm25.closed);
     }
 
+    @Test
+    public void metadataStorePublisherCompletesReadyLifecycle() throws Exception {
+        String source = "source";
+        String checksum = "41cf6794ba4200b839c53531555f0f3998df4cbb01a4d5cb0b94e3ca5e23947d";
+        GraphVersion version = new GraphVersion("graph", "g1");
+        DatasetManifest manifest = new DatasetManifest("v1", "dataset", "release", "dev", "uri", null,
+            checksum, "preprocess-v1", new ChunkingConfiguration("chunk-v1", 100, 10),
+            "schema-v1", "model", "v1", 7);
+        IngestionContext context = new IngestionContext(manifest, version, "importer-v1");
+        InMemoryMetadataStore store = new InMemoryMetadataStore();
+        MetadataStorePublisher publisher = new MetadataStorePublisher(store,
+            value -> new ByteArrayInputStream(source.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        TrackingGraphArtifact graph = new TrackingGraphArtifact(new java.util.ArrayList<>(), "graph",
+            version, Arrays.asList("bm25", "vector"));
+        TrackingIndexArtifact bm25 = new TrackingIndexArtifact(new java.util.ArrayList<>(), "bm25", version);
+        TrackingIndexArtifact vector = new TrackingIndexArtifact(new java.util.ArrayList<>(), "vector", version);
+        IngestionPipeline pipeline = new IngestionPipeline(
+            value -> Collections.singletonList(document()),
+            (documents, value) -> Collections.singletonList(chunk()),
+            (chunks, value) -> new ExtractionResult(Collections.singletonList(entity()),
+                Collections.singletonList(edge())),
+            (value, documents, chunks, extraction) -> graph,
+            (value, chunks) -> bm25,
+            (value, chunks) -> vector,
+            publisher);
+
+        ImportMetadata result = pipeline.run(context);
+
+        assertEquals(ImportState.READY, result.getState());
+        assertEquals(version, store.getPublishedVersion("graph").get());
+        assertEquals(Arrays.asList("bm25", "vector"), result.getGraph().getRequiredIndexes());
+        assertEquals(2, result.getIndexes().size());
+    }
+
     private static IngestionContext context() {
         DatasetManifest manifest = new DatasetManifest("v1", "hotpotqa", "release-1", "train",
             null, "cache/hotpotqa", SHA256, "normalizer-1",
@@ -187,17 +224,26 @@ public class IngestionPipelineTest {
     private static final class TrackingGraphArtifact implements GraphArtifact {
         private final List<String> calls;
         private final String name;
+        private final GraphVersion version;
+        private final List<String> requiredIndexes;
         private boolean closed;
 
         private TrackingGraphArtifact(List<String> calls, String name) {
+            this(calls, name, new GraphVersion("graph-1", "version-1"), Collections.emptyList());
+        }
+
+        private TrackingGraphArtifact(List<String> calls, String name, GraphVersion version,
+                                      List<String> requiredIndexes) {
             this.calls = calls;
             this.name = name;
+            this.version = version;
+            this.requiredIndexes = requiredIndexes;
         }
 
         @Override
         public GraphBuildMetadata getMetadata() {
-            return new GraphBuildMetadata(new GraphVersion("graph-1", "version-1"),
-                "memory:" + name, "fixture", "builder-1", true);
+            return new GraphBuildMetadata(version, "memory:" + name, "fixture", "builder-1", true,
+                requiredIndexes);
         }
 
         @Override
@@ -210,17 +256,23 @@ public class IngestionPipelineTest {
     private static final class TrackingIndexArtifact implements IndexArtifact {
         private final List<String> calls;
         private final String name;
+        private final GraphVersion version;
         private boolean closed;
 
         private TrackingIndexArtifact(List<String> calls, String name) {
+            this(calls, name, new GraphVersion("graph-1", "version-1"));
+        }
+
+        private TrackingIndexArtifact(List<String> calls, String name, GraphVersion version) {
             this.calls = calls;
             this.name = name;
+            this.version = version;
         }
 
         @Override
         public IndexBuildMetadata getMetadata() {
-            return new IndexBuildMetadata(new GraphVersion("graph-1", "version-1"),
-                new org.apache.geaflow.ai.retrieval.model.version.IndexVersion(name, "v1", "version-1"),
+            return new IndexBuildMetadata(version,
+                new org.apache.geaflow.ai.retrieval.model.version.IndexVersion(name, "v1", version.getVersion()),
                 name, "builder-1", "memory:" + name, true);
         }
 

@@ -76,12 +76,6 @@ public final class IngestionPipeline {
             indexArtifacts.add(vector);
             context.setQualityCounters(new QualityCounters(documents.size(), chunks.size(),
                 extraction.getEntities().size(), extraction.getEdges().size(), 0, 0));
-            for (IndexArtifact artifact : indexArtifacts) {
-                artifact.close();
-            }
-            for (GraphArtifact artifact : graphArtifacts) {
-                artifact.close();
-            }
             return metadataPublisher.publish(context, graph,
                 Collections.unmodifiableList(indexArtifacts));
         } catch (Exception failure) {
