@@ -103,6 +103,14 @@ public class MemoryServerTest {
             assertTrue(response.getEvidence().get(0).getFinalScore() > 0);
             assertTrue(response.getEvidence().get(0).getStageScores().containsKey("keyword"));
 
+            for (String mode : new String[] {"BM25_ONLY", "VECTOR_ONLY", "GRAPH_ONLY", "HYBRID"}) {
+                String unsupportedRequest = request.replace("\"query\":", "\"mode\":\"" + mode
+                    + "\",\"queryVector\":[1,0],\"query\":");
+                HttpTestResponse unsupported = client.post("/api/v1/retrievals", unsupportedRequest);
+                assertEquals(400, unsupported.getStatus(), unsupported.getBody());
+                assertTrue(unsupported.getBody().contains("UNSUPPORTED_OPTION"), unsupported.getBody());
+            }
+
             HttpTestResponse noMatch = client.post("/api/v1/retrievals",
                 request.replace("Confucius", "not-present"));
             assertEquals(200, noMatch.getStatus(), noMatch.getBody());

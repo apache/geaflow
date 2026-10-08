@@ -160,6 +160,11 @@ public final class RetrievalApiJson {
     private static void validateRequestShape(JsonObject object) {
         requireString(object, "graphName");
         requireString(object, "query");
+        optionalString(object, "requestId");
+        optionalString(object, "graphVersion");
+        optionalString(object, "indexVersion");
+        optionalString(object, "vectorVersion");
+        optionalString(object, "vectorSource");
         optionalString(object, "mode");
         optionalString(object, "executionMode");
         if (object.has("queryVector") && !object.get("queryVector").isJsonNull()) {
@@ -201,6 +206,7 @@ public final class RetrievalApiJson {
         }
         RetrievalTrace trace = new RetrievalTrace();
         trace.setTraceVersion(string(object, "traceVersion"));
+        trace.setRequestId(optionalString(object, "requestId"));
         trace.setOriginalQuery(string(object, "originalQuery"));
         trace.setSelectedMode(enumValue(object, "selectedMode",
             org.apache.geaflow.ai.retrieval.api.model.RetrievalMode.class));
@@ -208,7 +214,113 @@ public final class RetrievalApiJson {
         requireArray(object, "stages");
         trace.setStages(traceStages(object, "stages"));
         trace.setStopReason(optionalString(object, "stopReason"));
+        trace.setGraphVersion(optionalString(object, "graphVersion"));
+        trace.setIndexVersion(optionalString(object, "indexVersion"));
+        trace.setVectorVersion(optionalString(object, "vectorVersion"));
+        trace.setEffectiveCandidateBudget(optionalInt(object, "effectiveCandidateBudget") == null
+            ? 0 : optionalInt(object, "effectiveCandidateBudget"));
+        trace.setElapsedNanos(optionalLong(object, "elapsedNanos"));
+        trace.setCandidateCounts(integerMap(object, "candidateCounts"));
+        trace.setEvaluatedCounts(integerMap(object, "evaluatedCounts"));
+        trace.setEffectiveTopK(optionalInt(object, "effectiveTopK") == null ? 0 : optionalInt(object, "effectiveTopK"));
+        trace.setChannelStatuses(enumMap(object, "channelStatuses",
+            org.apache.geaflow.ai.retrieval.execution.RecallStageStatus.class));
+        trace.setChannelStopReasons(enumMap(object, "channelStopReasons",
+            org.apache.geaflow.ai.retrieval.execution.RecallStopReason.class));
+        trace.setAnchorsConsidered(optionalInt(object, "anchorsConsidered") == null ? 0 : optionalInt(object, "anchorsConsidered"));
+        trace.setEdgesExamined(optionalInt(object, "edgesExamined") == null ? 0 : optionalInt(object, "edgesExamined"));
+        trace.setNeighborsSampled(optionalInt(object, "neighborsSampled") == null ? 0 : optionalInt(object, "neighborsSampled"));
+        trace.setVerticesReached(optionalInt(object, "verticesReached") == null ? 0 : optionalInt(object, "verticesReached"));
+        trace.setGraphCandidatesProduced(optionalInt(object, "graphCandidatesProduced") == null ? 0 : optionalInt(object, "graphCandidatesProduced"));
+        trace.setTotalCandidatesEvaluated(optionalInt(object, "totalCandidatesEvaluated") == null
+            ? 0 : optionalInt(object, "totalCandidatesEvaluated"));
+        trace.setSelectedChannels(strings(object, "selectedChannels"));
+        trace.setChannelBudgets(integerMap(object, "channelBudgets"));
+        trace.setDegradedChannels(strings(object, "degradedChannels"));
+        trace.setDegradationReasons(stringMap(object, "degradationReasons"));
+        trace.setBm25Weight(optionalDouble(object, "bm25Weight", 1.0));
+        trace.setVectorWeight(optionalDouble(object, "vectorWeight", 1.0));
+        trace.setGraphWeight(optionalDouble(object, "graphWeight", 1.0));
+        trace.setRrfRankConstant(optionalInt(object, "rrfRankConstant") == null
+            ? 60 : optionalInt(object, "rrfRankConstant"));
+        trace.setValidationErrors(strings(object, "validationErrors"));
         return trace;
+    }
+
+    private static <T extends Enum<T>> java.util.Map<String, T> enumMap(JsonObject object, String name, Class<T> type) {
+        java.util.Map<String, T> result = new java.util.LinkedHashMap<>();
+        for (java.util.Map.Entry<String, String> entry : stringMap(object, name).entrySet()) {
+            try {
+                result.put(entry.getKey(), Enum.valueOf(type, entry.getValue()));
+            } catch (IllegalArgumentException error) {
+                throw new JsonParseException("unknown " + name + ": " + entry.getValue(), error);
+            }
+        }
+        return result;
+    }
+
+    private static long optionalLong(JsonObject object, String name) {
+        JsonElement value = object.get(name);
+        if (value == null || value.isJsonNull()) {
+            return 0L;
+        }
+        if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isNumber()
+            || !Double.isFinite(value.getAsDouble()) || value.getAsDouble() != Math.rint(value.getAsDouble())) {
+            throw new JsonParseException(name + " must be an integer");
+        }
+        return value.getAsLong();
+    }
+
+    private static double optionalDouble(JsonObject object, String name, double fallback) {
+        JsonElement value = object.get(name);
+        if (value == null || value.isJsonNull()) {
+            return fallback;
+        }
+        if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isNumber()
+            || !Double.isFinite(value.getAsDouble())) {
+            throw new JsonParseException(name + " must be a finite number");
+        }
+        return value.getAsDouble();
+    }
+
+    private static java.util.Map<String, Integer> integerMap(JsonObject object, String name) {
+        java.util.Map<String, Integer> result = new java.util.LinkedHashMap<>();
+        JsonElement value = object.get(name);
+        if (value == null || value.isJsonNull()) {
+            return result;
+        }
+        if (!value.isJsonObject()) {
+            throw new JsonParseException(name + " must be an object");
+        }
+        for (java.util.Map.Entry<String, JsonElement> entry : value.getAsJsonObject().entrySet()) {
+            JsonElement item = entry.getValue();
+            if (!item.isJsonPrimitive() || !item.getAsJsonPrimitive().isNumber()
+                || !Double.isFinite(item.getAsDouble()) || item.getAsDouble() != Math.rint(item.getAsDouble())
+                || item.getAsDouble() < Integer.MIN_VALUE || item.getAsDouble() > Integer.MAX_VALUE) {
+                throw new JsonParseException(name + " values must be integers");
+            }
+            result.put(entry.getKey(), item.getAsInt());
+        }
+        return result;
+    }
+
+    private static java.util.Map<String, String> stringMap(JsonObject object, String name) {
+        java.util.Map<String, String> result = new java.util.LinkedHashMap<>();
+        JsonElement value = object.get(name);
+        if (value == null || value.isJsonNull()) {
+            return result;
+        }
+        if (!value.isJsonObject()) {
+            throw new JsonParseException(name + " must be an object");
+        }
+        for (java.util.Map.Entry<String, JsonElement> entry : value.getAsJsonObject().entrySet()) {
+            JsonElement item = entry.getValue();
+            if (!item.isJsonPrimitive() || !item.getAsJsonPrimitive().isString()) {
+                throw new JsonParseException(name + " values must be strings");
+            }
+            result.put(entry.getKey(), item.getAsString());
+        }
+        return result;
     }
 
     private static List<TraceStage> traceStages(JsonObject object, String name) {

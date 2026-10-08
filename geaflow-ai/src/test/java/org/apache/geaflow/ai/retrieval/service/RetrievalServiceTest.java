@@ -119,6 +119,21 @@ class RetrievalServiceTest {
         assertEquals(RetrievalErrorCode.INDEX_NOT_READY, exception.getCode());
     }
 
+    @Test
+    void httpServiceRejectsCoreModesBeforeReadinessOrKeywordExecution() {
+        RetrievalService service = new RetrievalService(new ServerMemoryCache(), new RetrievalProperties());
+        for (String mode : new String[] {"BM25_ONLY", "VECTOR_ONLY", "GRAPH_ONLY", "HYBRID", "unknown"}) {
+            RetrievalRequest request = new RetrievalRequest();
+            request.setGraphName("week1-service-graph");
+            request.setQuery("Confucius");
+            request.setMode(mode);
+            request.setQueryVector(java.util.Arrays.asList(1.0, 0.0));
+            RetrievalException error = org.junit.jupiter.api.Assertions.assertThrows(RetrievalException.class,
+                () -> service.retrieve(request));
+            assertEquals(RetrievalErrorCode.UNSUPPORTED_OPTION, error.getCode());
+        }
+    }
+
     private static MemoryGraph createGraph() {
         VertexSchema schema = new VertexSchema("chunk", "id", Collections.singletonList("text"));
         GraphSchema graphSchema = new GraphSchema();

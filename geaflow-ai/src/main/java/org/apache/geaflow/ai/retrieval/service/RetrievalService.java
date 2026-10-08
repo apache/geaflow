@@ -85,6 +85,11 @@ public class RetrievalService {
     public RetrievalResponse retrieve(RetrievalRequest request, String requestId) {
         long startedAt = System.nanoTime();
         try {
+            if (request != null && request.getMode() != null
+                && !"KEYWORD".equalsIgnoreCase(request.getMode().trim())) {
+                throw new RetrievalException(RetrievalErrorCode.UNSUPPORTED_OPTION,
+                    "HTTP retrieval currently supports KEYWORD only");
+            }
             RetrievalCommand command = validator.validate(request);
             ServerMemoryCache.ReadyStatus readiness = cache.keywordReadiness(command.getGraphName());
             if ("GRAPH_NOT_LOADED".equals(readiness.getReason())) {
@@ -119,7 +124,9 @@ public class RetrievalService {
             response.setEffectiveBudget(budget);
             RetrievalTrace trace = new RetrievalTrace();
             trace.setTraceVersion("v1");
+            trace.setRequestId(requestId);
             trace.setOriginalQuery(command.getQuery());
+            trace.setGraphVersion(response.getGraphVersion());
             trace.setSelectedMode(command.getMode());
             trace.setExecutionMode(command.getExecutionMode());
             trace.setStages(Collections.singletonList(new TraceStage("keyword", "SUCCESS", null)));

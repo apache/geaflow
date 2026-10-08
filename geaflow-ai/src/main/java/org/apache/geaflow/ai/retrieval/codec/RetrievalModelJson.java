@@ -36,6 +36,7 @@ import org.apache.geaflow.ai.retrieval.model.document.TextChunk;
 import org.apache.geaflow.ai.retrieval.model.evidence.ChannelScore;
 import org.apache.geaflow.ai.retrieval.model.evidence.Evidence;
 import org.apache.geaflow.ai.retrieval.model.evidence.EvidenceKind;
+import org.apache.geaflow.ai.retrieval.model.evidence.GraphEvidenceTrace;
 import org.apache.geaflow.ai.retrieval.model.graph.EntityRef;
 import org.apache.geaflow.ai.retrieval.model.graph.GraphEdgeRef;
 import org.apache.geaflow.ai.retrieval.model.graph.GraphPathRef;
@@ -131,7 +132,13 @@ public final class RetrievalModelJson {
                 models(object, "entities", EntityRef.class), models(object, "paths", GraphPathRef.class),
                 models(object, "sources", SourceRef.class), scores(object),
                 optionalDouble(object, "fusedScore"), optionalDouble(object, "finalScore"),
-                optionalInt(object, "rank"));
+                optionalInt(object, "rank"), models(object, "graphTraces", GraphEvidenceTrace.class));
+        } else if (type == GraphEvidenceTrace.class) {
+            JsonObject path = object.getAsJsonObject("path");
+            return new GraphEvidenceTrace(requiredString(object, "queryId"),
+                requiredString(object, "graphVersion"), requiredString(object, "anchorEntityId"),
+                requiredString(object, "anchorMatchType"), requiredDouble(object, "anchorConfidence"),
+                (GraphPathRef) parse(path, GraphPathRef.class), strings(object, "supportingChunkIds"));
         }
         throw new JsonParseException("unsupported retrieval model: " + type.getName());
     }
