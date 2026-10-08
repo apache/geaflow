@@ -61,8 +61,12 @@ public class RetrievalProperties {
                 org.apache.geaflow.ai.retrieval.api.model.RetrievalErrorCode.INVALID_REQUEST,
                 "retrieval config-version must be v1 and ready-graph-name is required");
         }
-        if (!RetrievalMode.KEYWORD.name().equals(defaultMode)) {
-            throw invalid("default-mode must be KEYWORD");
+        try {
+            if (RetrievalMode.valueOf(defaultMode) != RetrievalMode.KEYWORD) {
+                throw invalid("default-mode must be KEYWORD");
+            }
+        } catch (IllegalArgumentException | NullPointerException e) {
+            throw invalid("default-mode is unsupported: " + defaultMode);
         }
         if (!ExecutionMode.SEQUENTIAL.name().equals(defaultExecutionMode)) {
             throw invalid("default-execution-mode must be SEQUENTIAL");

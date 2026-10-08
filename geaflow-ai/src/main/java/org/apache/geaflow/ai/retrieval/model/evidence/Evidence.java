@@ -54,6 +54,8 @@ public final class Evidence {
     private final List<EntityRef> entities;
     @SerializedName("paths")
     private final List<GraphPathRef> paths;
+    @SerializedName("graphTraces")
+    private final List<GraphEvidenceTrace> graphTraces;
     @SerializedName("sources")
     private final List<SourceRef> sources;
     @SerializedName("stageScores")
@@ -72,6 +74,7 @@ public final class Evidence {
         this.chunks = Collections.emptyList();
         this.entities = Collections.emptyList();
         this.paths = Collections.emptyList();
+        this.graphTraces = Collections.emptyList();
         this.sources = Collections.emptyList();
         this.stageScores = Collections.emptyMap();
         this.fusedScore = null;
@@ -83,19 +86,28 @@ public final class Evidence {
                     List<EntityRef> entities, List<GraphPathRef> paths, List<SourceRef> sources,
                     Map<String, ChannelScore> stageScores, Double fusedScore, Integer rank) {
         this(evidenceId, kind, text, chunks, entities, paths, sources, stageScores, fusedScore,
-            null, rank);
+            null, rank, Collections.emptyList());
     }
 
     public Evidence(String evidenceId, EvidenceKind kind, String text, List<TextChunk> chunks,
                     List<EntityRef> entities, List<GraphPathRef> paths, List<SourceRef> sources,
                     Map<String, ChannelScore> stageScores, Double fusedScore, Double finalScore,
                     Integer rank) {
+        this(evidenceId, kind, text, chunks, entities, paths, sources, stageScores, fusedScore,
+            finalScore, rank, Collections.emptyList());
+    }
+
+    public Evidence(String evidenceId, EvidenceKind kind, String text, List<TextChunk> chunks,
+                    List<EntityRef> entities, List<GraphPathRef> paths, List<SourceRef> sources,
+                    Map<String, ChannelScore> stageScores, Double fusedScore, Double finalScore,
+                    Integer rank, List<GraphEvidenceTrace> graphTraces) {
         this.evidenceId = ModelValidation.optionalNonBlank(evidenceId, "evidenceId");
         this.kind = Objects.requireNonNull(kind, "kind");
         this.text = ModelValidation.optional(text);
         this.chunks = ModelValidation.immutableList(chunks, "chunks");
         this.entities = ModelValidation.immutableList(entities, "entities");
         this.paths = ModelValidation.immutableList(paths, "paths");
+        this.graphTraces = ModelValidation.immutableList(graphTraces, "graphTraces");
         this.sources = ModelValidation.immutableList(sources, "sources");
         this.stageScores = ModelValidation.sortedMap(stageScores);
         for (Map.Entry<String, ChannelScore> entry : this.stageScores.entrySet()) {
@@ -138,6 +150,11 @@ public final class Evidence {
 
     public List<GraphPathRef> getPaths() {
         return Collections.unmodifiableList(paths == null ? Collections.emptyList() : paths);
+    }
+
+    public List<GraphEvidenceTrace> getGraphTraces() {
+        return Collections.unmodifiableList(graphTraces == null
+            ? Collections.emptyList() : graphTraces);
     }
 
     public List<SourceRef> getSources() {
@@ -219,7 +236,7 @@ public final class Evidence {
         return Objects.equals(evidenceId, that.evidenceId) && kind == that.kind
             && Objects.equals(text, that.text) && Objects.equals(chunks, that.chunks)
             && Objects.equals(entities, that.entities) && Objects.equals(paths, that.paths)
-            && Objects.equals(sources, that.sources)
+            && Objects.equals(sources, that.sources) && Objects.equals(graphTraces, that.graphTraces)
             && Objects.equals(stageScores, that.stageScores)
             && Objects.equals(fusedScore, that.fusedScore)
             && Objects.equals(finalScore, that.finalScore)
@@ -228,7 +245,7 @@ public final class Evidence {
 
     @Override
     public int hashCode() {
-        return Objects.hash(evidenceId, kind, text, chunks, entities, paths, sources,
+        return Objects.hash(evidenceId, kind, text, chunks, entities, paths, sources, graphTraces,
             stageScores, fusedScore, finalScore, rank);
     }
 }
