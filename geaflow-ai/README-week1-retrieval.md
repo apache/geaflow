@@ -39,3 +39,6 @@ curl -i http://localhost:8080/health
 curl -i http://localhost:8080/ready
 curl -sS http://localhost:8080/metrics/retrieval
 ```
+
+The HTTP endpoint supports `KEYWORD` only. Offline BM25, vector, graph-only, and Hybrid retrieval
+are available through the [session-free core facade](README-hybrid-recall.md).
