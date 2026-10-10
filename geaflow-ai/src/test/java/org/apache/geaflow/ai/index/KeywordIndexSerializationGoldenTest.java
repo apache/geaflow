@@ -25,6 +25,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import org.apache.geaflow.ai.graph.GraphEdge;
@@ -74,7 +75,7 @@ public class KeywordIndexSerializationGoldenTest {
             Collections.singletonList(new KeywordVector("master")));
         store.indexVertex(new GraphVertex(
                 new Vertex("chunk", "v3", Collections.singletonList("two vectors"))),
-            List.of(new KeywordVector("a"), new KeywordVector("b")));
+            Arrays.asList(new KeywordVector("a"), new KeywordVector("b")));
         store.close();
 
         List<String> actual = new ArrayList<>();
