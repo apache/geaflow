@@ -18,6 +18,8 @@
 
 package org.apache.geaflow.ai.retrieval.config;
 
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import org.apache.geaflow.ai.retrieval.api.model.ExecutionMode;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalException;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalMode;
@@ -53,6 +55,12 @@ public class RetrievalProperties {
     private int defaultTokenBudget = 4096;
     @Inject("${retrieval.max-token-budget:16384}")
     private int maxTokenBudget = 16384;
+    @Inject("${server.host:127.0.0.1}")
+    private String serverHost = "127.0.0.1";
+    @Inject("${retrieval.remote-access-enabled:false}")
+    private boolean remoteAccessEnabled;
+    @Inject("${retrieval.api-token:}")
+    private String apiToken;
 
     @Init
     public void validateConfiguration() {
@@ -78,6 +86,13 @@ public class RetrievalProperties {
         if (defaultTopK > defaultMaxCandidates) {
             throw invalid("default-top-k must not exceed default-max-candidates");
         }
+        boolean loopback = isLoopbackHost(serverHost);
+        if (!loopback && !remoteAccessEnabled) {
+            throw invalid("non-loopback server.host requires retrieval.remote-access-enabled=true");
+        }
+        if (remoteAccessEnabled && blank(apiToken)) {
+            throw invalid("retrieval.api-token is required when remote access is enabled");
+        }
     }
 
     private static void positiveLimit(int defaultValue, int maxValue, String name) {
@@ -88,6 +103,17 @@ public class RetrievalProperties {
 
     private static boolean blank(String value) {
         return value == null || value.trim().isEmpty();
+    }
+
+    private static boolean isLoopbackHost(String host) {
+        if (blank(host)) {
+            return false;
+        }
+        try {
+            return InetAddress.getByName(host.trim()).isLoopbackAddress();
+        } catch (UnknownHostException error) {
+            throw invalid("server.host is not a resolvable address");
+        }
     }
 
     private static RetrievalException invalid(String message) {
@@ -189,5 +215,29 @@ public class RetrievalProperties {
 
     public void setMaxTokenBudget(int maxTokenBudget) {
         this.maxTokenBudget = maxTokenBudget;
+    }
+
+    public String getServerHost() {
+        return serverHost;
+    }
+
+    public void setServerHost(String serverHost) {
+        this.serverHost = serverHost;
+    }
+
+    public boolean isRemoteAccessEnabled() {
+        return remoteAccessEnabled;
+    }
+
+    public void setRemoteAccessEnabled(boolean remoteAccessEnabled) {
+        this.remoteAccessEnabled = remoteAccessEnabled;
+    }
+
+    public String getApiToken() {
+        return apiToken;
+    }
+
+    public void setApiToken(String apiToken) {
+        this.apiToken = apiToken;
     }
 }

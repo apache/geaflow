@@ -19,6 +19,8 @@
 
 package org.apache.geaflow.ai;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -79,6 +81,19 @@ public class GeaFlowMemoryServer {
             app.cfg().loadAdd("application.yml");
             app.cfg().put("server.port", port);
             LOGGER.info("Starting {} on port {}", SERVER_NAME, port);
+            app.filter(-100, (ctx, chain) -> {
+                String path = ctx.path();
+                if (path.startsWith("/graph/") || path.startsWith("/query/")) {
+                    String error = authenticationError(ctx, app.context().getBean(RetrievalProperties.class),
+                        resolveRequestId(ctx.header("X-Request-Id")));
+                    if (error != null) {
+                        ctx.output(error);
+                        ctx.setHandled(true);
+                        return;
+                    }
+                }
+                chain.doFilter(ctx);
+            });
             app.get("/", ctx -> {
                 ctx.output("GeaFlow AI Server is running...");
             });
@@ -111,9 +126,14 @@ public class GeaFlowMemoryServer {
         long startedAt = System.nanoTime();
         ctx.headerSet("X-Request-Id", requestId);
         ctx.contentType("application/json; charset=utf-8");
+        RetrievalProperties properties = properties();
+        String authenticationFailure = authenticationError(ctx, properties, requestId);
+        if (authenticationFailure != null) {
+            return authenticationFailure;
+        }
         try {
-            String body = RetrievalApiJson.toJson(
-                runtimeRetrievalService().retrieve(RetrievalApiJson.parseRequest(input), requestId));
+            String body = RetrievalApiJson.toJson(runtimeRetrievalService().retrieve(
+                RetrievalApiJson.parseRequest(input), requestId), properties);
             ctx.status(200);
             return body;
         } catch (RetrievalException exception) {
@@ -140,6 +160,43 @@ public class GeaFlowMemoryServer {
                 "internal retrieval error");
             return RetrievalApiJson.toJson(error);
         }
+    }
+
+    private static String authenticationError(org.noear.solon.core.handle.Context ctx,
+                                              RetrievalProperties properties, String requestId) {
+        if (!properties.isRemoteAccessEnabled()) {
+            return null;
+        }
+        String authorization = ctx.header("Authorization");
+        org.apache.geaflow.ai.retrieval.api.model.RetrievalErrorCode code;
+        String message;
+        if (authorization == null || authorization.trim().isEmpty()) {
+            code = org.apache.geaflow.ai.retrieval.api.model.RetrievalErrorCode.AUTHENTICATION_REQUIRED;
+            message = "Bearer token required";
+        } else {
+            String token = bearerToken(authorization);
+            if (token != null && properties.getApiToken() != null
+                && MessageDigest.isEqual(token.getBytes(StandardCharsets.UTF_8),
+                    properties.getApiToken().getBytes(StandardCharsets.UTF_8))) {
+                return null;
+            }
+            code = org.apache.geaflow.ai.retrieval.api.model.RetrievalErrorCode.FORBIDDEN;
+            message = "Invalid bearer token";
+        }
+        ctx.status(code.getHttpStatus());
+        ctx.headerSet("X-Request-Id", requestId);
+        ctx.contentType("application/json; charset=utf-8");
+        return RetrievalApiJson.toJson(new RetrievalError(requestId, code, message));
+    }
+
+    private static String bearerToken(String authorization) {
+        String value = authorization.trim();
+        int separator = value.indexOf(' ');
+        if (separator < 1 || !"Bearer".equalsIgnoreCase(value.substring(0, separator))) {
+            return null;
+        }
+        String token = value.substring(separator + 1).trim();
+        return token.isEmpty() ? null : token;
     }
 
     static String resolveRequestId(String requestedId) {

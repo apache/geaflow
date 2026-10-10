@@ -26,6 +26,7 @@ import org.apache.geaflow.ai.GraphMemoryServer;
 import org.apache.geaflow.ai.consolidate.ConsolidateServer;
 import org.apache.geaflow.ai.graph.Graph;
 import org.noear.solon.annotation.Component;
+import org.noear.solon.annotation.Destroy;
 
 @Component
 public class ServerMemoryCache {
@@ -47,7 +48,10 @@ public class ServerMemoryCache {
             throw new RuntimeException("Cannot register server without graph accessor");
         }
         String name = server.getGraphAccessors().get(0).getGraphSchema().getName();
-        name2Server.put(name, server);
+        GraphMemoryServer previous = name2Server.put(name, server);
+        if (previous != null && previous != server) {
+            previous.close();
+        }
         graphVersions.putIfAbsent(name, new AtomicLong(1L));
     }
 
@@ -75,12 +79,24 @@ public class ServerMemoryCache {
         return consolidateServer;
     }
 
+    @Destroy
+    public void close() {
+        for (GraphMemoryServer server : name2Server.values()) {
+            server.close();
+        }
+        name2Server.clear();
+    }
+
     public String getGraphVersion(String graphName) {
         AtomicLong version = graphVersions.get(graphName);
         return version == null ? null : "v" + version.get();
     }
 
     public String markGraphUpdated(String graphName) {
+        GraphMemoryServer server = name2Server.get(graphName);
+        if (server != null) {
+            server.invalidateKeywordSearchIndex();
+        }
         AtomicLong version = graphVersions.get(graphName);
         if (version == null) {
             throw new IllegalArgumentException("Unknown graph: " + graphName);

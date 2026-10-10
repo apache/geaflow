@@ -28,6 +28,10 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.apache.geaflow.ai.graph.LocalMemoryGraphAccessor;
 import org.apache.geaflow.ai.graph.io.EntityGroup;
 import org.apache.geaflow.ai.graph.io.GraphSchema;
@@ -45,12 +49,13 @@ import org.junit.jupiter.api.Test;
 class GraphMemoryKeywordSearchTest {
 
     @Test
-    void maxCandidatesStopsScanningBeforeTailMatch() {
+    void candidateBudgetLimitsSearchAcrossCompleteCachedIndex() {
         GraphMemoryServer server = createServer();
 
         List<ScoredGraphEntity> hits = server.searchKeyword("stars", 10, 1, Long.MAX_VALUE);
 
-        assertEquals(0, hits.size());
+        assertEquals(1, hits.size());
+        server.close();
     }
 
     @Test
@@ -61,6 +66,44 @@ class GraphMemoryKeywordSearchTest {
             () -> server.searchKeyword("confucius", 1, 10, System.nanoTime() - 1));
 
         assertEquals(RetrievalErrorCode.RETRIEVAL_TIMEOUT, exception.getCode());
+    }
+
+    @Test
+    void reusesCachedIndexUntilGraphUpdateInvalidatesIt() {
+        GraphMemoryServer server = createServer();
+
+        server.searchKeyword("confucius", 1, 10, Long.MAX_VALUE);
+        server.searchKeyword("stars", 1, 10, Long.MAX_VALUE);
+        assertEquals(1, server.getKeywordSearchStoreBuildCount());
+
+        server.invalidateKeywordSearchIndex();
+        server.searchKeyword("stars", 1, 10, Long.MAX_VALUE);
+
+        assertEquals(2, server.getKeywordSearchStoreBuildCount());
+        server.invalidateKeywordSearchIndex();
+        server.close();
+        server.close();
+        assertThrows(IllegalStateException.class,
+            () -> server.searchKeyword("stars", 1, 10, Long.MAX_VALUE));
+    }
+
+    @Test
+    void concurrentRequestsBuildOneCachedStore() throws Exception {
+        GraphMemoryServer server = createServer();
+        ExecutorService executor = Executors.newFixedThreadPool(4);
+        try {
+            List<Future<List<ScoredGraphEntity>>> calls = new ArrayList<>();
+            for (int index = 0; index < 16; index++) {
+                calls.add(executor.submit(() -> server.searchKeyword("stars", 1, 10, Long.MAX_VALUE)));
+            }
+            for (Future<List<ScoredGraphEntity>> call : calls) {
+                assertEquals(1, call.get(5, TimeUnit.SECONDS).size());
+            }
+            assertEquals(1, server.getKeywordSearchStoreBuildCount());
+        } finally {
+            executor.shutdownNow();
+            server.close();
+        }
     }
 
     private static GraphMemoryServer createServer() {

@@ -72,12 +72,14 @@ public class GraphSearchStore {
 
     private SearchStore store;
     private long entityNum = 0L;
+    private boolean closed;
 
     public GraphSearchStore() {
         this.store = new SearchStore();
     }
 
     public boolean indexVertex(GraphVertex graphVertex, List<IVector> indexVectors) {
+        ensureOpen();
         Map<String, String> kv = new HashMap<>();
         Vertex vertex = graphVertex.getVertex();
         kv.put(SearchConstants.ID, vertex.getId());
@@ -99,6 +101,7 @@ public class GraphSearchStore {
     }
 
     public boolean indexEdge(GraphEdge graphEdge, List<IVector> indexVectors) {
+        ensureOpen();
         Map<String, String> kv = new HashMap<>();
         Edge edge = graphEdge.getEdge();
         kv.put(SearchConstants.SRC, edge.getSrcId());
@@ -133,6 +136,7 @@ public class GraphSearchStore {
     public List<ScoredGraphEntity> searchScored(String key1, GraphAccessor graphAccessor,
                                                 int topK, int maxCandidates,
                                                 long deadlineNanos) {
+        ensureOpen();
         try {
             String query = SearchUtils.formatQuery(key1);
             TopDocs docs = store.searchDoc(SearchConstants.CONTENT, query,
@@ -208,7 +212,11 @@ public class GraphSearchStore {
         entityNum++;
     }
 
-    public void close() {
+    public synchronized void close() {
+        if (closed) {
+            return;
+        }
+        closed = true;
         try {
             store.close();
         } catch (Throwable e) {
@@ -217,6 +225,7 @@ public class GraphSearchStore {
     }
 
     public void finishWriting() {
+        ensureOpen();
         try {
             store.finishWriting();
         } catch (Throwable e) {
@@ -234,6 +243,12 @@ public class GraphSearchStore {
 
     public IndexWriterConfig getConfig() {
         return store.getConfig();
+    }
+
+    private void ensureOpen() {
+        if (closed) {
+            throw new IllegalStateException("graph search store is closed");
+        }
     }
 
 

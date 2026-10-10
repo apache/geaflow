@@ -34,14 +34,19 @@ import java.util.Map;
 import org.apache.geaflow.ai.graph.io.Vertex;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalResponse;
 import org.apache.geaflow.ai.retrieval.codec.RetrievalApiJson;
+import org.apache.geaflow.ai.retrieval.config.RetrievalProperties;
 import org.apache.geaflow.ai.retrieval.support.HttpTestClient;
 import org.apache.geaflow.ai.retrieval.support.HttpTestResponse;
 import org.apache.geaflow.ai.retrieval.support.RetrievalTestFixture;
 import org.junit.jupiter.api.Test;
+import org.noear.solon.annotation.Inject;
 import org.noear.solon.test.SolonTest;
 
 @SolonTest(GeaFlowMemoryServer.class)
 public class MemoryServerTest {
+
+    @Inject
+    private RetrievalProperties properties;
 
     @Test
     void legacyWorkflow() {
@@ -102,6 +107,36 @@ public class MemoryServerTest {
             assertEquals(1, response.getEvidence().size());
             assertTrue(response.getEvidence().get(0).getFinalScore() > 0);
             assertTrue(response.getEvidence().get(0).getStageScores().containsKey("keyword"));
+
+            int previousMaxTopK = properties.getMaxTopK();
+            try {
+                properties.setMaxTopK(200);
+                String largerRequest = request.replace("\"topK\":1", "\"topK\":120")
+                    .replace("\"maxCandidates\":10", "\"maxCandidates\":120");
+                HttpTestResponse larger = client.post("/api/v1/retrievals", largerRequest);
+                assertEquals(200, larger.getStatus(), larger.getBody());
+                assertEquals(120, RetrievalApiJson.parseResponse(larger.getBody(), properties)
+                    .getEffectiveBudget().getTopK());
+                properties.setApiToken("http-test-token");
+                properties.setRemoteAccessEnabled(true);
+                assertEquals(401, client.post("/api/v1/retrievals", request).getStatus());
+                assertEquals(403, client.postWithHeaders("/api/v1/retrievals", request,
+                    Collections.singletonMap("Authorization", "Bearer wrong")).getStatus());
+                assertEquals(403, client.postWithHeaders("/api/v1/retrievals", request,
+                    Collections.singletonMap("Authorization", "Basic http-test-token")).getStatus());
+                HttpTestResponse authorized = client.postWithHeaders("/api/v1/retrievals", request,
+                    Collections.singletonMap("Authorization", "Bearer http-test-token"));
+                assertEquals(200, authorized.getStatus(), authorized.getBody());
+                assertEquals(401, client.post("/api/v1/retrievals", "{").getStatus());
+                assertEquals(401, client.post("/graph/getGraphSchema", "", graph).getStatus());
+                assertEquals(403, client.postWithHeaders("/query/result", "",
+                    Collections.singletonMap("Authorization", "Bearer wrong")).getStatus());
+                assertEquals(200, client.get("/health").getStatus());
+            } finally {
+                properties.setMaxTopK(previousMaxTopK);
+                properties.setRemoteAccessEnabled(false);
+                properties.setApiToken(null);
+            }
 
             for (String mode : new String[] {"BM25_ONLY", "VECTOR_ONLY", "GRAPH_ONLY", "HYBRID"}) {
                 String unsupportedRequest = request.replace("\"query\":", "\"mode\":\"" + mode

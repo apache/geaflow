@@ -20,6 +20,7 @@
 package org.apache.geaflow.ai.operator;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.Collections;
 import org.apache.lucene.search.TopDocs;
@@ -41,6 +42,26 @@ class SearchStoreTest {
             assertEquals(1, docs.scoreDocs.length);
         } finally {
             store.close();
+            store.close();
         }
+        assertThrows(IllegalStateException.class,
+            () -> store.searchDoc(SearchConstants.CONTENT, "confucius", 1));
+    }
+
+    @Test
+    void emptyAndWriteOnlyStoresAndGraphWrapperCanBeClosedRepeatedly() throws Exception {
+        SearchStore empty = new SearchStore();
+        empty.close();
+        empty.close();
+        SearchStore writeOnly = new SearchStore();
+        writeOnly.addDoc(Collections.singletonMap(SearchConstants.CONTENT, "text"));
+        writeOnly.close();
+        writeOnly.close();
+        assertThrows(IllegalStateException.class,
+            () -> writeOnly.addDoc(Collections.singletonMap(SearchConstants.CONTENT, "text")));
+        GraphSearchStore graph = new GraphSearchStore();
+        graph.close();
+        graph.close();
+        assertThrows(IllegalStateException.class, graph::finishWriting);
     }
 }
