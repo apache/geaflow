@@ -1,0 +1,14 @@
+# Golden wire format of the Lucene documents GraphSearchStore writes for a
+# vertex and an edge, read back field by field after close().
+#
+# Facts pinned here:
+#  - IVector values reach the index through toString(), so a KeywordVector lands
+#    in the content field as the wrapper "KeywordVector{vec=[a, b]}". The tokens
+#    "keywordvector" and "vec" this wrapper contributes are therefore present in
+#    EVERY document (see KeywordIndexLifecycleGoldenTest for the noise this
+#    creates and how exact anchoring stays unaffected);
+#  - multiple vectors of one entity are joined with the two-space DELIMITER;
+#  - vertices carry id/label/content, edges carry src/dst/label/content.
+vertex id=[v1] label=[chunk] content=[KeywordVector{vec=[alpaca, grazes]}]
+edge src=[v1] dst=[v2] label=[rel] content=[KeywordVector{vec=[master]}]
+vertex id=[v3] label=[chunk] content=[KeywordVector{vec=[a]}  KeywordVector{vec=[b]}]
