@@ -30,6 +30,10 @@ Build both artifacts with `LuceneBm25IndexBuilder` and `OfflineVectorIndexBuilde
 `IngestionContext` and canonical chunks. Supply precomputed vectors; no embedding service is called.
 Load the published artifacts and graph records once:
 
+Each canonical chunk must carry its real `sourceUri` (or use `TextChunk.withSourceUri` before building).
+The ingestion pipeline copies this URI from its `SourceDocument` and rejects missing or inconsistent
+provenance. The registry rejects chunks without a URI; citations use this URI and the chunk offsets.
+
 ```java
 RetrievalFixtureRegistry registry = new RetrievalFixtureRegistry();
 registry.load(graphName, graphVersion, indexVersion, bm25Path, vectorPath,
@@ -83,7 +87,9 @@ document/chunk identity, uses stable evidence ID for ties, and receives consecut
 GRAPH_ONLY retains deterministic anchor resolution and one-hop expansion. Both edge scans and unique
 chunk evidence are capped by `maxCandidates`, including edges that cite several chunks. Paths and
 anchor provenance survive merging. Hybrid always selects BM25, Vector, and Graph; graph provenance
-contains the stable query, graph version, anchor match, path, and supporting chunk IDs.
+contains the request ID, graph version, anchor match, path, and supporting chunk IDs. A supplied request
+ID is resolved before any channel runs; otherwise one is generated. Every graph evidence `queryId`
+matches the response and retrieval trace request ID. The graph evidence trace does not store query text.
 
 ## Errors and trace
 
@@ -114,14 +120,64 @@ before vector source/version and the vector payload. Legacy artifacts without th
 rejected with `INDEX_NOT_READY`; rebuild and publish a fresh graph/index version before switching
 requests. Existing immutable artifacts are validated rather than silently overwritten.
 
+Chunk fingerprints now include `sourceUri`; artifacts built with the previous fingerprint must be
+rebuilt. All three Java artifact builders use a shared publisher with bounded JVM locks and an OS file
+lock per canonical target. Publication checks and rename run under that lock; competing builders reuse
+an equivalent winner and reject conflicting content. The `.publish.lock` file stays beside the artifact
+so every process locks the same inode. Do not delete it while builders are running.
+
+`MetadataPublisher.begin` returns an `ImportAttempt` ownership token. `publish` and `fail` require that
+token. A failed `begin` does not trigger `fail`, and a competing ingestion cannot fail the owner.
+Custom publishers must implement the token-aware lifecycle.
+
+## HTTP access and keyword index lifecycle
+
+The server binds to `127.0.0.1` by default. Non-loopback binding requires both
+`retrieval.remote-access-enabled=true` and a nonblank `retrieval.api-token`; invalid combinations fail
+configuration initialization. Environment equivalents are `GEAFLOW_SERVER_HOST`,
+`GEAFLOW_REMOTE_ACCESS_ENABLED`, and `GEAFLOW_RETRIEVAL_API_TOKEN`. Remote mode requires
+`Authorization: Bearer <token>` on retrieval and the legacy `/graph/*` and `/query/*` data APIs.
+Missing credentials return `401`; invalid credentials return `403`. `/health` remains available.
+The single token grants access to the configured server; per-graph authorization is future work.
+
+Responses use the same configured limits as request validation, including a raised `max-top-k`.
+Keyword retrieval builds one complete Lucene store on the first request and reuses it. Candidate
+budgets cap search results evaluated rather than the vertices included in the cached index. Graph
+updates invalidate the cache; server replacement and shutdown close it. Cold construction and lock
+acquisition check the request deadline. Search store closure is idempotent.
+
+## Python ingestion
+
+Multi-file ZIP sources select the requested train/dev/test entry by case-insensitive basename;
+missing or ambiguous splits fail. Single archives with a generic data filename remain supported.
+Artifact identity includes dataset release and the effective chunk policy (size, overlap, and token
+estimate settings). The policy fingerprint also participates in chunk IDs, even for short documents.
+
+Ingestion normalizes one batch at a time, writes canonical `documents.jsonl` and `chunks.jsonl`, and
+merges graph records and provenance in a temporary SQLite database. Index builder callbacks receive a
+repeatable `JsonlRecords` iterable supporting `len`; callbacks must iterate rather than index a list.
+Graph export reads sorted records from disk. Temporary database and staging files are removed on
+success or failure; a failed attempt retains only a separate `*.FAILED.json` diagnostic. Canonical
+JSONL files remain in the published version for reproducibility. Memory depends on batch size, an
+individual document's chunks, and a single exported graph record's provenance, rather than simultaneous
+materialization of the entire corpus. This does not bound allocations made by external builder callbacks.
+
 Run the retrieval and HTTP regression suite with JDK 11, which is compatible with the repository's
 JaCoCo 0.8.8:
 
 ```bash
-mvn -pl geaflow-ai -Dtest='org.apache.geaflow.ai.retrieval.**.*Test,MemoryServerTest' test
+mvn -pl geaflow-ai -am clean test -Drat.skip=true \
+  -Dtest='org.apache.geaflow.ai.retrieval.**.*Test,MemoryServerTest,GeaFlowMemoryServerTest,GraphMemoryKeywordSearchTest,SearchStoreTest' \
+  -Dsurefire.failIfNoSpecifiedTests=false
+python -m pytest tools/graphrag/tests -q
 ```
 
 The Maven lifecycle also runs Checkstyle and Apache RAT. New retrieval production sources have no
 blanket Checkstyle suppressions. The suite covers bounded scoring, partial-channel failures,
 deadlines using a controlled clock, graph limits, version mismatches, JSON trace round trips,
 concurrent request isolation, and rejection of core modes at the HTTP boundary.
+The PR #876 regressions also cover concurrent import ownership, same-target publication for all three
+artifacts, competing JVMs, URI citations, request IDs, HTTP authentication and custom limits, cached
+keyword retrieval, repeated close, ZIP splits, release/policy identities, and a 10,000-document spill
+fixture whose traced Python heap stays below 12 MiB. This fixture uses deterministic builder callbacks;
+it is not a full HotpotQA/2Wiki or external embedding benchmark.
