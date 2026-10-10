@@ -105,6 +105,7 @@ public final class ArtifactIdentity {
                 append(digest, Integer.toString(chunk.getTokenEstimate()));
                 append(digest, chunk.getPolicyVersion());
                 append(digest, chunk.getTextHash());
+                append(digest, chunk.getSourceUri());
                 append(digest, Integer.toString(chunk.getStartOffset()));
                 append(digest, Integer.toString(chunk.getEndOffset()));
             }

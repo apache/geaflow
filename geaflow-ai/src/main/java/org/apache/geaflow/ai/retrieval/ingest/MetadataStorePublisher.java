@@ -49,7 +49,7 @@ public final class MetadataStorePublisher implements MetadataPublisher {
 
     private final MetadataStore store;
     private final SourceStreamProvider sourceProvider;
-    private final Map<GraphVersion, Attempt> attempts = new HashMap<>();
+    private final Map<GraphVersion, AttemptState> attempts = new HashMap<>();
 
     public MetadataStorePublisher(MetadataStore store, SourceStreamProvider sourceProvider) {
         this.store = Objects.requireNonNull(store, "store");
@@ -57,28 +57,31 @@ public final class MetadataStorePublisher implements MetadataPublisher {
     }
 
     @Override
-    public synchronized void begin(IngestionContext context) {
+    public synchronized ImportAttempt begin(IngestionContext context) {
         Objects.requireNonNull(context, "context");
         GraphVersion version = context.getGraphVersion();
         if (attempts.containsKey(version)) {
             throw new MetadataException(MetadataException.Code.VERSION_CONFLICT,
                 "ingestion attempt already started");
         }
+        ImportAttempt token = new ImportAttempt(version);
         GraphBuildMetadata graph = new GraphBuildMetadata(version, null, "graph", "pending",
             false, REQUIRED_INDEXES);
         GraphVersion expected = store.getPublishedVersion(version.getGraphName()).orElse(null);
         store.begin(context.getManifest(), context.getImporterVersion(), graph);
-        attempts.put(version, new Attempt(expected));
+        attempts.put(version, new AttemptState(token, expected));
+        return token;
     }
 
     @Override
-    public synchronized ImportMetadata publish(IngestionContext context, GraphArtifact graph,
+    public synchronized ImportMetadata publish(IngestionContext context, ImportAttempt token, GraphArtifact graph,
                                                List<IndexArtifact> indexes) throws IOException {
         Objects.requireNonNull(context, "context");
+        Objects.requireNonNull(token, "attempt");
         Objects.requireNonNull(graph, "graph");
         Objects.requireNonNull(indexes, "indexes");
         GraphVersion version = context.getGraphVersion();
-        final Attempt attempt = requireAttempt(version);
+        final AttemptState attempt = requireAttempt(version, token);
         GraphBuildMetadata graphMetadata = graph.getMetadata();
         if (!version.equals(graphMetadata.getGraphVersion())
             || !REQUIRED_INDEXES.equals(graphMetadata.getRequiredIndexes())) {
@@ -99,14 +102,17 @@ public final class MetadataStorePublisher implements MetadataPublisher {
     }
 
     @Override
-    public synchronized void fail(IngestionContext context, Exception failure) throws IOException {
+    public synchronized void fail(IngestionContext context, ImportAttempt token, Exception failure)
+        throws IOException {
         Objects.requireNonNull(context, "context");
+        Objects.requireNonNull(token, "attempt");
         Objects.requireNonNull(failure, "failure");
         GraphVersion version = context.getGraphVersion();
-        Attempt attempt = attempts.remove(version);
-        if (attempt == null) {
+        AttemptState attempt = attempts.get(version);
+        if (attempt == null || !sameToken(attempt.token, token)) {
             return;
         }
+        attempts.remove(version);
         ImportMetadata current = store.find(version).orElse(null);
         if (current == null || current.getState() == ImportState.FAILED
             || current.getState() == ImportState.READY) {
@@ -126,19 +132,25 @@ public final class MetadataStorePublisher implements MetadataPublisher {
         return source;
     }
 
-    private Attempt requireAttempt(GraphVersion version) {
-        Attempt attempt = attempts.get(version);
-        if (attempt == null) {
+    private AttemptState requireAttempt(GraphVersion version, ImportAttempt token) {
+        AttemptState attempt = attempts.get(version);
+        if (attempt == null || !sameToken(attempt.token, token)) {
             throw new MetadataException(MetadataException.Code.INVALID_TRANSITION,
-                "ingestion attempt has not started");
+                "ingestion attempt does not own this version");
         }
         return attempt;
     }
 
-    private static final class Attempt {
+    private static boolean sameToken(ImportAttempt expected, ImportAttempt actual) {
+        return expected == actual && expected.getAttemptId().equals(actual.getAttemptId());
+    }
+
+    private static final class AttemptState {
+        private final ImportAttempt token;
         private final GraphVersion expectedPublishedVersion;
 
-        private Attempt(GraphVersion expectedPublishedVersion) {
+        private AttemptState(ImportAttempt token, GraphVersion expectedPublishedVersion) {
+            this.token = token;
             this.expectedPublishedVersion = expectedPublishedVersion;
         }
     }

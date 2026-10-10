@@ -22,7 +22,6 @@ package org.apache.geaflow.ai.retrieval.index.bm25;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -30,6 +29,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import org.apache.geaflow.ai.retrieval.index.ArtifactIdentity;
+import org.apache.geaflow.ai.retrieval.index.ArtifactPublisher;
 import org.apache.geaflow.ai.retrieval.index.Bm25IndexBuilder;
 import org.apache.geaflow.ai.retrieval.index.IndexArtifact;
 import org.apache.geaflow.ai.retrieval.ingest.IngestionContext;
@@ -103,18 +103,8 @@ public final class LuceneBm25IndexBuilder implements Bm25IndexBuilder {
                     }
                 }
             }
-            if (Files.exists(published)) {
-                validateExisting(published, ordered, context);
-                return new LuceneIndexArtifact(new IndexBuildMetadata(context.getGraphVersion(),
-                    new IndexVersion(INDEX_NAME, version, version), INDEX_NAME, BUILDER_VERSION,
-                    published.toString(), true), published);
-            }
-            try {
-                Files.move(staging, published, StandardCopyOption.ATOMIC_MOVE);
-            } catch (java.nio.file.AtomicMoveNotSupportedException unsupported) {
-                Files.move(staging, published);
-            }
-            publishedStaging = true;
+            publishedStaging = ArtifactPublisher.publish(staging, published,
+                existing -> validateExisting(existing, ordered, context));
             IndexVersion indexVersion = new IndexVersion(INDEX_NAME, version, version);
             IndexBuildMetadata metadata = new IndexBuildMetadata(context.getGraphVersion(), indexVersion,
                 INDEX_NAME, BUILDER_VERSION, published.toString(), true);

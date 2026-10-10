@@ -29,6 +29,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import org.apache.geaflow.ai.retrieval.index.ArtifactIdentity;
+import org.apache.geaflow.ai.retrieval.index.ArtifactPublisher;
 import org.apache.geaflow.ai.retrieval.ingest.GraphArtifact;
 import org.apache.geaflow.ai.retrieval.ingest.IngestionContext;
 import org.apache.geaflow.ai.retrieval.metadata.GraphBuildMetadata;
@@ -80,16 +81,8 @@ public final class OfflineGraphArtifactBuilder {
                     writeStrings(output, edge.getSourceChunkIds());
                 }
             }
-            if (Files.exists(published)) {
-                validateExisting(published, context, orderedEntities, orderedEdges, chunks);
-                return new Artifact(new GraphBuildMetadata(context.getGraphVersion(), published.toString(),
-                    "offline-graph", "offline-graph-v1", true), published);
-            }
-            try {
-                Files.move(staging, published, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
-            } catch (java.nio.file.AtomicMoveNotSupportedException unsupported) {
-                Files.move(staging, published);
-            }
+            ArtifactPublisher.publish(staging, published,
+                existing -> validateExisting(existing, context, orderedEntities, orderedEdges, chunks));
             return new Artifact(new GraphBuildMetadata(context.getGraphVersion(), published.toString(),
                 "offline-graph", "offline-graph-v1", true), published);
         } finally {

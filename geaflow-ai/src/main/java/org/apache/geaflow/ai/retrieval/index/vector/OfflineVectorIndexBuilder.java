@@ -32,6 +32,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import org.apache.geaflow.ai.retrieval.index.ArtifactIdentity;
+import org.apache.geaflow.ai.retrieval.index.ArtifactPublisher;
 import org.apache.geaflow.ai.retrieval.index.IndexArtifact;
 import org.apache.geaflow.ai.retrieval.index.VectorIndexBuilder;
 import org.apache.geaflow.ai.retrieval.ingest.IngestionContext;
@@ -89,20 +90,9 @@ public final class OfflineVectorIndexBuilder implements VectorIndexBuilder {
                     }
                 }
             }
-            if (Files.exists(published)) {
-                VectorArtifact.validateArtifact(published, ordered, dimensions, vectorSource, vectorVersion, context, vectors);
-                return new VectorArtifact(new IndexBuildMetadata(context.getGraphVersion(),
-                    new IndexVersion(INDEX_NAME, context.getGraphVersion().getVersion(),
-                        context.getGraphVersion().getVersion()), INDEX_NAME,
-                    BUILDER_VERSION + ":" + vectorSource + ":" + vectorVersion,
-                    published.toString(), true), published);
-            }
-            try {
-                Files.move(staging, published, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
-            } catch (java.nio.file.AtomicMoveNotSupportedException unsupported) {
-                Files.move(staging, published);
-            }
-            publishedStaging = true;
+            publishedStaging = ArtifactPublisher.publish(staging, published,
+                existing -> VectorArtifact.validateArtifact(existing, ordered, dimensions,
+                    vectorSource, vectorVersion, context, vectors));
             IndexVersion indexVersion = new IndexVersion(INDEX_NAME,
                 context.getGraphVersion().getVersion(), context.getGraphVersion().getVersion());
             IndexBuildMetadata metadata = new IndexBuildMetadata(context.getGraphVersion(), indexVersion,

@@ -22,16 +22,20 @@ package org.apache.geaflow.ai.retrieval.ingest;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayInputStream;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import org.apache.geaflow.ai.retrieval.index.Bm25IndexBuilder;
 import org.apache.geaflow.ai.retrieval.index.IndexArtifact;
-import org.apache.geaflow.ai.retrieval.index.VectorIndexBuilder;
 import org.apache.geaflow.ai.retrieval.metadata.ChunkingConfiguration;
 import org.apache.geaflow.ai.retrieval.metadata.DatasetManifest;
 import org.apache.geaflow.ai.retrieval.metadata.GraphBuildMetadata;
@@ -91,12 +95,14 @@ public class IngestionPipelineTest {
             },
             new MetadataPublisher() {
                 @Override
-                public void begin(IngestionContext value) {
+                public ImportAttempt begin(IngestionContext value) {
                     calls.add("begin");
+                    return new ImportAttempt(value.getGraphVersion());
                 }
 
                 @Override
-                public ImportMetadata publish(IngestionContext value, GraphArtifact valueGraph,
+                public ImportMetadata publish(IngestionContext value, ImportAttempt attempt,
+                                              GraphArtifact valueGraph,
                                               List<IndexArtifact> indexes) {
                     calls.add("publish");
                     assertEquals(2, indexes.size());
@@ -105,7 +111,7 @@ public class IngestionPipelineTest {
                 }
 
                 @Override
-                public void fail(IngestionContext value, Exception failure) {
+                public void fail(IngestionContext value, ImportAttempt attempt, Exception failure) {
                     throw new AssertionError("unexpected failure", failure);
                 }
             });
@@ -135,18 +141,20 @@ public class IngestionPipelineTest {
             },
             new MetadataPublisher() {
                 @Override
-                public void begin(IngestionContext value) {
+                public ImportAttempt begin(IngestionContext value) {
+                    return new ImportAttempt(value.getGraphVersion());
                 }
 
                 @Override
-                public ImportMetadata publish(IngestionContext value, GraphArtifact valueGraph,
+                public ImportMetadata publish(IngestionContext value, ImportAttempt attempt,
+                                              GraphArtifact valueGraph,
                                               List<IndexArtifact> indexes) {
                     published.set(true);
                     return null;
                 }
 
                 @Override
-                public void fail(IngestionContext value, Exception failure) {
+                public void fail(IngestionContext value, ImportAttempt attempt, Exception failure) {
                     failed.set(true);
                     assertTrue(failure.getMessage().contains("vector build failed"));
                 }
@@ -162,6 +170,40 @@ public class IngestionPipelineTest {
         assertTrue(failed.get());
         assertTrue(graph.closed);
         assertTrue(bm25.closed);
+    }
+
+    @Test
+    public void beginFailureDoesNotFailAnAttemptItDoesNotOwn() {
+        AtomicBoolean failed = new AtomicBoolean();
+        IngestionPipeline pipeline = new IngestionPipeline(
+            value -> Collections.singletonList(document()),
+            (documents, value) -> Collections.singletonList(chunk()),
+            (chunks, value) -> new ExtractionResult(Collections.emptyList(), Collections.emptyList()),
+            (value, documents, chunks, extraction) -> new TrackingGraphArtifact(
+                new java.util.ArrayList<>(), "graph"),
+            (value, chunks) -> new TrackingIndexArtifact(new java.util.ArrayList<>(), "bm25"),
+            (value, chunks) -> new TrackingIndexArtifact(new java.util.ArrayList<>(), "vector"),
+            new MetadataPublisher() {
+                @Override
+                public ImportAttempt begin(IngestionContext value) {
+                    throw new IllegalStateException("begin failed");
+                }
+
+                @Override
+                public ImportMetadata publish(IngestionContext value, ImportAttempt attempt,
+                                              GraphArtifact graph, List<IndexArtifact> indexes) {
+                    throw new AssertionError("unexpected publish");
+                }
+
+                @Override
+                public void fail(IngestionContext value, ImportAttempt attempt, Exception failure) {
+                    failed.set(true);
+                }
+            });
+
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
+            () -> pipeline.run(context()));
+        assertFalse(failed.get());
     }
 
     @Test
@@ -196,6 +238,117 @@ public class IngestionPipelineTest {
         assertEquals(version, store.getPublishedVersion("graph").get());
         assertEquals(Arrays.asList("bm25", "vector"), result.getGraph().getRequiredIndexes());
         assertEquals(2, result.getIndexes().size());
+    }
+
+    @Test
+    public void rejectedConcurrentDuplicateLeavesOwnerAbleToPublishReady() throws Exception {
+        String source = "source";
+        String checksum = "41cf6794ba4200b839c53531555f0f3998df4cbb01a4d5cb0b94e3ca5e23947d";
+        GraphVersion version = new GraphVersion("graph", "g1");
+        DatasetManifest manifest = new DatasetManifest("v1", "dataset", "release", "dev", "uri", null,
+            checksum, "preprocess-v1", new ChunkingConfiguration("chunk-v1", 100, 10),
+            "schema-v1", "model", "v1", 7);
+        IngestionContext ownerContext = new IngestionContext(manifest, version, "importer-v1");
+        IngestionContext duplicateContext = new IngestionContext(manifest, version, "importer-v1");
+        InMemoryMetadataStore store = new InMemoryMetadataStore();
+        MetadataStorePublisher publisher = new MetadataStorePublisher(store,
+            value -> new ByteArrayInputStream(source.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        CountDownLatch ownerStarted = new CountDownLatch(1);
+        CountDownLatch ownerReleased = new CountDownLatch(1);
+        TrackingGraphArtifact graph = new TrackingGraphArtifact(new java.util.ArrayList<>(), "graph",
+            version, Arrays.asList("bm25", "vector"));
+        TrackingIndexArtifact bm25 = new TrackingIndexArtifact(new java.util.ArrayList<>(), "bm25", version);
+        TrackingIndexArtifact vector = new TrackingIndexArtifact(new java.util.ArrayList<>(), "vector", version);
+        IngestionPipeline pipeline = new IngestionPipeline(value -> {
+            ownerStarted.countDown();
+            try {
+                if (!ownerReleased.await(5, TimeUnit.SECONDS)) {
+                    throw new java.io.IOException("owner release timed out");
+                }
+            } catch (InterruptedException error) {
+                Thread.currentThread().interrupt();
+                throw new java.io.IOException(error);
+            }
+            return Collections.singletonList(document());
+        }, (documents, value) -> Collections.singletonList(chunk()),
+            (chunks, value) -> new ExtractionResult(Collections.singletonList(entity()),
+                Collections.singletonList(edge())),
+            (value, documents, chunks, extraction) -> graph,
+            (value, chunks) -> bm25, (value, chunks) -> vector, publisher);
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        try {
+            Future<ImportMetadata> owner = executor.submit(() -> pipeline.run(ownerContext));
+            assertTrue(ownerStarted.await(5, TimeUnit.SECONDS));
+            MetadataException rejected = assertThrows(MetadataException.class,
+                () -> pipeline.run(duplicateContext));
+            assertEquals(MetadataException.Code.VERSION_CONFLICT, rejected.getCode());
+            assertEquals(ImportState.IMPORTING, store.find(version).get().getState());
+            assertFalse(store.getPublishedVersion(version.getGraphName()).isPresent());
+
+            ownerReleased.countDown();
+            ImportMetadata result = owner.get(5, TimeUnit.SECONDS);
+            assertNotNull(result);
+            assertEquals(ImportState.READY, result.getState());
+            assertEquals(ImportState.READY, store.find(version).get().getState());
+            assertEquals(version, store.getPublishedVersion(version.getGraphName()).get());
+            assertEquals(Arrays.asList("bm25", "vector"), result.getGraph().getRequiredIndexes());
+            assertEquals(2, result.getIndexes().size());
+            assertTrue(graph.closed);
+            assertTrue(bm25.closed);
+            assertTrue(vector.closed);
+        } finally {
+            ownerReleased.countDown();
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
+    public void concurrentDuplicateDoesNotFailOwnerAndForeignTokenCannotPublish() throws Exception {
+        IngestionContext context = context();
+        InMemoryMetadataStore store = new InMemoryMetadataStore();
+        MetadataStorePublisher publisher = new MetadataStorePublisher(store,
+            ignored -> new ByteArrayInputStream(new byte[0]));
+        CountDownLatch ownerStarted = new CountDownLatch(1);
+        CountDownLatch ownerReleased = new CountDownLatch(1);
+        AtomicBoolean ownerFailed = new AtomicBoolean();
+        IngestionPipeline pipeline = new IngestionPipeline(value -> {
+            ownerStarted.countDown();
+            try {
+                if (!ownerReleased.await(5, TimeUnit.SECONDS)) {
+                    throw new java.io.IOException("owner release timed out");
+                }
+            } catch (InterruptedException error) {
+                Thread.currentThread().interrupt();
+                throw new java.io.IOException(error);
+            }
+            throw new java.io.IOException("owner build failure");
+        }, (documents, value) -> Collections.singletonList(chunk()),
+            (chunks, value) -> new ExtractionResult(Collections.emptyList(), Collections.emptyList()),
+            (value, documents, chunks, extraction) -> new TrackingGraphArtifact(new java.util.ArrayList<>(), "graph"),
+            (value, chunks) -> new TrackingIndexArtifact(new java.util.ArrayList<>(), "bm25"),
+            (value, chunks) -> new TrackingIndexArtifact(new java.util.ArrayList<>(), "vector"), publisher);
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        try {
+            Future<?> owner = executor.submit(() -> {
+                assertThrows(java.io.IOException.class, () -> pipeline.run(context));
+                ownerFailed.set(true);
+            });
+            assertTrue(ownerStarted.await(5, TimeUnit.SECONDS));
+            assertThrows(MetadataException.class, () -> pipeline.run(context));
+            assertEquals(ImportState.IMPORTING, store.find(context.getGraphVersion()).get().getState());
+            ImportAttempt foreign = new ImportAttempt(context.getGraphVersion());
+            publisher.fail(context, foreign, new java.io.IOException("foreign failure"));
+            assertThrows(MetadataException.class, () -> publisher.publish(context, foreign,
+                new TrackingGraphArtifact(new java.util.ArrayList<>(), "graph"), Collections.emptyList()));
+            assertEquals(ImportState.IMPORTING, store.find(context.getGraphVersion()).get().getState());
+            ownerReleased.countDown();
+            owner.get(5, TimeUnit.SECONDS);
+            assertTrue(ownerFailed.get());
+            assertEquals(ImportState.FAILED, store.find(context.getGraphVersion()).get().getState());
+        } finally {
+            ownerReleased.countDown();
+            executor.shutdownNow();
+        }
     }
 
     private static IngestionContext context() {

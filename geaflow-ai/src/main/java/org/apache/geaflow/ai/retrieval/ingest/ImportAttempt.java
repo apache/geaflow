@@ -19,18 +19,26 @@
 
 package org.apache.geaflow.ai.retrieval.ingest;
 
-import java.io.IOException;
-import java.util.List;
-import org.apache.geaflow.ai.retrieval.index.IndexArtifact;
-import org.apache.geaflow.ai.retrieval.metadata.ImportMetadata;
+import java.util.Objects;
+import java.util.UUID;
+import org.apache.geaflow.ai.retrieval.model.version.GraphVersion;
 
-/** Owns import state changes and atomic publication of completed artifacts. */
-public interface MetadataPublisher {
+/** Ownership token for one ingestion lifecycle attempt. */
+public final class ImportAttempt {
 
-    ImportAttempt begin(IngestionContext context) throws IOException;
+    private final GraphVersion graphVersion;
+    private final String attemptId;
 
-    ImportMetadata publish(IngestionContext context, ImportAttempt attempt, GraphArtifact graph,
-                           List<IndexArtifact> indexes) throws IOException;
+    public ImportAttempt(GraphVersion graphVersion) {
+        this.graphVersion = Objects.requireNonNull(graphVersion, "graphVersion");
+        this.attemptId = UUID.randomUUID().toString();
+    }
 
-    void fail(IngestionContext context, ImportAttempt attempt, Exception failure) throws IOException;
+    public GraphVersion getGraphVersion() {
+        return graphVersion;
+    }
+
+    String getAttemptId() {
+        return attemptId;
+    }
 }

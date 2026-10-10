@@ -22,7 +22,9 @@ package org.apache.geaflow.ai.retrieval.ingest;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import org.apache.geaflow.ai.retrieval.index.Bm25IndexBuilder;
 import org.apache.geaflow.ai.retrieval.index.IndexArtifact;
@@ -61,10 +63,13 @@ public final class IngestionPipeline {
         Objects.requireNonNull(context, "context");
         List<GraphArtifact> graphArtifacts = new ArrayList<>();
         List<IndexArtifact> indexArtifacts = new ArrayList<>();
+        ImportAttempt attempt = null;
         try {
-            metadataPublisher.begin(context);
+            attempt = metadataPublisher.begin(context);
+            Objects.requireNonNull(attempt, "metadata publisher returned a null attempt");
             List<SourceDocument> documents = requireList(sourceLoader.load(context), "documents");
-            List<TextChunk> chunks = requireList(normalizer.normalize(documents, context), "chunks");
+            List<TextChunk> chunks = withSourceUris(documents,
+                requireList(normalizer.normalize(documents, context), "chunks"));
             ExtractionResult extraction = Objects.requireNonNull(
                 entityExtractor.extract(chunks, context), "extraction");
             GraphArtifact graph = Objects.requireNonNull(
@@ -76,17 +81,19 @@ public final class IngestionPipeline {
             indexArtifacts.add(vector);
             context.setQualityCounters(new QualityCounters(documents.size(), chunks.size(),
                 extraction.getEntities().size(), extraction.getEdges().size(), 0, 0));
-            return metadataPublisher.publish(context, graph,
+            return metadataPublisher.publish(context, attempt, graph,
                 Collections.unmodifiableList(indexArtifacts));
         } catch (Exception failure) {
             closeAll(indexArtifacts, failure);
             indexArtifacts.clear();
             closeAll(graphArtifacts, failure);
             graphArtifacts.clear();
-            try {
-                metadataPublisher.fail(context, failure);
-            } catch (IOException publicationFailure) {
-                failure.addSuppressed(publicationFailure);
+            if (attempt != null) {
+                try {
+                    metadataPublisher.fail(context, attempt, failure);
+                } catch (Exception publicationFailure) {
+                    failure.addSuppressed(publicationFailure);
+                }
             }
             if (failure instanceof IOException) {
                 throw (IOException) failure;
@@ -107,6 +114,28 @@ public final class IngestionPipeline {
             throw new IllegalArgumentException(name + " must not contain null");
         }
         return values;
+    }
+
+    private static List<TextChunk> withSourceUris(List<SourceDocument> documents, List<TextChunk> chunks) {
+        Map<String, SourceDocument> byId = new HashMap<>();
+        for (SourceDocument document : documents) {
+            if (byId.put(document.getDocumentId(), document) != null) {
+                throw new IllegalArgumentException("duplicate source document ID");
+            }
+        }
+        List<TextChunk> result = new ArrayList<>(chunks.size());
+        for (TextChunk chunk : chunks) {
+            SourceDocument document = byId.get(chunk.getDocumentId());
+            if (document == null || document.getSourceUri() == null
+                || document.getSourceUri().trim().isEmpty()) {
+                throw new IllegalArgumentException("chunk requires a source document with a source URI");
+            }
+            if (chunk.getSourceUri() != null && !document.getSourceUri().equals(chunk.getSourceUri())) {
+                throw new IllegalArgumentException("chunk source URI does not match its document");
+            }
+            result.add(chunk.withSourceUri(document.getSourceUri()));
+        }
+        return result;
     }
 
     private static void closeAll(List<? extends AutoCloseable> resources, Exception failure)
