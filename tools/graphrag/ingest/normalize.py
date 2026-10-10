@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 import unicodedata
 from dataclasses import dataclass
@@ -24,6 +25,12 @@ class ChunkingConfig:
             raise ValueError("chunk size must be positive and overlap must be in [0, size)")
         if self.token_characters < 1:
             raise ValueError("token_characters must be positive")
+
+    def policy_version(self) -> str:
+        effective = json.dumps({"size": self.size, "overlap": self.overlap,
+                                "token_characters": self.token_characters}, sort_keys=True,
+                               separators=(",", ":"))
+        return CHUNKING_VERSION + ":" + hashlib.sha256(effective.encode("utf-8")).hexdigest()
 
 
 def normalize_text(value: str) -> str:
@@ -61,6 +68,7 @@ def documents(records: Iterable[Dict[str, Any]]) -> Iterator[Dict[str, Any]]:
             "answers": record.get("answers", []),
             "supporting_facts": record.get("supporting_facts", []),
             "normalization_version": NORMALIZATION_VERSION,
+            "source_uri": record.get("source_uri"),
         }
 
 
@@ -82,7 +90,8 @@ def chunk_document(document: Dict[str, Any], config: ChunkingConfig) -> List[Dic
         actual_end = actual_start + len(chunk_text)
         if chunk_text:
             digest = hashlib.sha256(chunk_text.encode("utf-8")).hexdigest()
-            chunk_id = hashlib.sha256((document["document_id"] + "\0" + str(index) + "\0" + digest)
+            chunk_id = hashlib.sha256((document["document_id"] + "\0" + str(index) + "\0" + digest
+                                      + "\0" + config.policy_version())
                                       .encode("utf-8")).hexdigest()
             result.append({
                 "chunk_id": chunk_id,
@@ -93,7 +102,8 @@ def chunk_document(document: Dict[str, Any], config: ChunkingConfig) -> List[Dic
                 "token_estimate": (len(chunk_text) + config.token_characters - 1)
                     // config.token_characters,
                 "text": chunk_text,
-                "policy_version": CHUNKING_VERSION,
+                "policy_version": config.policy_version(),
+                "source_uri": document.get("source_uri"),
                 "text_hash": digest,
                 "source_hash": document["source_hash"],
             })

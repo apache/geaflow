@@ -3,6 +3,7 @@ import gzip
 import json
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 
 from tools.graphrag.ingest.sources.source_loader import SourceError, SourceLoader, SourceManifest
@@ -83,6 +84,33 @@ class SourceLoaderTest(unittest.TestCase):
             manifest = SourceManifest("d", "r", "s", None, str(source), checksum, "p")
             with self.assertRaisesRegex(SourceError, "gzip source exceeds"):
                 list(SourceLoader(max_uncompressed_bytes=len(contents) - 1).load(manifest))
+
+    def test_selects_manifest_split_from_multi_file_zip(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "data.zip"
+            payload = lambda value: json.dumps({"id": value, "question": "q",
+                                                 "context": [["T", ["text"]]]})
+            with zipfile.ZipFile(source, "w") as archive:
+                archive.writestr("train.json", payload("train"))
+                archive.writestr("dev.json", payload("dev"))
+                archive.writestr("test.json", payload("test"))
+            checksum = hashlib.sha256(source.read_bytes()).hexdigest()
+            manifest = SourceManifest("2wikimultihopqa", "r", "dev", None, str(source), checksum, "p")
+            records = list(SourceLoader().load(manifest))
+            self.assertEqual(["dev"], [record["document_id"] for record in records])
+
+    def test_zip_rejects_missing_or_ambiguous_split(self):
+        for entries in (("train.json", "test.json"), ("dev.json", "folder/DEV.JSON")):
+            with self.subTest(entries=entries), tempfile.TemporaryDirectory() as directory:
+                source = Path(directory) / "data.zip"
+                with zipfile.ZipFile(source, "w") as archive:
+                    for name in entries:
+                        archive.writestr(name, "[]")
+                manifest = SourceManifest("2wikimultihopqa", "r", "dev", None, str(source),
+                                          hashlib.sha256(source.read_bytes()).hexdigest(), "p")
+                with self.assertRaisesRegex(SourceError, "matching data files"):
+                    list(SourceLoader().load(manifest))
 
 
 if __name__ == "__main__":

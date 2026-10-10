@@ -38,6 +38,26 @@ class NormalizeTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             ChunkingConfig(size=10, overlap=10)
 
+    def test_chunk_policy_is_part_of_identity(self):
+        record = {
+            "dataset": "d", "dataset_release": "r", "split": "dev", "document_id": "x",
+            "question": "q", "paragraphs": [{"title": "T", "text": "alpha beta gamma"}],
+        }
+        document = list(documents([record]))[0]
+        first = chunk_document(document, ChunkingConfig(size=12, overlap=3, token_characters=4))[0]
+        second = chunk_document(document, ChunkingConfig(size=12, overlap=2, token_characters=4))[0]
+        self.assertNotEqual(first["chunk_id"], second["chunk_id"])
+        self.assertNotEqual(first["policy_version"], second["policy_version"])
+
+    def test_short_document_identity_depends_on_all_effective_policy_parameters(self):
+        document = {"document_id": "short", "text": "text", "source_hash": "hash"}
+        configs = [ChunkingConfig(50, 0, 4), ChunkingConfig(60, 0, 4),
+                   ChunkingConfig(50, 1, 4), ChunkingConfig(50, 0, 5)]
+        results = [chunk_document(document, config)[0] for config in configs]
+        self.assertEqual(4, len({item["chunk_id"] for item in results}))
+        self.assertEqual(4, len({item["policy_version"] for item in results}))
+        self.assertEqual({"text"}, {item["text"] for item in results})
+
 
 if __name__ == "__main__":
     unittest.main()

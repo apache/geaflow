@@ -51,8 +51,8 @@ class SourceManifest:
         checksum = str(raw["sha256"]).lower()
         if len(checksum) != 64 or any(char not in "0123456789abcdef" for char in checksum):
             raise SourceError("manifest %s has invalid sha256" % path)
-        if raw.get("dataset") == "2wikimultihopqa" and raw.get("split") not in ("dev", "test"):
-            raise SourceError("2wikimultihopqa manifest split must be dev or test")
+        if raw.get("dataset") == "2wikimultihopqa" and raw.get("split") not in ("train", "dev", "test"):
+            raise SourceError("2wikimultihopqa manifest split must be train, dev or test")
         return cls(
             dataset=str(raw["dataset"]),
             dataset_release=str(raw["dataset_release"]),
@@ -89,8 +89,10 @@ class SourceLoader:
         if path.stat().st_size > self.max_download_bytes:
             raise SourceError("source exceeds configured size limit: %s" % path)
         for number, raw in enumerate(self._records(path, self.max_uncompressed_bytes,
-                                                   self.max_zip_entries), start=1):
-            batch.append(self._canonical_record(manifest, number, raw))
+                                                   self.max_zip_entries, manifest.split), start=1):
+            record = self._canonical_record(manifest, number, raw)
+            record["source_uri"] = manifest.source_uri or path.resolve().as_uri()
+            batch.append(record)
             if len(batch) == self.batch_size:
                 yield batch
                 batch = []
@@ -161,22 +163,32 @@ class SourceLoader:
 
     @staticmethod
     def _records(path: Path, max_uncompressed_bytes: int = 1024 * 1024 * 1024,
-                 max_zip_entries: int = 16) -> Iterable[Any]:
+                 max_zip_entries: int = 16, split: Optional[str] = None) -> Iterable[Any]:
         if path.suffix == ".zip":
             try:
                 with zipfile.ZipFile(path) as archive:
                     names = sorted(name for name in archive.namelist()
-                                   if name.endswith((".json", ".jsonl", ".json.gz", ".jsonl.gz")))
+                                   if name.lower().endswith((".json", ".jsonl", ".json.gz", ".jsonl.gz")))
                     if len(archive.namelist()) > max_zip_entries:
                         raise SourceError("ZIP source %s has too many entries" % path)
-                    if len(names) != 1:
-                        raise SourceError("ZIP source %s must contain exactly one JSON data file" % path)
-                    descriptor, temporary_name = tempfile.mkstemp(suffix=Path(names[0]).suffix)
+                    matches = [name for name in names if Path(name).name.lower()
+                               in {str(split).lower() + suffix for suffix in
+                                   (".json", ".jsonl", ".json.gz", ".jsonl.gz")}]
+                    if not matches and len(names) == 1:
+                        # Preserve single-file archive compatibility, but reject a wrong named split.
+                        basename = Path(names[0]).name.lower().split(".")[0]
+                        if basename not in ("train", "dev", "test"):
+                            matches = names
+                    if len(matches) != 1:
+                        raise SourceError("ZIP source %s split %s has %d matching data files" %
+                                          (path, split, len(matches)))
+                    selected = matches[0]
+                    descriptor, temporary_name = tempfile.mkstemp(suffix=Path(selected).suffix.lower())
                     os.close(descriptor)
                     extracted = Path(temporary_name)
                     try:
                         total = 0
-                        with archive.open(names[0]) as source, extracted.open("wb") as target:
+                        with archive.open(selected) as source, extracted.open("wb") as target:
                             while True:
                                 block = source.read(1024 * 1024)
                                 if not block:
