@@ -128,7 +128,7 @@ public abstract class NearestNeighborIndexContractTest {
 
         List<Neighbor<String>> ranked = index.search(vec(0, 0, 1, 0), 5);
         Assertions.assertEquals(
-            List.of("third", "twin", "second", "fourth", "first"),
+            java.util.Arrays.asList("third", "twin", "second", "fourth", "first"),
             ids(ranked),
             "collinear entries first (insertion order among themselves), "
                 + "then the zero-scored ones, again in insertion order");
