@@ -88,7 +88,7 @@ public class RetrievalRequestValidatorTest {
     public void rejectsUnsupportedModeExecutionAndVector() {
         RetrievalRequest mode = request();
         mode.setMode("HYBRID");
-        assertCode(mode, RetrievalErrorCode.UNSUPPORTED_OPTION);
+        assertCode(mode, RetrievalErrorCode.INVALID_REQUEST);
 
         RetrievalRequest execution = request();
         execution.setExecutionMode("PARALLEL");
@@ -105,6 +105,32 @@ public class RetrievalRequestValidatorTest {
         RetrievalRequest emptyVector = request();
         emptyVector.setQueryVector(Collections.<Double>emptyList());
         Assertions.assertDoesNotThrow(() -> validator().validate(emptyVector));
+    }
+
+    @Test
+    public void acceptsHybridVectorAndCaseInsensitiveExecutionMode() {
+        RetrievalRequest request = request();
+        request.setMode("hybrid");
+        request.setExecutionMode(" sequential ");
+        request.setQueryVector(Collections.singletonList(0.1));
+
+        RetrievalCommand command = validator().validate(request);
+
+        Assertions.assertEquals(RetrievalMode.HYBRID, command.getMode());
+        Assertions.assertEquals(ExecutionMode.SEQUENTIAL, command.getExecutionMode());
+    }
+
+    @Test
+    public void rejectsVectorsForNonVectorModesAndBlankMetadata() {
+        for (String mode : new String[] {"BM25_ONLY", "KEYWORD", "GRAPH_ONLY"}) {
+            RetrievalRequest request = request();
+            request.setMode(mode);
+            request.setQueryVector(Collections.singletonList(0.1));
+            assertCode(request, RetrievalErrorCode.UNSUPPORTED_OPTION);
+        }
+        RetrievalRequest invalid = request();
+        invalid.setRequestId(" ");
+        assertCode(invalid, RetrievalErrorCode.INVALID_REQUEST);
     }
 
     @Test

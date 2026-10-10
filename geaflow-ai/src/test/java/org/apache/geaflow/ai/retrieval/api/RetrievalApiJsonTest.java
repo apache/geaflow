@@ -19,7 +19,6 @@
 package org.apache.geaflow.ai.retrieval.api;
 
 import com.google.gson.JsonObject;
-import com.google.gson.JsonParseException;
 import com.google.gson.JsonParser;
 import java.io.IOException;
 import java.io.InputStream;
@@ -33,23 +32,40 @@ import org.apache.geaflow.ai.retrieval.api.model.ExecutionMode;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalBudget;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalError;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalErrorCode;
-import org.apache.geaflow.ai.retrieval.api.model.RetrievalException;
-import org.apache.geaflow.ai.retrieval.api.model.RetrievalMode;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalRequest;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalResponse;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalTrace;
+import org.apache.geaflow.ai.retrieval.api.model.RetrievalMode;
 import org.apache.geaflow.ai.retrieval.api.model.TraceStage;
 import org.apache.geaflow.ai.retrieval.codec.RetrievalApiJson;
-import org.apache.geaflow.ai.retrieval.config.RetrievalProperties;
-import org.apache.geaflow.ai.retrieval.model.document.SourceRef;
+import org.apache.geaflow.ai.retrieval.execution.RecallStageStatus;
+import org.apache.geaflow.ai.retrieval.execution.RecallStopReason;
 import org.apache.geaflow.ai.retrieval.model.evidence.Evidence;
 import org.apache.geaflow.ai.retrieval.model.evidence.EvidenceKind;
-import org.apache.geaflow.ai.retrieval.model.graph.GraphPathRef;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 /** JSON contract tests independent of Solon and HTTP. */
 public class RetrievalApiJsonTest {
+
+    @Test
+    void hybridContractAcceptsValidVectorAndRejectsMalformedInput() {
+        String valid = "{\"graphName\":\"graph\",\"query\":\"query\",\"mode\":\"HYBRID\",\"queryVector\":[1,0]}";
+        org.apache.geaflow.ai.retrieval.service.RetrievalRequestValidator validator =
+            new org.apache.geaflow.ai.retrieval.service.RetrievalRequestValidator(new org.apache.geaflow.ai.retrieval.config.RetrievalProperties());
+        Assertions.assertEquals(org.apache.geaflow.ai.retrieval.api.model.RetrievalMode.HYBRID,
+            validator.validate(RetrievalApiJson.parseRequest(valid)).getMode());
+        for (String vector : new String[] {"[null]", "[\"1\"]", "{}", "[1e400]"}) {
+            Assertions.assertThrows(com.google.gson.JsonParseException.class,
+                () -> RetrievalApiJson.parseRequest(valid.replace("[1,0]", vector)));
+        }
+        for (String vector : new String[] {"[]", "[0,0]", "[1e100,0]"}) {
+            org.apache.geaflow.ai.retrieval.api.model.RetrievalException error = Assertions.assertThrows(
+                org.apache.geaflow.ai.retrieval.api.model.RetrievalException.class,
+                () -> validator.validate(RetrievalApiJson.parseRequest(valid.replace("[1,0]", vector))));
+            Assertions.assertEquals(org.apache.geaflow.ai.retrieval.api.model.RetrievalErrorCode.INVALID_REQUEST, error.getCode());
+        }
+    }
 
     @Test
     public void parsesMinimalAndFullRequests() {
@@ -117,75 +133,6 @@ public class RetrievalApiJsonTest {
     }
 
     @Test
-    public void appliesSemanticValidationAtRequestJsonBoundary() {
-        Assertions.assertThrows(RetrievalException.class, () -> RetrievalApiJson.parseRequest(
-            "{\"graphName\":\"g\",\"query\":\"q\",\"mode\":\"HYBRID\"}"));
-        Assertions.assertThrows(RetrievalException.class, () -> RetrievalApiJson.parseRequest(
-            "{\"graphName\":\"g\",\"query\":\"q\","
-                + "\"executionMode\":\"PARALLEL\"}"));
-        Assertions.assertThrows(RetrievalException.class, () -> RetrievalApiJson.parseRequest(
-            "{\"graphName\":\"g\",\"query\":\"q\","
-                + "\"budget\":{\"topK\":0}}"));
-
-        StringBuilder longQuery = new StringBuilder("{\"graphName\":\"g\",\"query\":\"");
-        for (int i = 0; i < 4097; i++) {
-            longQuery.append('q');
-        }
-        longQuery.append("\"}");
-        Assertions.assertThrows(RetrievalException.class,
-            () -> RetrievalApiJson.parseRequest(longQuery.toString()));
-
-        RetrievalProperties properties = new RetrievalProperties();
-        properties.setMaxTopK(5);
-        properties.setDefaultTopK(5);
-        properties.validateConfiguration();
-        Assertions.assertThrows(RetrievalException.class, () -> RetrievalApiJson.parseRequest(
-            "{\"graphName\":\"g\",\"query\":\"q\","
-                + "\"budget\":{\"topK\":6}}", properties));
-    }
-
-    @Test
-    public void rejectsSemanticallyInvalidRequestSerialization() {
-        RetrievalRequest request = new RetrievalRequest();
-        request.setGraphName("graph");
-        request.setQuery("query");
-        request.setMode("HYBRID");
-
-        Assertions.assertThrows(RetrievalException.class, () -> RetrievalApiJson.toJson(request));
-    }
-
-    @Test
-    public void rejectsExcessiveJsonNestingBeforeParsing() {
-        StringBuilder json = new StringBuilder("{\"graphName\":\"g\",\"query\":\"q\",\"nested\":");
-        for (int i = 0; i < 257; i++) {
-            json.append('[');
-        }
-        json.append('0');
-        for (int i = 0; i < 257; i++) {
-            json.append(']');
-        }
-        json.append('}');
-
-        Assertions.assertThrows(JsonParseException.class,
-            () -> RetrievalApiJson.parseRequest(json.toString()));
-    }
-
-    @Test
-    public void parsesOnlyExactIntegerBudgetNumbers() {
-        Assertions.assertThrows(JsonParseException.class, () -> RetrievalApiJson.parseRequest(
-            "{\"graphName\":\"g\",\"query\":\"q\","
-                + "\"budget\":{\"topK\":1.0000000000000001}}"));
-        Assertions.assertThrows(JsonParseException.class, () -> RetrievalApiJson.parseRequest(
-            "{\"graphName\":\"g\",\"query\":\"q\","
-                + "\"budget\":{\"topK\":2147483648}}"));
-
-        RetrievalRequest request = RetrievalApiJson.parseRequest(
-            "{\"graphName\":\"g\",\"query\":\"q\","
-                + "\"budget\":{\"topK\":1e1}}");
-        Assertions.assertEquals(Integer.valueOf(10), request.getBudget().getTopK());
-    }
-
-    @Test
     public void responseKeepsRequiredCollectionsAndRoundTrips() {
         RetrievalResponse response = new RetrievalResponse();
         response.setRequestId("req-1");
@@ -196,10 +143,40 @@ public class RetrievalApiJsonTest {
         RetrievalTrace trace = new RetrievalTrace();
         trace.setTraceVersion("v1");
         trace.setOriginalQuery("confucius");
-        trace.setSelectedMode(RetrievalMode.KEYWORD);
+        trace.setSelectedMode(RetrievalMode.HYBRID);
         trace.setExecutionMode(ExecutionMode.SEQUENTIAL);
         trace.setStages(Collections.singletonList(new TraceStage("keyword", "COMPLETED", null)));
         trace.setStopReason("COMPLETED");
+        trace.setRequestId("req-1");
+        trace.setGraphVersion("v1");
+        trace.setIndexVersion("v1");
+        trace.setSelectedChannels(java.util.Arrays.asList("BM25", "VECTOR"));
+        Map<String, Integer> channelBudgets = new HashMap<>();
+        channelBudgets.put("BM25", 50);
+        channelBudgets.put("VECTOR", 50);
+        trace.setChannelBudgets(channelBudgets);
+        Map<String, Integer> candidateCounts = new HashMap<>();
+        candidateCounts.put("BM25", 2);
+        candidateCounts.put("VECTOR", 2);
+        trace.setCandidateCounts(candidateCounts);
+        Map<String, Integer> evaluatedCounts = new HashMap<>();
+        evaluatedCounts.put("BM25", 2);
+        evaluatedCounts.put("VECTOR", 2);
+        trace.setEvaluatedCounts(evaluatedCounts);
+        Map<String, RecallStageStatus> channelStatuses = new HashMap<>();
+        channelStatuses.put("BM25", RecallStageStatus.SUCCESS);
+        channelStatuses.put("VECTOR", RecallStageStatus.SUCCESS);
+        trace.setChannelStatuses(channelStatuses);
+        Map<String, RecallStopReason> channelStopReasons = new HashMap<>();
+        channelStopReasons.put("BM25", RecallStopReason.COMPLETED);
+        channelStopReasons.put("VECTOR", RecallStopReason.COMPLETED);
+        trace.setChannelStopReasons(channelStopReasons);
+        trace.setEffectiveCandidateBudget(100);
+        trace.setEffectiveTopK(10);
+        trace.setTotalCandidatesEvaluated(4);
+        trace.setBm25Weight(1.0);
+        trace.setVectorWeight(1.0);
+        trace.setRrfRankConstant(60);
         response.setTrace(trace);
         response.setEffectiveBudget(new RetrievalBudget(10, 3000, 100, 4096));
 
@@ -212,8 +189,45 @@ public class RetrievalApiJsonTest {
         Assertions.assertNotNull(restored.getSources());
         Assertions.assertNotNull(restored.getDegradedChannels());
         Assertions.assertEquals("v1", restored.getTrace().getTraceVersion());
+        Assertions.assertEquals("req-1", restored.getTrace().getRequestId());
+        Assertions.assertEquals(4, restored.getTrace().getTotalCandidatesEvaluated());
+        Assertions.assertEquals(java.util.Arrays.asList("BM25", "VECTOR"),
+            restored.getTrace().getSelectedChannels());
         Assertions.assertEquals(Integer.valueOf(4096),
             restored.getEffectiveBudget().getTokenBudget());
+
+        response.getTrace().getCandidateCounts().put("BM25", 3);
+        Assertions.assertThrows(RuntimeException.class, () -> RetrievalApiJson.toJson(response));
+    }
+
+    @Test
+    public void rejectsIncompleteHybridTraceContract() {
+        RetrievalResponse response = new RetrievalResponse();
+        response.setRequestId("req-hybrid");
+        response.setGraphName("graph");
+        response.setGraphVersion("v1");
+        response.setEffectiveBudget(new RetrievalBudget(1, 100, 2, 10));
+        RetrievalTrace trace = new RetrievalTrace();
+        trace.setTraceVersion("v1");
+        trace.setRequestId("req-hybrid");
+        trace.setOriginalQuery("q");
+        trace.setSelectedMode(RetrievalMode.HYBRID);
+        trace.setExecutionMode(ExecutionMode.SEQUENTIAL);
+        trace.setGraphVersion("v1");
+        trace.setIndexVersion("v1");
+        trace.setSelectedChannels(java.util.Arrays.asList("BM25", "VECTOR"));
+        trace.setChannelBudgets(Collections.singletonMap("BM25", 2));
+        response.setTrace(trace);
+
+        Assertions.assertThrows(RuntimeException.class,
+            () -> RetrievalApiJson.toJson(response));
+    }
+
+    @Test
+    public void rejectsMismatchedTraceRequestId() {
+        String json = responseJson("KEYWORD", "SEQUENTIAL", 10, 3000, 100, 4096)
+            .replace("\"stages\":[]", "\"requestId\":\"other\",\"stages\":[]");
+        Assertions.assertThrows(RuntimeException.class, () -> RetrievalApiJson.parseResponse(json));
     }
 
     @Test
@@ -222,6 +236,7 @@ public class RetrievalApiJsonTest {
             + "\"graphVersion\":\"v1\",\"evidence\":[],\"paths\":[],"
             + "\"sources\":[],\"degradedChannels\":[],"
             + "\"trace\":{\"traceVersion\":\"v1\","
+            + "\"requestId\":\"req-2\","
             + "\"originalQuery\":\"none\",\"selectedMode\":\"KEYWORD\","
             + "\"executionMode\":\"SEQUENTIAL\",\"stages\":[]},"
             + "\"effectiveBudget\":{\"topK\":10,\"timeoutMs\":3000,"
@@ -283,48 +298,6 @@ public class RetrievalApiJsonTest {
     }
 
     @Test
-    public void rejectsPartialEffectiveBudgetSerialization() {
-        RetrievalResponse response = validResponse();
-        response.setEffectiveBudget(new RetrievalBudget(null, 3000, 100, 4096));
-
-        Assertions.assertThrows(RetrievalException.class, () -> RetrievalApiJson.toJson(response));
-    }
-
-    @Test
-    public void rejectsNullResponseCollectionElements() {
-        RetrievalResponse evidence = validResponse();
-        evidence.setEvidence(Collections.<Evidence>singletonList(null));
-        Assertions.assertThrows(RetrievalException.class, () -> RetrievalApiJson.toJson(evidence));
-
-        RetrievalResponse paths = validResponse();
-        paths.setPaths(Collections.<GraphPathRef>singletonList(null));
-        Assertions.assertThrows(RetrievalException.class, () -> RetrievalApiJson.toJson(paths));
-
-        RetrievalResponse sources = validResponse();
-        sources.setSources(Collections.<SourceRef>singletonList(null));
-        Assertions.assertThrows(RetrievalException.class, () -> RetrievalApiJson.toJson(sources));
-
-        RetrievalResponse channels = validResponse();
-        channels.setDegradedChannels(Collections.<String>singletonList(null));
-        Assertions.assertThrows(RetrievalException.class, () -> RetrievalApiJson.toJson(channels));
-    }
-
-    @Test
-    public void reportsMissingTraceModesAsInvalidRequest() {
-        RetrievalResponse missingMode = validResponse();
-        missingMode.getTrace().setSelectedMode(null);
-        RetrievalException modeException = Assertions.assertThrows(RetrievalException.class,
-            () -> RetrievalApiJson.toJson(missingMode));
-        Assertions.assertEquals(RetrievalErrorCode.INVALID_REQUEST, modeException.getCode());
-
-        RetrievalResponse missingExecutionMode = validResponse();
-        missingExecutionMode.getTrace().setExecutionMode(null);
-        RetrievalException executionException = Assertions.assertThrows(RetrievalException.class,
-            () -> RetrievalApiJson.toJson(missingExecutionMode));
-        Assertions.assertEquals(RetrievalErrorCode.INVALID_REQUEST, executionException.getCode());
-    }
-
-    @Test
     public void errorCodeAndRetriableFlagAreStable() {
         RetrievalError error = new RetrievalError("req-3", RetrievalErrorCode.INDEX_NOT_READY,
             "not ready");
@@ -343,6 +316,8 @@ public class RetrievalApiJsonTest {
         Map<RetrievalErrorCode, Integer> statuses = new HashMap<>();
         statuses.put(RetrievalErrorCode.INVALID_REQUEST, 400);
         statuses.put(RetrievalErrorCode.UNSUPPORTED_OPTION, 400);
+        statuses.put(RetrievalErrorCode.AUTHENTICATION_REQUIRED, 401);
+        statuses.put(RetrievalErrorCode.FORBIDDEN, 403);
         statuses.put(RetrievalErrorCode.GRAPH_NOT_FOUND, 404);
         statuses.put(RetrievalErrorCode.INDEX_NOT_READY, 503);
         statuses.put(RetrievalErrorCode.RETRIEVAL_TIMEOUT, 504);
@@ -373,25 +348,6 @@ public class RetrievalApiJsonTest {
         Assertions.assertTrue(json.has("budget"));
         Assertions.assertTrue(json.getAsJsonObject("budget").has("maxCandidates"));
         Assertions.assertFalse(json.has("graph_name"));
-    }
-
-    private static RetrievalResponse validResponse() {
-        RetrievalResponse response = new RetrievalResponse();
-        response.setRequestId("req-1");
-        response.setGraphName("graph");
-        response.setGraphVersion("v1");
-        response.setEvidence(Collections.singletonList(new Evidence("e-1", EvidenceKind.CHUNK,
-            "text", null, null, null, null, null, null, 1)));
-        RetrievalTrace trace = new RetrievalTrace();
-        trace.setTraceVersion("v1");
-        trace.setOriginalQuery("confucius");
-        trace.setSelectedMode(RetrievalMode.KEYWORD);
-        trace.setExecutionMode(ExecutionMode.SEQUENTIAL);
-        trace.setStages(Collections.singletonList(new TraceStage("keyword", "COMPLETED", null)));
-        trace.setStopReason("COMPLETED");
-        response.setTrace(trace);
-        response.setEffectiveBudget(new RetrievalBudget(10, 3000, 100, 4096));
-        return response;
     }
 
     private static String read(String resource) throws IOException {

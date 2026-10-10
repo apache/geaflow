@@ -31,7 +31,11 @@ import org.apache.geaflow.ai.verbalization.VerbalizationFunction;
 
 public class EntityAttributeIndexStore implements IndexStore {
 
-    private VerbalizationFunction verbFunc;
+    private volatile VerbalizationFunction verbFunc;
+
+    public boolean isInitialized() {
+        return verbFunc != null;
+    }
 
     public void initStore(VerbalizationFunction func) {
         if (func != null) {
@@ -41,6 +45,9 @@ public class EntityAttributeIndexStore implements IndexStore {
 
     @Override
     public List<IVector> getEntityIndex(GraphEntity entity) {
+        if (!isInitialized()) {
+            throw new IllegalStateException("Entity attribute index is not initialized");
+        }
         if (entity instanceof GraphVertex) {
             String verbalization = verbFunc.verbalize(new SubGraph().addVertex((GraphVertex) entity));
             List<String> sentences = new ArrayList<>();

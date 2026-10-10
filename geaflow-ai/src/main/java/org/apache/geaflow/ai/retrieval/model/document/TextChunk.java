@@ -45,15 +45,25 @@ public final class TextChunk {
     private final String policyVersion;
     @SerializedName("textHash")
     private final String textHash;
+    @SerializedName("sourceUri")
+    private final String sourceUri;
 
     public TextChunk(String chunkId, String documentId, int chunkIndex, int startOffset,
                      int endOffset, int tokenEstimate, String text) {
-        this(chunkId, documentId, chunkIndex, startOffset, endOffset, tokenEstimate, text, null, null);
+        this(chunkId, documentId, chunkIndex, startOffset, endOffset, tokenEstimate, text,
+            null, null, null);
     }
 
     public TextChunk(String chunkId, String documentId, int chunkIndex, int startOffset,
                      int endOffset, int tokenEstimate, String text,
                      String policyVersion, String textHash) {
+        this(chunkId, documentId, chunkIndex, startOffset, endOffset, tokenEstimate, text,
+            policyVersion, textHash, null);
+    }
+
+    public TextChunk(String chunkId, String documentId, int chunkIndex, int startOffset,
+                     int endOffset, int tokenEstimate, String text,
+                     String policyVersion, String textHash, String sourceUri) {
         this.chunkId = ModelValidation.required(chunkId, "chunkId");
         this.documentId = ModelValidation.required(documentId, "documentId");
         this.chunkIndex = ModelValidation.nonNegative(chunkIndex, "chunkIndex");
@@ -66,6 +76,7 @@ public final class TextChunk {
         this.text = ModelValidation.required(text, "text");
         this.policyVersion = ModelValidation.optionalNonBlank(policyVersion, "policyVersion");
         this.textHash = ModelValidation.optionalNonBlank(textHash, "textHash");
+        this.sourceUri = ModelValidation.optionalNonBlank(sourceUri, "sourceUri");
     }
 
     public String getChunkId() {
@@ -104,6 +115,15 @@ public final class TextChunk {
         return textHash;
     }
 
+    public String getSourceUri() {
+        return sourceUri;
+    }
+
+    public TextChunk withSourceUri(String uri) {
+        return new TextChunk(chunkId, documentId, chunkIndex, startOffset, endOffset,
+            tokenEstimate, text, policyVersion, textHash, ModelValidation.required(uri, "sourceUri"));
+    }
+
     public boolean sameIdentityAs(TextChunk other) {
         return other != null && Objects.equals(chunkId, other.chunkId)
             && Objects.equals(documentId, other.documentId)
@@ -112,7 +132,8 @@ public final class TextChunk {
             && endOffset == other.endOffset
             && Objects.equals(text, other.text)
             && Objects.equals(policyVersion, other.policyVersion)
-            && Objects.equals(textHash, other.textHash);
+            && Objects.equals(textHash, other.textHash)
+            && Objects.equals(sourceUri, other.sourceUri);
     }
 
     @Override
@@ -130,12 +151,13 @@ public final class TextChunk {
             && Objects.equals(documentId, that.documentId)
             && Objects.equals(text, that.text)
             && Objects.equals(policyVersion, that.policyVersion)
-            && Objects.equals(textHash, that.textHash);
+            && Objects.equals(textHash, that.textHash)
+            && Objects.equals(sourceUri, that.sourceUri);
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(chunkId, documentId, chunkIndex, startOffset, endOffset,
-            tokenEstimate, text, policyVersion, textHash);
+            tokenEstimate, text, policyVersion, textHash, sourceUri);
     }
 }

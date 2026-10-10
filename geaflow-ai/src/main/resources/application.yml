@@ -21,8 +21,8 @@ solon:
     group: geaflow
 
 server:
-  port: 8080
-  host: 0.0.0.0
+  port: ${GEAFLOW_SERVER_PORT:8080}
+  host: ${GEAFLOW_SERVER_HOST:127.0.0.1}
 
 logging:
   level:
@@ -42,3 +42,5 @@ retrieval:
   max-candidates: 1000
   default-token-budget: 4096
   max-token-budget: 16384
+  remote-access-enabled: ${GEAFLOW_REMOTE_ACCESS_ENABLED:false}
+  api-token: ${GEAFLOW_RETRIEVAL_API_TOKEN:}
