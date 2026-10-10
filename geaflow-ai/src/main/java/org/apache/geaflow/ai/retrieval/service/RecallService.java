@@ -161,18 +161,16 @@ public final class RecallService {
                 throw notReady("vector source/version mismatch");
             }
             RecallService delegate = new RecallService(fixture, fusion.getConfig(), clock);
+            String requestId = request.getRequestId() == null || request.getRequestId().trim().isEmpty()
+                ? UUID.randomUUID().toString() : request.getRequestId();
             RetrievalResponse response = delegate.execute(command, toFloat(command.getQueryVector()), deadline,
-                request.isAllowPartialResults(), started, fixture);
+                request.isAllowPartialResults(), started, fixture, requestId);
             response.setGraphName(fixture.getGraphName());
             response.setGraphVersion(fixture.getGraphVersion());
             response.getTrace().setGraphVersion(fixture.getGraphVersion());
             response.getTrace().setIndexVersion(fixture.getIndexVersion());
             if (fixture.getVector() != null) {
                 response.getTrace().setVectorVersion(fixture.getVector().getVectorVersion());
-            }
-            if (request.getRequestId() != null) {
-                response.setRequestId(request.getRequestId());
-                response.getTrace().setRequestId(request.getRequestId());
             }
             response.getTrace().setElapsedNanos(clock.getAsLong() - started);
             return response;
@@ -217,11 +215,13 @@ public final class RecallService {
         if (registry != null) {
             throw notReady("registry retrieval requires a structured request with graph/index versions");
         }
-        return execute(command, queryVector, deadlineNanos, allowPartialResults, started, null);
+        return execute(command, queryVector, deadlineNanos, allowPartialResults, started, null,
+            UUID.randomUUID().toString());
     }
 
     private RetrievalResponse execute(RetrievalCommand command, float[] queryVector, long deadline,
-                                       boolean partial, long started, RetrievalFixtureRegistry.Fixture fixture) {
+                                       boolean partial, long started, RetrievalFixtureRegistry.Fixture fixture,
+                                       String requestId) {
         RetrievalBudget budget = command.getBudget();
         RecallPlan plan = new RecallPlan(command.getMode(), budget.getTopK(), budget.getMaxCandidates(), deadline,
             fixture == null ? null : fixture.getGraphVersion(), fixture == null ? null : fixture.getIndexVersion(),
@@ -321,7 +321,7 @@ public final class RecallService {
                             if (!builder.paths.contains(hit.getPath())) {
                                 builder.paths.add(hit.getPath());
                             }
-                            builder.graphTraces.add(new GraphEvidenceTrace(command.getQuery(),
+                            builder.graphTraces.add(new GraphEvidenceTrace(requestId,
                                 plan.getGraphVersion() == null ? "fixture" : plan.getGraphVersion(),
                                 hit.getAnchor().getEntity().getEntityId(), hit.getAnchor().getMatchType(),
                                 hit.getAnchor().getConfidence(), hit.getPath(),
@@ -416,9 +416,8 @@ public final class RecallService {
         }
         response.setSources(sources);
         response.setPaths(paths);
-        String responseId = UUID.randomUUID().toString();
-        response.setRequestId(responseId);
-        trace.setRequestId(responseId);
+        response.setRequestId(requestId);
+        trace.setRequestId(requestId);
         trace.setElapsedNanos(clock.getAsLong() - started);
         response.setTrace(trace);
         response.setEffectiveBudget(budget);
@@ -488,7 +487,11 @@ public final class RecallService {
             for (ChannelScore score : scores.values()) {
                 fused += 1.0 / (60.0 + score.getRank());
             }
-            SourceRef source = new SourceRef(chunk.getDocumentId(), chunk.getDocumentId(), chunk.getStartOffset(), chunk.getEndOffset());
+            if (chunk.getSourceUri() == null) {
+                throw notReady("chunk source URI is missing");
+            }
+            SourceRef source = new SourceRef(chunk.getDocumentId(), chunk.getSourceUri(),
+                chunk.getStartOffset(), chunk.getEndOffset());
             return new Evidence(id, kind, chunk.getText(), Collections.singletonList(chunk), entities, paths,
                 Collections.singletonList(source), scores, fused, null, 1, graphTraces);
         }

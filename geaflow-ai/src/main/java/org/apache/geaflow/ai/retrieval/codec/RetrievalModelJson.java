@@ -95,7 +95,8 @@ public final class RetrievalModelJson {
                 requiredString(object, "documentId"), requiredInt(object, "chunkIndex"),
                 requiredInt(object, "startOffset"), requiredInt(object, "endOffset"),
                 requiredInt(object, "tokenEstimate"), requiredString(object, "text"),
-                optionalString(object, "policyVersion"), optionalString(object, "textHash"));
+                optionalString(object, "policyVersion"), optionalString(object, "textHash"),
+                optionalString(object, "sourceUri"));
         } else if (type == EntityRef.class) {
             return new EntityRef(requiredString(object, "entityId"),
                 requiredString(object, "canonicalName"), strings(object, "aliases"),

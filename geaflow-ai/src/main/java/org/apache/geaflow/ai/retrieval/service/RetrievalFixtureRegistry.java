@@ -64,8 +64,8 @@ public final class RetrievalFixtureRegistry implements AutoCloseable {
             }
             java.util.Set<String> chunkIds = new java.util.HashSet<>();
             for (TextChunk chunk : chunks) {
-                if (chunk == null || !chunkIds.add(chunk.getChunkId())) {
-                    throw notReady("invalid or duplicate fixture chunk");
+                if (chunk == null || !chunkIds.add(chunk.getChunkId()) || chunk.getSourceUri() == null) {
+                    throw notReady("invalid, duplicate, or untraceable fixture chunk");
                 }
             }
             if (bm25 != null) {

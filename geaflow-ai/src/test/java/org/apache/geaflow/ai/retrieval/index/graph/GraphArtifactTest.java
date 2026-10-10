@@ -225,8 +225,8 @@ class GraphArtifactTest {
 
     private static List<TextChunk> chunks() {
         return Arrays.asList(
-            new TextChunk("c1", "doc-1", 0, 0, 10, 2, "Confucius"),
-            new TextChunk("c2", "doc-2", 0, 0, 9, 2, "philosophy"));
+            new TextChunk("c1", "doc-1", 0, 0, 10, 2, "Confucius").withSourceUri("fixture://doc-1"),
+            new TextChunk("c2", "doc-2", 0, 0, 9, 2, "philosophy").withSourceUri("fixture://doc-2"));
     }
 
     private static List<EntityRef> entities() {

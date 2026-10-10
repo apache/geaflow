@@ -79,12 +79,23 @@ class GraphRagMvpEndToEndTest {
 
         RetrievalResponse bm25 = service.retrieve(request("BM25_ONLY", null));
         RetrievalResponse vector = service.retrieve(request("VECTOR_ONLY", Arrays.asList(1.0, 0.0)));
-        RetrievalResponse graph = service.retrieve(request("GRAPH_ONLY", null));
+        RetrievalRequest graphRequest = request("GRAPH_ONLY", null);
+        graphRequest.setRequestId("request-graph-trace");
+        RetrievalResponse graph = service.retrieve(graphRequest);
         RetrievalResponse hybrid = service.retrieve(request("HYBRID", Arrays.asList(1.0, 0.0)));
 
         assertFalse(bm25.getEvidence().isEmpty());
         assertFalse(vector.getEvidence().isEmpty());
         assertFalse(graph.getEvidence().isEmpty());
+        assertEquals("request-graph-trace", graph.getRequestId());
+        for (Evidence evidence : graph.getEvidence()) {
+            for (org.apache.geaflow.ai.retrieval.model.evidence.GraphEvidenceTrace trace : evidence.getGraphTraces()) {
+                assertEquals(graph.getRequestId(), trace.getQueryId());
+                assertFalse(graphRequest.getQuery().equals(trace.getQueryId()));
+            }
+            assertEquals("https://example.test/" + evidence.getChunks().get(0).getDocumentId(),
+                evidence.getSources().get(0).getSourceUri());
+        }
         RetrievalRequest aliasRequest = request("GRAPH_ONLY", null);
         aliasRequest.setQuery("kongzi");
         assertFalse(service.retrieve(aliasRequest).getEvidence().isEmpty());
@@ -176,7 +187,8 @@ class GraphRagMvpEndToEndTest {
             String text = index % 5 == 0
                 ? "Confucius discusses ethics in document " + index
                 : "Background material about history in document " + index;
-            chunks.add(new TextChunk(chunkId, documentId, 0, 0, text.length(), 6, text));
+            chunks.add(new TextChunk(chunkId, documentId, 0, 0, text.length(), 6, text,
+                null, null, "fixture://scaled/" + documentId));
             vectors.put(chunkId, index % 2 == 0 ? new float[] {1.0F, 0.0F} : new float[] {0.0F, 1.0F});
             if (index % 5 == 0) {
                 graphEvidenceChunkIds.add(chunkId);
@@ -206,6 +218,7 @@ class GraphRagMvpEndToEndTest {
             entities, edges, true);
 
         RetrievalRequest request = request("HYBRID", Arrays.asList(1.0, 0.0));
+        request.setRequestId("stable-request");
         request.setBudget(new RetrievalBudget(10, 5000, 400, 100));
         RecallService service = new RecallService(registry);
         RetrievalResponse first = service.retrieve(request);
@@ -231,6 +244,7 @@ class GraphRagMvpEndToEndTest {
         Fixture fixture = fixture();
         RecallService service = new RecallService(fixture.registry);
         RetrievalRequest request = request("HYBRID", Arrays.asList(1.0, 0.0));
+        request.setRequestId("stable-request");
         RetrievalResponse first = service.retrieve(request);
         RetrievalResponse second = service.retrieve(request);
         assertEquals(first.getEvidence(), second.getEvidence());
@@ -668,9 +682,12 @@ class GraphRagMvpEndToEndTest {
 
     private Fixture fixture() throws Exception {
         List<TextChunk> chunks = Arrays.asList(
-            new TextChunk("c1", "doc-1", 0, 0, 36, 6, "Confucius taught ethics and philosophy"),
-            new TextChunk("c2", "doc-2", 0, 0, 25, 4, "Astronomy studies distant stars"),
-            new TextChunk("c3", "doc-3", 0, 0, 35, 6, "Confucius and astronomy are studied"));
+            new TextChunk("c1", "doc-1", 0, 0, 36, 6,
+                "Confucius taught ethics and philosophy", null, null, "https://example.test/doc-1"),
+            new TextChunk("c2", "doc-2", 0, 0, 25, 4,
+                "Astronomy studies distant stars", null, null, "https://example.test/doc-2"),
+            new TextChunk("c3", "doc-3", 0, 0, 35, 6,
+                "Confucius and astronomy are studied", null, null, "https://example.test/doc-3"));
         IngestionContext context = context();
         Map<String, float[]> vectors = new HashMap<>();
         vectors.put("c1", new float[] {1.0F, 0.0F});

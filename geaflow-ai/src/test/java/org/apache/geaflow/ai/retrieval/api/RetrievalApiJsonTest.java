@@ -316,6 +316,8 @@ public class RetrievalApiJsonTest {
         Map<RetrievalErrorCode, Integer> statuses = new HashMap<>();
         statuses.put(RetrievalErrorCode.INVALID_REQUEST, 400);
         statuses.put(RetrievalErrorCode.UNSUPPORTED_OPTION, 400);
+        statuses.put(RetrievalErrorCode.AUTHENTICATION_REQUIRED, 401);
+        statuses.put(RetrievalErrorCode.FORBIDDEN, 403);
         statuses.put(RetrievalErrorCode.GRAPH_NOT_FOUND, 404);
         statuses.put(RetrievalErrorCode.INDEX_NOT_READY, 503);
         statuses.put(RetrievalErrorCode.RETRIEVAL_TIMEOUT, 504);
