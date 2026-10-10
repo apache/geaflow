@@ -1,6 +1,5 @@
 # Minimal GeaFlow Backend Vertical Slice — Design
 
-Status: **Open / For review** · Scope: geaflow-ai · Issue: apache/geaflow#849
 
 ## 1. Context & Goals
 
