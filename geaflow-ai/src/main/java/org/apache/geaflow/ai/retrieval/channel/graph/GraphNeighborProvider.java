@@ -23,6 +23,7 @@ import java.util.List;
 import org.apache.geaflow.ai.retrieval.model.graph.EntityRef;
 import org.apache.geaflow.ai.retrieval.model.graph.GraphEdgeRef;
 import org.apache.geaflow.ai.retrieval.model.graph.GraphVertexRef;
+import org.apache.geaflow.ai.retrieval.model.version.GraphVersion;
 
 /** Versioned graph boundary used by the bounded graph retriever. */
 public interface GraphNeighborProvider {
@@ -34,5 +35,35 @@ public interface GraphNeighborProvider {
     default GraphVertexRef vertex(EntityRef entity) {
         return new GraphVertexRef(entity.getType(), entity.getEntityId(), entity.getEntityId(),
             entity.getDataset(), entity.getDatasetVersion(), entity.getSplit(), entity.getSourceHash());
+    }
+
+    /** Returns the pinned graph version when the provider is version-aware. */
+    default GraphVersion getGraphVersion() {
+        return null;
+    }
+
+    /** Returns the deterministic digest of applied deltas, or an empty value for a snapshot. */
+    default String getDeltaDigest() {
+        return "";
+    }
+
+    /** Returns the statistics build version, or an empty value for a legacy provider. */
+    default String getStatisticsVersion() {
+        return "";
+    }
+
+    /** Returns deterministic local graph statistics when available. */
+    default GraphStatistics getStatistics() {
+        return GraphStatistics.from(java.util.Collections.emptyList());
+    }
+
+    /** Returns a stable reader lease over this provider. */
+    default GraphQueryLease openLease() {
+        return new GraphQueryLease(this);
+    }
+
+    /** Returns a stable fingerprint for the logical graph view. */
+    default String getFingerprint() {
+        return "";
     }
 }

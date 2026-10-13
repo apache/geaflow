@@ -88,6 +88,9 @@ class GraphArtifactTest {
             assertEquals(Collections.singletonList("c1"), reader.getEntities().get(0).getSourceChunkIds());
             assertEquals("e1", reader.getVertices().get(0).getEntityId());
             assertEquals(edges, reader.getNeighbors().neighbors("e1"));
+            assertEquals(new GraphVersion(GRAPH, VERSION), reader.getNeighbors().getGraphVersion());
+            assertEquals("", reader.getNeighbors().getDeltaDigest());
+            assertTrue(reader.getNeighbors().getStatisticsVersion().startsWith("stats-"));
             reader.validateReferences(chunks);
             assertThrows(RetrievalException.class, () -> reader.getIdentity().validate(
                 GRAPH, VERSION, VERSION, Collections.singletonList(

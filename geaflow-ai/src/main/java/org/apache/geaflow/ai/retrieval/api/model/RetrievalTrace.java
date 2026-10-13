@@ -36,6 +36,10 @@ public class RetrievalTrace {
     private List<TraceStage> stages = new ArrayList<>();
     private String stopReason;
     private String graphVersion;
+    private String visibleGraphVersion;
+    private String actualVisibleGraphVersion;
+    private String deltaDigest;
+    private String statisticsVersion;
     private String indexVersion;
     private String vectorVersion;
     private int effectiveCandidateBudget;
@@ -126,6 +130,47 @@ public class RetrievalTrace {
 
     public void setGraphVersion(String graphVersion) {
         this.graphVersion = graphVersion;
+    }
+
+    public String getVisibleGraphVersion() {
+        return visibleGraphVersion;
+    }
+
+    public void setVisibleGraphVersion(String visibleGraphVersion) {
+        this.visibleGraphVersion = visibleGraphVersion;
+    }
+
+    public String getActualVisibleGraphVersion() {
+        return actualVisibleGraphVersion;
+    }
+
+    public void setActualVisibleGraphVersion(String actualVisibleGraphVersion) {
+        this.actualVisibleGraphVersion = actualVisibleGraphVersion;
+    }
+
+    /** Alias for consumers that call the pinned version the effective version. */
+    public String getEffectiveGraphVersion() {
+        return actualVisibleGraphVersion == null ? visibleGraphVersion : actualVisibleGraphVersion;
+    }
+
+    public void setEffectiveGraphVersion(String effectiveGraphVersion) {
+        this.actualVisibleGraphVersion = effectiveGraphVersion;
+    }
+
+    public String getDeltaDigest() {
+        return deltaDigest;
+    }
+
+    public void setDeltaDigest(String deltaDigest) {
+        this.deltaDigest = deltaDigest;
+    }
+
+    public String getStatisticsVersion() {
+        return statisticsVersion;
+    }
+
+    public void setStatisticsVersion(String statisticsVersion) {
+        this.statisticsVersion = statisticsVersion;
     }
 
     public String getIndexVersion() {

@@ -149,6 +149,10 @@ public class RetrievalApiJsonTest {
         trace.setStopReason("COMPLETED");
         trace.setRequestId("req-1");
         trace.setGraphVersion("v1");
+        trace.setVisibleGraphVersion("v1");
+        trace.setActualVisibleGraphVersion("v1");
+        trace.setDeltaDigest("delta-digest");
+        trace.setStatisticsVersion("stats-v1");
         trace.setIndexVersion("v1");
         trace.setSelectedChannels(java.util.Arrays.asList("BM25", "VECTOR"));
         Map<String, Integer> channelBudgets = new HashMap<>();
@@ -189,6 +193,8 @@ public class RetrievalApiJsonTest {
         Assertions.assertNotNull(restored.getSources());
         Assertions.assertNotNull(restored.getDegradedChannels());
         Assertions.assertEquals("v1", restored.getTrace().getTraceVersion());
+        Assertions.assertEquals("delta-digest", restored.getTrace().getDeltaDigest());
+        Assertions.assertEquals("stats-v1", restored.getTrace().getStatisticsVersion());
         Assertions.assertEquals("req-1", restored.getTrace().getRequestId());
         Assertions.assertEquals(4, restored.getTrace().getTotalCandidatesEvaluated());
         Assertions.assertEquals(java.util.Arrays.asList("BM25", "VECTOR"),

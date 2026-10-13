@@ -35,13 +35,15 @@ import java.util.stream.Collectors;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalErrorCode;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalException;
 import org.apache.geaflow.ai.retrieval.channel.graph.GraphNeighborProvider;
-import org.apache.geaflow.ai.retrieval.channel.graph.InMemoryGraphNeighborProvider;
+import org.apache.geaflow.ai.retrieval.channel.graph.GraphSnapshot;
+import org.apache.geaflow.ai.retrieval.channel.graph.VersionedGraphView;
 import org.apache.geaflow.ai.retrieval.index.ArtifactIdentity;
 import org.apache.geaflow.ai.retrieval.model.document.RetrievalIds;
 import org.apache.geaflow.ai.retrieval.model.document.TextChunk;
 import org.apache.geaflow.ai.retrieval.model.graph.EntityRef;
 import org.apache.geaflow.ai.retrieval.model.graph.GraphEdgeRef;
 import org.apache.geaflow.ai.retrieval.model.graph.GraphVertexRef;
+import org.apache.geaflow.ai.retrieval.model.version.GraphVersion;
 
 /** Reader for current and legacy deterministic graph artifacts. */
 public final class GraphArtifactReader implements Closeable {
@@ -133,7 +135,9 @@ public final class GraphArtifactReader implements Closeable {
             if (input.read() != -1) {
                 throw new IOException("trailing graph artifact data");
             }
-            neighbors = new InMemoryGraphNeighborProvider(edges, vertices);
+            neighbors = VersionedGraphView.from(new GraphSnapshot(
+                new GraphVersion(identity.getGraphName(), identity.getGraphVersion()),
+                java.util.Collections.emptyList(), entities, vertices, edges));
         } catch (RetrievalException error) {
             throw error;
         } catch (Exception error) {
@@ -255,6 +259,12 @@ public final class GraphArtifactReader implements Closeable {
 
     public GraphNeighborProvider getNeighbors() {
         return neighbors;
+    }
+
+    /** Adapts this fully materialized artifact to the immutable snapshot contract. */
+    public GraphSnapshot toSnapshot() {
+        return new GraphSnapshot(new GraphVersion(identity.getGraphName(), identity.getGraphVersion()),
+            java.util.Collections.emptyList(), entities, vertices, edges);
     }
 
     /** Validates that all graph provenance references point at the supplied chunks. */

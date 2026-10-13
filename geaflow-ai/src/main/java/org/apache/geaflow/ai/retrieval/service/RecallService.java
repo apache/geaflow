@@ -39,6 +39,7 @@ import org.apache.geaflow.ai.retrieval.api.model.RetrievalResponse;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalTrace;
 import org.apache.geaflow.ai.retrieval.api.model.TraceStage;
 import org.apache.geaflow.ai.retrieval.channel.graph.GraphNeighborProvider;
+import org.apache.geaflow.ai.retrieval.channel.graph.GraphQueryLease;
 import org.apache.geaflow.ai.retrieval.channel.graph.GraphRetriever;
 import org.apache.geaflow.ai.retrieval.channel.graph.InMemoryGraphNeighborProvider;
 import org.apache.geaflow.ai.retrieval.config.RetrievalProperties;
@@ -223,6 +224,19 @@ public final class RecallService {
     private RetrievalResponse execute(RetrievalCommand command, float[] queryVector, long deadline,
                                        boolean partial, long started, RetrievalFixtureRegistry.Fixture fixture,
                                        String requestId) {
+        if (graphProvider == null) {
+            return executePinned(command, queryVector, deadline, partial, started, fixture, requestId, null);
+        }
+        try (GraphQueryLease graphLease = graphProvider.openLease()) {
+            return executePinned(command, queryVector, deadline, partial, started, fixture, requestId,
+                graphLease);
+        }
+    }
+
+    private RetrievalResponse executePinned(RetrievalCommand command, float[] queryVector, long deadline,
+                                             boolean partial, long started,
+                                             RetrievalFixtureRegistry.Fixture fixture, String requestId,
+                                             GraphNeighborProvider pinnedGraphProvider) {
         RetrievalBudget budget = command.getBudget();
         RecallPlan plan = new RecallPlan(command.getMode(), budget.getTopK(), budget.getMaxCandidates(), deadline,
             fixture == null ? null : fixture.getGraphVersion(), fixture == null ? null : fixture.getIndexVersion(),
@@ -239,6 +253,14 @@ public final class RecallService {
         RetrievalTrace trace = new RetrievalTrace();
         trace.setTraceVersion("v1");
         trace.setGraphVersion(plan.getGraphVersion());
+        if (pinnedGraphProvider != null) {
+            if (pinnedGraphProvider.getGraphVersion() != null) {
+                trace.setVisibleGraphVersion(pinnedGraphProvider.getGraphVersion().getVersion());
+                trace.setActualVisibleGraphVersion(pinnedGraphProvider.getGraphVersion().getVersion());
+            }
+            trace.setDeltaDigest(pinnedGraphProvider.getDeltaDigest());
+            trace.setStatisticsVersion(pinnedGraphProvider.getStatisticsVersion());
+        }
         trace.setIndexVersion(plan.getIndexVersion());
         trace.setVectorVersion(plan.getVectorVersion());
         trace.setOriginalQuery(command.getQuery());
@@ -303,7 +325,8 @@ public final class RecallService {
                     reason = search.getStopReason();
                 } else {
                     GraphRetriever retriever = new GraphRetriever();
-                    final List<GraphRetriever.GraphHit> hits = retriever.retrieve(command.getQuery(), entities, graphProvider, byId,
+                    final List<GraphRetriever.GraphHit> hits = retriever.retrieve(command.getQuery(), entities,
+                        pinnedGraphProvider, byId,
                         channel.getValue(), channel.getValue(), deadline, clock);
                     GraphRetriever.GraphStats stats = retriever.getLastStats();
                     trace.setAnchorsConsidered(stats.getAnchorsConsidered());

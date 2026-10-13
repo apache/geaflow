@@ -80,6 +80,22 @@ public final class ArtifactIdentity {
         return metadata;
     }
 
+    public String getGraphName() {
+        return graphName;
+    }
+
+    public String getGraphVersion() {
+        return graphVersion;
+    }
+
+    public String getIndexVersion() {
+        return indexVersion;
+    }
+
+    public String getChunkFingerprint() {
+        return chunkFingerprint;
+    }
+
     public void validate(String name, String graph, String index, List<TextChunk> chunks) {
         if (!graphName.equals(name) || !graphVersion.equals(graph) || !indexVersion.equals(index)
             || !matchesChunkFingerprint(chunks)) {

@@ -215,6 +215,10 @@ public final class RetrievalApiJson {
         trace.setStages(traceStages(object, "stages"));
         trace.setStopReason(optionalString(object, "stopReason"));
         trace.setGraphVersion(optionalString(object, "graphVersion"));
+        trace.setVisibleGraphVersion(optionalString(object, "visibleGraphVersion"));
+        trace.setActualVisibleGraphVersion(optionalString(object, "actualVisibleGraphVersion"));
+        trace.setDeltaDigest(optionalString(object, "deltaDigest"));
+        trace.setStatisticsVersion(optionalString(object, "statisticsVersion"));
         trace.setIndexVersion(optionalString(object, "indexVersion"));
         trace.setVectorVersion(optionalString(object, "vectorVersion"));
         trace.setEffectiveCandidateBudget(optionalInt(object, "effectiveCandidateBudget") == null

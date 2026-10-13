@@ -100,9 +100,29 @@ public final class MetadataJson {
                 number(object, "randomSeed"));
         }
         if (type == GraphBuildMetadata.class) {
+            String snapshotUri = string(object, "snapshotUri");
+            String deltaUri = string(object, "deltaUri");
+            String artifactUri = string(object, "artifactUri");
+            org.apache.geaflow.ai.retrieval.model.version.GraphVersion parent = object.has("parentGraphVersion")
+                && !object.get("parentGraphVersion").isJsonNull()
+                ? RetrievalModelJson.fromJson(object.get("parentGraphVersion").toString(), GraphVersion.class) : null;
+            if (parent != null || snapshotUri != null || deltaUri != null || string(object, "tombstoneUri") != null) {
+                return new GraphBuildMetadata(
+                    RetrievalModelJson.fromJson(object.get("graphVersion").toString(), GraphVersion.class),
+                    parent,
+                    snapshotUri == null ? artifactUri : snapshotUri,
+                    deltaUri,
+                    string(object, "tombstoneUri"),
+                    string(object, "deltaDigest"),
+                    string(object, "statisticsVersion"),
+                    stringOrDefault(object, "graphType", "graph"),
+                    stringOrDefault(object, "builderVersion", "unknown"),
+                    bool(object, "ready"),
+                    strings(object, "requiredIndexes"));
+            }
             return new GraphBuildMetadata(
                 RetrievalModelJson.fromJson(object.get("graphVersion").toString(), GraphVersion.class),
-                string(object, "artifactUri"),
+                artifactUri,
                 stringOrDefault(object, "graphType", "graph"),
                 stringOrDefault(object, "builderVersion", "unknown"),
                 bool(object, "ready"),
