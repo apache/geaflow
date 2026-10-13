@@ -55,7 +55,9 @@ public final class WeightedRrfFusion {
             result.add(new Evidence(value.getEvidenceId(), value.getKind(), value.getText(),
                 value.getChunks(), value.getEntities(), value.getPaths(), value.getSources(),
                 value.getStageScores(), score(value), value.getFinalScore(), value.getRank(),
-                value.getGraphTraces()));
+                value.getGraphTraces(), value.getSchemaVersion(), value.getDataset(),
+                value.getDatasetVersion(), value.getSplit(), value.getGraphVersion(),
+                value.getIndexVersion()));
         }
         result.sort(Comparator.comparingDouble(Evidence::getFusedScore).reversed()
             .thenComparing(Evidence::getEvidenceId));
@@ -63,7 +65,9 @@ public final class WeightedRrfFusion {
         for (Evidence value : result) {
             ranked.add(new Evidence(value.getEvidenceId(), value.getKind(), value.getText(), value.getChunks(),
                 value.getEntities(), value.getPaths(), value.getSources(), value.getStageScores(), value.getFusedScore(),
-                value.getFinalScore(), ranked.size() + 1, value.getGraphTraces()));
+                value.getFinalScore(), ranked.size() + 1, value.getGraphTraces(),
+                value.getSchemaVersion(), value.getDataset(), value.getDatasetVersion(),
+                value.getSplit(), value.getGraphVersion(), value.getIndexVersion()));
         }
         return ranked;
     }

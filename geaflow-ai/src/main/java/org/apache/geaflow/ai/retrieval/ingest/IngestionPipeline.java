@@ -31,6 +31,7 @@ import org.apache.geaflow.ai.retrieval.index.IndexArtifact;
 import org.apache.geaflow.ai.retrieval.index.VectorIndexBuilder;
 import org.apache.geaflow.ai.retrieval.metadata.ImportMetadata;
 import org.apache.geaflow.ai.retrieval.metadata.QualityCounters;
+import org.apache.geaflow.ai.retrieval.model.document.RetrievalIds;
 import org.apache.geaflow.ai.retrieval.model.document.SourceDocument;
 import org.apache.geaflow.ai.retrieval.model.document.TextChunk;
 
@@ -130,10 +131,11 @@ public final class IngestionPipeline {
                 || document.getSourceUri().trim().isEmpty()) {
                 throw new IllegalArgumentException("chunk requires a source document with a source URI");
             }
-            if (chunk.getSourceUri() != null && !document.getSourceUri().equals(chunk.getSourceUri())) {
+            if (chunk.getSourceUri() != null && !RetrievalIds.normalizeSourceUri(document.getSourceUri())
+                .equals(RetrievalIds.normalizeSourceUri(chunk.getSourceUri()))) {
                 throw new IllegalArgumentException("chunk source URI does not match its document");
             }
-            result.add(chunk.withSourceUri(document.getSourceUri()));
+            result.add(chunk.withSourceDocument(document));
         }
         return result;
     }

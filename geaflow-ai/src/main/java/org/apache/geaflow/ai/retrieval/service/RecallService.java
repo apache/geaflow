@@ -52,6 +52,7 @@ import org.apache.geaflow.ai.retrieval.index.bm25.Bm25Hit;
 import org.apache.geaflow.ai.retrieval.index.bm25.Bm25IndexReader;
 import org.apache.geaflow.ai.retrieval.index.vector.VectorHit;
 import org.apache.geaflow.ai.retrieval.index.vector.VectorIndexReader;
+import org.apache.geaflow.ai.retrieval.model.document.RetrievalIds;
 import org.apache.geaflow.ai.retrieval.model.document.SourceRef;
 import org.apache.geaflow.ai.retrieval.model.document.TextChunk;
 import org.apache.geaflow.ai.retrieval.model.evidence.ChannelScore;
@@ -278,7 +279,8 @@ public final class RecallService {
                     trace.getEvaluatedCounts().put(name, search.getCandidatesEvaluated());
                     trace.getCandidateCounts().put(name, search.getHits().size());
                     for (Bm25Hit hit : search.getHits()) {
-                        EvidenceBuilder builder = builder(merged, byId, hit.getChunkId(), hit.getDocumentId(), EvidenceKind.CHUNK);
+                        EvidenceBuilder builder = builder(merged, byId, hit.getChunkId(),
+                            hit.getDocumentId(), EvidenceKind.CHUNK, plan);
                         if (!builder.chunk.getText().equals(hit.getText())) {
                             throw notReady("BM25 text does not match fixture");
                         }
@@ -294,7 +296,8 @@ public final class RecallService {
                     trace.getEvaluatedCounts().put(name, search.getCandidatesEvaluated());
                     trace.getCandidateCounts().put(name, search.getHits().size());
                     for (VectorHit hit : search.getHits()) {
-                        EvidenceBuilder builder = builder(merged, byId, hit.getChunkId(), hit.getDocumentId(), EvidenceKind.CHUNK);
+                        EvidenceBuilder builder = builder(merged, byId, hit.getChunkId(),
+                            hit.getDocumentId(), EvidenceKind.CHUNK, plan);
                         builder.scores.put(name, new ChannelScore(name, hit.getSimilarity(), null, hit.getRank()));
                     }
                     reason = search.getStopReason();
@@ -314,18 +317,20 @@ public final class RecallService {
                     int rank = 0;
                     for (GraphRetriever.GraphHit hit : hits) {
                         for (String id : hit.getSourceChunkIds()) {
-                            EvidenceBuilder builder = builder(merged, byId, id, byId.get(id).getDocumentId(), EvidenceKind.GRAPH_PATH);
+                            EvidenceBuilder builder = builder(merged, byId, id,
+                                byId.get(id).getDocumentId(), EvidenceKind.GRAPH_PATH, plan);
                             if (!builder.entities.contains(hit.getAnchor().getEntity())) {
                                 builder.entities.add(hit.getAnchor().getEntity());
                             }
                             if (!builder.paths.contains(hit.getPath())) {
                                 builder.paths.add(hit.getPath());
                             }
-                            builder.graphTraces.add(new GraphEvidenceTrace(requestId,
+                            builder.graphTraces.add(new GraphEvidenceTrace(requestId, plan.getMode(),
+                                hit.getSeed(),
+                                hit.getAnchor().getMatchType(), hit.getAnchor().getConfidence(),
                                 plan.getGraphVersion() == null ? "fixture" : plan.getGraphVersion(),
-                                hit.getAnchor().getEntity().getEntityId(), hit.getAnchor().getMatchType(),
-                                hit.getAnchor().getConfidence(), hit.getPath(),
-                                hit.getSourceChunkIds()));
+                                hit.getPath(), Collections.singletonList(id), hit.getPathVertices(),
+                                hit.getPathEdges()));
                             if (!builder.scores.containsKey(name)) {
                                 builder.scores.put(name, new ChannelScore(name, hit.getScore(), null, ++rank));
                             }
@@ -367,7 +372,9 @@ public final class RecallService {
         for (Evidence value : evidence.subList(0, Math.min(plan.getTopK(), evidence.size()))) {
             ranked.add(new Evidence(value.getEvidenceId(), value.getKind(), value.getText(), value.getChunks(),
                 value.getEntities(), value.getPaths(), value.getSources(), value.getStageScores(), value.getFusedScore(),
-                value.getFinalScore(), ranked.size() + 1, value.getGraphTraces()));
+                value.getFinalScore(), ranked.size() + 1, value.getGraphTraces(),
+                value.getSchemaVersion(), value.getDataset(), value.getDatasetVersion(),
+                value.getSplit(), value.getGraphVersion(), value.getIndexVersion()));
         }
         boolean deadlineReached = expired(deadline) || trace.getChannelStopReasons().containsValue(RecallStopReason.DEADLINE);
         if (deadlineReached) {
@@ -457,29 +464,36 @@ public final class RecallService {
         }
     }
 
-    private static EvidenceBuilder builder(Map<String, EvidenceBuilder> merged, Map<String, TextChunk> chunks,
-                                            String chunkId, String documentId, EvidenceKind kind) {
+    private static EvidenceBuilder builder(Map<String, EvidenceBuilder> merged,
+                                            Map<String, TextChunk> chunks, String chunkId,
+                                            String documentId, EvidenceKind kind, RecallPlan plan) {
         TextChunk chunk = chunks.get(chunkId);
         if (chunk == null || !chunk.getDocumentId().equals(documentId)) {
             throw notReady("channel chunk does not match fixture");
         }
-        String id = documentId.length() + ":" + documentId + chunkId;
-        return merged.computeIfAbsent(id, key -> new EvidenceBuilder(id, chunk, kind));
+        String id = RetrievalIds.chunkEvidenceId(documentId, chunkId);
+        return merged.computeIfAbsent(id, key -> new EvidenceBuilder(id, chunk, kind,
+            plan.getGraphVersion(), plan.getIndexVersion()));
     }
 
     private static final class EvidenceBuilder {
         private final String id;
         private final TextChunk chunk;
         private final EvidenceKind kind;
+        private final String graphVersion;
+        private final String indexVersion;
         private final Map<String, ChannelScore> scores = new LinkedHashMap<>();
         private final List<EntityRef> entities = new ArrayList<>();
         private final List<GraphPathRef> paths = new ArrayList<>();
         private final List<GraphEvidenceTrace> graphTraces = new ArrayList<>();
 
-        private EvidenceBuilder(String id, TextChunk chunk, EvidenceKind kind) {
+        private EvidenceBuilder(String id, TextChunk chunk, EvidenceKind kind, String graphVersion,
+                                String indexVersion) {
             this.id = id;
             this.chunk = chunk;
             this.kind = kind;
+            this.graphVersion = graphVersion;
+            this.indexVersion = indexVersion;
         }
 
         private Evidence build() {
@@ -490,10 +504,20 @@ public final class RecallService {
             if (chunk.getSourceUri() == null) {
                 throw notReady("chunk source URI is missing");
             }
-            SourceRef source = new SourceRef(chunk.getDocumentId(), chunk.getSourceUri(),
-                chunk.getStartOffset(), chunk.getEndOffset());
+            SourceRef source = chunk.getDataset() == null
+                ? new SourceRef(chunk.getDocumentId(), chunk.getSourceUri(), chunk.getStartOffset(),
+                    chunk.getEndOffset())
+                : new SourceRef(chunk.getDocumentId(), chunk.getSourceUri(), chunk.getStartOffset(),
+                    chunk.getEndOffset(), chunk.getDataset(), chunk.getDatasetVersion(),
+                    chunk.getSplit(), chunk.getSourceHash());
+            String evidenceGraphVersion = graphTraces.isEmpty() ? graphVersion
+                : graphTraces.get(0).getGraphVersion();
             return new Evidence(id, kind, chunk.getText(), Collections.singletonList(chunk), entities, paths,
-                Collections.singletonList(source), scores, fused, null, 1, graphTraces);
+                Collections.singletonList(source), scores, fused, null, 1, graphTraces,
+                chunk.getDataset() == null ? Evidence.LEGACY_SCHEMA_VERSION
+                    : Evidence.CURRENT_SCHEMA_VERSION,
+                chunk.getDataset(), chunk.getDatasetVersion(),
+                chunk.getSplit(), evidenceGraphVersion, indexVersion);
         }
     }
 }

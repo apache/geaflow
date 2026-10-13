@@ -30,6 +30,7 @@ import java.util.Map;
 import java.util.TreeMap;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalErrorCode;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalException;
+import org.apache.geaflow.ai.retrieval.model.document.RetrievalIds;
 import org.apache.geaflow.ai.retrieval.model.document.TextChunk;
 
 /** Persisted graph/index identity and canonical chunk fingerprint shared by both indexes. */
@@ -41,7 +42,7 @@ public final class ArtifactIdentity {
     private final String chunkFingerprint;
 
     public ArtifactIdentity(String graphName, String graphVersion, String indexVersion, String chunkFingerprint) {
-        if (blank(graphName) || blank(graphVersion) || blank(indexVersion) || !graphVersion.equals(indexVersion)
+        if (blank(graphName) || blank(graphVersion) || blank(indexVersion)
             || chunkFingerprint == null || !chunkFingerprint.matches("[0-9a-f]{64}")) {
             throw new RetrievalException(RetrievalErrorCode.INDEX_NOT_READY, "artifact identity missing; rebuild index");
         }
@@ -81,9 +82,17 @@ public final class ArtifactIdentity {
 
     public void validate(String name, String graph, String index, List<TextChunk> chunks) {
         if (!graphName.equals(name) || !graphVersion.equals(graph) || !indexVersion.equals(index)
-            || !chunkFingerprint.equals(fingerprint(chunks))) {
+            || !matchesChunkFingerprint(chunks)) {
             throw new RetrievalException(RetrievalErrorCode.INDEX_NOT_READY, "artifact/fixture identity mismatch");
         }
+    }
+
+    private boolean matchesChunkFingerprint(List<TextChunk> chunks) {
+        if (chunkFingerprint.equals(fingerprint(chunks))) {
+            return true;
+        }
+        return chunks.stream().noneMatch(ArtifactIdentity::hasSourceProvenance)
+            && chunkFingerprint.equals(legacyFingerprint(chunks));
     }
 
     public void validateVersions(String graph, String index) {
@@ -105,18 +114,54 @@ public final class ArtifactIdentity {
                 append(digest, Integer.toString(chunk.getTokenEstimate()));
                 append(digest, chunk.getPolicyVersion());
                 append(digest, chunk.getTextHash());
+                append(digest, RetrievalIds.normalizeSourceUri(chunk.getSourceUri()));
+                append(digest, Integer.toString(chunk.getStartOffset()));
+                append(digest, Integer.toString(chunk.getEndOffset()));
+                append(digest, chunk.getDataset());
+                append(digest, chunk.getDatasetVersion());
+                append(digest, chunk.getSplit());
+                append(digest, chunk.getSourceHash());
+            }
+            return hex(digest.digest());
+        } catch (NoSuchAlgorithmException error) {
+            throw new IllegalStateException("SHA-256 unavailable", error);
+        }
+    }
+
+    private static String legacyFingerprint(List<TextChunk> chunks) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            List<TextChunk> ordered = new ArrayList<>(chunks);
+            ordered.sort(Comparator.comparing(TextChunk::getDocumentId).thenComparing(TextChunk::getChunkId));
+            for (TextChunk chunk : ordered) {
+                append(digest, chunk.getDocumentId());
+                append(digest, chunk.getChunkId());
+                append(digest, chunk.getText());
+                append(digest, Integer.toString(chunk.getChunkIndex()));
+                append(digest, Integer.toString(chunk.getTokenEstimate()));
+                append(digest, chunk.getPolicyVersion());
+                append(digest, chunk.getTextHash());
                 append(digest, chunk.getSourceUri());
                 append(digest, Integer.toString(chunk.getStartOffset()));
                 append(digest, Integer.toString(chunk.getEndOffset()));
             }
-            StringBuilder result = new StringBuilder();
-            for (byte value : digest.digest()) {
-                result.append(String.format(java.util.Locale.ROOT, "%02x", value & 255));
-            }
-            return result.toString();
+            return hex(digest.digest());
         } catch (NoSuchAlgorithmException error) {
             throw new IllegalStateException("SHA-256 unavailable", error);
         }
+    }
+
+    private static boolean hasSourceProvenance(TextChunk chunk) {
+        return chunk.getDataset() != null || chunk.getDatasetVersion() != null || chunk.getSplit() != null
+            || chunk.getSourceHash() != null;
+    }
+
+    private static String hex(byte[] values) {
+        StringBuilder result = new StringBuilder();
+        for (byte value : values) {
+            result.append(String.format(java.util.Locale.ROOT, "%02x", value & 255));
+        }
+        return result.toString();
     }
 
     private static void append(MessageDigest digest, String value) {

@@ -20,11 +20,19 @@
 package org.apache.geaflow.ai.retrieval.channel.graph;
 
 import java.util.List;
+import org.apache.geaflow.ai.retrieval.model.graph.EntityRef;
 import org.apache.geaflow.ai.retrieval.model.graph.GraphEdgeRef;
+import org.apache.geaflow.ai.retrieval.model.graph.GraphVertexRef;
 
 /** Versioned graph boundary used by the bounded graph retriever. */
 public interface GraphNeighborProvider {
 
     /** Returns non-null neighbors ordered by edge ID, source, target, and label. */
     List<GraphEdgeRef> neighbors(String entityId);
+
+    /** Returns the graph vertex identity for an entity; providers may preserve distinct IDs. */
+    default GraphVertexRef vertex(EntityRef entity) {
+        return new GraphVertexRef(entity.getType(), entity.getEntityId(), entity.getEntityId(),
+            entity.getDataset(), entity.getDatasetVersion(), entity.getSplit(), entity.getSourceHash());
+    }
 }

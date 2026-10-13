@@ -19,6 +19,7 @@
 package org.apache.geaflow.ai.retrieval.channel.graph;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.AbstractList;
 import java.util.Arrays;
@@ -28,9 +29,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.geaflow.ai.retrieval.execution.RecallStopReason;
+import org.apache.geaflow.ai.retrieval.api.model.RetrievalMode;
 import org.apache.geaflow.ai.retrieval.model.document.TextChunk;
+import org.apache.geaflow.ai.retrieval.model.evidence.GraphEvidenceTrace;
 import org.apache.geaflow.ai.retrieval.model.graph.EntityRef;
 import org.apache.geaflow.ai.retrieval.model.graph.GraphEdgeRef;
+import org.apache.geaflow.ai.retrieval.model.graph.GraphVertexRef;
 import org.junit.jupiter.api.Test;
 
 class GraphRetrieverTest {
@@ -113,6 +117,42 @@ class GraphRetrieverTest {
         assertEquals(1, hits.size());
         assertEquals(1, retriever.getLastStats().getCandidatesProduced());
         assertEquals(RecallStopReason.CANDIDATE_LIMIT, retriever.getLastStats().getStopReason());
+    }
+
+    @Test
+    void preservesDistinctGraphVertexIdentityInPathAndSeed() {
+        List<EntityRef> entities = Arrays.asList(
+            new EntityRef("e1", "Confucius", "person"),
+            new EntityRef("e2", "Ethics", "topic"));
+        GraphNeighborProvider provider = new GraphNeighborProvider() {
+            @Override
+            public List<GraphEdgeRef> neighbors(String entityId) {
+                return Collections.singletonList(edge(0));
+            }
+
+            @Override
+            public GraphVertexRef vertex(EntityRef entity) {
+                return new GraphVertexRef(entity.getType(), "vertex-" + entity.getEntityId(),
+                    entity.getEntityId());
+            }
+        };
+        Map<String, TextChunk> chunks = Collections.singletonMap("c1",
+            new TextChunk("c1", "doc-1", 0, 0, 1, 1, "Confucius"));
+        GraphRetriever retriever = new GraphRetriever();
+
+        List<GraphRetriever.GraphHit> hits = retriever.retrieve("Confucius", entities, provider,
+            chunks, 10, 10, 0L, System::nanoTime);
+
+        assertEquals(1, hits.size());
+        assertEquals("e1", hits.get(0).getSeed().getEntityId());
+        assertEquals("vertex-e1", hits.get(0).getSeed().getVertexId());
+        assertEquals(Arrays.asList("vertex-e1", "vertex-e2"),
+            hits.get(0).getPath().getVertexIds());
+        assertEquals(hits.get(0).getSeed().getVertexId(),
+            hits.get(0).getPath().getVertexIds().get(0));
+        assertTrue(new GraphEvidenceTrace("request-1", RetrievalMode.GRAPH_ONLY,
+            hits.get(0).getSeed(), "CANONICAL", 1.0, "v1", hits.get(0).getPath(),
+            hits.get(0).getSourceChunkIds()).getSeed().equals(hits.get(0).getSeed()));
     }
 
     private static GraphEdgeRef edge(int index) {

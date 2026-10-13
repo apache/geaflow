@@ -37,6 +37,14 @@ public final class EntityRef {
     private final String type;
     @SerializedName("sourceChunkIds")
     private final java.util.List<String> sourceChunkIds;
+    @SerializedName("dataset")
+    private final String dataset;
+    @SerializedName("datasetVersion")
+    private final String datasetVersion;
+    @SerializedName("split")
+    private final String split;
+    @SerializedName("sourceHash")
+    private final String sourceHash;
 
     private EntityRef() {
         this.entityId = null;
@@ -44,6 +52,10 @@ public final class EntityRef {
         this.aliases = java.util.Collections.emptyList();
         this.type = null;
         this.sourceChunkIds = java.util.Collections.emptyList();
+        this.dataset = null;
+        this.datasetVersion = null;
+        this.split = null;
+        this.sourceHash = null;
     }
 
     public EntityRef(String entityId, String canonicalName, String type) {
@@ -53,11 +65,22 @@ public final class EntityRef {
 
     public EntityRef(String entityId, String canonicalName, java.util.List<String> aliases,
                      String type, java.util.List<String> sourceChunkIds) {
+        this(entityId, canonicalName, aliases, type, sourceChunkIds, null, null, null, null);
+    }
+
+    public EntityRef(String entityId, String canonicalName, java.util.List<String> aliases,
+                     String type, java.util.List<String> sourceChunkIds, String dataset,
+                     String datasetVersion, String split, String sourceHash) {
         this.entityId = ModelValidation.required(entityId, "entityId");
         this.canonicalName = ModelValidation.required(canonicalName, "canonicalName");
         this.aliases = ModelValidation.sortedStrings(aliases, "alias");
         this.type = ModelValidation.required(type, "type");
         this.sourceChunkIds = ModelValidation.sortedStrings(sourceChunkIds, "sourceChunkId");
+        this.dataset = ModelValidation.optionalNonBlank(dataset, "dataset");
+        this.datasetVersion = ModelValidation.optionalNonBlank(datasetVersion, "datasetVersion");
+        this.split = ModelValidation.optionalNonBlank(split, "split");
+        this.sourceHash = ModelValidation.optionalNonBlank(sourceHash, "sourceHash");
+        validateProvenance();
     }
 
     public String getEntityId() {
@@ -81,6 +104,22 @@ public final class EntityRef {
             ? Collections.emptyList() : sourceChunkIds);
     }
 
+    public String getDataset() {
+        return dataset;
+    }
+
+    public String getDatasetVersion() {
+        return datasetVersion;
+    }
+
+    public String getSplit() {
+        return split;
+    }
+
+    public String getSourceHash() {
+        return sourceHash;
+    }
+
     public boolean sameIdentityAs(EntityRef other) {
         return other != null && Objects.equals(entityId, other.entityId)
             && Objects.equals(canonicalName, other.canonicalName)
@@ -100,11 +139,25 @@ public final class EntityRef {
             && Objects.equals(canonicalName, that.canonicalName)
             && Objects.equals(aliases, that.aliases)
             && Objects.equals(type, that.type)
-            && Objects.equals(sourceChunkIds, that.sourceChunkIds);
+            && Objects.equals(sourceChunkIds, that.sourceChunkIds)
+            && Objects.equals(dataset, that.dataset)
+            && Objects.equals(datasetVersion, that.datasetVersion)
+            && Objects.equals(split, that.split)
+            && Objects.equals(sourceHash, that.sourceHash);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(entityId, canonicalName, aliases, type, sourceChunkIds);
+        return Objects.hash(entityId, canonicalName, aliases, type, sourceChunkIds, dataset,
+            datasetVersion, split, sourceHash);
+    }
+
+    private void validateProvenance() {
+        boolean any = dataset != null || datasetVersion != null || split != null || sourceHash != null;
+        boolean complete = dataset != null && datasetVersion != null && split != null && sourceHash != null;
+        if (any && !complete) {
+            throw new IllegalArgumentException(
+                "entity dataset, datasetVersion, split, and sourceHash must be provided together");
+        }
     }
 }

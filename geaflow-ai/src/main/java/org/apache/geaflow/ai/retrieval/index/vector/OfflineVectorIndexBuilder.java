@@ -62,8 +62,10 @@ public final class OfflineVectorIndexBuilder implements VectorIndexBuilder {
     public IndexArtifact build(IngestionContext context, List<TextChunk> chunks) throws IOException {
         Objects.requireNonNull(context, "context");
         Objects.requireNonNull(chunks, "chunks");
-        String version = context.getGraphVersion().getVersion();
-        Path published = ArtifactIdentity.resolveVersionedPath(outputDirectory, INDEX_NAME + "-", version, ".bin");
+        String graphVersion = context.getGraphVersion().getVersion();
+        String indexVersion = context.getIndexVersion();
+        Path published = ArtifactIdentity.resolveVersionedPath(outputDirectory, INDEX_NAME + "-",
+            indexVersion, ".bin");
         List<TextChunk> ordered = new ArrayList<>(chunks);
         ordered.sort(Comparator.comparing(TextChunk::getChunkId));
         int dimensions = validate(context, ordered);
@@ -74,8 +76,8 @@ public final class OfflineVectorIndexBuilder implements VectorIndexBuilder {
             try (DataOutputStream output = new DataOutputStream(Files.newOutputStream(staging))) {
                 output.writeUTF("GEAFLOW-VECTOR-2");
                 output.writeUTF(context.getGraphVersion().getGraphName());
-                output.writeUTF(context.getGraphVersion().getVersion());
-                output.writeUTF(context.getGraphVersion().getVersion());
+                output.writeUTF(graphVersion);
+                output.writeUTF(indexVersion);
                 output.writeUTF(ArtifactIdentity.fingerprint(ordered));
                 output.writeUTF(vectorSource);
                 output.writeUTF(vectorVersion);
@@ -93,9 +95,8 @@ public final class OfflineVectorIndexBuilder implements VectorIndexBuilder {
             publishedStaging = ArtifactPublisher.publish(staging, published,
                 existing -> VectorArtifact.validateArtifact(existing, ordered, dimensions,
                     vectorSource, vectorVersion, context, vectors));
-            IndexVersion indexVersion = new IndexVersion(INDEX_NAME,
-                context.getGraphVersion().getVersion(), context.getGraphVersion().getVersion());
-            IndexBuildMetadata metadata = new IndexBuildMetadata(context.getGraphVersion(), indexVersion,
+            IndexVersion versionMetadata = new IndexVersion(INDEX_NAME, indexVersion, graphVersion);
+            IndexBuildMetadata metadata = new IndexBuildMetadata(context.getGraphVersion(), versionMetadata,
                 INDEX_NAME, BUILDER_VERSION + ":" + vectorSource + ":" + vectorVersion,
                 published.toString(), true);
             return new VectorArtifact(metadata, published);
@@ -214,7 +215,7 @@ public final class OfflineVectorIndexBuilder implements VectorIndexBuilder {
                 }
                 new ArtifactIdentity(input.readUTF(), input.readUTF(), input.readUTF(), input.readUTF()).validate(
                     context.getGraphVersion().getGraphName(), context.getGraphVersion().getVersion(),
-                    context.getGraphVersion().getVersion(), chunks);
+                    context.getIndexVersion(), chunks);
                 if (!expectedSource.equals(input.readUTF()) || !expectedVersion.equals(input.readUTF())) {
                     throw new IOException("vector artifact metadata mismatch");
                 }

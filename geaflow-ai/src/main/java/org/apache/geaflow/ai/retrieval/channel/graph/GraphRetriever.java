@@ -32,6 +32,7 @@ import org.apache.geaflow.ai.retrieval.model.document.TextChunk;
 import org.apache.geaflow.ai.retrieval.model.graph.EntityRef;
 import org.apache.geaflow.ai.retrieval.model.graph.GraphEdgeRef;
 import org.apache.geaflow.ai.retrieval.model.graph.GraphPathRef;
+import org.apache.geaflow.ai.retrieval.model.graph.GraphVertexRef;
 
 /** Bounded deterministic one-hop graph expansion over fixture graph records. */
 public final class GraphRetriever {
@@ -172,10 +173,14 @@ public final class GraphRetriever {
                     continue;
                 }
                 producedChunks.addAll(newCandidates);
+                GraphVertexRef sourceVertex = provider.vertex(anchor.getEntity());
+                GraphVertexRef targetVertex = provider.vertex(entityMap.get(target));
+                List<GraphVertexRef> pathVertices = java.util.Arrays.asList(sourceVertex, targetVertex);
                 GraphPathRef path = new GraphPathRef(
-                    java.util.Arrays.asList(anchor.getEntity().getEntityId(), target),
+                    java.util.Arrays.asList(sourceVertex.getVertexId(), targetVertex.getVertexId()),
                     Collections.singletonList(edge.getEdgeId()), 1, false);
-                result.add(new GraphHit(anchor, edge, path, boundedSources,
+                result.add(new GraphHit(anchor, sourceVertex, edge, path, pathVertices,
+                    Collections.singletonList(edge), boundedSources,
                     1.0 / (1.0 + result.size())));
                 lastStats.verticesReached++;
                 lastStats.candidatesProduced = producedChunks.size();
@@ -206,16 +211,24 @@ public final class GraphRetriever {
     /** Graph candidate with path and source provenance. */
     public static final class GraphHit {
         private final EntityAnchorResolver.Anchor anchor;
+        private final GraphVertexRef seed;
         private final GraphEdgeRef edge;
         private final GraphPathRef path;
+        private final List<GraphVertexRef> pathVertices;
+        private final List<GraphEdgeRef> pathEdges;
         private final List<String> sourceChunkIds;
         private final double score;
 
-        private GraphHit(EntityAnchorResolver.Anchor anchor, GraphEdgeRef edge, GraphPathRef path,
+        private GraphHit(EntityAnchorResolver.Anchor anchor, GraphVertexRef seed,
+                         GraphEdgeRef edge, GraphPathRef path,
+                         List<GraphVertexRef> pathVertices, List<GraphEdgeRef> pathEdges,
                          List<String> sourceChunkIds, double score) {
             this.anchor = anchor;
+            this.seed = seed;
             this.edge = edge;
             this.path = path;
+            this.pathVertices = new ArrayList<>(pathVertices);
+            this.pathEdges = new ArrayList<>(pathEdges);
             this.sourceChunkIds = new ArrayList<>(sourceChunkIds);
             this.score = score;
         }
@@ -224,12 +237,24 @@ public final class GraphRetriever {
             return anchor;
         }
 
+        public GraphVertexRef getSeed() {
+            return seed;
+        }
+
         public GraphEdgeRef getEdge() {
             return edge;
         }
 
         public GraphPathRef getPath() {
             return path;
+        }
+
+        public List<GraphVertexRef> getPathVertices() {
+            return Collections.unmodifiableList(pathVertices);
+        }
+
+        public List<GraphEdgeRef> getPathEdges() {
+            return Collections.unmodifiableList(pathEdges);
         }
 
         public List<String> getSourceChunkIds() {

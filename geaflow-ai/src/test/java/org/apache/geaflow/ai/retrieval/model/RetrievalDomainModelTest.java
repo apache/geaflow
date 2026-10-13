@@ -31,12 +31,14 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
 import org.apache.geaflow.ai.retrieval.codec.RetrievalModelJson;
+import org.apache.geaflow.ai.retrieval.api.model.RetrievalMode;
 import org.apache.geaflow.ai.retrieval.model.document.SourceDocument;
 import org.apache.geaflow.ai.retrieval.model.document.SourceRef;
 import org.apache.geaflow.ai.retrieval.model.document.TextChunk;
 import org.apache.geaflow.ai.retrieval.model.evidence.ChannelScore;
 import org.apache.geaflow.ai.retrieval.model.evidence.Evidence;
 import org.apache.geaflow.ai.retrieval.model.evidence.EvidenceKind;
+import org.apache.geaflow.ai.retrieval.model.evidence.GraphEvidenceTrace;
 import org.apache.geaflow.ai.retrieval.model.graph.EntityRef;
 import org.apache.geaflow.ai.retrieval.model.graph.GraphEdgeRef;
 import org.apache.geaflow.ai.retrieval.model.graph.GraphPathRef;
@@ -339,6 +341,84 @@ Assertions.assertEquals(document.hashCode(), copy.hashCode());
         Assertions.assertEquals(score, roundTrip(score, ChannelScore.class));
         Assertions.assertEquals(graphVersion, roundTrip(graphVersion, GraphVersion.class));
         Assertions.assertEquals(indexVersion, roundTrip(indexVersion, IndexVersion.class));
+    }
+
+    @Test
+    public void graphTraceRetainsSelectedModeAndStructuredSeed() {
+        GraphVertexRef seed = new GraphVertexRef("PERSON", "vertex-1", "entity-1");
+        GraphPathRef path = new GraphPathRef(Arrays.asList("vertex-1", "vertex-2"),
+            Collections.singletonList("edge-1"), 1, false);
+        GraphEvidenceTrace trace = new GraphEvidenceTrace("request-1", RetrievalMode.HYBRID,
+            seed, "ALIAS", 0.9, "v1", path, Collections.singletonList("chunk-1"));
+
+        String json = RetrievalModelJson.toJson(trace);
+        GraphEvidenceTrace restored = RetrievalModelJson.fromJson(json, GraphEvidenceTrace.class);
+
+        Assertions.assertEquals(RetrievalMode.HYBRID, restored.getSelectedMode());
+        Assertions.assertEquals(seed, restored.getSeed());
+        Assertions.assertEquals(trace, restored);
+    }
+
+    @Test
+    public void graphTraceRejectsAnchorEntityThatConflictsWithSeed() {
+        GraphVertexRef seed = new GraphVertexRef("PERSON", "vertex-1", "entity-1");
+        GraphEvidenceTrace trace = new GraphEvidenceTrace("request-1", RetrievalMode.GRAPH_ONLY,
+            seed, "CANONICAL", 1.0, "v1",
+            new GraphPathRef(Collections.singletonList("vertex-1"), Collections.emptyList(),
+                0, false), Collections.singletonList("chunk-1"));
+        String conflictingJson = RetrievalModelJson.toJson(trace)
+            .replace("\"anchorEntityId\":\"entity-1\"",
+                "\"anchorEntityId\":\"different-entity\"");
+
+        Assertions.assertThrows(JsonParseException.class,
+            () -> RetrievalModelJson.fromJson(conflictingJson, GraphEvidenceTrace.class));
+    }
+
+    @Test
+    public void graphTraceAcceptsLegacyJsonWithoutAddedFields() {
+        String json = "{\"queryId\":\"request-1\",\"graphVersion\":\"v1\","
+            + "\"anchorEntityId\":\"entity-1\",\"anchorMatchType\":\"ALIAS\","
+            + "\"anchorConfidence\":0.9,\"path\":{\"vertexIds\":[\"entity-1\"],"
+            + "\"edgeIds\":[],\"hop\":0,\"sampled\":false},"
+            + "\"supportingChunkIds\":[\"chunk-1\"]}";
+
+        GraphEvidenceTrace trace = RetrievalModelJson.fromJson(json, GraphEvidenceTrace.class);
+
+        Assertions.assertNull(trace.getSelectedMode());
+        Assertions.assertNull(trace.getSeed());
+    }
+
+    @Test
+    public void graphTraceRejectsMismatchedPathAndSeed() {
+        GraphVertexRef seed = new GraphVertexRef("PERSON", "vertex-1", "entity-1");
+        GraphPathRef path = new GraphPathRef(Collections.singletonList("vertex-2"),
+            Collections.emptyList(), 0, false);
+
+        Assertions.assertThrows(IllegalArgumentException.class,
+            () -> new GraphEvidenceTrace("request-1", RetrievalMode.GRAPH_ONLY, seed,
+                "CANONICAL", 1.0, "v1", path, Collections.emptyList()));
+        Assertions.assertThrows(JsonParseException.class,
+            () -> RetrievalModelJson.fromJson("{\"queryId\":\"request-1\","
+                + "\"graphVersion\":\"v1\",\"anchorEntityId\":\"entity-1\","
+                + "\"anchorMatchType\":\"CANONICAL\",\"anchorConfidence\":1.0,"
+                + "\"path\":{\"vertexIds\":[\"vertex-2\"],\"edgeIds\":[],"
+                + "\"hop\":0,\"sampled\":false}}", GraphEvidenceTrace.class));
+    }
+
+    @Test
+    public void graphTraceRejectsPartialOrUnknownNewFields() {
+        String prefix = "{\"queryId\":\"request-1\",\"graphVersion\":\"v1\","
+            + "\"anchorEntityId\":\"entity-1\",\"anchorMatchType\":\"CANONICAL\","
+            + "\"anchorConfidence\":1.0,\"path\":{\"vertexIds\":[\"entity-1\"],"
+            + "\"edgeIds\":[],\"hop\":0,\"sampled\":false}";
+        String seed = ",\"seed\":{\"label\":\"PERSON\",\"vertexId\":\"entity-1\","
+            + "\"entityId\":\"entity-1\"}";
+
+        Assertions.assertThrows(JsonParseException.class,
+            () -> RetrievalModelJson.fromJson(prefix + seed + "}", GraphEvidenceTrace.class));
+        Assertions.assertThrows(JsonParseException.class,
+            () -> RetrievalModelJson.fromJson(prefix + ",\"selectedMode\":\"FUTURE\""
+                + seed + "}", GraphEvidenceTrace.class));
     }
 
     @Test

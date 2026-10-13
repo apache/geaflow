@@ -38,6 +38,14 @@ public final class GraphEdgeRef {
     private final String targetEntityId;
     @SerializedName("sourceChunkIds")
     private final List<String> sourceChunkIds;
+    @SerializedName("dataset")
+    private final String dataset;
+    @SerializedName("datasetVersion")
+    private final String datasetVersion;
+    @SerializedName("split")
+    private final String split;
+    @SerializedName("sourceHash")
+    private final String sourceHash;
 
     private GraphEdgeRef() {
         this.edgeId = null;
@@ -45,6 +53,10 @@ public final class GraphEdgeRef {
         this.sourceEntityId = null;
         this.targetEntityId = null;
         this.sourceChunkIds = Collections.emptyList();
+        this.dataset = null;
+        this.datasetVersion = null;
+        this.split = null;
+        this.sourceHash = null;
     }
 
     public GraphEdgeRef(String edgeId, String label, String sourceEntityId, String targetEntityId) {
@@ -53,11 +65,27 @@ public final class GraphEdgeRef {
 
     public GraphEdgeRef(String edgeId, String label, String sourceEntityId,
                         String targetEntityId, List<String> sourceChunkIds) {
+        this(edgeId, label, sourceEntityId, targetEntityId, sourceChunkIds, null, null, null, null);
+    }
+
+    public GraphEdgeRef(String edgeId, String label, String sourceEntityId, String targetEntityId,
+                        List<String> sourceChunkIds, String dataset, String datasetVersion,
+                        String split, String sourceHash) {
         this.edgeId = ModelValidation.required(edgeId, "edgeId");
         this.label = ModelValidation.required(label, "label");
         this.sourceEntityId = ModelValidation.required(sourceEntityId, "sourceEntityId");
         this.targetEntityId = ModelValidation.required(targetEntityId, "targetEntityId");
         this.sourceChunkIds = ModelValidation.sortedStrings(sourceChunkIds, "sourceChunkId");
+        this.dataset = ModelValidation.optionalNonBlank(dataset, "dataset");
+        this.datasetVersion = ModelValidation.optionalNonBlank(datasetVersion, "datasetVersion");
+        this.split = ModelValidation.optionalNonBlank(split, "split");
+        this.sourceHash = ModelValidation.optionalNonBlank(sourceHash, "sourceHash");
+        boolean any = dataset != null || datasetVersion != null || split != null || sourceHash != null;
+        boolean complete = dataset != null && datasetVersion != null && split != null && sourceHash != null;
+        if (any && !complete) {
+            throw new IllegalArgumentException(
+                "edge dataset, datasetVersion, split, and sourceHash must be provided together");
+        }
     }
 
     public String getEdgeId() {
@@ -81,11 +109,31 @@ public final class GraphEdgeRef {
             ? Collections.emptyList() : sourceChunkIds);
     }
 
+    public String getDataset() {
+        return dataset;
+    }
+
+    public String getDatasetVersion() {
+        return datasetVersion;
+    }
+
+    public String getSplit() {
+        return split;
+    }
+
+    public String getSourceHash() {
+        return sourceHash;
+    }
+
     public boolean sameIdentityAs(GraphEdgeRef other) {
         return other != null && Objects.equals(edgeId, other.edgeId)
             && Objects.equals(label, other.label)
             && Objects.equals(sourceEntityId, other.sourceEntityId)
-            && Objects.equals(targetEntityId, other.targetEntityId);
+            && Objects.equals(targetEntityId, other.targetEntityId)
+            && Objects.equals(dataset, other.dataset)
+            && Objects.equals(datasetVersion, other.datasetVersion)
+            && Objects.equals(split, other.split)
+            && Objects.equals(sourceHash, other.sourceHash);
     }
 
     @Override
@@ -101,11 +149,16 @@ public final class GraphEdgeRef {
             && Objects.equals(label, that.label)
             && Objects.equals(sourceEntityId, that.sourceEntityId)
             && Objects.equals(targetEntityId, that.targetEntityId)
-            && Objects.equals(sourceChunkIds, that.sourceChunkIds);
+            && Objects.equals(sourceChunkIds, that.sourceChunkIds)
+            && Objects.equals(dataset, that.dataset)
+            && Objects.equals(datasetVersion, that.datasetVersion)
+            && Objects.equals(split, that.split)
+            && Objects.equals(sourceHash, that.sourceHash);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(edgeId, label, sourceEntityId, targetEntityId, sourceChunkIds);
+        return Objects.hash(edgeId, label, sourceEntityId, targetEntityId, sourceChunkIds, dataset,
+            datasetVersion, split, sourceHash);
     }
 }

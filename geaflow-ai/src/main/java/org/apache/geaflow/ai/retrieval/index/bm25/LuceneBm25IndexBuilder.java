@@ -71,10 +71,12 @@ public final class LuceneBm25IndexBuilder implements Bm25IndexBuilder {
                 throw new IOException("duplicate chunk ID " + chunk.getChunkId());
             }
         }
-        String version = context.getGraphVersion().getVersion();
-        Path published = ArtifactIdentity.resolveVersionedPath(outputDirectory, INDEX_NAME + "-", version, "");
+        String graphVersion = context.getGraphVersion().getVersion();
+        String indexVersion = context.getIndexVersion();
+        Path published = ArtifactIdentity.resolveVersionedPath(outputDirectory, INDEX_NAME + "-",
+            indexVersion, "");
         Files.createDirectories(outputDirectory);
-        Path staging = Files.createTempDirectory(outputDirectory, INDEX_NAME + "-" + version + "-");
+        Path staging = Files.createTempDirectory(outputDirectory, INDEX_NAME + "-" + indexVersion + "-");
         boolean publishedStaging = false;
         try {
             try (Directory directory = FSDirectory.open(staging)) {
@@ -94,7 +96,7 @@ public final class LuceneBm25IndexBuilder implements Bm25IndexBuilder {
                         writer.addDocument(document);
                     }
                     writer.setLiveCommitData(new ArtifactIdentity(context.getGraphVersion().getGraphName(),
-                        version, version, ArtifactIdentity.fingerprint(ordered)).toMap().entrySet());
+                        graphVersion, indexVersion, ArtifactIdentity.fingerprint(ordered)).toMap().entrySet());
                     writer.commit();
                 }
                 try (DirectoryReader reader = DirectoryReader.open(directory)) {
@@ -105,8 +107,8 @@ public final class LuceneBm25IndexBuilder implements Bm25IndexBuilder {
             }
             publishedStaging = ArtifactPublisher.publish(staging, published,
                 existing -> validateExisting(existing, ordered, context));
-            IndexVersion indexVersion = new IndexVersion(INDEX_NAME, version, version);
-            IndexBuildMetadata metadata = new IndexBuildMetadata(context.getGraphVersion(), indexVersion,
+            IndexVersion versionMetadata = new IndexVersion(INDEX_NAME, indexVersion, graphVersion);
+            IndexBuildMetadata metadata = new IndexBuildMetadata(context.getGraphVersion(), versionMetadata,
                 INDEX_NAME, BUILDER_VERSION, published.toString(), true);
             return new LuceneIndexArtifact(metadata, published);
         } finally {
@@ -138,7 +140,7 @@ public final class LuceneBm25IndexBuilder implements Bm25IndexBuilder {
              DirectoryReader reader = DirectoryReader.open(directory)) {
             ArtifactIdentity.fromMap(reader.getIndexCommit().getUserData()).validate(
                 context.getGraphVersion().getGraphName(), context.getGraphVersion().getVersion(),
-                context.getGraphVersion().getVersion(), chunks);
+                context.getIndexVersion(), chunks);
             if (reader.numDocs() != chunks.size()) {
                 throw new IOException("existing BM25 document count mismatch");
             }

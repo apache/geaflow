@@ -33,6 +33,7 @@ import org.apache.geaflow.ai.retrieval.channel.graph.InMemoryGraphNeighborProvid
 import org.apache.geaflow.ai.retrieval.index.bm25.Bm25IndexReader;
 import org.apache.geaflow.ai.retrieval.index.graph.GraphArtifactReader;
 import org.apache.geaflow.ai.retrieval.index.vector.VectorIndexReader;
+import org.apache.geaflow.ai.retrieval.model.document.RetrievalIds;
 import org.apache.geaflow.ai.retrieval.model.document.TextChunk;
 import org.apache.geaflow.ai.retrieval.model.graph.EntityRef;
 import org.apache.geaflow.ai.retrieval.model.graph.GraphEdgeRef;
@@ -59,15 +60,18 @@ public final class RetrievalFixtureRegistry implements AutoCloseable {
         try {
             requireVersion(graphName, graphVersion, indexVersion);
             if (chunks == null || entities == null || edges == null
-                || graphProvider == null || (bm25 == null && vector == null && graphProvider == null)) {
+                || (bm25 == null && vector == null && graphProvider == null
+                    && !fixtures.containsKey(key(graphName, graphVersion, indexVersion)))) {
                 throw notReady("fixture contains no usable channel or incomplete graph fixture");
             }
-            java.util.Set<String> chunkIds = new java.util.HashSet<>();
+            Map<String, TextChunk> chunksById = new HashMap<>();
             for (TextChunk chunk : chunks) {
-                if (chunk == null || !chunkIds.add(chunk.getChunkId()) || chunk.getSourceUri() == null) {
+                if (chunk == null || chunksById.put(chunk.getChunkId(), chunk) != null
+                    || chunk.getSourceUri() == null) {
                     throw notReady("invalid, duplicate, or untraceable fixture chunk");
                 }
             }
+            validateGraphReferences(entities, edges, chunksById);
             if (bm25 != null) {
                 bm25.getIdentity().validate(graphName, graphVersion, indexVersion, chunks);
             }
@@ -76,9 +80,15 @@ public final class RetrievalFixtureRegistry implements AutoCloseable {
             }
             ensureOpen();
             String fixtureKey = key(graphName, graphVersion, indexVersion);
+            Fixture previous = fixtures.get(fixtureKey);
+            GraphNeighborProvider publishedGraphProvider = graphProvider;
+            if (publishedGraphProvider == null) {
+                publishedGraphProvider = previous == null
+                    ? new InMemoryGraphNeighborProvider(edges) : previous.getGraphProvider();
+            }
             Fixture replacement = new Fixture(graphName, graphVersion, indexVersion, bm25, vector,
-                chunks, entities, edges, graphProvider, ready, failures);
-            Fixture previous = fixtures.put(fixtureKey, replacement);
+                chunks, entities, edges, publishedGraphProvider, ready, failures);
+            fixtures.put(fixtureKey, replacement);
             registered = true;
             if (previous != null) {
                 previous.retire();
@@ -129,7 +139,7 @@ public final class RetrievalFixtureRegistry implements AutoCloseable {
             throw notReady("no usable BM25 or vector artifact");
         }
         register(graphName, graphVersion, indexVersion, bm25, vector, chunks, entities, edges, true,
-            new InMemoryGraphNeighborProvider(edges), failures);
+            null, failures);
     }
 
     public void loadGraph(String graphName, String graphVersion, String indexVersion, Path graphArtifact,
@@ -217,10 +227,78 @@ public final class RetrievalFixtureRegistry implements AutoCloseable {
         }
     }
 
+    private static void validateGraphReferences(List<EntityRef> entities, List<GraphEdgeRef> edges,
+                                                Map<String, TextChunk> chunks) {
+        if (chunks.values().stream().noneMatch(chunk -> chunk.getDataset() != null)) {
+            return;
+        }
+        for (EntityRef entity : entities) {
+            if (entity.getDataset() != null && entity.getSourceChunkIds().isEmpty()) {
+                throw notReady("entity " + entity.getEntityId()
+                    + " requires source chunks for scoped provenance");
+            }
+            validateGraphReference(entity.getDataset(), entity.getDatasetVersion(), entity.getSplit(),
+                entity.getSourceHash(), entity.getSourceChunkIds(), chunks,
+                "entity " + entity.getEntityId());
+        }
+        for (GraphEdgeRef edge : edges) {
+            validateGraphReference(edge.getDataset(), edge.getDatasetVersion(), edge.getSplit(),
+                edge.getSourceHash(), edge.getSourceChunkIds(), chunks,
+                "edge " + edge.getEdgeId());
+        }
+    }
+
+    private static void validateGraphReference(String dataset, String datasetVersion, String split,
+                                               String sourceHash, List<String> sourceChunkIds,
+                                               Map<String, TextChunk> chunks, String owner) {
+        if (sourceChunkIds.isEmpty()) {
+            if (dataset == null && chunks.values().stream()
+                .anyMatch(chunk -> chunk.getDataset() != null)) {
+                throw notReady(owner + " is missing provenance for scoped chunks");
+            }
+            return;
+        }
+        java.util.Set<String> sourceHashes = new java.util.TreeSet<>();
+        boolean hasScopedChunk = false;
+        boolean hasUnscopedChunk = false;
+        for (String chunkId : sourceChunkIds) {
+            TextChunk chunk = chunks.get(chunkId);
+            if (chunk == null) {
+                throw notReady(owner + " references unknown chunk " + chunkId);
+            }
+            if (chunk.getDataset() == null) {
+                hasUnscopedChunk = true;
+            } else {
+                hasScopedChunk = true;
+                sourceHashes.add(chunk.getSourceHash());
+            }
+        }
+        if (dataset == null) {
+            if (hasScopedChunk) {
+                throw notReady(owner + " is missing provenance for scoped chunks");
+            }
+            return;
+        }
+        if (hasUnscopedChunk) {
+            throw notReady(owner + " provenance references an unscoped chunk");
+        }
+        for (String chunkId : sourceChunkIds) {
+            TextChunk chunk = chunks.get(chunkId);
+            if (!dataset.equals(chunk.getDataset())
+                || !datasetVersion.equals(chunk.getDatasetVersion())
+                || !split.equals(chunk.getSplit())) {
+                throw notReady(owner + " provenance does not match referenced chunk");
+            }
+        }
+        if (!sourceHash.equals(RetrievalIds.aggregateSourceHash(
+            new ArrayList<>(sourceHashes)))) {
+            throw notReady(owner + " sourceHash does not match referenced chunks");
+        }
+    }
+
     private static void requireVersion(String graphName, String graphVersion, String indexVersion) {
-        if (blank(graphName) || blank(graphVersion) || blank(indexVersion)
-            || !graphVersion.equals(indexVersion)) {
-            throw notReady("graph/index versions are missing or inconsistent");
+        if (blank(graphName) || blank(graphVersion) || blank(indexVersion)) {
+            throw notReady("graph/index versions are missing");
         }
     }
 

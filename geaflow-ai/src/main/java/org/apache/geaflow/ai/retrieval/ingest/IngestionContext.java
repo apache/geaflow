@@ -30,15 +30,27 @@ public final class IngestionContext {
     private final DatasetManifest manifest;
     private final GraphVersion graphVersion;
     private final String importerVersion;
+    private final String indexVersion;
     private volatile QualityCounters qualityCounters = new QualityCounters(0, 0, 0, 0, 0, 0);
 
     public IngestionContext(DatasetManifest manifest, GraphVersion graphVersion,
                             String importerVersion) {
+        this(manifest, graphVersion, importerVersion,
+            Objects.requireNonNull(graphVersion, "graphVersion").getVersion());
+    }
+
+    /** Creates build context with an index version independent of the source graph version. */
+    public IngestionContext(DatasetManifest manifest, GraphVersion graphVersion,
+                            String importerVersion, String indexVersion) {
         this.manifest = Objects.requireNonNull(manifest, "manifest");
         this.graphVersion = Objects.requireNonNull(graphVersion, "graphVersion");
         this.importerVersion = Objects.requireNonNull(importerVersion, "importerVersion");
         if (importerVersion.trim().isEmpty()) {
             throw new IllegalArgumentException("importerVersion must not be blank");
+        }
+        this.indexVersion = Objects.requireNonNull(indexVersion, "indexVersion");
+        if (indexVersion.trim().isEmpty()) {
+            throw new IllegalArgumentException("indexVersion must not be blank");
         }
     }
 
@@ -52,6 +64,10 @@ public final class IngestionContext {
 
     public String getImporterVersion() {
         return importerVersion;
+    }
+
+    public String getIndexVersion() {
+        return indexVersion;
     }
 
     public long getRandomSeed() {
