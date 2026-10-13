@@ -11,6 +11,7 @@ import hashlib
 import json
 import os
 import tempfile
+import urllib.parse
 import urllib.request
 import zipfile
 from dataclasses import dataclass
@@ -31,6 +32,8 @@ class SourceManifest:
     cache_path: Optional[str]
     sha256: str
     parser_version: str
+    license_url: Optional[str] = None
+    license_status: str = "pending-review"
 
     @classmethod
     def from_file(cls, path: Path) -> "SourceManifest":
@@ -53,6 +56,14 @@ class SourceManifest:
             raise SourceError("manifest %s has invalid sha256" % path)
         if raw.get("dataset") == "2wikimultihopqa" and raw.get("split") not in ("train", "dev", "test"):
             raise SourceError("2wikimultihopqa manifest split must be train, dev or test")
+        license_data = raw.get("license")
+        if not isinstance(license_data, dict):
+            raise SourceError("manifest %s requires license metadata" % path)
+        license_url = str(license_data.get("url", "")).strip()
+        license_status = str(license_data.get("status", "")).strip()
+        parsed_license_url = urllib.parse.urlparse(license_url)
+        if not license_url or parsed_license_url.scheme not in ("http", "https") or not license_status:
+            raise SourceError("manifest %s has incomplete license metadata" % path)
         return cls(
             dataset=str(raw["dataset"]),
             dataset_release=str(raw["dataset_release"]),
@@ -61,6 +72,8 @@ class SourceManifest:
             cache_path=raw.get("cache_path"),
             sha256=checksum,
             parser_version=str(raw["parser_version"]),
+            license_url=license_url,
+            license_status=license_status,
         )
 
 

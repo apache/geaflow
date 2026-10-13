@@ -5,5 +5,9 @@
   "source_uri": "https://www.dropbox.com/s/npidmtadreo6df2/data.zip?dl=1",
   "cache_path": "${GRAPH_RAG_CACHE}/2wikimultihopqa-dev.zip",
   "sha256": "${TWIKIMULTIHOPQA_DEV_SHA256}",
-  "parser_version": "2wikimultihopqa-parser-v1"
+  "parser_version": "2wikimultihopqa-parser-v1",
+  "license": {
+    "url": "https://github.com/Alab-NII/2wikimultihop",
+    "status": "pending-review"
+  }
 }

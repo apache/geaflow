@@ -6,10 +6,38 @@ import unittest
 import zipfile
 from pathlib import Path
 
+from tools.graphrag.ingest.manifest_cli import dry_run_manifest
 from tools.graphrag.ingest.sources.source_loader import SourceError, SourceLoader, SourceManifest
 
 
 class SourceLoaderTest(unittest.TestCase):
+
+    def test_manifest_dry_run_verifies_license_checksum_split_and_records(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "dev.jsonl"
+            source.write_text(json.dumps({"id": "a", "question": "q",
+                                          "context": [["T", ["text"]]]}) + "\n", encoding="utf-8")
+            manifest_path = root / "manifest.json"
+            manifest_path.write_text(json.dumps({
+                "dataset": "2wikimultihopqa", "dataset_release": "r", "split": "dev",
+                "cache_path": str(source), "sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
+                "parser_version": "p", "license": {"url": "https://example.test/terms",
+                                                        "status": "pending-review"}
+            }), encoding="utf-8")
+            result = dry_run_manifest(manifest_path)
+            self.assertEqual("VALIDATED", result["state"])
+            self.assertEqual(1, result["records"])
+            self.assertEqual("pending-review", result["license"]["status"])
+
+    def test_manifest_requires_explicit_license_metadata(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "manifest.json"
+            path.write_text(json.dumps({"dataset": "d", "dataset_release": "r", "split": "dev",
+                                        "source_uri": "https://example.test/data", "sha256": "0" * 64,
+                                        "parser_version": "p"}), encoding="utf-8")
+            with self.assertRaisesRegex(SourceError, "license metadata"):
+                SourceManifest.from_file(path)
 
     def test_loads_jsonl_in_stable_batches(self):
         with tempfile.TemporaryDirectory() as directory:
