@@ -223,6 +223,12 @@ public class GeaFlowMemoryServer {
     @Get
     @Mapping("/health")
     public String health(org.noear.solon.core.handle.Context ctx) {
+        String requestId = resolveRequestId(ctx.header("X-Request-Id"));
+        ctx.headerSet("X-Request-Id", requestId);
+        String authenticationFailure = authenticationError(ctx, properties(), requestId);
+        if (authenticationFailure != null) {
+            return authenticationFailure;
+        }
         ctx.status(200);
         ctx.contentType("application/json; charset=utf-8");
         return "{\"status\":\"UP\",\"service\":\"" + SERVER_NAME + "\"}";
@@ -231,7 +237,13 @@ public class GeaFlowMemoryServer {
     @Get
     @Mapping("/ready")
     public String ready(org.noear.solon.core.handle.Context ctx) {
+        String requestId = resolveRequestId(ctx.header("X-Request-Id"));
+        ctx.headerSet("X-Request-Id", requestId);
         RetrievalProperties properties = properties();
+        String authenticationFailure = authenticationError(ctx, properties, requestId);
+        if (authenticationFailure != null) {
+            return authenticationFailure;
+        }
         ServerMemoryCache.ReadinessStatus status;
         try {
             properties.validateConfiguration();
@@ -256,6 +268,12 @@ public class GeaFlowMemoryServer {
     @Get
     @Mapping("/metrics/retrieval")
     public String metrics(org.noear.solon.core.handle.Context ctx) {
+        String requestId = resolveRequestId(ctx.header("X-Request-Id"));
+        ctx.headerSet("X-Request-Id", requestId);
+        String authenticationFailure = authenticationError(ctx, properties(), requestId);
+        if (authenticationFailure != null) {
+            return authenticationFailure;
+        }
         RetrievalMetrics.Snapshot snapshot = runtimeMetrics().snapshot();
         ctx.status(200);
         ctx.contentType("application/json; charset=utf-8");
