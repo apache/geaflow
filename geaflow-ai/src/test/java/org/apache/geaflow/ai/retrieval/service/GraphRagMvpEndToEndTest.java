@@ -244,6 +244,22 @@ class GraphRagMvpEndToEndTest {
     }
 
     @Test
+    void hybridTokenBudgetIsSharedAcrossChannels() throws Exception {
+        Fixture fixture = fixture();
+        RetrievalFixtureRegistry registry = new RetrievalFixtureRegistry();
+        registry.register(GRAPH, VERSION, VERSION, fixture.bm25, fixture.vector,
+            fixture.chunks, fixture.entities, Collections.singletonList(fixture.edges.get(0)), true);
+        RetrievalRequest request = request("HYBRID", Arrays.asList(1.0, 0.0));
+        request.setBudget(new RetrievalBudget(4, 1000, 10, 6, BudgetConstraint.TOKENS));
+
+        RetrievalResponse response = new RecallService(registry).retrieve(request);
+
+        assertTrue(response.getTrace().getTokensRetained() <= 6);
+        assertEquals(6L, response.getTrace().getTokensRetained());
+        assertTrue(response.getEvidence().size() <= 1);
+    }
+
+    @Test
     void nonTokenPrimaryConstraintsReportTokensWithoutEnforcingTokenBudget() throws Exception {
         Fixture fixture = fixture();
         for (BudgetConstraint primary : Arrays.asList(BudgetConstraint.CANDIDATES, BudgetConstraint.LATENCY)) {

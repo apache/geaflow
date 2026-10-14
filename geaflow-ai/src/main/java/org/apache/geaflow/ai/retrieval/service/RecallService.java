@@ -50,6 +50,7 @@ import org.apache.geaflow.ai.retrieval.channel.graph.GraphRetriever;
 import org.apache.geaflow.ai.retrieval.channel.graph.InMemoryGraphNeighborProvider;
 import org.apache.geaflow.ai.retrieval.config.RetrievalProperties;
 import org.apache.geaflow.ai.retrieval.execution.BudgetConstraint;
+import org.apache.geaflow.ai.retrieval.execution.BudgetLedger;
 import org.apache.geaflow.ai.retrieval.execution.DeterministicReranker;
 import org.apache.geaflow.ai.retrieval.execution.DeterministicTokenEstimator;
 import org.apache.geaflow.ai.retrieval.execution.RecallPlan;
@@ -277,6 +278,8 @@ public final class RecallService {
             vector == null ? null : vector.getVectorVersion(), budget.getPrimaryConstraint(),
             command.getExecutionMode());
         Map<String, RetrievalException> failures = fixture == null ? Collections.emptyMap() : fixture.getFailures();
+        BudgetLedger tokenLedger = budget.getPrimaryConstraint() == BudgetConstraint.TOKENS
+            ? new BudgetLedger(executionCandidateLimit, budget.getTokenBudget(), deadline, clock) : null;
         if (plan.getChannelBudgets().containsKey("VECTOR")) {
             VectorIndexReader.validateValues(queryVector);
             if (vector != null) {
@@ -334,7 +337,7 @@ public final class RecallService {
             }
             runChannels(probes, ExecutionMode.SEQUENTIAL, command, queryVector, deadline, partial,
                 requestId, failures, byId, plan, merged, trace, channelElapsedNanos, fixture,
-                pinnedGraphProvider);
+                pinnedGraphProvider, tokenLedger);
             boolean probeDeadline = expired(deadline)
                 || trace.getChannelStopReasons().containsValue(RecallStopReason.DEADLINE);
             boolean hasTextEvidence = !merged.isEmpty();
@@ -370,12 +373,13 @@ public final class RecallService {
                 runChannels(Collections.singletonList(channels.stream()
                     .filter(value -> "GRAPH".equals(value.getKey())).findFirst().orElseThrow()),
                     ExecutionMode.SEQUENTIAL, command, queryVector, deadline, partial, requestId,
-                    failures, byId, plan, merged, trace, channelElapsedNanos, fixture, pinnedGraphProvider);
+                    failures, byId, plan, merged, trace, channelElapsedNanos, fixture, pinnedGraphProvider,
+                    tokenLedger);
             }
         } else {
             runChannels(channels, command.getExecutionMode(), command, queryVector, deadline, partial,
                 requestId, failures, byId, plan, merged, trace, channelElapsedNanos, fixture,
-                pinnedGraphProvider);
+                pinnedGraphProvider, tokenLedger);
         }
         List<Evidence> evidence = new ArrayList<>();
         for (EvidenceBuilder value : merged.values()) {
@@ -388,7 +392,8 @@ public final class RecallService {
         }
         evidence = reranker.rerank(evidence);
         trace.setUniqueEvidenceCandidates(evidence.size());
-        boolean enforceTokenBudget = budget.getPrimaryConstraint() == BudgetConstraint.TOKENS;
+        boolean enforceTokenBudget = budget.getPrimaryConstraint() == BudgetConstraint.TOKENS
+            && tokenLedger == null;
         TokenContextTruncator.Result context = new TokenContextTruncator(tokenEstimator)
             .truncate(evidence, plan.getTopK(), budget.getTokenBudget(), enforceTokenBudget);
         trace.setTokensRetained(context.getTokensRetained());
@@ -467,7 +472,7 @@ public final class RecallService {
                              Map<String, EvidenceBuilder> merged, RetrievalTrace trace,
                              Map<String, Long> channelElapsedNanos,
                              RetrievalFixtureRegistry.Fixture fixture,
-                             GraphNeighborProvider pinnedGraphProvider) {
+                             GraphNeighborProvider pinnedGraphProvider, BudgetLedger tokenLedger) {
         AtomicBoolean anyStageStarted = new AtomicBoolean();
         boolean deadlineAlreadyRecorded = false;
         List<Stage<ChannelOutput>> stages = new ArrayList<>();
@@ -489,7 +494,7 @@ public final class RecallService {
                     GraphNeighborProvider stageGraphProvider = graphLease == null
                         ? pinnedGraphProvider : graphLease;
                     ChannelOutput output = searchChannel(name, channel.getValue(), command,
-                        queryVector, deadline, requestId, failures, byId, plan, stageGraphProvider);
+                        queryVector, deadline, requestId, failures, byId, plan, stageGraphProvider, tokenLedger);
                     output.elapsedNanos = Math.max(0L, clock.getAsLong() - started);
                     return output;
                 }
@@ -558,7 +563,11 @@ public final class RecallService {
                 trace.setGraphMarginalYield(stats.getMarginalYield());
                 trace.getValidationErrors().addAll(stats.getValidationErrors());
             }
-            mergeChannel(name, output, requestId, byId, plan, merged);
+            mergeChannel(name, output, requestId, byId, plan, merged, tokenLedger);
+            if (tokenLedger != null && tokenLedger.getStopReason() == RecallStopReason.TOKEN_BUDGET
+                && output.reason == RecallStopReason.COMPLETED) {
+                output.reason = RecallStopReason.TOKEN_BUDGET;
+            }
             if (output.reason == RecallStopReason.DEADLINE) {
                 timedOut(partial);
             }
@@ -578,7 +587,8 @@ public final class RecallService {
                                         float[] queryVector, long deadline, String requestId,
                                         Map<String, RetrievalException> failures,
                                         Map<String, TextChunk> byId, RecallPlan plan,
-                                        GraphNeighborProvider pinnedGraphProvider) {
+                                        GraphNeighborProvider pinnedGraphProvider,
+                                        BudgetLedger tokenLedger) {
         RetrievalException loadFailure = failures.get(name);
         if (loadFailure != null) {
             throw loadFailure;
@@ -618,7 +628,7 @@ public final class RecallService {
                 .samplingSeed(stableGraphSeed(requestId, command.getQuery()))
                 .build();
             output.graphHits = retriever.retrieve(command.getQuery(), entities, pinnedGraphProvider,
-                byId, graphConfig, deadline, clock);
+                byId, graphConfig, deadline, clock, tokenLedger);
             output.graphStats = retriever.getLastStats();
             output.evaluated = output.graphStats.getEdgesExamined();
             output.rawCandidatesScored = output.graphStats.getCandidatesProduced();
@@ -630,9 +640,13 @@ public final class RecallService {
 
     private void mergeChannel(String name, ChannelOutput output, String requestId,
                               Map<String, TextChunk> byId, RecallPlan plan,
-                              Map<String, EvidenceBuilder> merged) {
+                              Map<String, EvidenceBuilder> merged, BudgetLedger tokenLedger) {
         if (output.bm25Hits != null) {
             for (Bm25Hit hit : output.bm25Hits) {
+                TextChunk chunk = byId.get(hit.getChunkId());
+                if (!retainTokenEvidence(tokenLedger, hit.getChunkId(), chunk)) {
+                    continue;
+                }
                 EvidenceBuilder value = builder(merged, byId, hit.getChunkId(), hit.getDocumentId(),
                     EvidenceKind.CHUNK, plan);
                 if (!value.chunk.getText().equals(hit.getText())) {
@@ -643,6 +657,10 @@ public final class RecallService {
         }
         if (output.vectorHits != null) {
             for (VectorHit hit : output.vectorHits) {
+                TextChunk chunk = byId.get(hit.getChunkId());
+                if (!retainTokenEvidence(tokenLedger, hit.getChunkId(), chunk)) {
+                    continue;
+                }
                 EvidenceBuilder value = builder(merged, byId, hit.getChunkId(), hit.getDocumentId(),
                     EvidenceKind.CHUNK, plan);
                 value.scores.put(name, new ChannelScore(name, hit.getSimilarity(), null, hit.getRank()));
@@ -652,6 +670,9 @@ public final class RecallService {
             int rank = 0;
             for (GraphRetriever.GraphHit hit : output.graphHits) {
                 for (String id : hit.getSourceChunkIds()) {
+                    if (!retainTokenEvidence(tokenLedger, id, byId.get(id))) {
+                        continue;
+                    }
                     EvidenceBuilder value = builder(merged, byId, id, byId.get(id).getDocumentId(),
                         EvidenceKind.GRAPH_PATH, plan);
                     if (!value.entities.contains(hit.getAnchor().getEntity())) {
@@ -670,6 +691,10 @@ public final class RecallService {
                 }
             }
         }
+    }
+
+    private boolean retainTokenEvidence(BudgetLedger tokenLedger, String chunkId, TextChunk chunk) {
+        return tokenLedger == null || chunk == null || tokenLedger.tryRetain(chunkId, chunk, tokenEstimator);
     }
 
     private double cascadeProbeScoreGap(Map<String, EvidenceBuilder> candidates) {

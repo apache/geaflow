@@ -30,6 +30,7 @@ import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.function.LongSupplier;
+import org.apache.geaflow.ai.retrieval.execution.BudgetLedger;
 import org.apache.geaflow.ai.retrieval.execution.DeterministicTokenEstimator;
 import org.apache.geaflow.ai.retrieval.execution.RecallStopReason;
 import org.apache.geaflow.ai.retrieval.execution.TokenEstimator;
@@ -211,6 +212,13 @@ public final class GraphRetriever {
     public List<GraphHit> retrieve(String query, List<EntityRef> entities, GraphNeighborProvider provider,
                                    Map<String, TextChunk> chunks, GraphRetrievalConfig config,
                                    long deadlineNanos, LongSupplier clock) {
+        return retrieve(query, entities, provider, chunks, config, deadlineNanos, clock, null);
+    }
+
+    /** Executes graph expansion while charging unique source chunks to a request ledger. */
+    public List<GraphHit> retrieve(String query, List<EntityRef> entities, GraphNeighborProvider provider,
+                                   Map<String, TextChunk> chunks, GraphRetrievalConfig config,
+                                   long deadlineNanos, LongSupplier clock, BudgetLedger ledger) {
         lastStats = new GraphStats();
         if (config == null || entities == null || provider == null || chunks == null) {
             return Collections.emptyList();
@@ -339,10 +347,17 @@ public final class GraphRetriever {
                             stopForBudget(RecallStopReason.TOKEN_BUDGET);
                             return result;
                         }
-                        long projectedTokens = (long) lastStats.tokensEstimated + addedTokens + estimate;
-                        if (projectedTokens > config.getTokenBudget()) {
-                            stopForBudget(RecallStopReason.TOKEN_BUDGET);
-                            return result;
+                        if (ledger != null) {
+                            if (!ledger.tryRetain(sourceId, chunk, tokenEstimator)) {
+                                stopForBudget(ledger.getStopReason());
+                                return result;
+                            }
+                        } else {
+                            long projectedTokens = (long) lastStats.tokensEstimated + addedTokens + estimate;
+                            if (projectedTokens > config.getTokenBudget()) {
+                                stopForBudget(RecallStopReason.TOKEN_BUDGET);
+                                return result;
+                            }
                         }
                         addedTokens += estimate;
                         newChunks++;

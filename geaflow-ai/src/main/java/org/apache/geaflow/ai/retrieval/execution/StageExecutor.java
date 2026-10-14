@@ -88,11 +88,18 @@ public final class StageExecutor {
                                             LongSupplier clock) {
         Map<String, Future<StageResult<T>>> futures = new LinkedHashMap<>();
         Map<String, StageTask<T>> tasks = new LinkedHashMap<>();
+        Map<String, StageResult<T>> preflightResults = new LinkedHashMap<>();
         for (Stage<T> stage : stages) {
             StageTask<T> task = new StageTask<>(stage);
             tasks.put(stage.getName(), task);
-            futures.put(stage.getName(), executor.submit(task));
+            if (deadlineReached(deadlineNanos, clock)) {
+                task.cancel();
+                preflightResults.put(stage.getName(), timeoutFailure(stage.getName()));
+            } else {
+                futures.put(stage.getName(), executor.submit(task));
+            }
         }
+        Map<String, StageResult<T>> collected = new LinkedHashMap<>(preflightResults);
         boolean deadlineReached = false;
         boolean interrupted = false;
         for (Map.Entry<String, Future<StageResult<T>>> entry : futures.entrySet()) {
@@ -100,42 +107,42 @@ public final class StageExecutor {
             Future<StageResult<T>> future = entry.getValue();
             if (deadlineReached && !future.isDone()) {
                 cancel(tasks.get(name), future);
-                results.put(name, timeoutFailure(name));
+                collected.put(name, timeoutFailure(name));
                 continue;
             }
             try {
                 if (deadlineNanos == 0L) {
-                    results.put(name, future.get());
+                    collected.put(name, future.get());
                 } else {
                     long remaining = deadlineNanos - clock.getAsLong();
                     if (remaining <= 0L) {
                         deadlineReached = true;
                         if (!future.isDone()) {
                             cancel(tasks.get(name), future);
-                            results.put(name, timeoutFailure(name));
+                            collected.put(name, timeoutFailure(name));
                             continue;
                         }
-                        results.put(name, future.get());
+                        collected.put(name, future.get());
                     } else {
-                        results.put(name, future.get(remaining, TimeUnit.NANOSECONDS));
+                        collected.put(name, future.get(remaining, TimeUnit.NANOSECONDS));
                     }
                 }
             } catch (InterruptedException error) {
                 interrupted = true;
                 for (Map.Entry<String, Future<StageResult<T>>> pending : futures.entrySet()) {
                     cancel(tasks.get(pending.getKey()), pending.getValue());
-                    results.putIfAbsent(pending.getKey(), StageResult.failure(pending.getKey(), error));
+                    collected.putIfAbsent(pending.getKey(), StageResult.failure(pending.getKey(), error));
                 }
                 break;
             } catch (TimeoutException error) {
                 deadlineReached = true;
                 cancel(tasks.get(name), future);
-                results.put(name, StageResult.failure(name, error));
+                collected.put(name, StageResult.failure(name, error));
             } catch (ExecutionException error) {
                 Throwable cause = error.getCause() == null ? error : error.getCause();
-                results.put(name, StageResult.failure(name, cause));
+                collected.put(name, StageResult.failure(name, cause));
             } catch (CancellationException error) {
-                results.put(name, StageResult.failure(name, error));
+                collected.put(name, StageResult.failure(name, error));
             }
         }
         if (deadlineReached || interrupted) {
@@ -145,6 +152,11 @@ public final class StageExecutor {
         }
         if (interrupted) {
             Thread.currentThread().interrupt();
+        }
+        for (Stage<T> stage : stages) {
+            StageResult<T> result = collected.get(stage.getName());
+            results.put(stage.getName(), result == null
+                ? timeoutFailure(stage.getName()) : result);
         }
     }
 
