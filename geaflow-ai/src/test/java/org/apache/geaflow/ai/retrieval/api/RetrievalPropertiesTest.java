@@ -49,8 +49,12 @@ public class RetrievalPropertiesTest {
     @Test
     public void rejectsInvalidModesAndLimits() {
         RetrievalProperties properties = new RetrievalProperties();
-        properties.setDefaultMode("HYBRID");
+        properties.setDefaultMode("UNKNOWN");
         assertInvalid(properties);
+
+        properties = new RetrievalProperties();
+        properties.setDefaultMode("HYBRID");
+        properties.validateConfiguration();
 
         properties = new RetrievalProperties();
         properties.setDefaultExecutionMode("PARALLEL");

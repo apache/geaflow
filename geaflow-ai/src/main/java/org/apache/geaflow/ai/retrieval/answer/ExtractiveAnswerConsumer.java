@@ -41,43 +41,27 @@ public final class ExtractiveAnswerConsumer {
                 || (item.getSources().isEmpty() && item.getPaths().isEmpty())) {
                 continue;
             }
-            long estimatedCost = 0L;
-            try {
-                if (item.getChunks().isEmpty()) {
-                    estimatedCost = Math.max(1L, (item.getText().length() + 3L) / 4L);
-                } else {
-                    for (org.apache.geaflow.ai.retrieval.model.document.TextChunk chunk : item.getChunks()) {
-                        int estimate = estimator.estimate(chunk);
-                        if (estimate < 1) {
-                            throw new IllegalArgumentException(
-                                "token estimator must return a positive value");
-                        }
-                        estimatedCost = Math.addExact(estimatedCost, estimate);
-                    }
-                }
-            } catch (ArithmeticException overflow) {
-                continue;
-            }
-            if (estimatedCost > remaining || estimatedCost > Integer.MAX_VALUE) {
-                continue;
-            }
-            int cost = (int) estimatedCost;
             SourceRef source = item.getSources().isEmpty() ? null : item.getSources().get(0);
             String sourceId = source == null ? item.getGraphVersion() : source.getDocumentId();
             if (sourceId == null && !item.getPaths().isEmpty()) {
                 sourceId = "graph";
             }
+            final String citationSourceId = sourceId;
             if (item.getChunks().isEmpty()) {
-                String identity = sourceId + "\u0000" + item.getEvidenceId();
+                String identity = citationSourceId + "\u0000" + item.getEvidenceId();
+                int cost = Math.max(1, (item.getText().length() + 3) / 4);
+                if (cost > remaining) {
+                    continue;
+                }
                 if (sources.add(identity)) {
                     context.append(item.getText()).append('\n');
                     evidenceIds.add(item.getEvidenceId());
                     item.getGraphTraces().forEach(trace -> traceIds.add(trace.getQueryId()));
                     if (!item.getPaths().isEmpty()) {
-                        citations.add(new Citation(item.getEvidenceId(), sourceId, null,
-                            item.getPaths().get(0).getVertexIds().toString() + item.getPaths().get(0).getEdgeIds()));
+                        item.getPaths().forEach(path -> citations.add(new Citation(item.getEvidenceId(),
+                            citationSourceId, null, pathIdentity(path))));
                     } else {
-                        citations.add(new Citation(item.getEvidenceId(), sourceId));
+                        citations.add(new Citation(item.getEvidenceId(), citationSourceId));
                     }
                     remaining -= cost;
                 }
@@ -87,13 +71,22 @@ public final class ExtractiveAnswerConsumer {
                 Set<String> localChunks = new HashSet<>();
                 long selectedCost = 0L;
                 for (org.apache.geaflow.ai.retrieval.model.document.TextChunk chunk : item.getChunks()) {
-                    String identity = sourceId + "\u0000" + chunk.getChunkId();
+                    String identity = citationSourceId + "\u0000" + chunk.getChunkId();
                     if (sources.contains(identity) || !localChunks.add(identity)) {
                         continue;
                     }
+                    int estimate = estimator.estimate(chunk);
+                    if (estimate < 1) {
+                        throw new IllegalArgumentException("token estimator must return a positive value");
+                    }
+                    if (selectedCost + estimate > remaining) {
+                        localChunks.remove(identity);
+                        continue;
+                    }
                     selectedText.append(chunk.getText()).append('\n');
-                    selectedCitations.add(new Citation(item.getEvidenceId(), sourceId, chunk.getChunkId()));
-                    selectedCost += estimator.estimate(chunk);
+                    selectedCitations.add(new Citation(item.getEvidenceId(), citationSourceId,
+                        chunk.getChunkId()));
+                    selectedCost = Math.addExact(selectedCost, estimate);
                 }
                 if (selectedCitations.isEmpty()) {
                     continue;
@@ -126,6 +119,11 @@ public final class ExtractiveAnswerConsumer {
             return evidence.getFusedScore();
         }
         return evidence.getRank() == null ? 0.0D : -evidence.getRank();
+    }
+
+    private static String pathIdentity(org.apache.geaflow.ai.retrieval.model.graph.GraphPathRef path) {
+        return "hop=" + path.getHop() + ";vertices=" + String.join(",", path.getVertexIds())
+            + ";edges=" + String.join(",", path.getEdgeIds());
     }
 
     private static AnswerResponse abstain(String reason) {

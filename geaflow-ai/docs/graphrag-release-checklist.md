@@ -22,8 +22,8 @@ are `BM25_ONLY`, `VECTOR_ONLY`, `GRAPH_ONLY`, and `HYBRID`; execution modes are
 `SEQUENTIAL`, `PARALLEL`, and `CASCADED`. Requests may include a request ID,
 version pins, top-k, timeout, candidate, and token budgets. Responses retain
 evidence IDs, source and chunk provenance, budget decisions, trace events, and
-typed errors. `/health` reports process liveness, `/ready` reports the selected
-artifact readiness, and `/metrics/retrieval` reports counters and latency
+typed errors. `/health` reports process liveness, `/ready` reports readiness
+for the configured graph name, and `/metrics/retrieval` reports counters and latency
 percentiles. When remote access is enabled, all four endpoints require the
 configured Bearer token and echo `X-Request-Id`.
 

@@ -95,7 +95,8 @@ public class MemoryServerTest {
             assertTrue(ready.getBody().contains("GRAPH_NOT_LOADED"), ready.getBody());
 
             String request = "{\"graphName\":\"" + RetrievalTestFixture.GRAPH_NAME
-                + "\",\"query\":\"Confucius\",\"budget\":{\"topK\":1,"
+                + "\",\"graphVersion\":\"v4\",\"indexVersion\":\"v4\","
+                + "\"query\":\"Confucius\",\"budget\":{\"topK\":1,"
                 + "\"timeoutMs\":3000,\"maxCandidates\":10,\"tokenBudget\":4096}}";
             HttpTestResponse retrieval = client.postWithHeaders("/api/v1/retrievals", request,
                 Collections.singletonMap("X-Request-Id", "request-1"));
@@ -131,7 +132,9 @@ public class MemoryServerTest {
                 assertEquals(401, client.post("/graph/getGraphSchema", "", graph).getStatus());
                 assertEquals(403, client.postWithHeaders("/query/result", "",
                     Collections.singletonMap("Authorization", "Bearer wrong")).getStatus());
-                assertEquals(200, client.get("/health").getStatus());
+                assertEquals(401, client.get("/health").getStatus());
+                assertEquals(200, client.getWithHeaders("/health",
+                    Collections.singletonMap("Authorization", "Bearer http-test-token")).getStatus());
             } finally {
                 properties.setMaxTopK(previousMaxTopK);
                 properties.setRemoteAccessEnabled(false);
@@ -142,8 +145,8 @@ public class MemoryServerTest {
                 String unsupportedRequest = request.replace("\"query\":", "\"mode\":\"" + mode
                     + "\",\"queryVector\":[1,0],\"query\":");
                 HttpTestResponse unsupported = client.post("/api/v1/retrievals", unsupportedRequest);
-                assertEquals(400, unsupported.getStatus(), unsupported.getBody());
-                assertTrue(unsupported.getBody().contains("UNSUPPORTED_OPTION"), unsupported.getBody());
+                assertEquals(503, unsupported.getStatus(), unsupported.getBody());
+                assertTrue(unsupported.getBody().contains("INDEX_NOT_READY"), unsupported.getBody());
             }
 
             HttpTestResponse noMatch = client.post("/api/v1/retrievals",
