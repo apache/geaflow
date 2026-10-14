@@ -56,7 +56,14 @@ public final class ExtractiveAnswerConsumer {
             String identity = source.getDocumentId() + "\u0000" + String.valueOf(chunkId);
             if (sources.add(identity)) {
                 context.append(item.getText()).append('\n');
-                citations.add(new Citation(item.getEvidenceId(), source.getDocumentId(), chunkId));
+                if (item.getChunks().isEmpty()) {
+                    citations.add(new Citation(item.getEvidenceId(), source.getDocumentId(), null));
+                } else {
+                    for (org.apache.geaflow.ai.retrieval.model.document.TextChunk chunk : item.getChunks()) {
+                        citations.add(new Citation(item.getEvidenceId(), source.getDocumentId(),
+                            chunk.getChunkId()));
+                    }
+                }
                 remaining -= cost;
             }
         }
