@@ -153,6 +153,11 @@ public class RetrievalApiJsonTest {
         trace.setActualVisibleGraphVersion("v1");
         trace.setDeltaDigest("delta-digest");
         trace.setStatisticsVersion("stats-v1");
+        trace.setUniqueVertices(3);
+        trace.setGraphTokensEstimated(7);
+        trace.setGraphEvidenceYield(2);
+        trace.setGraphGrowthRate(0.5);
+        trace.setGraphMarginalYield(0.25);
         trace.setIndexVersion("v1");
         trace.setSelectedChannels(java.util.Arrays.asList("BM25", "VECTOR"));
         Map<String, Integer> channelBudgets = new HashMap<>();
@@ -195,6 +200,11 @@ public class RetrievalApiJsonTest {
         Assertions.assertEquals("v1", restored.getTrace().getTraceVersion());
         Assertions.assertEquals("delta-digest", restored.getTrace().getDeltaDigest());
         Assertions.assertEquals("stats-v1", restored.getTrace().getStatisticsVersion());
+        Assertions.assertEquals(3, restored.getTrace().getUniqueVertices());
+        Assertions.assertEquals(7, restored.getTrace().getGraphTokensEstimated());
+        Assertions.assertEquals(2, restored.getTrace().getGraphEvidenceYield());
+        Assertions.assertEquals(0.5, restored.getTrace().getGraphGrowthRate());
+        Assertions.assertEquals(0.25, restored.getTrace().getGraphMarginalYield());
         Assertions.assertEquals("req-1", restored.getTrace().getRequestId());
         Assertions.assertEquals(4, restored.getTrace().getTotalCandidatesEvaluated());
         Assertions.assertEquals(java.util.Arrays.asList("BM25", "VECTOR"),

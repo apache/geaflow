@@ -21,10 +21,13 @@ package org.apache.geaflow.ai.retrieval.channel.graph;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.function.LongSupplier;
 import org.apache.geaflow.ai.retrieval.execution.RecallStopReason;
@@ -104,10 +107,10 @@ public final class GraphRetriever {
                     return result;
                 }
                 if (lastStats.edgesExamined >= edgeCap) {
-                    lastStats.stopReason = RecallStopReason.EDGE_SCAN_LIMIT;
+                    stopForBudget(RecallStopReason.EDGE_SCAN_LIMIT);
                     return result;
                 }
-                GraphEdgeRef edge = iterator.next();
+                final GraphEdgeRef edge = iterator.next();
                 lastStats.neighborsSampled++;
                 lastStats.edgesExamined++;
                 if (edge == null) {
@@ -167,7 +170,7 @@ public final class GraphRetriever {
                 }
                 if (boundedSources.isEmpty()) {
                     if (provenanceLimitReached) {
-                        lastStats.stopReason = RecallStopReason.CANDIDATE_LIMIT;
+                        stopForBudget(RecallStopReason.CANDIDATE_LIMIT);
                         return result;
                     }
                     continue;
@@ -185,7 +188,7 @@ public final class GraphRetriever {
                 lastStats.verticesReached++;
                 lastStats.candidatesProduced = producedChunks.size();
                 if (producedChunks.size() >= candidateCap || provenanceLimitReached) {
-                    lastStats.stopReason = RecallStopReason.CANDIDATE_LIMIT;
+                    stopForBudget(RecallStopReason.CANDIDATE_LIMIT);
                     return result;
                 }
             }
@@ -196,8 +199,390 @@ public final class GraphRetriever {
         return result;
     }
 
+    /** Executes a deterministic, bounded frontier expansion. */
+    public List<GraphHit> retrieve(String query, List<EntityRef> entities, GraphNeighborProvider provider,
+                                   Map<String, TextChunk> chunks, GraphRetrievalConfig config,
+                                   long deadlineNanos, LongSupplier clock) {
+        lastStats = new GraphStats();
+        if (config == null || entities == null || provider == null || chunks == null) {
+            return Collections.emptyList();
+        }
+        if (expired(deadlineNanos, clock)) {
+            return Collections.emptyList();
+        }
+        List<EntityAnchorResolver.Anchor> anchors = resolver.resolve(query, entities, deadlineNanos, clock);
+        lastStats.anchorsConsidered = anchors.size();
+        if (anchors.isEmpty()) {
+            lastStats.stopReason = RecallStopReason.NO_RELIABLE_ANCHOR;
+            return Collections.emptyList();
+        }
+        Map<String, EntityRef> entityMap = new HashMap<>();
+        for (EntityRef entity : entities) {
+            if (entity != null) {
+                entityMap.put(entity.getEntityId(), entity);
+            }
+        }
+        PriorityQueue<ExpansionState> frontier = new PriorityQueue<>(ExpansionState.ORDER);
+        Set<String> visitedVertices = new LinkedHashSet<>();
+        for (EntityAnchorResolver.Anchor anchor : anchors) {
+            String entityId = anchor.getEntity().getEntityId();
+            visitedVertices.add(entityId);
+            frontier.add(ExpansionState.seed(anchor, provider.vertex(anchor.getEntity()),
+                anchor.getConfidence() * config.getAnchorScoreWeight()));
+        }
+        lastStats.verticesReached = visitedVertices.size();
+        lastStats.uniqueVertices = visitedVertices.size();
+        Set<String> scannedEdges = new HashSet<>();
+        Set<String> producedChunks = new LinkedHashSet<>();
+        Set<String> emittedPaths = new HashSet<>();
+        List<GraphHit> result = new ArrayList<>();
+        Map<Integer, Integer> frontierSizes = new HashMap<>();
+        Map<Integer, Integer> edgesExaminedByHop = new HashMap<>();
+        Map<Integer, Integer> newVerticesByHop = new HashMap<>();
+        Map<Integer, Integer> newEvidenceByHop = new HashMap<>();
+        frontierSizes.put(0, anchors.size());
+        boolean reachedMaxHop = false;
+        while (!frontier.isEmpty()) {
+            if (expired(deadlineNanos, clock)) {
+                return result;
+            }
+            ExpansionState state = frontier.poll();
+            if (state.hop >= config.getMaxHop()) {
+                reachedMaxHop = true;
+                continue;
+            }
+            List<GraphEdgeRef> neighbors = provider.neighbors(state.entityId);
+            if (neighbors == null) {
+                continue;
+            }
+            int sampledForVertex = 0;
+            List<GraphEdgeRef> sampledEdges = new ArrayList<>();
+            java.util.Iterator<GraphEdgeRef> iterator = neighbors.iterator();
+            while (iterator.hasNext() && sampledForVertex < config.getNeighborCap()) {
+                if (expired(deadlineNanos, clock)) {
+                    return result;
+                }
+                if (lastStats.edgesExamined >= config.getEdgeScanBudget()) {
+                    stopForBudget(RecallStopReason.EDGE_SCAN_LIMIT);
+                    return result;
+                }
+                final GraphEdgeRef edge = iterator.next();
+                sampledForVertex++;
+                lastStats.neighborsSampled++;
+                lastStats.edgesExamined++;
+                increment(edgesExaminedByHop, state.hop + 1);
+                if (edge != null) {
+                    sampledEdges.add(edge);
+                }
+            }
+            sampledEdges.sort(edgeComparator(query, state, config));
+            for (GraphEdgeRef edge : sampledEdges) {
+                if (expired(deadlineNanos, clock)) {
+                    return result;
+                }
+                if (!sampled(query, state, edge, config) || !scannedEdges.add(edge.getEdgeId())) {
+                    continue;
+                }
+                String targetId = otherEndpoint(state.entityId, edge);
+                if (targetId == null || !entityMap.containsKey(targetId)) {
+                    lastStats.validationErrors.add("edge " + edge.getEdgeId()
+                        + " references an unknown entity");
+                    continue;
+                }
+                if (state.pathEntityIds.contains(targetId)) {
+                    continue;
+                }
+                double score = associationScore(state, edge, targetId, provider, config);
+                if (score < config.getMinAssociationScore()) {
+                    continue;
+                }
+                List<String> sourceIds = sourceIds(state, edge, entityMap);
+                if (sourceIds.isEmpty()) {
+                    lastStats.validationErrors.add("edge " + edge.getEdgeId()
+                        + " references an unknown chunk");
+                    continue;
+                }
+                int remainingCandidates = config.getCandidateBudget() - producedChunks.size();
+                if (remainingCandidates <= 0) {
+                    stopForBudget(RecallStopReason.CANDIDATE_LIMIT);
+                    return result;
+                }
+                int newChunks = 0;
+                long addedTokens = 0L;
+                boolean invalidSource = false;
+                Set<String> edgeSources = new LinkedHashSet<>();
+                List<String> boundedSourceIds = new ArrayList<>();
+                for (String sourceId : sourceIds) {
+                    if (!edgeSources.add(sourceId)) {
+                        continue;
+                    }
+                    TextChunk chunk = chunks.get(sourceId);
+                    if (chunk == null) {
+                        invalidSource = true;
+                        break;
+                    }
+                    if (!producedChunks.contains(sourceId)) {
+                        int estimate = estimateTokens(chunk);
+                        long projectedTokens = (long) lastStats.tokensEstimated + addedTokens + estimate;
+                        if (projectedTokens > config.getTokenBudget()) {
+                            stopForBudget(RecallStopReason.TOKEN_BUDGET);
+                            return result;
+                        }
+                        addedTokens += estimate;
+                        newChunks++;
+                    }
+                    boundedSourceIds.add(sourceId);
+                    if (newChunks >= remainingCandidates) {
+                        break;
+                    }
+                }
+                if (invalidSource) {
+                    lastStats.validationErrors.add("edge " + edge.getEdgeId()
+                        + " references an unknown chunk");
+                    continue;
+                }
+                sourceIds = boundedSourceIds;
+                GraphVertexRef targetVertex = provider.vertex(entityMap.get(targetId));
+                List<GraphVertexRef> pathVertices = new ArrayList<>(state.pathVertices);
+                pathVertices.add(targetVertex);
+                List<GraphEdgeRef> pathEdges = new ArrayList<>(state.pathEdges);
+                pathEdges.add(edge);
+                int hop = state.hop + 1;
+                GraphPathRef path = new GraphPathRef(vertexIds(pathVertices), edgeIds(pathEdges), hop,
+                    config.getSampleRate() < 1.0);
+                if (!emittedPaths.add(pathKey(path))) {
+                    continue;
+                }
+                Set<String> pathSources = new LinkedHashSet<>(state.sourceChunkIds);
+                pathSources.addAll(sourceIds);
+                List<String> orderedSources = new ArrayList<>(pathSources);
+                Collections.sort(orderedSources);
+                producedChunks.addAll(sourceIds);
+                lastStats.tokensEstimated += (int) addedTokens;
+                lastStats.candidatesProduced = producedChunks.size();
+                lastStats.evidenceYield += newChunks;
+                boolean newVertex = visitedVertices.add(targetId);
+                if (newVertex) {
+                    lastStats.verticesReached = visitedVertices.size();
+                    lastStats.uniqueVertices = visitedVertices.size();
+                    increment(newVerticesByHop, hop);
+                }
+                increment(newEvidenceByHop, hop, newChunks);
+                lastStats.growthRate = (double) newVerticesByHop.getOrDefault(hop, 0)
+                    / Math.max(1, frontierSizes.getOrDefault(hop - 1, 1));
+                lastStats.marginalYield = (double) newEvidenceByHop.getOrDefault(hop, 0)
+                    / Math.max(1, edgesExaminedByHop.getOrDefault(hop, 0));
+                result.add(new GraphHit(state.anchor, state.seed, edge, path, pathVertices,
+                    pathEdges, orderedSources, score));
+                if (producedChunks.size() >= config.getCandidateBudget()) {
+                    stopForBudget(RecallStopReason.CANDIDATE_LIMIT);
+                    return result;
+                }
+                if (lastStats.growthRate > config.getMaxDiffusionGrowth()) {
+                    stopWithValidation(RecallStopReason.DIFFUSION_GROWTH_LIMIT);
+                    return result;
+                }
+                if (hop < config.getMaxHop()) {
+                    increment(frontierSizes, hop);
+                    frontier.add(state.extend(targetId, targetVertex, edge, score, orderedSources));
+                } else {
+                    reachedMaxHop = true;
+                }
+                if (lastStats.marginalYield < config.getMinMarginalYield()) {
+                    stopWithValidation(RecallStopReason.MARGINAL_YIELD_LIMIT);
+                    return result;
+                }
+            }
+        }
+        if (lastStats.stopReason == RecallStopReason.COMPLETED && !lastStats.validationErrors.isEmpty()) {
+            lastStats.stopReason = RecallStopReason.TRACE_VALIDATION_ERROR;
+        } else if (lastStats.stopReason == RecallStopReason.COMPLETED && reachedMaxHop) {
+            lastStats.stopReason = RecallStopReason.MAX_HOP_REACHED;
+        }
+        return result;
+    }
+
+    public List<GraphHit> retrieve(String query, List<EntityRef> entities, GraphNeighborProvider provider,
+                                   Map<String, TextChunk> chunks, GraphRetrievalConfig config,
+                                   long deadlineNanos) {
+        return retrieve(query, entities, provider, chunks, config, deadlineNanos, System::nanoTime);
+    }
+
+    private static boolean sampled(String query, ExpansionState state, GraphEdgeRef edge,
+                                   GraphRetrievalConfig config) {
+        if (config.getSampleRate() >= 1.0) {
+            return true;
+        }
+        String key = query + "\u001f" + state.anchor.getEntity().getEntityId() + "\u001f"
+            + state.entityId + "\u001f" + otherEndpoint(state.entityId, edge) + "\u001f"
+            + config.getSamplingSeed();
+        long value = Long.parseUnsignedLong(GraphSnapshot.sha256(key).substring(0, 16), 16);
+        double normalized = (value >>> 1) / (double) Long.MAX_VALUE;
+        return normalized < config.getSampleRate();
+    }
+
+    private static Comparator<GraphEdgeRef> edgeComparator(String query, ExpansionState state,
+                                                            GraphRetrievalConfig config) {
+        return Comparator.comparingDouble((GraphEdgeRef edge) ->
+                config.relationPriority(edge.getLabel())).reversed()
+            .thenComparing(edge -> edgeOrderKey(query, state, edge, config))
+            .thenComparing(GraphEdgeRef::getEdgeId);
+    }
+
+    private static String edgeOrderKey(String query, ExpansionState state, GraphEdgeRef edge,
+                                       GraphRetrievalConfig config) {
+        String target = otherEndpoint(state.entityId, edge);
+        return GraphSnapshot.sha256(query + "\u001f" + state.anchor.getEntity().getEntityId()
+            + "\u001f" + state.entityId + "\u001f" + target + "\u001f"
+            + config.getSamplingSeed());
+    }
+
+    private static String otherEndpoint(String current, GraphEdgeRef edge) {
+        if (current.equals(edge.getSourceEntityId())) {
+            return edge.getTargetEntityId();
+        }
+        if (current.equals(edge.getTargetEntityId())) {
+            return edge.getSourceEntityId();
+        }
+        return null;
+    }
+
+    private static double associationScore(ExpansionState state, GraphEdgeRef edge, String targetId,
+                                           GraphNeighborProvider provider, GraphRetrievalConfig config) {
+        double edgeStrength = config.relationPriority(edge.getLabel()) * config.getEdgeStrengthWeight();
+        double relevance = sourceRelevance(state.anchor.getEntity(), edge) * config.getSourceRelevanceWeight();
+        GraphStatistics statistics = provider.getStatistics();
+        int degree = statistics == null ? 0 : statistics.getDegree(targetId);
+        double degreePenalty = 1.0 / Math.log(2.0 + degree);
+        degreePenalty = Math.pow(degreePenalty, config.getDegreePenalty());
+        // The first edge is hop one and therefore has no decay. A state at hop n
+        // contributes the next edge at hop n + 1, whose decay exponent is n.
+        return state.score * Math.pow(config.getHopDecay(), state.hop)
+            * edgeStrength * degreePenalty * relevance;
+    }
+
+    private static double sourceRelevance(EntityRef anchor, GraphEdgeRef edge) {
+        if (anchor.getSourceChunkIds().isEmpty() || edge.getSourceChunkIds().isEmpty()) {
+            return 1.0;
+        }
+        Set<String> anchorSources = new HashSet<>(anchor.getSourceChunkIds());
+        int overlap = 0;
+        for (String source : edge.getSourceChunkIds()) {
+            if (anchorSources.contains(source)) {
+                overlap++;
+            }
+        }
+        return overlap == 0 ? 0.5 : 1.0 + (double) overlap / anchorSources.size();
+    }
+
+    private static List<String> sourceIds(ExpansionState state, GraphEdgeRef edge,
+                                          Map<String, EntityRef> entityMap) {
+        if (!edge.getSourceChunkIds().isEmpty()) {
+            return edge.getSourceChunkIds();
+        }
+        EntityRef entity = entityMap.get(state.entityId);
+        return entity == null ? Collections.emptyList() : entity.getSourceChunkIds();
+    }
+
+    private static int estimateTokens(TextChunk chunk) {
+        return chunk.getTokenEstimate() > 0 ? chunk.getTokenEstimate()
+            : (int) Math.max(1L, ((long) chunk.getText().length() + 3L) / 4L);
+    }
+
+    private static List<String> vertexIds(List<GraphVertexRef> vertices) {
+        List<String> result = new ArrayList<>();
+        for (GraphVertexRef vertex : vertices) {
+            result.add(vertex.getVertexId());
+        }
+        return result;
+    }
+
+    private static List<String> edgeIds(List<GraphEdgeRef> edges) {
+        List<String> result = new ArrayList<>();
+        for (GraphEdgeRef edge : edges) {
+            result.add(edge.getEdgeId());
+        }
+        return result;
+    }
+
+    private static String pathKey(GraphPathRef path) {
+        return path.getVertexIds().toString() + "\u001f" + path.getEdgeIds();
+    }
+
+    private static void increment(Map<Integer, Integer> counters, int key) {
+        increment(counters, key, 1);
+    }
+
+    private static void increment(Map<Integer, Integer> counters, int key, int amount) {
+        counters.put(key, counters.getOrDefault(key, 0) + amount);
+    }
+
+    private static final class ExpansionState {
+        private static final Comparator<ExpansionState> ORDER = Comparator
+            .comparingDouble((ExpansionState value) -> value.score).reversed()
+            .thenComparingInt(value -> value.hop)
+            .thenComparing(value -> value.entityId)
+            .thenComparing(value -> edgeIds(value.pathEdges).toString());
+        private final EntityAnchorResolver.Anchor anchor;
+        private final GraphVertexRef seed;
+        private final String entityId;
+        private final int hop;
+        private final double score;
+        private final List<GraphVertexRef> pathVertices;
+        private final List<GraphEdgeRef> pathEdges;
+        private final Set<String> pathEntityIds;
+        private final List<String> sourceChunkIds;
+
+        private ExpansionState(EntityAnchorResolver.Anchor anchor, GraphVertexRef seed, String entityId,
+                               int hop, double score, List<GraphVertexRef> pathVertices,
+                               List<GraphEdgeRef> pathEdges, Set<String> pathEntityIds,
+                               List<String> sourceChunkIds) {
+            this.anchor = anchor;
+            this.seed = seed;
+            this.entityId = entityId;
+            this.hop = hop;
+            this.score = score;
+            this.pathVertices = pathVertices;
+            this.pathEdges = pathEdges;
+            this.pathEntityIds = pathEntityIds;
+            this.sourceChunkIds = sourceChunkIds;
+        }
+
+        private static ExpansionState seed(EntityAnchorResolver.Anchor anchor, GraphVertexRef vertex,
+                                           double score) {
+            Set<String> entityIds = new LinkedHashSet<>();
+            entityIds.add(anchor.getEntity().getEntityId());
+            return new ExpansionState(anchor, vertex, anchor.getEntity().getEntityId(), 0, score,
+                new ArrayList<>(Collections.singletonList(vertex)), new ArrayList<>(), entityIds,
+                new ArrayList<>());
+        }
+
+        private ExpansionState extend(String targetId, GraphVertexRef vertex, GraphEdgeRef edge,
+                                      double nextScore, List<String> sources) {
+            List<GraphVertexRef> vertices = new ArrayList<>(pathVertices);
+            vertices.add(vertex);
+            List<GraphEdgeRef> edges = new ArrayList<>(pathEdges);
+            edges.add(edge);
+            Set<String> entityIds = new LinkedHashSet<>(pathEntityIds);
+            entityIds.add(targetId);
+            List<String> allSources = new ArrayList<>(sourceChunkIds);
+            allSources.addAll(sources);
+            return new ExpansionState(anchor, seed, targetId, hop + 1, nextScore, vertices, edges,
+                entityIds, allSources);
+        }
+    }
+
     public GraphStats getLastStats() {
         return lastStats;
+    }
+
+    private void stopForBudget(RecallStopReason budgetReason) {
+        stopWithValidation(budgetReason);
+    }
+
+    private void stopWithValidation(RecallStopReason reason) {
+        lastStats.stopReason = lastStats.validationErrors.isEmpty()
+            ? reason : RecallStopReason.TRACE_VALIDATION_ERROR;
     }
 
     private boolean expired(long deadline, LongSupplier clock) {
@@ -272,7 +657,12 @@ public final class GraphRetriever {
         private int edgesExamined;
         private int neighborsSampled;
         private int verticesReached;
+        private int uniqueVertices;
         private int candidatesProduced;
+        private int tokensEstimated;
+        private int evidenceYield;
+        private double growthRate;
+        private double marginalYield;
         private RecallStopReason stopReason = RecallStopReason.COMPLETED;
         private final List<String> validationErrors = new ArrayList<>();
 
@@ -292,8 +682,36 @@ public final class GraphRetriever {
             return verticesReached;
         }
 
+        public int getUniqueVertices() {
+            return uniqueVertices;
+        }
+
         public int getCandidatesProduced() {
             return candidatesProduced;
+        }
+
+        public int getTokensEstimated() {
+            return tokensEstimated;
+        }
+
+        public int getEdgesScanned() {
+            return edgesExamined;
+        }
+
+        public int getNeighborsSampledCount() {
+            return neighborsSampled;
+        }
+
+        public int getEvidenceYield() {
+            return evidenceYield;
+        }
+
+        public double getGrowthRate() {
+            return growthRate;
+        }
+
+        public double getMarginalYield() {
+            return marginalYield;
         }
 
         public RecallStopReason getStopReason() {

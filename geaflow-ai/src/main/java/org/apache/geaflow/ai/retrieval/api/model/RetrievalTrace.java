@@ -49,7 +49,12 @@ public class RetrievalTrace {
     private int edgesExamined;
     private int neighborsSampled;
     private int verticesReached;
+    private int uniqueVertices;
     private int graphCandidatesProduced;
+    private int graphTokensEstimated;
+    private int graphEvidenceYield;
+    private double graphGrowthRate;
+    private double graphMarginalYield;
     private List<String> degradedChannels = new ArrayList<>();
     private List<String> validationErrors = new ArrayList<>();
     private List<String> selectedChannels = new ArrayList<>();
@@ -245,12 +250,52 @@ public class RetrievalTrace {
         verticesReached = value;
     }
 
+    public int getUniqueVertices() {
+        return uniqueVertices;
+    }
+
+    public void setUniqueVertices(int value) {
+        uniqueVertices = value;
+    }
+
     public int getGraphCandidatesProduced() {
         return graphCandidatesProduced;
     }
 
     public void setGraphCandidatesProduced(int value) {
         graphCandidatesProduced = value;
+    }
+
+    public int getGraphTokensEstimated() {
+        return graphTokensEstimated;
+    }
+
+    public void setGraphTokensEstimated(int value) {
+        graphTokensEstimated = value;
+    }
+
+    public int getGraphEvidenceYield() {
+        return graphEvidenceYield;
+    }
+
+    public void setGraphEvidenceYield(int value) {
+        graphEvidenceYield = value;
+    }
+
+    public double getGraphGrowthRate() {
+        return graphGrowthRate;
+    }
+
+    public void setGraphGrowthRate(double value) {
+        graphGrowthRate = value;
+    }
+
+    public double getGraphMarginalYield() {
+        return graphMarginalYield;
+    }
+
+    public void setGraphMarginalYield(double value) {
+        graphMarginalYield = value;
     }
 
     public List<String> getDegradedChannels() {

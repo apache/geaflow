@@ -235,7 +235,12 @@ public final class RetrievalApiJson {
         trace.setEdgesExamined(optionalInt(object, "edgesExamined") == null ? 0 : optionalInt(object, "edgesExamined"));
         trace.setNeighborsSampled(optionalInt(object, "neighborsSampled") == null ? 0 : optionalInt(object, "neighborsSampled"));
         trace.setVerticesReached(optionalInt(object, "verticesReached") == null ? 0 : optionalInt(object, "verticesReached"));
+        trace.setUniqueVertices(optionalInt(object, "uniqueVertices") == null ? 0 : optionalInt(object, "uniqueVertices"));
         trace.setGraphCandidatesProduced(optionalInt(object, "graphCandidatesProduced") == null ? 0 : optionalInt(object, "graphCandidatesProduced"));
+        trace.setGraphTokensEstimated(optionalInt(object, "graphTokensEstimated") == null ? 0 : optionalInt(object, "graphTokensEstimated"));
+        trace.setGraphEvidenceYield(optionalInt(object, "graphEvidenceYield") == null ? 0 : optionalInt(object, "graphEvidenceYield"));
+        trace.setGraphGrowthRate(optionalDouble(object, "graphGrowthRate", 0.0));
+        trace.setGraphMarginalYield(optionalDouble(object, "graphMarginalYield", 0.0));
         trace.setTotalCandidatesEvaluated(optionalInt(object, "totalCandidatesEvaluated") == null
             ? 0 : optionalInt(object, "totalCandidatesEvaluated"));
         trace.setSelectedChannels(strings(object, "selectedChannels"));

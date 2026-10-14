@@ -40,6 +40,7 @@ import org.apache.geaflow.ai.retrieval.api.model.RetrievalTrace;
 import org.apache.geaflow.ai.retrieval.api.model.TraceStage;
 import org.apache.geaflow.ai.retrieval.channel.graph.GraphNeighborProvider;
 import org.apache.geaflow.ai.retrieval.channel.graph.GraphQueryLease;
+import org.apache.geaflow.ai.retrieval.channel.graph.GraphRetrievalConfig;
 import org.apache.geaflow.ai.retrieval.channel.graph.GraphRetriever;
 import org.apache.geaflow.ai.retrieval.channel.graph.InMemoryGraphNeighborProvider;
 import org.apache.geaflow.ai.retrieval.config.RetrievalProperties;
@@ -325,15 +326,27 @@ public final class RecallService {
                     reason = search.getStopReason();
                 } else {
                     GraphRetriever retriever = new GraphRetriever();
+                    GraphRetrievalConfig graphConfig = GraphRetrievalConfig.builder()
+                        .maxHop(1)
+                        .candidateBudget(channel.getValue())
+                        .edgeScanBudget(channel.getValue())
+                        .neighborCap(channel.getValue())
+                        .tokenBudget(Integer.MAX_VALUE)
+                        .samplingSeed(stableGraphSeed(requestId, command.getQuery()))
+                        .build();
                     final List<GraphRetriever.GraphHit> hits = retriever.retrieve(command.getQuery(), entities,
-                        pinnedGraphProvider, byId,
-                        channel.getValue(), channel.getValue(), deadline, clock);
+                        pinnedGraphProvider, byId, graphConfig, deadline, clock);
                     GraphRetriever.GraphStats stats = retriever.getLastStats();
                     trace.setAnchorsConsidered(stats.getAnchorsConsidered());
                     trace.setEdgesExamined(stats.getEdgesExamined());
                     trace.setNeighborsSampled(stats.getNeighborsSampled());
                     trace.setVerticesReached(stats.getVerticesReached());
+                    trace.setUniqueVertices(stats.getUniqueVertices());
                     trace.setGraphCandidatesProduced(stats.getCandidatesProduced());
+                    trace.setGraphTokensEstimated(stats.getTokensEstimated());
+                    trace.setGraphEvidenceYield(stats.getEvidenceYield());
+                    trace.setGraphGrowthRate(stats.getGrowthRate());
+                    trace.setGraphMarginalYield(stats.getMarginalYield());
                     trace.getValidationErrors().addAll(stats.getValidationErrors());
                     trace.getEvaluatedCounts().put(name, stats.getEdgesExamined());
                     trace.getCandidateCounts().put(name, stats.getCandidatesProduced());
@@ -463,6 +476,15 @@ public final class RecallService {
         if (!partial) {
             throw new RetrievalException(RetrievalErrorCode.RETRIEVAL_TIMEOUT, "retrieval deadline exceeded");
         }
+    }
+
+    private static long stableGraphSeed(String requestId, String query) {
+        String value = requestId + "\u001f" + query;
+        long result = 1125899906842597L;
+        for (int index = 0; index < value.length(); index++) {
+            result = 31L * result + value.charAt(index);
+        }
+        return result;
     }
 
     private static void record(RetrievalTrace trace, String name, RecallStageStatus status, RecallStopReason reason, String message) {
