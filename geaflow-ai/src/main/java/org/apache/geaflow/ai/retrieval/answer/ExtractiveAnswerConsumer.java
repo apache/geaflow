@@ -28,6 +28,8 @@ public final class ExtractiveAnswerConsumer {
         int remaining = request.getTokenBudget();
         StringBuilder context = new StringBuilder();
         List<Citation> citations = new ArrayList<>();
+        List<String> evidenceIds = new ArrayList<>();
+        Set<String> traceIds = new java.util.TreeSet<>();
         Set<String> sources = new HashSet<>();
         List<Evidence> ordered = new ArrayList<>(evidence);
         ordered.removeIf(java.util.Objects::isNull);
@@ -36,35 +38,72 @@ public final class ExtractiveAnswerConsumer {
                 Comparator.nullsFirst(String::compareTo)));
         for (Evidence item : ordered) {
             if (item == null || item.getEvidenceId() == null || item.getText() == null
-                || item.getSources().isEmpty()) {
+                || (item.getSources().isEmpty() && item.getPaths().isEmpty())) {
                 continue;
             }
-            long estimatedCost = item.getChunks().isEmpty() ? Math.max(1L, (item.getText().length() + 3L) / 4L)
-                : item.getChunks().stream().mapToLong(chunk -> {
-                    int estimate = estimator.estimate(chunk);
-                    if (estimate < 1) {
-                        throw new IllegalArgumentException("token estimator must return a positive value");
+            long estimatedCost = 0L;
+            try {
+                if (item.getChunks().isEmpty()) {
+                    estimatedCost = Math.max(1L, (item.getText().length() + 3L) / 4L);
+                } else {
+                    for (org.apache.geaflow.ai.retrieval.model.document.TextChunk chunk : item.getChunks()) {
+                        int estimate = estimator.estimate(chunk);
+                        if (estimate < 1) {
+                            throw new IllegalArgumentException(
+                                "token estimator must return a positive value");
+                        }
+                        estimatedCost = Math.addExact(estimatedCost, estimate);
                     }
-                    return estimate;
-                }).sum();
+                }
+            } catch (ArithmeticException overflow) {
+                continue;
+            }
             if (estimatedCost > remaining || estimatedCost > Integer.MAX_VALUE) {
                 continue;
             }
             int cost = (int) estimatedCost;
-            SourceRef source = item.getSources().get(0);
-            String chunkId = item.getChunks().isEmpty() ? null : item.getChunks().get(0).getChunkId();
-            String identity = source.getDocumentId() + "\u0000" + String.valueOf(chunkId);
-            if (sources.add(identity)) {
-                context.append(item.getText()).append('\n');
-                if (item.getChunks().isEmpty()) {
-                    citations.add(new Citation(item.getEvidenceId(), source.getDocumentId(), null));
-                } else {
-                    for (org.apache.geaflow.ai.retrieval.model.document.TextChunk chunk : item.getChunks()) {
-                        citations.add(new Citation(item.getEvidenceId(), source.getDocumentId(),
-                            chunk.getChunkId()));
+            SourceRef source = item.getSources().isEmpty() ? null : item.getSources().get(0);
+            String sourceId = source == null ? item.getGraphVersion() : source.getDocumentId();
+            if (sourceId == null && !item.getPaths().isEmpty()) {
+                sourceId = "graph";
+            }
+            if (item.getChunks().isEmpty()) {
+                String identity = sourceId + "\u0000" + item.getEvidenceId();
+                if (sources.add(identity)) {
+                    context.append(item.getText()).append('\n');
+                    evidenceIds.add(item.getEvidenceId());
+                    item.getGraphTraces().forEach(trace -> traceIds.add(trace.getQueryId()));
+                    if (!item.getPaths().isEmpty()) {
+                        citations.add(new Citation(item.getEvidenceId(), sourceId, null,
+                            item.getPaths().get(0).getVertexIds().toString() + item.getPaths().get(0).getEdgeIds()));
+                    } else {
+                        citations.add(new Citation(item.getEvidenceId(), sourceId));
                     }
+                    remaining -= cost;
                 }
-                remaining -= cost;
+            } else {
+                StringBuilder selectedText = new StringBuilder();
+                List<Citation> selectedCitations = new ArrayList<>();
+                Set<String> localChunks = new HashSet<>();
+                long selectedCost = 0L;
+                for (org.apache.geaflow.ai.retrieval.model.document.TextChunk chunk : item.getChunks()) {
+                    String identity = sourceId + "\u0000" + chunk.getChunkId();
+                    if (sources.contains(identity) || !localChunks.add(identity)) {
+                        continue;
+                    }
+                    selectedText.append(chunk.getText()).append('\n');
+                    selectedCitations.add(new Citation(item.getEvidenceId(), sourceId, chunk.getChunkId()));
+                    selectedCost += estimator.estimate(chunk);
+                }
+                if (selectedCitations.isEmpty()) {
+                    continue;
+                }
+                context.append(selectedText);
+                citations.addAll(selectedCitations);
+                evidenceIds.add(item.getEvidenceId());
+                item.getGraphTraces().forEach(trace -> traceIds.add(trace.getQueryId()));
+                sources.addAll(localChunks);
+                remaining -= (int) selectedCost;
             }
         }
         if (citations.isEmpty()) {
@@ -75,7 +114,8 @@ public final class ExtractiveAnswerConsumer {
             return abstain("EMPTY_SUPPORTED_ANSWER");
         }
         return new AnswerResponse(answer, null, context.toString().trim(),
-            request.getTokenBudget() - remaining, citations);
+            request.getTokenBudget() - remaining, citations, evidenceIds,
+            new ArrayList<>(traceIds));
     }
 
     private static double score(Evidence evidence) {

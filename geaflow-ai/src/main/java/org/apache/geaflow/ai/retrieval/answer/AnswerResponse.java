@@ -12,14 +12,25 @@ public final class AnswerResponse {
     private final String context;
     private final int tokens;
     private final List<Citation> citations;
+    private final List<String> evidenceIds;
+    private final List<String> traceIds;
 
     public AnswerResponse(String answer, String abstentionReason, String context, int tokens,
                           List<Citation> citations) {
+        this(answer, abstentionReason, context, tokens, citations,
+            Collections.emptyList(), Collections.emptyList());
+    }
+
+    public AnswerResponse(String answer, String abstentionReason, String context, int tokens,
+                          List<Citation> citations, List<String> evidenceIds, List<String> traceIds) {
         if (tokens < 0) {
             throw new IllegalArgumentException("tokens must not be negative");
         }
         if (citations == null) {
             throw new IllegalArgumentException("citations are required");
+        }
+        if (evidenceIds == null || traceIds == null) {
+            throw new IllegalArgumentException("evidenceIds and traceIds are required");
         }
         if (abstentionReason != null && answer != null) {
             throw new IllegalArgumentException("abstained response must not contain an answer");
@@ -33,6 +44,8 @@ public final class AnswerResponse {
         this.context = context == null ? "" : context;
         this.tokens = tokens;
         this.citations = Collections.unmodifiableList(new ArrayList<>(citations));
+        this.evidenceIds = Collections.unmodifiableList(new ArrayList<>(evidenceIds));
+        this.traceIds = Collections.unmodifiableList(new ArrayList<>(traceIds));
     }
 
     public String getAnswer() {
@@ -53,6 +66,14 @@ public final class AnswerResponse {
 
     public List<Citation> getCitations() {
         return citations;
+    }
+
+    public List<String> getEvidenceIds() {
+        return evidenceIds;
+    }
+
+    public List<String> getTraceIds() {
+        return traceIds;
     }
 
     public boolean isAbstained() {
