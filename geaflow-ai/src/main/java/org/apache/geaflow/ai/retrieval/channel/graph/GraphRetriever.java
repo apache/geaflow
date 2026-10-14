@@ -211,6 +211,9 @@ public final class GraphRetriever {
             return Collections.emptyList();
         }
         List<EntityAnchorResolver.Anchor> anchors = resolver.resolve(query, entities, deadlineNanos, clock);
+        if (expired(deadlineNanos, clock)) {
+            return Collections.emptyList();
+        }
         lastStats.anchorsConsidered = anchors.size();
         if (anchors.isEmpty()) {
             lastStats.stopReason = RecallStopReason.NO_RELIABLE_ANCHOR;

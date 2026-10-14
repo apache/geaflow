@@ -228,6 +228,25 @@ class GraphRetrieverTest {
     }
 
     @Test
+    void explicitConfigDeadlineDoesNotReadNeighborsAfterAnchorResolution() {
+        AtomicInteger reads = new AtomicInteger();
+        GraphNeighborProvider provider = entityId -> {
+            reads.incrementAndGet();
+            return Collections.singletonList(edge(0));
+        };
+        GraphRetrievalConfig config = GraphRetrievalConfig.builder()
+            .maxHop(1).candidateBudget(10).edgeScanBudget(10).neighborCap(10).build();
+        GraphRetriever retriever = new GraphRetriever();
+        List<EntityRef> entities = Collections.singletonList(new EntityRef("e1", "Confucius", "person"));
+
+        retriever.retrieve("Confucius", entities, provider, Collections.emptyMap(), config,
+            1L, () -> 1L);
+
+        assertEquals(0, reads.get());
+        assertEquals(RecallStopReason.DEADLINE, retriever.getLastStats().getStopReason());
+    }
+
+    @Test
     void tokenBudgetPreservesCompletedEvidenceBeforeStopping() {
         List<EntityRef> entities = Arrays.asList(
             new EntityRef("e1", "Confucius", "person"),
