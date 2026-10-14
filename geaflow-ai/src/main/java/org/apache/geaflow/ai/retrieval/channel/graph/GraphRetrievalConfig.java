@@ -296,6 +296,9 @@ public final class GraphRetrievalConfig {
             relationPriorities.clear();
             if (values != null) {
                 for (Map.Entry<String, Double> entry : values.entrySet()) {
+                    if (entry.getValue() == null) {
+                        throw new IllegalArgumentException("relation priority is required");
+                    }
                     relationPriority(entry.getKey(), entry.getValue());
                 }
             }
