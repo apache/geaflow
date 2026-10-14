@@ -145,8 +145,10 @@ public class MemoryServerTest {
                 String unsupportedRequest = request.replace("\"query\":", "\"mode\":\"" + mode
                     + "\",\"queryVector\":[1,0],\"query\":");
                 HttpTestResponse unsupported = client.post("/api/v1/retrievals", unsupportedRequest);
-                assertEquals(503, unsupported.getStatus(), unsupported.getBody());
-                assertTrue(unsupported.getBody().contains("INDEX_NOT_READY"), unsupported.getBody());
+                boolean rejectsVector = "BM25_ONLY".equals(mode) || "GRAPH_ONLY".equals(mode);
+                assertEquals(rejectsVector ? 400 : 503, unsupported.getStatus(), unsupported.getBody());
+                assertTrue(unsupported.getBody().contains(rejectsVector
+                    ? "UNSUPPORTED_OPTION" : "INDEX_NOT_READY"), unsupported.getBody());
             }
 
             HttpTestResponse noMatch = client.post("/api/v1/retrievals",
