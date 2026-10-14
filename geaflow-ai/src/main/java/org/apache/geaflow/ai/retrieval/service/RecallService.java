@@ -32,6 +32,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.LongSupplier;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.apache.geaflow.ai.retrieval.api.model.ExecutionMode;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalBudget;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalCommand;
@@ -52,11 +54,19 @@ import org.apache.geaflow.ai.retrieval.config.RetrievalProperties;
 import org.apache.geaflow.ai.retrieval.execution.BudgetConstraint;
 import org.apache.geaflow.ai.retrieval.execution.BudgetLedger;
 import org.apache.geaflow.ai.retrieval.execution.DeterministicReranker;
+import org.apache.geaflow.ai.retrieval.execution.DeterministicRulePolicy;
 import org.apache.geaflow.ai.retrieval.execution.DeterministicTokenEstimator;
 import org.apache.geaflow.ai.retrieval.execution.RecallPlan;
 import org.apache.geaflow.ai.retrieval.execution.RecallStageStatus;
 import org.apache.geaflow.ai.retrieval.execution.RecallStopReason;
 import org.apache.geaflow.ai.retrieval.execution.Reranker;
+import org.apache.geaflow.ai.retrieval.execution.RetrievalPlan;
+import org.apache.geaflow.ai.retrieval.execution.RetrievalPlanValidator;
+import org.apache.geaflow.ai.retrieval.execution.RetrievalProgress;
+import org.apache.geaflow.ai.retrieval.execution.RetrievalReplanEvent;
+import org.apache.geaflow.ai.retrieval.execution.RoutingContext;
+import org.apache.geaflow.ai.retrieval.execution.RoutingFeatures;
+import org.apache.geaflow.ai.retrieval.execution.RoutingPolicy;
 import org.apache.geaflow.ai.retrieval.execution.StageExecutor;
 import org.apache.geaflow.ai.retrieval.execution.StageExecutor.Stage;
 import org.apache.geaflow.ai.retrieval.execution.StageExecutor.StageResult;
@@ -83,6 +93,7 @@ import org.apache.geaflow.ai.retrieval.model.graph.GraphPathRef;
 /** Session-free sequential recall; all execution state belongs to one request. */
 public final class RecallService {
     private static final double CASCADE_MIN_PROBE_SCORE_GAP = 0.0001D;
+    private static final Pattern QUERY_TOKEN = Pattern.compile("[\\p{L}\\p{N}]+", Pattern.UNICODE_CHARACTER_CLASS);
 
     private final Bm25IndexReader bm25;
     private final VectorIndexReader vector;
@@ -96,6 +107,8 @@ public final class RecallService {
     private final LongSupplier clock;
     private final TokenEstimator tokenEstimator;
     private final Reranker reranker;
+    private final RoutingPolicy routingPolicy;
+    private final int maxReplanCount;
 
     public RecallService(Bm25IndexReader bm25, VectorIndexReader vector, List<TextChunk> chunks,
                          List<EntityRef> entities, List<GraphEdgeRef> edges) {
@@ -105,7 +118,8 @@ public final class RecallService {
     public RecallService(Bm25IndexReader bm25, VectorIndexReader vector, List<TextChunk> chunks,
                          List<EntityRef> entities, List<GraphEdgeRef> edges, WeightedRrfConfig config) {
         this(bm25, vector, chunks, entities, edges, null, new InMemoryGraphNeighborProvider(edges), config,
-            System::nanoTime, new DeterministicTokenEstimator(), new DeterministicReranker());
+            System::nanoTime, new DeterministicTokenEstimator(), new DeterministicReranker(),
+            new DeterministicRulePolicy(), 1);
     }
 
     public RecallService(RetrievalFixtureRegistry registry) {
@@ -123,14 +137,26 @@ public final class RecallService {
 
     public RecallService(RetrievalFixtureRegistry registry, WeightedRrfConfig config, LongSupplier clock,
                          TokenEstimator tokenEstimator, Reranker reranker) {
+        this(registry, config, clock, tokenEstimator, reranker, new DeterministicRulePolicy(), 1);
+    }
+
+    /** Allows a routing policy and replan bound to be injected for replay and policy evaluation. */
+    public RecallService(RetrievalFixtureRegistry registry, WeightedRrfConfig config, LongSupplier clock,
+                         TokenEstimator tokenEstimator, Reranker reranker,
+                         RoutingPolicy routingPolicy, int maxReplanCount) {
         this(null, null, Collections.emptyList(), Collections.emptyList(), Collections.emptyList(),
-            Objects.requireNonNull(registry, "registry"), null, config, clock, tokenEstimator, reranker);
+            Objects.requireNonNull(registry, "registry"), null, config, clock, tokenEstimator, reranker,
+            routingPolicy, maxReplanCount);
     }
 
     private RecallService(Bm25IndexReader bm25, VectorIndexReader vector, List<TextChunk> chunks,
                           List<EntityRef> entities, List<GraphEdgeRef> edges, RetrievalFixtureRegistry registry,
                           GraphNeighborProvider graphProvider, WeightedRrfConfig config, LongSupplier clock,
-                          TokenEstimator tokenEstimator, Reranker reranker) {
+                          TokenEstimator tokenEstimator, Reranker reranker, RoutingPolicy routingPolicy,
+                          int maxReplanCount) {
+        if (maxReplanCount < 0) {
+            throw new IllegalArgumentException("maxReplanCount must be non-negative");
+        }
         this.bm25 = bm25;
         this.vector = vector;
         this.chunks = immutable(chunks);
@@ -143,6 +169,8 @@ public final class RecallService {
         this.clock = Objects.requireNonNull(clock, "clock");
         this.tokenEstimator = Objects.requireNonNull(tokenEstimator, "tokenEstimator");
         this.reranker = Objects.requireNonNull(reranker, "reranker");
+        this.routingPolicy = Objects.requireNonNull(routingPolicy, "routingPolicy");
+        this.maxReplanCount = maxReplanCount;
     }
 
     private static <T> List<T> immutable(List<T> values) {
@@ -157,13 +185,137 @@ public final class RecallService {
         return Collections.unmodifiableMap(indexed);
     }
 
-    private RecallService(RetrievalFixtureRegistry.Fixture fixture, WeightedRrfConfig config,
-                          LongSupplier clock) {
-        this(fixture, config, clock, new DeterministicTokenEstimator(), new DeterministicReranker());
+    private RoutingContext routingContext(RetrievalCommand command, GraphNeighborProvider provider,
+                                          RetrievalBudget budget, int candidateLimit) {
+        int queryLength = queryLength(command.getQuery());
+        double averageIdf = averageIdf(command.getQuery(), chunks);
+        EntityAnchorResolver resolver = new EntityAnchorResolver();
+        List<EntityAnchorResolver.Anchor> anchors = resolver.resolve(command.getQuery(), entities);
+        int maxDegree = 0;
+        double confidence = 0.0D;
+        for (EntityAnchorResolver.Anchor anchor : anchors) {
+            confidence = Math.max(confidence, anchor.getConfidence());
+            if (provider != null && provider.getStatistics() != null) {
+                maxDegree = Math.max(maxDegree,
+                    provider.getStatistics().getDegree(anchor.getEntity().getEntityId()));
+            }
+        }
+        final RoutingFeatures features = RoutingFeatures.builder().queryLength(queryLength)
+            .averageIdf(averageIdf).anchorCount(anchors.size()).anchorConfidence(confidence)
+            .candidateDegree(maxDegree).build();
+        List<String> available = new ArrayList<>();
+        if (bm25 != null) {
+            available.add("BM25");
+        }
+        if (vector != null) {
+            available.add("VECTOR");
+        }
+        if (provider != null) {
+            available.add("GRAPH");
+        }
+        int maxCandidates = candidateLimit;
+        RetrievalBudget boundedBudget = new RetrievalBudget(budget.getTopK(), budget.getTimeoutMs(),
+            maxCandidates, budget.getTokenBudget(), budget.getPrimaryConstraint());
+        return RoutingContext.builder().query(command.getQuery()).features(features)
+            .availableIndexes(available).budget(boundedBudget).requestedMode(command.getMode())
+            .executionMode(command.getExecutionMode()).maxHop(2).maxReplanCount(maxReplanCount)
+            .configVersion("v1").seed(stableGraphSeed("routing", command.getQuery())).build();
+    }
+
+    private static int queryLength(String query) {
+        Matcher matcher = QUERY_TOKEN.matcher(EntityAnchorResolver.normalize(query));
+        int count = 0;
+        while (matcher.find()) {
+            count++;
+        }
+        return count;
+    }
+
+    private boolean isDefaultFusionConfig() {
+        return fusion.getConfig().getBm25Weight() == 1.0D
+            && fusion.getConfig().getVectorWeight() == 1.0D
+            && fusion.getConfig().getGraphWeight() == 1.0D;
+    }
+
+    private static double averageIdf(String query, List<TextChunk> chunks) {
+        java.util.Set<String> queryTokens = new java.util.TreeSet<>();
+        Matcher matcher = QUERY_TOKEN.matcher(EntityAnchorResolver.normalize(query));
+        while (matcher.find()) {
+            queryTokens.add(matcher.group());
+        }
+        if (queryTokens.isEmpty() || chunks.isEmpty()) {
+            return 0.0D;
+        }
+        double total = 0.0D;
+        for (String token : queryTokens) {
+            int documents = 0;
+            for (TextChunk chunk : chunks) {
+                if (QUERY_TOKEN.matcher(EntityAnchorResolver.normalize(chunk.getText())).find()) {
+                    Matcher chunkTokens = QUERY_TOKEN.matcher(EntityAnchorResolver.normalize(chunk.getText()));
+                    while (chunkTokens.find()) {
+                        if (token.equals(chunkTokens.group())) {
+                            documents++;
+                            break;
+                        }
+                    }
+                }
+            }
+            total += Math.log(1.0D + (chunks.size() + 1.0D) / (documents + 1.0D));
+        }
+        return total / queryTokens.size();
+    }
+
+    private RetrievalProgress routingProgress(RetrievalTrace trace, RoutingContext context, long deadline,
+                                               RecallPlan plan, BudgetLedger ledger,
+                                               Map<String, EvidenceBuilder> merged) {
+        int candidatesUsed = 0;
+        for (Integer count : trace.getEvaluatedCounts().values()) {
+            candidatesUsed += count;
+        }
+        int tokenUsed = ledger == null ? (int) Math.min(Integer.MAX_VALUE, trace.getTokensRetained())
+            : (int) Math.min(Integer.MAX_VALUE, ledger.getTokensRetained());
+        long remainingLatency = deadline == 0L ? 0L : Math.max(0L, deadline - clock.getAsLong());
+        int anchorCount = trace.getAnchorsConsidered() == 0
+            ? context.getFeatures().getAnchorCount() : trace.getAnchorsConsidered();
+        double confidence = 0.0D;
+        if (anchorCount > 0) {
+            for (EntityAnchorResolver.Anchor anchor : new EntityAnchorResolver()
+                .resolve(context.getQuery(), entities)) {
+                confidence = Math.max(confidence, anchor.getConfidence());
+            }
+        }
+        return RetrievalProgress.builder().boundary("AFTER_TEXT")
+            .completedChannels(trace.getChannelStatuses().keySet())
+            .candidateCounts(trace.getCandidateCounts())
+            .remainingCandidates(Math.max(0, context.getBudget().getMaxCandidates() - candidatesUsed))
+            .remainingTokens(Math.max(0, context.getBudget().getTokenBudget() - tokenUsed))
+            .remainingLatencyNanos(remainingLatency).firstStageScoreGap(cascadeProbeScoreGap(merged))
+            .anchorCount(anchorCount).anchorConfidence(confidence)
+            .candidateDegree(context.getFeatures().getCandidateDegree())
+            .graphGrowthRate(trace.getGraphGrowthRate()).graphMarginalYield(trace.getGraphMarginalYield())
+            .replanCount(0).build();
+    }
+
+    private static Map<String, Integer> orderedBudgets(RetrievalPlan plan) {
+        Map<String, Integer> ordered = new LinkedHashMap<>();
+        for (String channel : plan.getChannelOrder()) {
+            Integer value = plan.getChannelBudgets().get(channel);
+            if (value != null) {
+                ordered.put(channel, value);
+            }
+        }
+        return ordered;
     }
 
     private RecallService(RetrievalFixtureRegistry.Fixture fixture, WeightedRrfConfig config,
-                          LongSupplier clock, TokenEstimator tokenEstimator, Reranker reranker) {
+                          LongSupplier clock) {
+        this(fixture, config, clock, new DeterministicTokenEstimator(), new DeterministicReranker(),
+            new DeterministicRulePolicy(), 1);
+    }
+
+    private RecallService(RetrievalFixtureRegistry.Fixture fixture, WeightedRrfConfig config,
+                          LongSupplier clock, TokenEstimator tokenEstimator, Reranker reranker,
+                          RoutingPolicy routingPolicy, int maxReplanCount) {
         this.bm25 = fixture.getBm25();
         this.vector = fixture.getVector();
         this.chunks = fixture.getChunks();
@@ -176,6 +328,8 @@ public final class RecallService {
         this.clock = Objects.requireNonNull(clock, "clock");
         this.tokenEstimator = Objects.requireNonNull(tokenEstimator, "tokenEstimator");
         this.reranker = Objects.requireNonNull(reranker, "reranker");
+        this.routingPolicy = Objects.requireNonNull(routingPolicy, "routingPolicy");
+        this.maxReplanCount = maxReplanCount;
     }
 
     public RetrievalResponse retrieve(RetrievalRequest request) {
@@ -199,7 +353,7 @@ public final class RecallService {
                 throw notReady("vector source/version mismatch");
             }
             RecallService delegate = new RecallService(fixture, fusion.getConfig(), clock,
-                tokenEstimator, reranker);
+                tokenEstimator, reranker, routingPolicy, maxReplanCount);
             String requestId = request.getRequestId() == null || request.getRequestId().trim().isEmpty()
                 ? UUID.randomUUID().toString() : request.getRequestId();
             RetrievalResponse response = delegate.execute(command, toFloat(command.getQueryVector()), deadline,
@@ -273,10 +427,33 @@ public final class RecallService {
         RetrievalBudget budget = command.getBudget();
         int executionCandidateLimit = budget.getPrimaryConstraint() == BudgetConstraint.CANDIDATES
             ? budget.getMaxCandidates() : command.getExecutionCandidateLimit();
-        RecallPlan plan = new RecallPlan(command.getMode(), budget.getTopK(), executionCandidateLimit, deadline,
-            fixture == null ? null : fixture.getGraphVersion(), fixture == null ? null : fixture.getIndexVersion(),
-            vector == null ? null : vector.getVectorVersion(), budget.getPrimaryConstraint(),
-            command.getExecutionMode());
+        RetrievalPlan routingPlan = null;
+        boolean adaptive = command.getMode().canonical() == RetrievalMode.HYBRID
+            && command.getExecutionMode() != ExecutionMode.CASCADED && bm25 != null && vector != null
+            && routingPolicy.supports(command.getMode());
+        RoutingContext routingContext = null;
+        if (adaptive) {
+            RoutingPolicy policy = routingPolicy;
+            routingContext = routingContext(command, pinnedGraphProvider, budget, executionCandidateLimit);
+            routingPlan = RetrievalPlanValidator.validate(policy.plan(routingContext), routingContext);
+            if (!isDefaultFusionConfig()) {
+                routingPlan = RetrievalPlan.builder(routingPlan)
+                    .bm25Weight(fusion.getConfig().getBm25Weight())
+                    .vectorWeight(fusion.getConfig().getVectorWeight())
+                    .graphWeight(fusion.getConfig().getGraphWeight()).build();
+            }
+        }
+        RetrievalPlan effectiveRoutingPlan = routingPlan;
+        RecallPlan plan = routingPlan == null
+            ? new RecallPlan(command.getMode(), budget.getTopK(), executionCandidateLimit, deadline,
+                fixture == null ? null : fixture.getGraphVersion(), fixture == null ? null : fixture.getIndexVersion(),
+                vector == null ? null : vector.getVectorVersion(), budget.getPrimaryConstraint(),
+                command.getExecutionMode())
+            : new RecallPlan(routingPlan.getSelectedMode(), routingPlan.getTopK(), deadline,
+                fixture == null ? null : fixture.getGraphVersion(), fixture == null ? null : fixture.getIndexVersion(),
+                vector == null ? null : vector.getVectorVersion(), budget.getPrimaryConstraint(),
+                command.getExecutionMode(), orderedBudgets(routingPlan), routingPlan.getMaxHop(),
+                routingPlan.getNeighborCap());
         Map<String, RetrievalException> failures = fixture == null ? Collections.emptyMap() : fixture.getFailures();
         BudgetLedger tokenLedger = budget.getPrimaryConstraint() == BudgetConstraint.TOKENS
             ? new BudgetLedger(executionCandidateLimit, budget.getTokenBudget(), deadline, clock) : null;
@@ -307,6 +484,19 @@ public final class RecallService {
         trace.setTokenEstimatorVersion(tokenEstimator.getVersion());
         trace.setRerankerVersion(reranker.getVersion());
         trace.setPrimaryConstraint(budget.getPrimaryConstraint().name());
+        if (routingPlan != null) {
+            RoutingFeatures features = routingContext.getFeatures();
+            trace.setPolicyId(routingPlan.getPolicyId());
+            trace.setPolicyVersion(routingPlan.getPolicyVersion());
+            trace.setFeatureSchemaVersion(features.getSchemaVersion());
+            Map<String, Double> featureValues = new LinkedHashMap<>();
+            for (Map.Entry<String, Number> feature : features.asMap().entrySet()) {
+                featureValues.put(feature.getKey(), feature.getValue().doubleValue());
+            }
+            trace.setRoutingFeatures(featureValues);
+            trace.setRoutingReasons(routingPlan.getReasons());
+            trace.setPolicyParameters(new LinkedHashMap<>(routingPolicy.getParameters()));
+        }
         trace.setSelectedChannels(new ArrayList<>(plan.getChannelBudgets().keySet()));
         trace.setChannelBudgets(plan.getChannelBudgets());
         int effectiveCandidateBudget = 0;
@@ -315,9 +505,12 @@ public final class RecallService {
         }
         trace.setEffectiveCandidateBudget(effectiveCandidateBudget);
         trace.setEffectiveTopK(plan.getTopK());
-        trace.setBm25Weight(fusion.getConfig().getBm25Weight());
-        trace.setVectorWeight(fusion.getConfig().getVectorWeight());
-        trace.setGraphWeight(fusion.getConfig().getGraphWeight());
+        trace.setBm25Weight(routingPlan == null ? fusion.getConfig().getBm25Weight()
+            : routingPlan.getBm25Weight());
+        trace.setVectorWeight(routingPlan == null ? fusion.getConfig().getVectorWeight()
+            : routingPlan.getVectorWeight());
+        trace.setGraphWeight(routingPlan == null ? fusion.getConfig().getGraphWeight()
+            : routingPlan.getGraphWeight());
         trace.setRrfRankConstant(fusion.getConfig().getRankConstant());
         Map<String, Long> channelElapsedNanos = new LinkedHashMap<>();
         for (String name : plan.getChannelBudgets().keySet()) {
@@ -376,6 +569,54 @@ public final class RecallService {
                     failures, byId, plan, merged, trace, channelElapsedNanos, fixture, pinnedGraphProvider,
                     tokenLedger);
             }
+        } else if (routingPlan != null && plan.getChannelBudgets().containsKey("GRAPH")) {
+            List<Map.Entry<String, Integer>> textChannels = new ArrayList<>();
+            for (Map.Entry<String, Integer> channel : channels) {
+                if (!"GRAPH".equals(channel.getKey())) {
+                    textChannels.add(channel);
+                }
+            }
+            runChannels(textChannels, command.getExecutionMode(), command, queryVector, deadline, partial,
+                requestId, failures, byId, plan, merged, trace, channelElapsedNanos, fixture,
+                pinnedGraphProvider, tokenLedger);
+            RetrievalProgress progress = routingProgress(trace, routingContext, deadline, plan, tokenLedger, merged);
+            RetrievalPlan replanned = routingPlan;
+            if (maxReplanCount > 0 && !expired(deadline)) {
+                replanned = RetrievalPlanValidator.validate(routingPolicy.plan(routingContext, progress), routingContext);
+                if (!isDefaultFusionConfig()) {
+                    replanned = RetrievalPlan.builder(replanned)
+                        .bm25Weight(fusion.getConfig().getBm25Weight())
+                        .vectorWeight(fusion.getConfig().getVectorWeight())
+                        .graphWeight(fusion.getConfig().getGraphWeight()).build();
+                }
+                trace.getReplanEvents().add(new RetrievalReplanEvent("AFTER_TEXT", "GRAPH_STAGE_BOUNDARY",
+                    routingPlan, replanned, progress, progress.getRemainingCandidates(),
+                    progress.getRemainingTokens(), replanned.getReasons(), null));
+            }
+            effectiveRoutingPlan = replanned;
+            if (replanned.getChannelBudgets().containsKey("GRAPH")) {
+                int replannedGraphBudget = replanned.getChannelBudgets().get("GRAPH");
+                Map<String, Integer> remainingGraphBudget = Collections.singletonMap("GRAPH",
+                    Math.min(replannedGraphBudget,
+                        Math.max(1, progress.getRemainingCandidates())));
+                RecallPlan graphPlan = new RecallPlan(plan.getMode(),
+                    Math.min(plan.getTopK(), remainingGraphBudget.get("GRAPH")), plan.getDeadlineNanos(),
+                    plan.getGraphVersion(), plan.getIndexVersion(), plan.getVectorVersion(),
+                    budget.getPrimaryConstraint(), command.getExecutionMode(), remainingGraphBudget,
+                    replanned.getMaxHop(), replanned.getNeighborCap(), replanned.getMaxDiffusionGrowth());
+                List<Map.Entry<String, Integer>> scheduledGraph = Collections.singletonList(
+                    new java.util.AbstractMap.SimpleImmutableEntry<>("GRAPH", remainingGraphBudget.get("GRAPH")));
+                runChannels(scheduledGraph, ExecutionMode.SEQUENTIAL, command, queryVector, deadline, partial,
+                    requestId, failures, byId, graphPlan, merged, trace, channelElapsedNanos, fixture,
+                    pinnedGraphProvider, tokenLedger);
+            } else {
+                RecallStopReason skipReason = progress.getGraphGrowthRate() > 2.0D
+                    ? RecallStopReason.DIFFUSION_GROWTH_LIMIT : RecallStopReason.NO_RELIABLE_ANCHOR;
+                record(trace, "GRAPH", RecallStageStatus.NOT_RUN, skipReason,
+                    "adaptive policy disabled the graph stage at the boundary");
+                channelElapsedNanos.put("GRAPH", 0L);
+                trace.getStageElapsedNanos().put("GRAPH", 0L);
+            }
         } else {
             runChannels(channels, command.getExecutionMode(), command, queryVector, deadline, partial,
                 requestId, failures, byId, plan, merged, trace, channelElapsedNanos, fixture,
@@ -385,8 +626,20 @@ public final class RecallService {
         for (EvidenceBuilder value : merged.values()) {
             evidence.add(value.build());
         }
+        WeightedRrfFusion activeFusion = fusion;
+        if (effectiveRoutingPlan != null && isDefaultFusionConfig()) {
+            activeFusion = new WeightedRrfFusion(new WeightedRrfConfig(effectiveRoutingPlan.getBm25Weight(),
+                effectiveRoutingPlan.getVectorWeight(), effectiveRoutingPlan.getGraphWeight(),
+                fusion.getConfig().getRankConstant()));
+        }
+        if (effectiveRoutingPlan != null) {
+            trace.setBm25Weight(activeFusion.getConfig().getBm25Weight());
+            trace.setVectorWeight(activeFusion.getConfig().getVectorWeight());
+            trace.setGraphWeight(activeFusion.getConfig().getGraphWeight());
+            trace.setRoutingReasons(effectiveRoutingPlan.getReasons());
+        }
         if (plan.getMode() == RetrievalMode.HYBRID) {
-            evidence = fusion.sort(evidence);
+            evidence = activeFusion.sort(evidence);
         } else {
             evidence.sort(Comparator.comparingDouble(Evidence::getFusedScore).reversed().thenComparing(Evidence::getEvidenceId));
         }
@@ -619,10 +872,11 @@ public final class RecallService {
         } else {
             GraphRetriever retriever = new GraphRetriever(new EntityAnchorResolver(), tokenEstimator);
             GraphRetrievalConfig graphConfig = GraphRetrievalConfig.builder()
-                .maxHop(1)
+                .maxHop(plan.getMaxHop())
                 .candidateBudget(candidateBudget)
                 .edgeScanBudget(candidateBudget)
-                .neighborCap(candidateBudget)
+                .neighborCap(Math.min(candidateBudget, plan.getNeighborCap()))
+                .maxDiffusionGrowth(plan.getMaxDiffusionGrowth())
                 .tokenBudget(command.getBudget().getPrimaryConstraint() == BudgetConstraint.TOKENS
                     ? command.getBudget().getTokenBudget() : Integer.MAX_VALUE)
                 .samplingSeed(stableGraphSeed(requestId, command.getQuery()))

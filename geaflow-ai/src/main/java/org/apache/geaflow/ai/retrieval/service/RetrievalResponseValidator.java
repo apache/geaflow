@@ -35,6 +35,8 @@ import org.apache.geaflow.ai.retrieval.api.model.TraceStage;
 import org.apache.geaflow.ai.retrieval.config.RetrievalProperties;
 import org.apache.geaflow.ai.retrieval.execution.RecallStageStatus;
 import org.apache.geaflow.ai.retrieval.execution.RecallStopReason;
+import org.apache.geaflow.ai.retrieval.execution.RetrievalReplanEvent;
+import org.apache.geaflow.ai.retrieval.execution.RoutingFeatures;
 
 /** Validates the complete success response before it crosses the API boundary. */
 public final class RetrievalResponseValidator {
@@ -97,10 +99,58 @@ public final class RetrievalResponseValidator {
             throw invalid("unsupported trace.primaryConstraint: " + trace.getPrimaryConstraint());
         }
         validateEffectiveBudget(trace, effectiveBudget, properties);
+        validateAdaptiveTrace(trace);
         if (trace.getSelectedMode().canonical() == RetrievalMode.HYBRID) {
             validateHybridTrace(trace, effectiveBudget, properties);
         }
         return response;
+    }
+
+    private static void validateAdaptiveTrace(RetrievalTrace trace) {
+        boolean adaptive = trace.getPolicyId() != null || trace.getPolicyVersion() != null
+            || trace.getFeatureSchemaVersion() != null || !trace.getReplanEvents().isEmpty();
+        if (!adaptive) {
+            if (!trace.getPolicyParameters().isEmpty() || !trace.getRoutingFeatures().isEmpty()
+                || !trace.getRoutingReasons().isEmpty()) {
+                throw invalid("adaptive trace fields require policy metadata");
+            }
+            return;
+        }
+        required(trace.getPolicyId(), "trace.policyId");
+        required(trace.getPolicyVersion(), "trace.policyVersion");
+        required(trace.getFeatureSchemaVersion(), "trace.featureSchemaVersion");
+        if (!RoutingFeatures.SCHEMA_VERSION.equals(trace.getFeatureSchemaVersion())) {
+            throw invalid("unsupported trace.featureSchemaVersion");
+        }
+        Set<String> featureNames = RoutingFeatures.empty().asMap().keySet();
+        if (!featureNames.equals(trace.getRoutingFeatures().keySet())) {
+            throw invalid("trace.routingFeatures does not match feature schema");
+        }
+        for (Map.Entry<String, Double> feature : trace.getRoutingFeatures().entrySet()) {
+            if (feature.getValue() == null || !Double.isFinite(feature.getValue())
+                || feature.getValue() < 0.0D) {
+                throw invalid("invalid routing feature: " + feature.getKey());
+            }
+        }
+        Double confidence = trace.getRoutingFeatures().get("anchor_confidence");
+        if (confidence == null || confidence > 1.0D || trace.getPolicyParameters().isEmpty()
+            || trace.getRoutingReasons().isEmpty()) {
+            throw invalid("adaptive policy parameters and routing reasons are required");
+        }
+        for (RetrievalReplanEvent event : trace.getReplanEvents()) {
+            if (event == null || !hasText(event.getBoundary()) || !hasText(event.getReason())
+                || event.getOldPlan() == null || event.getNewPlan() == null
+                || event.getRemainingCandidates() < 0 || event.getRemainingTokens() < 0
+                || event.getRemainingLatencyNanos() < 0L || event.getUnusedCandidates() < 0
+                || event.getUnusedTokens() < 0 || !Double.isFinite(event.getFirstStageScoreGap())
+                || event.getFirstStageScoreGap() < 0.0D || event.getAnchorCount() < 0
+                || !Double.isFinite(event.getAnchorConfidence()) || event.getAnchorConfidence() < 0.0D
+                || event.getAnchorConfidence() > 1.0D || event.getCandidateDegree() < 0
+                || !Double.isFinite(event.getGraphGrowthRate()) || event.getGraphGrowthRate() < 0.0D
+                || !Double.isFinite(event.getGraphMarginalYield()) || event.getGraphMarginalYield() < 0.0D) {
+                throw invalid("invalid adaptive replan event");
+            }
+        }
     }
 
     private static void validateHybridTrace(RetrievalTrace trace, RetrievalBudget effectiveBudget,

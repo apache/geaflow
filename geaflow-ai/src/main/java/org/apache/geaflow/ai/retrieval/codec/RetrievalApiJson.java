@@ -40,6 +40,7 @@ import org.apache.geaflow.ai.retrieval.api.model.RetrievalTrace;
 import org.apache.geaflow.ai.retrieval.api.model.TraceStage;
 import org.apache.geaflow.ai.retrieval.config.RetrievalProperties;
 import org.apache.geaflow.ai.retrieval.execution.BudgetConstraint;
+import org.apache.geaflow.ai.retrieval.execution.RetrievalReplanEvent;
 import org.apache.geaflow.ai.retrieval.model.document.SourceRef;
 import org.apache.geaflow.ai.retrieval.model.evidence.Evidence;
 import org.apache.geaflow.ai.retrieval.model.graph.GraphPathRef;
@@ -248,6 +249,13 @@ public final class RetrievalApiJson {
         trace.setPrimaryConstraint(optionalString(object, "primaryConstraint"));
         trace.setCascadeProbeScoreGap(optionalDouble(object, "cascadeProbeScoreGap", 0.0));
         trace.setCascadeDecision(optionalString(object, "cascadeDecision"));
+        trace.setPolicyId(optionalString(object, "policyId"));
+        trace.setPolicyVersion(optionalString(object, "policyVersion"));
+        trace.setFeatureSchemaVersion(optionalString(object, "featureSchemaVersion"));
+        trace.setPolicyParameters(stringMap(object, "policyParameters"));
+        trace.setRoutingFeatures(doubleMap(object, "routingFeatures"));
+        trace.setRoutingReasons(strings(object, "routingReasons"));
+        trace.setReplanEvents(replanEvents(object, "replanEvents"));
         trace.setAnchorsConsidered(optionalInt(object, "anchorsConsidered") == null ? 0 : optionalInt(object, "anchorsConsidered"));
         trace.setEdgesExamined(optionalInt(object, "edgesExamined") == null ? 0 : optionalInt(object, "edgesExamined"));
         trace.setNeighborsSampled(optionalInt(object, "neighborsSampled") == null ? 0 : optionalInt(object, "neighborsSampled"));
@@ -365,6 +373,44 @@ public final class RetrievalApiJson {
                 throw new JsonParseException(name + " values must be strings");
             }
             result.put(entry.getKey(), item.getAsString());
+        }
+        return result;
+    }
+
+    private static java.util.Map<String, Double> doubleMap(JsonObject object, String name) {
+        java.util.Map<String, Double> result = new java.util.LinkedHashMap<>();
+        JsonElement value = object.get(name);
+        if (value == null || value.isJsonNull()) {
+            return result;
+        }
+        if (!value.isJsonObject()) {
+            throw new JsonParseException(name + " must be an object");
+        }
+        for (java.util.Map.Entry<String, JsonElement> entry : value.getAsJsonObject().entrySet()) {
+            JsonElement item = entry.getValue();
+            if (!item.isJsonPrimitive() || !item.getAsJsonPrimitive().isNumber()
+                || !Double.isFinite(item.getAsDouble())) {
+                throw new JsonParseException(name + " values must be finite numbers");
+            }
+            result.put(entry.getKey(), item.getAsDouble());
+        }
+        return result;
+    }
+
+    private static List<RetrievalReplanEvent> replanEvents(JsonObject object, String name) {
+        JsonElement value = object.get(name);
+        if (value == null || value.isJsonNull()) {
+            return new ArrayList<>();
+        }
+        if (!value.isJsonArray()) {
+            throw new JsonParseException(name + " must be an array");
+        }
+        List<RetrievalReplanEvent> result = new ArrayList<>();
+        for (JsonElement item : value.getAsJsonArray()) {
+            if (!item.isJsonObject()) {
+                throw new JsonParseException(name + " elements must be objects");
+            }
+            result.add(GSON.fromJson(item, RetrievalReplanEvent.class));
         }
         return result;
     }

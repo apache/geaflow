@@ -35,6 +35,9 @@ public final class RecallPlan {
     private final String graphVersion;
     private final String indexVersion;
     private final String vectorVersion;
+    private final int maxHop;
+    private final int neighborCap;
+    private final double maxDiffusionGrowth;
 
     public RecallPlan(RetrievalMode mode, int topK, int candidates, long deadlineNanos) {
         this(mode, topK, candidates, deadlineNanos, null, null, null);
@@ -85,6 +88,53 @@ public final class RecallPlan {
                 : this.mode == RetrievalMode.VECTOR_ONLY ? "VECTOR" : "GRAPH", allocatedCandidates);
         }
         channelBudgets = Collections.unmodifiableMap(budgets);
+        this.maxHop = this.mode == RetrievalMode.GRAPH_ONLY ? 1 : 1;
+        this.neighborCap = Math.max(1, candidates);
+        this.maxDiffusionGrowth = Double.POSITIVE_INFINITY;
+    }
+
+    /** Creates a plan from an already validated adaptive channel allocation. */
+    public RecallPlan(RetrievalMode mode, int topK, long deadlineNanos,
+                      String graphVersion, String indexVersion, String vectorVersion,
+                      BudgetConstraint primaryConstraint, ExecutionMode executionMode,
+                      Map<String, Integer> channelBudgets, int maxHop, int neighborCap) {
+        this(mode, topK, deadlineNanos, graphVersion, indexVersion, vectorVersion, primaryConstraint,
+            executionMode, channelBudgets, maxHop, neighborCap, Double.POSITIVE_INFINITY);
+    }
+
+    public RecallPlan(RetrievalMode mode, int topK, long deadlineNanos,
+                      String graphVersion, String indexVersion, String vectorVersion,
+                      BudgetConstraint primaryConstraint, ExecutionMode executionMode,
+                      Map<String, Integer> channelBudgets, int maxHop, int neighborCap,
+                      double maxDiffusionGrowth) {
+        if (mode == null || primaryConstraint == null || executionMode == null || topK < 1
+            || channelBudgets == null || channelBudgets.isEmpty() || maxHop < 0 || maxHop > 2
+            || neighborCap < 1 || !Double.isFinite(maxDiffusionGrowth)
+            && maxDiffusionGrowth != Double.POSITIVE_INFINITY) {
+            throw new RetrievalException(RetrievalErrorCode.INVALID_REQUEST, "invalid adaptive recall plan");
+        }
+        this.mode = mode.canonical();
+        this.topK = topK;
+        this.deadlineNanos = deadlineNanos;
+        this.graphVersion = graphVersion;
+        this.indexVersion = indexVersion;
+        this.vectorVersion = vectorVersion;
+        Map<String, Integer> budgets = new LinkedHashMap<>();
+        int total = 0;
+        for (Map.Entry<String, Integer> entry : channelBudgets.entrySet()) {
+            if (entry.getKey() == null || entry.getValue() == null || entry.getValue() < 1) {
+                throw new RetrievalException(RetrievalErrorCode.INVALID_REQUEST, "invalid adaptive channel budget");
+            }
+            total += entry.getValue();
+            budgets.put(entry.getKey(), entry.getValue());
+        }
+        if (primaryConstraint == BudgetConstraint.CANDIDATES && topK > total) {
+            throw new RetrievalException(RetrievalErrorCode.INVALID_REQUEST, "invalid adaptive topK budget");
+        }
+        this.channelBudgets = Collections.unmodifiableMap(budgets);
+        this.maxHop = maxHop;
+        this.neighborCap = neighborCap;
+        this.maxDiffusionGrowth = maxDiffusionGrowth;
     }
 
     public String getGraphVersion() {
@@ -113,5 +163,17 @@ public final class RecallPlan {
 
     public Map<String, Integer> getChannelBudgets() {
         return channelBudgets;
+    }
+
+    public int getMaxHop() {
+        return maxHop;
+    }
+
+    public int getNeighborCap() {
+        return neighborCap;
+    }
+
+    public double getMaxDiffusionGrowth() {
+        return maxDiffusionGrowth;
     }
 }

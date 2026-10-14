@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 import org.apache.geaflow.ai.retrieval.execution.RecallStageStatus;
 import org.apache.geaflow.ai.retrieval.execution.RecallStopReason;
+import org.apache.geaflow.ai.retrieval.execution.RetrievalReplanEvent;
 
 /** Stable minimum trace shape; future fields must be additive. */
 public class RetrievalTrace {
@@ -78,6 +79,13 @@ public class RetrievalTrace {
     private String primaryConstraint;
     private double cascadeProbeScoreGap;
     private String cascadeDecision;
+    private String policyId;
+    private String policyVersion;
+    private String featureSchemaVersion;
+    private Map<String, String> policyParameters = new LinkedHashMap<>();
+    private Map<String, Double> routingFeatures = new LinkedHashMap<>();
+    private List<String> routingReasons = new ArrayList<>();
+    private List<RetrievalReplanEvent> replanEvents = new ArrayList<>();
 
     public RetrievalTrace() {
     }
@@ -489,5 +497,61 @@ public class RetrievalTrace {
 
     public void setCascadeDecision(String value) {
         cascadeDecision = value;
+    }
+
+    public String getPolicyId() {
+        return policyId;
+    }
+
+    public void setPolicyId(String value) {
+        policyId = value;
+    }
+
+    public String getPolicyVersion() {
+        return policyVersion;
+    }
+
+    public void setPolicyVersion(String value) {
+        policyVersion = value;
+    }
+
+    public String getFeatureSchemaVersion() {
+        return featureSchemaVersion;
+    }
+
+    public void setFeatureSchemaVersion(String value) {
+        featureSchemaVersion = value;
+    }
+
+    public Map<String, String> getPolicyParameters() {
+        return policyParameters;
+    }
+
+    public void setPolicyParameters(Map<String, String> value) {
+        policyParameters = value == null ? new LinkedHashMap<>() : new LinkedHashMap<>(value);
+    }
+
+    public Map<String, Double> getRoutingFeatures() {
+        return routingFeatures;
+    }
+
+    public void setRoutingFeatures(Map<String, Double> value) {
+        routingFeatures = value == null ? new LinkedHashMap<>() : new LinkedHashMap<>(value);
+    }
+
+    public List<String> getRoutingReasons() {
+        return routingReasons;
+    }
+
+    public void setRoutingReasons(List<String> value) {
+        routingReasons = value == null ? new ArrayList<>() : new ArrayList<>(value);
+    }
+
+    public List<RetrievalReplanEvent> getReplanEvents() {
+        return replanEvents;
+    }
+
+    public void setReplanEvents(List<RetrievalReplanEvent> value) {
+        replanEvents = value == null ? new ArrayList<>() : new ArrayList<>(value);
     }
 }
