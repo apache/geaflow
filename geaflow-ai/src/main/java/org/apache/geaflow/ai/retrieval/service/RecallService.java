@@ -694,7 +694,13 @@ public final class RecallService {
     }
 
     private boolean retainTokenEvidence(BudgetLedger tokenLedger, String chunkId, TextChunk chunk) {
-        return tokenLedger == null || chunk == null || tokenLedger.tryRetain(chunkId, chunk, tokenEstimator);
+        if (tokenLedger == null) {
+            return true;
+        }
+        if (chunk == null) {
+            throw notReady("channel chunk does not match fixture");
+        }
+        return tokenLedger.tryRetain(chunkId, chunk, tokenEstimator);
     }
 
     private double cascadeProbeScoreGap(Map<String, EvidenceBuilder> candidates) {
