@@ -100,7 +100,11 @@ public class RetrievalService {
                         "structured retrieval registry is not configured");
                 }
                 RetrievalResponse response = new RecallService(fixtureRegistry).retrieve(request);
-                metrics.recordChannel(request.getMode().trim().toUpperCase(java.util.Locale.ROOT));
+                if (response.getTrace() != null) {
+                    for (String channel : response.getTrace().getSelectedChannels()) {
+                        metrics.recordChannel(channel);
+                    }
+                }
                 metrics.recordSuccess(elapsedMs(startedAt));
                 return response;
             }
