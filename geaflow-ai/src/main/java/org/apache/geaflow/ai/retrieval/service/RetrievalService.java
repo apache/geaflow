@@ -129,6 +129,9 @@ public class RetrievalService {
             trace.setGraphVersion(response.getGraphVersion());
             trace.setSelectedMode(command.getMode());
             trace.setExecutionMode(command.getExecutionMode());
+            trace.setPrimaryConstraint(budget.getPrimaryConstraint().name());
+            trace.setEffectiveCandidateBudget(budget.getMaxCandidates());
+            trace.setEffectiveTopK(budget.getTopK());
             trace.setStages(Collections.singletonList(new TraceStage("keyword", "SUCCESS", null)));
             trace.setStopReason(hits.isEmpty() ? "NO_MATCH" : "TOP_K");
             response.setTrace(trace);

@@ -39,6 +39,7 @@ import org.apache.geaflow.ai.retrieval.api.model.RetrievalResponse;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalTrace;
 import org.apache.geaflow.ai.retrieval.api.model.TraceStage;
 import org.apache.geaflow.ai.retrieval.config.RetrievalProperties;
+import org.apache.geaflow.ai.retrieval.execution.BudgetConstraint;
 import org.apache.geaflow.ai.retrieval.model.document.SourceRef;
 import org.apache.geaflow.ai.retrieval.model.evidence.Evidence;
 import org.apache.geaflow.ai.retrieval.model.graph.GraphPathRef;
@@ -57,7 +58,11 @@ public final class RetrievalApiJson {
     public static RetrievalRequest parseRequest(String json) {
         JsonObject object = object(json);
         validateRequestShape(object);
-        return GSON.fromJson(object, RetrievalRequest.class);
+        RetrievalRequest request = GSON.fromJson(object, RetrievalRequest.class);
+        if (object.has("budget") && !object.get("budget").isJsonNull()) {
+            request.setBudget(parseBudget(object.getAsJsonObject("budget"), false));
+        }
+        return request;
     }
 
     public static RetrievalResponse parseResponse(String json) {
@@ -193,11 +198,13 @@ public final class RetrievalApiJson {
         Integer timeoutMs = optionalInt(object, "timeoutMs");
         Integer maxCandidates = optionalInt(object, "maxCandidates");
         Integer tokenBudget = optionalInt(object, "tokenBudget");
+        BudgetConstraint primaryConstraint = optionalBudgetConstraint(object);
         if (requiredValues && (topK == null || timeoutMs == null || maxCandidates == null
             || tokenBudget == null)) {
             throw new JsonParseException("effectiveBudget contains invalid values");
         }
-        return new RetrievalBudget(topK, timeoutMs, maxCandidates, tokenBudget);
+        return new RetrievalBudget(topK, timeoutMs, maxCandidates, tokenBudget,
+            primaryConstraint == null ? BudgetConstraint.CANDIDATES : primaryConstraint);
     }
 
     private static RetrievalTrace parseTrace(JsonObject object) {
@@ -231,6 +238,16 @@ public final class RetrievalApiJson {
             org.apache.geaflow.ai.retrieval.execution.RecallStageStatus.class));
         trace.setChannelStopReasons(enumMap(object, "channelStopReasons",
             org.apache.geaflow.ai.retrieval.execution.RecallStopReason.class));
+        trace.setRawCandidatesScored(integerMap(object, "rawCandidatesScored"));
+        trace.setStageElapsedNanos(longMap(object, "stageElapsedNanos"));
+        trace.setUniqueEvidenceCandidates(optionalInt(object, "uniqueEvidenceCandidates") == null
+            ? 0 : optionalInt(object, "uniqueEvidenceCandidates"));
+        trace.setTokensRetained(optionalLong(object, "tokensRetained"));
+        trace.setTokenEstimatorVersion(optionalString(object, "tokenEstimatorVersion"));
+        trace.setRerankerVersion(optionalString(object, "rerankerVersion"));
+        trace.setPrimaryConstraint(optionalString(object, "primaryConstraint"));
+        trace.setCascadeProbeScoreGap(optionalDouble(object, "cascadeProbeScoreGap", 0.0));
+        trace.setCascadeDecision(optionalString(object, "cascadeDecision"));
         trace.setAnchorsConsidered(optionalInt(object, "anchorsConsidered") == null ? 0 : optionalInt(object, "anchorsConsidered"));
         trace.setEdgesExamined(optionalInt(object, "edgesExamined") == null ? 0 : optionalInt(object, "edgesExamined"));
         trace.setNeighborsSampled(optionalInt(object, "neighborsSampled") == null ? 0 : optionalInt(object, "neighborsSampled"));
@@ -309,6 +326,26 @@ public final class RetrievalApiJson {
                 throw new JsonParseException(name + " values must be integers");
             }
             result.put(entry.getKey(), item.getAsInt());
+        }
+        return result;
+    }
+
+    private static java.util.Map<String, Long> longMap(JsonObject object, String name) {
+        java.util.Map<String, Long> result = new java.util.LinkedHashMap<>();
+        JsonElement value = object.get(name);
+        if (value == null || value.isJsonNull()) {
+            return result;
+        }
+        if (!value.isJsonObject()) {
+            throw new JsonParseException(name + " must be an object");
+        }
+        for (java.util.Map.Entry<String, JsonElement> entry : value.getAsJsonObject().entrySet()) {
+            JsonElement item = entry.getValue();
+            if (!item.isJsonPrimitive() || !item.getAsJsonPrimitive().isNumber()
+                || !Double.isFinite(item.getAsDouble()) || item.getAsDouble() != Math.rint(item.getAsDouble())) {
+                throw new JsonParseException(name + " values must be integers");
+            }
+            result.put(entry.getKey(), item.getAsLong());
         }
         return result;
     }
@@ -458,6 +495,30 @@ public final class RetrievalApiJson {
             return Enum.valueOf(type, value);
         } catch (IllegalArgumentException e) {
             throw new JsonParseException("unknown " + name + ": " + value);
+        }
+    }
+
+    private static <T extends Enum<T>> T optionalEnum(JsonObject object, String name, Class<T> type) {
+        String value = optionalString(object, name);
+        if (value == null) {
+            return null;
+        }
+        try {
+            return Enum.valueOf(type, value);
+        } catch (IllegalArgumentException e) {
+            throw new JsonParseException("unknown " + name + ": " + value);
+        }
+    }
+
+    private static BudgetConstraint optionalBudgetConstraint(JsonObject object) {
+        String value = optionalString(object, "primaryConstraint");
+        if (value == null) {
+            return null;
+        }
+        try {
+            return BudgetConstraint.parse(value);
+        } catch (IllegalArgumentException error) {
+            throw new JsonParseException("unknown primaryConstraint: " + value);
         }
     }
 

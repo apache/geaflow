@@ -63,7 +63,7 @@ public final class RetrievalResponseValidator {
         if (trace.getSelectedMode() == null) {
             throw unsupported("unsupported retrieval mode in trace");
         }
-        if (trace.getExecutionMode() != ExecutionMode.SEQUENTIAL) {
+        if (trace.getExecutionMode() == null) {
             throw unsupported("unsupported execution mode in trace");
         }
         List<TraceStage> stages = trace.getStages();
@@ -87,13 +87,24 @@ public final class RetrievalResponseValidator {
         }
         RetrievalBudget effectiveBudget = response.getEffectiveBudget();
         RetrievalBudgetValidator.validate(effectiveBudget, properties, true);
+        required(trace.getPrimaryConstraint(), "trace.primaryConstraint");
+        try {
+            if (org.apache.geaflow.ai.retrieval.execution.BudgetConstraint.parse(
+                trace.getPrimaryConstraint()) != effectiveBudget.getPrimaryConstraint()) {
+                throw invalid("trace.primaryConstraint must match effectiveBudget.primaryConstraint");
+            }
+        } catch (IllegalArgumentException error) {
+            throw invalid("unsupported trace.primaryConstraint: " + trace.getPrimaryConstraint());
+        }
+        validateEffectiveBudget(trace, effectiveBudget, properties);
         if (trace.getSelectedMode().canonical() == RetrievalMode.HYBRID) {
-            validateHybridTrace(trace, effectiveBudget);
+            validateHybridTrace(trace, effectiveBudget, properties);
         }
         return response;
     }
 
-    private static void validateHybridTrace(RetrievalTrace trace, RetrievalBudget effectiveBudget) {
+    private static void validateHybridTrace(RetrievalTrace trace, RetrievalBudget effectiveBudget,
+                                            RetrievalProperties properties) {
         required(trace.getGraphVersion(), "trace.graphVersion");
         required(trace.getIndexVersion(), "trace.indexVersion");
         required(trace.getStopReason(), "trace.stopReason");
@@ -175,9 +186,84 @@ public final class RetrievalResponseValidator {
             throw invalid("degradationReasons must contain exactly degraded channels");
         }
         if (trace.getEffectiveCandidateBudget() != budgetSum
-            || trace.getEffectiveCandidateBudget() != effectiveBudget.getMaxCandidates()
-            || trace.getEffectiveTopK() != effectiveBudget.getTopK()) {
+            || trace.getEffectiveTopK() != effectiveBudget.getTopK()
+            || trace.getEffectiveCandidateBudget() > properties.getMaxCandidates()
+            || trace.getEffectiveCandidateBudget() != executionCandidateBudget(effectiveBudget, properties)) {
             throw invalid("invalid effective trace budget");
+        }
+        if (trace.getExecutionMode() == ExecutionMode.CASCADED) {
+            required(trace.getCascadeDecision(), "trace.cascadeDecision");
+            if (!"RUN_GRAPH".equals(trace.getCascadeDecision())
+                && !"SKIP_DEADLINE".equals(trace.getCascadeDecision())
+                && !"SKIP_NO_EVIDENCE".equals(trace.getCascadeDecision())
+                && !"SKIP_INSUFFICIENT_EVIDENCE".equals(trace.getCascadeDecision())
+                && !"SKIP_NO_ANCHOR".equals(trace.getCascadeDecision())
+                && !"SKIP_LOW_SCORE_GAP".equals(trace.getCascadeDecision())) {
+                throw invalid("unsupported trace.cascadeDecision: " + trace.getCascadeDecision());
+            }
+            if (!Double.isFinite(trace.getCascadeProbeScoreGap())
+                || trace.getCascadeProbeScoreGap() < 0.0) {
+                throw invalid("trace.cascadeProbeScoreGap must be finite and non-negative");
+            }
+            validateCascadeState(trace);
+        } else if (trace.getCascadeDecision() != null) {
+            throw invalid("trace.cascadeDecision is only valid for CASCADED execution");
+        }
+    }
+
+    private static int executionCandidateBudget(RetrievalBudget budget, RetrievalProperties properties) {
+        return budget.getPrimaryConstraint()
+            == org.apache.geaflow.ai.retrieval.execution.BudgetConstraint.CANDIDATES
+            ? budget.getMaxCandidates() : properties.getMaxCandidates();
+    }
+
+    private static void validateEffectiveBudget(RetrievalTrace trace, RetrievalBudget budget,
+                                                 RetrievalProperties properties) {
+        if (trace.getEffectiveTopK() != budget.getTopK()
+            || trace.getEffectiveCandidateBudget() != executionCandidateBudget(budget, properties)) {
+            throw invalid("trace effective budget does not match effectiveBudget");
+        }
+    }
+
+    private static void validateCascadeState(RetrievalTrace trace) {
+        RecallStageStatus graphStatus = trace.getChannelStatuses().get("GRAPH");
+        RecallStopReason graphReason = trace.getChannelStopReasons().get("GRAPH");
+        String decision = trace.getCascadeDecision();
+        TraceStage graphStage = null;
+        for (TraceStage stage : trace.getStages()) {
+            if ("GRAPH".equals(stage.getName())) {
+                graphStage = stage;
+                break;
+            }
+        }
+        if (graphStatus == null || graphStage == null || !graphStatus.name().equals(graphStage.getStatus())) {
+            throw invalid("Graph trace stage must match channel status");
+        }
+        if ("RUN_GRAPH".equals(decision)) {
+            if (graphStatus == null || graphStatus == RecallStageStatus.NOT_RUN
+                || graphReason == RecallStopReason.NO_RESULT
+                || graphReason == RecallStopReason.NO_RELIABLE_ANCHOR
+                || graphReason == RecallStopReason.LOW_SCORE_GAP) {
+                throw invalid("RUN_GRAPH requires an executed graph stage");
+            }
+            return;
+        }
+        if (graphStatus != RecallStageStatus.NOT_RUN) {
+            throw invalid("cascade skip decision requires graph stage NOT_RUN");
+        }
+        RecallStopReason expected;
+        if ("SKIP_DEADLINE".equals(decision)) {
+            expected = RecallStopReason.DEADLINE;
+        } else if ("SKIP_NO_EVIDENCE".equals(decision)
+            || "SKIP_INSUFFICIENT_EVIDENCE".equals(decision)) {
+            expected = RecallStopReason.NO_RESULT;
+        } else if ("SKIP_NO_ANCHOR".equals(decision)) {
+            expected = RecallStopReason.NO_RELIABLE_ANCHOR;
+        } else {
+            expected = RecallStopReason.LOW_SCORE_GAP;
+        }
+        if (graphReason != expected) {
+            throw invalid("cascade decision does not match graph stop reason");
         }
     }
 

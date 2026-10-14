@@ -18,6 +18,8 @@
 
 package org.apache.geaflow.ai.retrieval.api.model;
 
+import org.apache.geaflow.ai.retrieval.execution.BudgetConstraint;
+
 /** Optional request budget and the effective budget returned in a response. */
 public class RetrievalBudget {
 
@@ -25,16 +27,23 @@ public class RetrievalBudget {
     private Integer timeoutMs;
     private Integer maxCandidates;
     private Integer tokenBudget;
+    private BudgetConstraint primaryConstraint = BudgetConstraint.CANDIDATES;
 
     public RetrievalBudget() {
     }
 
     public RetrievalBudget(Integer topK, Integer timeoutMs, Integer maxCandidates,
                            Integer tokenBudget) {
+        this(topK, timeoutMs, maxCandidates, tokenBudget, BudgetConstraint.CANDIDATES);
+    }
+
+    public RetrievalBudget(Integer topK, Integer timeoutMs, Integer maxCandidates,
+                           Integer tokenBudget, BudgetConstraint primaryConstraint) {
         this.topK = topK;
         this.timeoutMs = timeoutMs;
         this.maxCandidates = maxCandidates;
         this.tokenBudget = tokenBudget;
+        this.primaryConstraint = primaryConstraint;
     }
 
     public Integer getTopK() {
@@ -67,5 +76,13 @@ public class RetrievalBudget {
 
     public void setTokenBudget(Integer tokenBudget) {
         this.tokenBudget = tokenBudget;
+    }
+
+    public BudgetConstraint getPrimaryConstraint() {
+        return primaryConstraint;
+    }
+
+    public void setPrimaryConstraint(BudgetConstraint primaryConstraint) {
+        this.primaryConstraint = primaryConstraint;
     }
 }

@@ -34,8 +34,11 @@ import org.apache.geaflow.ai.retrieval.api.model.RetrievalException;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalRequest;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalResponse;
 import org.apache.geaflow.ai.retrieval.codec.RetrievalApiJson;
+import org.apache.geaflow.ai.retrieval.execution.BudgetConstraint;
 import org.apache.geaflow.ai.retrieval.execution.RecallStageStatus;
 import org.apache.geaflow.ai.retrieval.execution.RecallStopReason;
+import org.apache.geaflow.ai.retrieval.execution.Reranker;
+import org.apache.geaflow.ai.retrieval.execution.TokenEstimator;
 import org.apache.geaflow.ai.retrieval.fusion.WeightedRrfConfig;
 import org.apache.geaflow.ai.retrieval.index.bm25.Bm25IndexReader;
 import org.apache.geaflow.ai.retrieval.index.bm25.LuceneBm25IndexBuilder;
@@ -123,7 +126,8 @@ class GraphRagMvpEndToEndTest {
 
         RetrievalRequest parallel = request("BM25_ONLY", null);
         parallel.setExecutionMode("PARALLEL");
-        assertCode(RetrievalErrorCode.UNSUPPORTED_OPTION, () -> service.retrieve(parallel));
+        assertEquals(org.apache.geaflow.ai.retrieval.api.model.ExecutionMode.PARALLEL,
+            service.retrieve(parallel).getTrace().getExecutionMode());
 
         RetrievalRequest badVector = request("VECTOR_ONLY", Collections.singletonList(1.0));
         assertCode(RetrievalErrorCode.INVALID_REQUEST, () -> service.retrieve(badVector));
@@ -133,6 +137,179 @@ class GraphRagMvpEndToEndTest {
             fixture.chunks, fixture.entities, fixture.edges, false);
         assertCode(RetrievalErrorCode.INDEX_NOT_READY,
             () -> new RecallService(notReady).retrieve(request("BM25_ONLY", null)));
+    }
+
+    @Test
+    void parallelExecutionProducesTheSameStableEvidenceAsSequential() throws Exception {
+        Fixture fixture = fixture();
+        RecallService service = new RecallService(fixture.registry);
+        RetrievalRequest sequential = request("HYBRID", Arrays.asList(1.0, 0.0));
+        RetrievalResponse sequentialResponse = service.retrieve(sequential);
+        RetrievalRequest parallel = request("HYBRID", Arrays.asList(1.0, 0.0));
+        parallel.setExecutionMode("PARALLEL");
+
+        RetrievalResponse parallelResponse = service.retrieve(parallel);
+
+        assertEquals(evidenceIds(sequentialResponse), evidenceIds(parallelResponse));
+        assertEquals(sequentialResponse.getTrace().getCandidateCounts(),
+            parallelResponse.getTrace().getCandidateCounts());
+        assertEquals("PARALLEL", parallelResponse.getTrace().getExecutionMode().name());
+        assertEquals("PARALLEL", RetrievalApiJson.parseResponse(
+            RetrievalApiJson.toJson(parallelResponse)).getTrace().getExecutionMode().name());
+    }
+
+    @Test
+    void cascadedExecutionSkipsGraphWhenProbeHasNoTextEvidence() throws Exception {
+        Fixture fixture = fixture();
+        RetrievalFixtureRegistry registry = new RetrievalFixtureRegistry();
+        registry.register(GRAPH, VERSION, VERSION, fixture.bm25, null,
+            fixture.chunks, fixture.entities, fixture.edges, true);
+        RetrievalRequest request = request("HYBRID", Arrays.asList(1.0, 0.0));
+        request.setQuery("kongzi");
+        request.setExecutionMode("CASCADED");
+        request.setAllowPartialResults(true);
+
+        RetrievalResponse response = new RecallService(registry).retrieve(request);
+
+        assertEquals(RecallStageStatus.NOT_RUN, response.getTrace().getChannelStatuses().get("GRAPH"));
+        assertEquals(RecallStopReason.NO_RESULT, response.getTrace().getChannelStopReasons().get("GRAPH"));
+        assertEquals(0, response.getTrace().getEvaluatedCounts().get("GRAPH"));
+        assertEquals(2, response.getTrace().getChannelBudgets().get("BM25"));
+        assertEquals(2, response.getTrace().getChannelBudgets().get("VECTOR"));
+        assertEquals(6, response.getTrace().getChannelBudgets().get("GRAPH"));
+    }
+
+    @Test
+    void cascadedExecutionRunsGraphWhenProbeScoreGapIsConfident() throws Exception {
+        Fixture fixture = fixture();
+        RetrievalFixtureRegistry registry = new RetrievalFixtureRegistry();
+        registry.register(GRAPH, VERSION, VERSION, fixture.bm25, fixture.vector,
+            fixture.chunks, fixture.entities, Collections.singletonList(fixture.edges.get(0)), true);
+        RetrievalRequest request = request("HYBRID", Arrays.asList(1.0, 0.0));
+        request.setExecutionMode("CASCADED");
+
+        RetrievalResponse response = new RecallService(registry).retrieve(request);
+
+        assertEquals(RecallStageStatus.SUCCESS, response.getTrace().getChannelStatuses().get("GRAPH"));
+        assertEquals("RUN_GRAPH", response.getTrace().getCascadeDecision());
+        assertTrue(response.getTrace().getCascadeProbeScoreGap() > 0.0001);
+        RetrievalResponse restored = RetrievalApiJson.parseResponse(RetrievalApiJson.toJson(response));
+        assertEquals("CASCADED", restored.getTrace().getExecutionMode().name());
+        assertEquals("RUN_GRAPH", restored.getTrace().getCascadeDecision());
+        assertEquals(response.getTrace().getCascadeProbeScoreGap(),
+            restored.getTrace().getCascadeProbeScoreGap(), 1.0e-12);
+    }
+
+    @Test
+    void cascadedExecutionSkipsGraphWhenProbeScoreGapIsLow() throws Exception {
+        Fixture fixture = fixture();
+        RetrievalRequest request = request("HYBRID", Arrays.asList(1.0, 0.0));
+        request.setQuery("Astronomy");
+        request.setExecutionMode("CASCADED");
+        request.setBudget(new RetrievalBudget(1, 1000, 3, 100, BudgetConstraint.CANDIDATES));
+
+        RetrievalResponse response = new RecallService(fixture.registry).retrieve(request);
+
+        assertEquals(RecallStageStatus.NOT_RUN, response.getTrace().getChannelStatuses().get("GRAPH"));
+        assertEquals("SKIP_LOW_SCORE_GAP", response.getTrace().getCascadeDecision());
+        assertEquals(0.0, response.getTrace().getCascadeProbeScoreGap(), 1.0e-12);
+    }
+
+    @Test
+    void cascadedExecutionDoesNotTrustOneProbeEvidenceAtMinimumBudget() throws Exception {
+        Fixture fixture = fixture();
+        RetrievalRequest request = request("HYBRID", Arrays.asList(1.0, 0.0));
+        request.setExecutionMode("CASCADED");
+        request.setBudget(new RetrievalBudget(1, 1000, 3, 100, BudgetConstraint.CANDIDATES));
+
+        RetrievalResponse response = new RecallService(fixture.registry).retrieve(request);
+
+        assertEquals(RecallStageStatus.NOT_RUN, response.getTrace().getChannelStatuses().get("GRAPH"));
+        assertEquals("SKIP_INSUFFICIENT_EVIDENCE", response.getTrace().getCascadeDecision());
+        assertEquals(0.0, response.getTrace().getCascadeProbeScoreGap(), 1.0e-12);
+    }
+
+    @Test
+    void graphExpansionStopsWhenTokenBudgetIsExhausted() throws Exception {
+        Fixture fixture = fixture();
+        RetrievalRequest request = request("GRAPH_ONLY", null);
+        request.setBudget(new RetrievalBudget(4, 1000, 10, 1, BudgetConstraint.TOKENS));
+
+        RetrievalResponse response = new RecallService(fixture.registry).retrieve(request);
+
+        assertTrue(response.getEvidence().isEmpty());
+        assertEquals(RecallStopReason.TOKEN_BUDGET,
+            response.getTrace().getChannelStopReasons().get("GRAPH"));
+        assertEquals(0, response.getTrace().getTokensRetained());
+    }
+
+    @Test
+    void nonTokenPrimaryConstraintsReportTokensWithoutEnforcingTokenBudget() throws Exception {
+        Fixture fixture = fixture();
+        for (BudgetConstraint primary : Arrays.asList(BudgetConstraint.CANDIDATES, BudgetConstraint.LATENCY)) {
+            RetrievalRequest request = request("BM25_ONLY", null);
+            request.setBudget(new RetrievalBudget(4, 1000, 10, 1, primary));
+
+            RetrievalResponse response = new RecallService(fixture.registry).retrieve(request);
+
+            assertFalse(response.getEvidence().isEmpty());
+            assertTrue(response.getTrace().getTokensRetained() > 1);
+            assertEquals(primary.name(), response.getTrace().getPrimaryConstraint());
+        }
+    }
+
+    @Test
+    void nonCandidatePrimaryConstraintsDoNotEnforceRequestCandidateBudget() throws Exception {
+        Fixture fixture = fixture();
+        for (BudgetConstraint primary : Arrays.asList(BudgetConstraint.LATENCY, BudgetConstraint.TOKENS)) {
+            RetrievalRequest request = request("HYBRID", Arrays.asList(1.0, 0.0));
+            request.setBudget(new RetrievalBudget(4, 1000, 3, 100, primary));
+
+            RetrievalResponse response = new RecallService(fixture.registry).retrieve(request);
+
+            assertTrue(response.getTrace().getTotalCandidatesEvaluated() > 3);
+            assertTrue(response.getTrace().getEffectiveCandidateBudget() > 3);
+            assertFalse(response.getTrace().getChannelStopReasons().containsValue(
+                RecallStopReason.CANDIDATE_BUDGET));
+        }
+    }
+
+    @Test
+    void customEstimatorAndRerankerReachTheRegistryExecution() throws Exception {
+        Fixture fixture = fixture();
+        TokenEstimator estimator = new TokenEstimator() {
+            @Override
+            public int estimate(TextChunk chunk) {
+                return chunk.getTokenEstimate();
+            }
+
+            @Override
+            public String getVersion() {
+                return "test-estimator-v7";
+            }
+        };
+        Reranker reranker = new Reranker() {
+            @Override
+            public List<Evidence> rerank(List<Evidence> candidates) {
+                List<Evidence> reversed = new ArrayList<>(candidates);
+                Collections.reverse(reversed);
+                return reversed;
+            }
+
+            @Override
+            public String getVersion() {
+                return "test-reranker-v3";
+            }
+        };
+        RecallService service = new RecallService(fixture.registry, WeightedRrfConfig.DEFAULT,
+            System::nanoTime, estimator, reranker);
+
+        RetrievalResponse response = service.retrieve(request("BM25_ONLY", null));
+
+        assertEquals("test-estimator-v7", response.getTrace().getTokenEstimatorVersion());
+        assertEquals("test-reranker-v3", response.getTrace().getRerankerVersion());
+        assertEquals("5:doc-1c1", response.getEvidence().get(response.getEvidence().size() - 1)
+            .getEvidenceId());
     }
 
     @Test
@@ -219,7 +396,7 @@ class GraphRagMvpEndToEndTest {
 
         RetrievalRequest request = request("HYBRID", Arrays.asList(1.0, 0.0));
         request.setRequestId("stable-request");
-        request.setBudget(new RetrievalBudget(10, 5000, 400, 100));
+        request.setBudget(new RetrievalBudget(10, 5000, 400, 2000));
         RecallService service = new RecallService(registry);
         RetrievalResponse first = service.retrieve(request);
         RetrievalResponse second = service.retrieve(request);
@@ -287,7 +464,9 @@ class GraphRagMvpEndToEndTest {
         try (RetrievalFixtureRegistry.Fixture.Lease lease = registry.acquire(GRAPH, VERSION, VERSION)) {
             registry.register(GRAPH, VERSION, VERSION, replacementReader, null,
                 fixture.chunks, fixture.entities, fixture.edges, true);
-            assertFalse(lease.getFixture().getBm25().search("Confucius", 3, 3).isEmpty());
+            try (RetrievalFixtureRegistry.Fixture.Lease stageLease = lease.getFixture().acquireLease()) {
+                assertFalse(stageLease.getFixture().getBm25().search("Confucius", 3, 3).isEmpty());
+            }
         } finally {
             registry.close();
         }
@@ -374,7 +553,7 @@ class GraphRagMvpEndToEndTest {
         RecallService service = new RecallService(fixture.registry, WeightedRrfConfig.DEFAULT,
             () -> time.getAndAdd(1_000_000L));
         RetrievalRequest timed = request("HYBRID", Arrays.asList(1.0, 0.0));
-        timed.setBudget(new RetrievalBudget(2, 7, 4, 100));
+        timed.setBudget(new RetrievalBudget(2, 7, 4, 100, BudgetConstraint.LATENCY));
         assertCode(RetrievalErrorCode.RETRIEVAL_TIMEOUT, () -> service.retrieve(timed));
         time.set(0L);
         timed.setAllowPartialResults(true);
@@ -385,6 +564,23 @@ class GraphRagMvpEndToEndTest {
         assertEquals(RecallStageStatus.NOT_RUN, partial.getTrace().getChannelStatuses().get("VECTOR"));
         assertEquals(0, partial.getTrace().getEvaluatedCounts().get("VECTOR"));
         assertTrue(partial.getTrace().getTotalCandidatesEvaluated() <= 4);
+    }
+
+    @Test
+    void candidateAndTokenPrimaryConstraintsDoNotEnableLatencyDeadline() throws Exception {
+        Fixture fixture = fixture();
+        AtomicLong time = new AtomicLong();
+        RecallService service = new RecallService(fixture.registry, WeightedRrfConfig.DEFAULT,
+            () -> time.getAndAdd(2_000_000_000L));
+        for (BudgetConstraint primary : Arrays.asList(BudgetConstraint.CANDIDATES, BudgetConstraint.TOKENS)) {
+            RetrievalRequest request = request("BM25_ONLY", null);
+            request.setBudget(new RetrievalBudget(2, 1, 4, 100, primary));
+
+            RetrievalResponse response = service.retrieve(request);
+
+            assertFalse(response.getEvidence().isEmpty());
+            assertFalse("DEADLINE".equals(response.getTrace().getStopReason()));
+        }
     }
 
     @Test
@@ -596,12 +792,16 @@ class GraphRagMvpEndToEndTest {
         RetrievalResponse response = service.retrieve(request("GRAPH_ONLY", null));
         assertEquals(1, response.getEvidence().size());
         assertEquals(1, response.getEvidence().get(0).getPaths().size());
+        assertEquals(response.getTrace().getGraphCandidatesProduced(),
+            response.getTrace().getRawCandidatesScored().get("GRAPH"));
+        assertEquals(response.getTrace().getEdgesExamined(),
+            response.getTrace().getEvaluatedCounts().get("GRAPH"));
         RetrievalRequest capped = request("GRAPH_ONLY", null);
         capped.setBudget(new RetrievalBudget(1, 1000, 1, 100));
         assertTrue(service.retrieve(capped).getTrace().getEdgesExamined() <= 1);
         AtomicLong time = new AtomicLong();
         RecallService timed = new RecallService(registry, WeightedRrfConfig.DEFAULT, () -> time.getAndAdd(1_000_000L));
-        capped.setBudget(new RetrievalBudget(1, 2, 2, 100));
+        capped.setBudget(new RetrievalBudget(1, 2, 2, 100, BudgetConstraint.LATENCY));
         assertCode(RetrievalErrorCode.RETRIEVAL_TIMEOUT, () -> timed.retrieve(capped));
         time.set(0L);
         capped.setAllowPartialResults(true);
@@ -671,9 +871,12 @@ class GraphRagMvpEndToEndTest {
                 RetrievalResponse response = calls.get(index).get();
                 assertEquals(index % 2 == 0 ? Arrays.asList("BM25", "VECTOR", "GRAPH") : Collections.singletonList("GRAPH"),
                     response.getTrace().getSelectedChannels());
-                assertEquals(index % 2 == 0 ? 4 : 2, response.getTrace().getTotalCandidatesEvaluated());
-                assertEquals(index % 2 == 0 ? Collections.emptyList() : Collections.singletonList("GRAPH"),
-                    response.getDegradedChannels());
+                if (index % 2 == 0) {
+                    assertTrue(response.getTrace().getTotalCandidatesEvaluated() > 4);
+                } else {
+                    assertEquals(2, response.getTrace().getTotalCandidatesEvaluated());
+                }
+                assertEquals(Collections.singletonList("GRAPH"), response.getDegradedChannels());
             }
         } finally {
             executor.shutdownNow();
@@ -740,6 +943,14 @@ class GraphRagMvpEndToEndTest {
     private static Evidence find(List<Evidence> evidence, String id) {
         return evidence.stream().filter(value -> id.equals(value.getEvidenceId())).findFirst()
             .orElseThrow(() -> new AssertionError("missing evidence " + id));
+    }
+
+    private static List<String> evidenceIds(RetrievalResponse response) {
+        List<String> ids = new ArrayList<>();
+        for (Evidence evidence : response.getEvidence()) {
+            ids.add(evidence.getEvidenceId());
+        }
+        return ids;
     }
 
     private static void assertCode(RetrievalErrorCode code, org.junit.jupiter.api.function.Executable executable) {

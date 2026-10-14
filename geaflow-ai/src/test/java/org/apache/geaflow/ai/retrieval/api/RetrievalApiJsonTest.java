@@ -38,6 +38,7 @@ import org.apache.geaflow.ai.retrieval.api.model.RetrievalTrace;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalMode;
 import org.apache.geaflow.ai.retrieval.api.model.TraceStage;
 import org.apache.geaflow.ai.retrieval.codec.RetrievalApiJson;
+import org.apache.geaflow.ai.retrieval.execution.BudgetConstraint;
 import org.apache.geaflow.ai.retrieval.execution.RecallStageStatus;
 import org.apache.geaflow.ai.retrieval.execution.RecallStopReason;
 import org.apache.geaflow.ai.retrieval.model.evidence.Evidence;
@@ -84,6 +85,19 @@ public class RetrievalApiJsonTest {
         Assertions.assertEquals("KEYWORD", full.getMode());
         Assertions.assertEquals(Integer.valueOf(100), full.getBudget().getMaxCandidates());
         Assertions.assertEquals(Collections.emptyList(), full.getQueryVector());
+    }
+
+    @Test
+    public void parsesLegacyPrimaryConstraintAliasesIntoCanonicalValues() {
+        RetrievalBudget candidate = RetrievalApiJson.parseRequest(
+            "{\"graphName\":\"graph\",\"query\":\"q\","
+                + "\"budget\":{\"primaryConstraint\":\"CANDIDATE\"}}").getBudget();
+        RetrievalBudget tokens = RetrievalApiJson.parseRequest(
+            "{\"graphName\":\"graph\",\"query\":\"q\","
+                + "\"budget\":{\"primaryConstraint\":\"TOKEN\"}}").getBudget();
+
+        Assertions.assertEquals(BudgetConstraint.CANDIDATES, candidate.getPrimaryConstraint());
+        Assertions.assertEquals(BudgetConstraint.TOKENS, tokens.getPrimaryConstraint());
     }
 
     @Test
@@ -142,6 +156,7 @@ public class RetrievalApiJsonTest {
             "text", null, null, null, null, null, null, 1)));
         RetrievalTrace trace = new RetrievalTrace();
         trace.setTraceVersion("v1");
+        trace.setRequestId("req-1");
         trace.setOriginalQuery("confucius");
         trace.setSelectedMode(RetrievalMode.HYBRID);
         trace.setExecutionMode(ExecutionMode.SEQUENTIAL);
@@ -158,11 +173,18 @@ public class RetrievalApiJsonTest {
         trace.setGraphEvidenceYield(2);
         trace.setGraphGrowthRate(0.5);
         trace.setGraphMarginalYield(0.25);
+        trace.setRawCandidatesScored(Collections.singletonMap("BM25", 9));
+        trace.setStageElapsedNanos(Collections.singletonMap("BM25", 12L));
+        trace.setUniqueEvidenceCandidates(4);
+        trace.setTokensRetained(6L);
+        trace.setTokenEstimatorVersion("chars4-v1");
+        trace.setRerankerVersion("deterministic-reranker-v1");
+        trace.setPrimaryConstraint("TOKENS");
         trace.setIndexVersion("v1");
         trace.setSelectedChannels(java.util.Arrays.asList("BM25", "VECTOR"));
         Map<String, Integer> channelBudgets = new HashMap<>();
-        channelBudgets.put("BM25", 50);
-        channelBudgets.put("VECTOR", 50);
+        channelBudgets.put("BM25", 500);
+        channelBudgets.put("VECTOR", 500);
         trace.setChannelBudgets(channelBudgets);
         Map<String, Integer> candidateCounts = new HashMap<>();
         candidateCounts.put("BM25", 2);
@@ -180,14 +202,14 @@ public class RetrievalApiJsonTest {
         channelStopReasons.put("BM25", RecallStopReason.COMPLETED);
         channelStopReasons.put("VECTOR", RecallStopReason.COMPLETED);
         trace.setChannelStopReasons(channelStopReasons);
-        trace.setEffectiveCandidateBudget(100);
+        trace.setEffectiveCandidateBudget(1000);
         trace.setEffectiveTopK(10);
         trace.setTotalCandidatesEvaluated(4);
         trace.setBm25Weight(1.0);
         trace.setVectorWeight(1.0);
         trace.setRrfRankConstant(60);
         response.setTrace(trace);
-        response.setEffectiveBudget(new RetrievalBudget(10, 3000, 100, 4096));
+        response.setEffectiveBudget(new RetrievalBudget(10, 3000, 100, 4096, BudgetConstraint.TOKENS));
 
         String json = RetrievalApiJson.toJson(response);
         RetrievalResponse restored = RetrievalApiJson.parseResponse(json);
@@ -205,13 +227,32 @@ public class RetrievalApiJsonTest {
         Assertions.assertEquals(2, restored.getTrace().getGraphEvidenceYield());
         Assertions.assertEquals(0.5, restored.getTrace().getGraphGrowthRate());
         Assertions.assertEquals(0.25, restored.getTrace().getGraphMarginalYield());
+        Assertions.assertEquals(Integer.valueOf(9), restored.getTrace().getRawCandidatesScored().get("BM25"));
+        Assertions.assertEquals(Long.valueOf(12L), restored.getTrace().getStageElapsedNanos().get("BM25"));
+        Assertions.assertEquals(4, restored.getTrace().getUniqueEvidenceCandidates());
+        Assertions.assertEquals(6L, restored.getTrace().getTokensRetained());
+        Assertions.assertEquals("chars4-v1", restored.getTrace().getTokenEstimatorVersion());
+        Assertions.assertEquals("deterministic-reranker-v1", restored.getTrace().getRerankerVersion());
+        Assertions.assertEquals("TOKENS", restored.getTrace().getPrimaryConstraint());
         Assertions.assertEquals("req-1", restored.getTrace().getRequestId());
         Assertions.assertEquals(4, restored.getTrace().getTotalCandidatesEvaluated());
         Assertions.assertEquals(java.util.Arrays.asList("BM25", "VECTOR"),
             restored.getTrace().getSelectedChannels());
         Assertions.assertEquals(Integer.valueOf(4096),
             restored.getEffectiveBudget().getTokenBudget());
+        Assertions.assertEquals(BudgetConstraint.TOKENS,
+            restored.getEffectiveBudget().getPrimaryConstraint());
 
+        trace.setExecutionMode(ExecutionMode.CASCADED);
+        trace.setCascadeDecision("RUN_GRAPH");
+        trace.setCascadeProbeScoreGap(1.0);
+        Assertions.assertThrows(RuntimeException.class, () -> RetrievalApiJson.toJson(response));
+        trace.setExecutionMode(ExecutionMode.SEQUENTIAL);
+        trace.setCascadeDecision(null);
+        response.getTrace().setPrimaryConstraint("CANDIDATES");
+        Assertions.assertThrows(RuntimeException.class,
+            () -> RetrievalApiJson.toJson(response));
+        response.getTrace().setPrimaryConstraint("TOKENS");
         response.getTrace().getCandidateCounts().put("BM25", 3);
         Assertions.assertThrows(RuntimeException.class, () -> RetrievalApiJson.toJson(response));
     }
@@ -254,7 +295,8 @@ public class RetrievalApiJsonTest {
             + "\"trace\":{\"traceVersion\":\"v1\","
             + "\"requestId\":\"req-2\","
             + "\"originalQuery\":\"none\",\"selectedMode\":\"KEYWORD\","
-            + "\"executionMode\":\"SEQUENTIAL\",\"stages\":[]},"
+            + "\"executionMode\":\"SEQUENTIAL\",\"primaryConstraint\":\"CANDIDATES\","
+            + "\"effectiveTopK\":10,\"effectiveCandidateBudget\":100,\"stages\":[]},"
             + "\"effectiveBudget\":{\"topK\":10,\"timeoutMs\":3000,"
             + "\"maxCandidates\":100,\"tokenBudget\":4096}}";
         RetrievalResponse response = RetrievalApiJson.parseResponse(json);
@@ -287,9 +329,13 @@ public class RetrievalApiJsonTest {
 
     @Test
     public void rejectsUnsupportedTraceModesAndUnboundedEffectiveBudget() {
-        String parallel = responseJson("PARALLEL", "SEQUENTIAL", 10, 3000, 100, 4096);
+        String parallel = responseJson("KEYWORD", "PARALLEL", 10, 3000, 100, 4096);
+        Assertions.assertEquals(ExecutionMode.PARALLEL,
+            RetrievalApiJson.parseResponse(parallel).getTrace().getExecutionMode());
+
+        String unsupportedMode = responseJson("UNKNOWN", "SEQUENTIAL", 10, 3000, 100, 4096);
         Assertions.assertThrows(RuntimeException.class,
-            () -> RetrievalApiJson.parseResponse(parallel));
+            () -> RetrievalApiJson.parseResponse(unsupportedMode));
 
         String overLimit = responseJson("KEYWORD", "SEQUENTIAL", 101, 3000, 100, 4096);
         Assertions.assertThrows(RuntimeException.class,
@@ -386,9 +432,11 @@ public class RetrievalApiJsonTest {
         return "{\"requestId\":\"r\",\"graphName\":\"graph\","
             + "\"graphVersion\":\"v1\",\"evidence\":[],\"paths\":[],"
             + "\"sources\":[],\"degradedChannels\":[],\"trace\":{"
-            + "\"traceVersion\":\"v1\",\"originalQuery\":\"q\","
+            + "\"traceVersion\":\"v1\",\"requestId\":\"r\",\"originalQuery\":\"q\","
             + "\"selectedMode\":\"" + mode + "\",\"executionMode\":\""
-            + executionMode + "\",\"stages\":[]},\"effectiveBudget\":{"
+            + executionMode + "\",\"primaryConstraint\":\"CANDIDATES\","
+            + "\"effectiveTopK\":10,\"effectiveCandidateBudget\":100,\"stages\":[]},"
+            + "\"effectiveBudget\":{"
             + "\"topK\":" + topK + ",\"timeoutMs\":" + timeoutMs
             + ",\"maxCandidates\":" + maxCandidates + ",\"tokenBudget\":"
             + tokenBudget + "}}";

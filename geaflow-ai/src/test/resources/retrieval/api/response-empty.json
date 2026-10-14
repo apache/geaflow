@@ -11,6 +11,9 @@
     "originalQuery": "unknown",
     "selectedMode": "KEYWORD",
     "executionMode": "SEQUENTIAL",
+    "primaryConstraint": "CANDIDATES",
+    "effectiveTopK": 10,
+    "effectiveCandidateBudget": 100,
     "stages": [],
     "stopReason": "NO_EVIDENCE"
   },

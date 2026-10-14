@@ -76,8 +76,10 @@ public class RetrievalProperties {
         } catch (IllegalArgumentException | NullPointerException e) {
             throw invalid("default-mode is unsupported: " + defaultMode);
         }
-        if (!ExecutionMode.SEQUENTIAL.name().equals(defaultExecutionMode)) {
-            throw invalid("default-execution-mode must be SEQUENTIAL");
+        try {
+            ExecutionMode.valueOf(defaultExecutionMode.trim().toUpperCase(java.util.Locale.ROOT));
+        } catch (IllegalArgumentException | NullPointerException e) {
+            throw invalid("default-execution-mode is unsupported: " + defaultExecutionMode);
         }
         positiveLimit(defaultTopK, maxTopK, "topK");
         positiveLimit(defaultTimeoutMs, maxTimeoutMs, "timeoutMs");

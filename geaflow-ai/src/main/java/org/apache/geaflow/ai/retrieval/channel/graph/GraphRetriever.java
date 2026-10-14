@@ -30,7 +30,9 @@ import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.function.LongSupplier;
+import org.apache.geaflow.ai.retrieval.execution.DeterministicTokenEstimator;
 import org.apache.geaflow.ai.retrieval.execution.RecallStopReason;
+import org.apache.geaflow.ai.retrieval.execution.TokenEstimator;
 import org.apache.geaflow.ai.retrieval.model.document.TextChunk;
 import org.apache.geaflow.ai.retrieval.model.graph.EntityRef;
 import org.apache.geaflow.ai.retrieval.model.graph.GraphEdgeRef;
@@ -40,14 +42,20 @@ import org.apache.geaflow.ai.retrieval.model.graph.GraphVertexRef;
 /** Bounded deterministic one-hop graph expansion over fixture graph records. */
 public final class GraphRetriever {
     private final EntityAnchorResolver resolver;
+    private final TokenEstimator tokenEstimator;
     private GraphStats lastStats = new GraphStats();
 
     public GraphRetriever() {
-        this(new EntityAnchorResolver());
+        this(new EntityAnchorResolver(), new DeterministicTokenEstimator());
     }
 
     public GraphRetriever(EntityAnchorResolver resolver) {
+        this(resolver, new DeterministicTokenEstimator());
+    }
+
+    public GraphRetriever(EntityAnchorResolver resolver, TokenEstimator tokenEstimator) {
         this.resolver = resolver;
+        this.tokenEstimator = java.util.Objects.requireNonNull(tokenEstimator, "tokenEstimator");
     }
 
     public List<GraphHit> retrieve(String query, List<EntityRef> entities, List<GraphEdgeRef> edges,
@@ -325,7 +333,12 @@ public final class GraphRetriever {
                         break;
                     }
                     if (!producedChunks.contains(sourceId)) {
-                        int estimate = estimateTokens(chunk);
+                        int estimate = tokenEstimator.estimate(chunk);
+                        if (estimate < 1) {
+                            lastStats.validationErrors.add("token estimator returned a non-positive estimate");
+                            stopForBudget(RecallStopReason.TOKEN_BUDGET);
+                            return result;
+                        }
                         long projectedTokens = (long) lastStats.tokensEstimated + addedTokens + estimate;
                         if (projectedTokens > config.getTokenBudget()) {
                             stopForBudget(RecallStopReason.TOKEN_BUDGET);
@@ -485,11 +498,6 @@ public final class GraphRetriever {
         }
         EntityRef entity = entityMap.get(state.entityId);
         return entity == null ? Collections.emptyList() : entity.getSourceChunkIds();
-    }
-
-    private static int estimateTokens(TextChunk chunk) {
-        return chunk.getTokenEstimate() > 0 ? chunk.getTokenEstimate()
-            : (int) Math.max(1L, ((long) chunk.getText().length() + 3L) / 4L);
     }
 
     private static List<String> vertexIds(List<GraphVertexRef> vertices) {

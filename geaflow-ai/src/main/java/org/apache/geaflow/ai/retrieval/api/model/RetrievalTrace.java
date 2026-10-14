@@ -69,6 +69,15 @@ public class RetrievalTrace {
     private Map<String, Integer> evaluatedCounts = new LinkedHashMap<>();
     private Map<String, RecallStageStatus> channelStatuses = new LinkedHashMap<>();
     private Map<String, RecallStopReason> channelStopReasons = new LinkedHashMap<>();
+    private Map<String, Integer> rawCandidatesScored = new LinkedHashMap<>();
+    private Map<String, Long> stageElapsedNanos = new LinkedHashMap<>();
+    private int uniqueEvidenceCandidates;
+    private long tokensRetained;
+    private String tokenEstimatorVersion;
+    private String rerankerVersion;
+    private String primaryConstraint;
+    private double cascadeProbeScoreGap;
+    private String cascadeDecision;
 
     public RetrievalTrace() {
     }
@@ -408,5 +417,77 @@ public class RetrievalTrace {
 
     public void setChannelStopReasons(Map<String, RecallStopReason> value) {
         channelStopReasons = value == null ? new LinkedHashMap<>() : new LinkedHashMap<>(value);
+    }
+
+    public Map<String, Integer> getRawCandidatesScored() {
+        return rawCandidatesScored;
+    }
+
+    public void setRawCandidatesScored(Map<String, Integer> value) {
+        rawCandidatesScored = value == null ? new LinkedHashMap<>() : new LinkedHashMap<>(value);
+    }
+
+    public Map<String, Long> getStageElapsedNanos() {
+        return stageElapsedNanos;
+    }
+
+    public void setStageElapsedNanos(Map<String, Long> value) {
+        stageElapsedNanos = value == null ? new LinkedHashMap<>() : new LinkedHashMap<>(value);
+    }
+
+    public int getUniqueEvidenceCandidates() {
+        return uniqueEvidenceCandidates;
+    }
+
+    public void setUniqueEvidenceCandidates(int value) {
+        uniqueEvidenceCandidates = value;
+    }
+
+    public long getTokensRetained() {
+        return tokensRetained;
+    }
+
+    public void setTokensRetained(long value) {
+        tokensRetained = value;
+    }
+
+    public String getTokenEstimatorVersion() {
+        return tokenEstimatorVersion;
+    }
+
+    public void setTokenEstimatorVersion(String value) {
+        tokenEstimatorVersion = value;
+    }
+
+    public String getRerankerVersion() {
+        return rerankerVersion;
+    }
+
+    public void setRerankerVersion(String value) {
+        rerankerVersion = value;
+    }
+
+    public String getPrimaryConstraint() {
+        return primaryConstraint;
+    }
+
+    public void setPrimaryConstraint(String value) {
+        primaryConstraint = value;
+    }
+
+    public double getCascadeProbeScoreGap() {
+        return cascadeProbeScoreGap;
+    }
+
+    public void setCascadeProbeScoreGap(double value) {
+        cascadeProbeScoreGap = value;
+    }
+
+    public String getCascadeDecision() {
+        return cascadeDecision;
+    }
+
+    public void setCascadeDecision(String value) {
+        cascadeDecision = value;
     }
 }

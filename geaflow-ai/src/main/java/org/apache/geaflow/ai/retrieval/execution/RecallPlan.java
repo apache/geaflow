@@ -21,11 +21,12 @@ package org.apache.geaflow.ai.retrieval.execution;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import org.apache.geaflow.ai.retrieval.api.model.ExecutionMode;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalErrorCode;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalException;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalMode;
 
-/** Immutable sequential plan with fixed channel allocations and one absolute deadline. */
+/** Immutable bounded plan with fixed channel allocations and one optional absolute deadline. */
 public final class RecallPlan {
     private final RetrievalMode mode;
     private final int topK;
@@ -41,26 +42,47 @@ public final class RecallPlan {
 
     public RecallPlan(RetrievalMode mode, int topK, int candidates, long deadlineNanos,
                       String graphVersion, String indexVersion, String vectorVersion) {
+        this(mode, topK, candidates, deadlineNanos, graphVersion, indexVersion, vectorVersion,
+            BudgetConstraint.CANDIDATES, ExecutionMode.SEQUENTIAL);
+    }
+
+    public RecallPlan(RetrievalMode mode, int topK, int candidates, long deadlineNanos,
+                      String graphVersion, String indexVersion, String vectorVersion,
+                      BudgetConstraint primaryConstraint, ExecutionMode executionMode) {
         this.graphVersion = graphVersion;
         this.indexVersion = indexVersion;
         this.vectorVersion = vectorVersion;
-        if (mode == null || topK < 1 || topK > candidates
-            || (mode.canonical() == RetrievalMode.HYBRID && candidates < 3)) {
+        if (mode == null || primaryConstraint == null || executionMode == null || topK < 1
+            || (primaryConstraint == BudgetConstraint.CANDIDATES && topK > candidates)
+            || (mode.canonical() == RetrievalMode.HYBRID
+                && primaryConstraint == BudgetConstraint.CANDIDATES && candidates < 3)
+            || candidates < 1) {
             throw new RetrievalException(RetrievalErrorCode.INVALID_REQUEST, "invalid recall budget or mode");
         }
         this.mode = mode.canonical();
         this.topK = topK;
         this.deadlineNanos = deadlineNanos;
+        int allocatedCandidates = this.mode == RetrievalMode.HYBRID
+            && primaryConstraint != BudgetConstraint.CANDIDATES ? Math.max(3, candidates) : candidates;
         Map<String, Integer> budgets = new LinkedHashMap<>();
         if (this.mode == RetrievalMode.HYBRID) {
-            int base = candidates / 3;
-            int remainder = candidates % 3;
-            budgets.put("BM25", base + (remainder >= 1 ? 1 : 0));
-            budgets.put("VECTOR", base + (remainder >= 2 ? 1 : 0));
-            budgets.put("GRAPH", base);
+            if (executionMode == ExecutionMode.CASCADED) {
+                int probeBudget = allocatedCandidates >= 5
+                    ? Math.min(10, Math.max(2, allocatedCandidates / 8))
+                    : Math.max(1, (allocatedCandidates - 1) / 2);
+                budgets.put("BM25", probeBudget);
+                budgets.put("VECTOR", probeBudget);
+                budgets.put("GRAPH", allocatedCandidates - (probeBudget * 2));
+            } else {
+                int base = allocatedCandidates / 3;
+                int remainder = allocatedCandidates % 3;
+                budgets.put("BM25", base + (remainder >= 1 ? 1 : 0));
+                budgets.put("VECTOR", base + (remainder >= 2 ? 1 : 0));
+                budgets.put("GRAPH", base);
+            }
         } else {
             budgets.put(this.mode == RetrievalMode.BM25_ONLY ? "BM25"
-                : this.mode == RetrievalMode.VECTOR_ONLY ? "VECTOR" : "GRAPH", candidates);
+                : this.mode == RetrievalMode.VECTOR_ONLY ? "VECTOR" : "GRAPH", allocatedCandidates);
         }
         channelBudgets = Collections.unmodifiableMap(budgets);
     }

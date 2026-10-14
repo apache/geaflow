@@ -408,11 +408,15 @@ public final class RetrievalFixtureRegistry implements AutoCloseable {
         }
 
         private synchronized Lease acquire() {
-            if (retired || closed) {
+            if (closed || retired && activeLeases == 0) {
                 throw new IllegalStateException("fixture is retired");
             }
             activeLeases++;
             return new Lease(this);
+        }
+
+        Lease acquireLease() {
+            return acquire();
         }
 
         /** Retires the fixture, deferring reader closure while leases remain active. */

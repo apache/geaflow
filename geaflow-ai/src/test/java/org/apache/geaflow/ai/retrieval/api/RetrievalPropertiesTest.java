@@ -54,7 +54,11 @@ public class RetrievalPropertiesTest {
 
         properties = new RetrievalProperties();
         properties.setDefaultExecutionMode("PARALLEL");
-        assertInvalid(properties);
+        properties.validateConfiguration();
+
+        properties = new RetrievalProperties();
+        properties.setDefaultExecutionMode("CASCADED");
+        properties.validateConfiguration();
 
         properties = new RetrievalProperties();
         properties.setDefaultTimeoutMs(10001);

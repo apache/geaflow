@@ -31,6 +31,7 @@ public final class RetrievalCommand {
     private final ExecutionMode executionMode;
     private final RetrievalBudget budget;
     private final List<Double> queryVector;
+    private final int executionCandidateLimit;
 
     public RetrievalCommand(String graphName, String query, RetrievalMode mode,
                             ExecutionMode executionMode, RetrievalBudget budget) {
@@ -40,12 +41,23 @@ public final class RetrievalCommand {
     public RetrievalCommand(String graphName, String query, RetrievalMode mode,
                             ExecutionMode executionMode, RetrievalBudget budget,
                             List<Double> queryVector) {
+        this(graphName, query, mode, executionMode, budget, queryVector,
+            budget.getMaxCandidates());
+    }
+
+    public RetrievalCommand(String graphName, String query, RetrievalMode mode,
+                            ExecutionMode executionMode, RetrievalBudget budget,
+                            List<Double> queryVector, int executionCandidateLimit) {
+        if (executionCandidateLimit < 1) {
+            throw new IllegalArgumentException("executionCandidateLimit must be positive");
+        }
         this.graphName = graphName;
         this.query = query;
         this.mode = mode;
         this.executionMode = executionMode;
+        this.executionCandidateLimit = executionCandidateLimit;
         this.budget = new RetrievalBudget(budget.getTopK(), budget.getTimeoutMs(),
-            budget.getMaxCandidates(), budget.getTokenBudget());
+            budget.getMaxCandidates(), budget.getTokenBudget(), budget.getPrimaryConstraint());
         this.queryVector = queryVector == null ? Collections.<Double>emptyList()
             : Collections.unmodifiableList(new ArrayList<>(queryVector));
     }
@@ -68,11 +80,16 @@ public final class RetrievalCommand {
 
     public RetrievalBudget getBudget() {
         return new RetrievalBudget(budget.getTopK(), budget.getTimeoutMs(),
-            budget.getMaxCandidates(), budget.getTokenBudget());
+            budget.getMaxCandidates(), budget.getTokenBudget(), budget.getPrimaryConstraint());
     }
 
     /** Returns the caller-supplied, precomputed query vector. */
     public List<Double> getQueryVector() {
         return queryVector;
+    }
+
+    /** Returns the service-wide candidate safety ceiling, independent of the primary constraint. */
+    public int getExecutionCandidateLimit() {
+        return executionCandidateLimit;
     }
 }

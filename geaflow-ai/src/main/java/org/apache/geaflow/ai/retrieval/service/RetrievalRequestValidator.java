@@ -29,6 +29,7 @@ import org.apache.geaflow.ai.retrieval.api.model.RetrievalException;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalMode;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalRequest;
 import org.apache.geaflow.ai.retrieval.config.RetrievalProperties;
+import org.apache.geaflow.ai.retrieval.execution.BudgetConstraint;
 
 /** Converts an untrusted wire request into a bounded immutable command. */
 public class RetrievalRequestValidator {
@@ -76,11 +77,13 @@ public class RetrievalRequestValidator {
         RetrievalBudget input = request.getBudget();
         final RetrievalBudget effectiveBudget = RetrievalBudgetValidator.validate(input,
             properties, false);
-        if (canonicalMode == RetrievalMode.HYBRID && effectiveBudget.getMaxCandidates() < 3) {
+        if (canonicalMode == RetrievalMode.HYBRID
+            && effectiveBudget.getPrimaryConstraint() == BudgetConstraint.CANDIDATES
+            && effectiveBudget.getMaxCandidates() < 3) {
             throw invalid("HYBRID requires maxCandidates >= 3");
         }
         return new RetrievalCommand(graphName, query, mode, executionMode,
-            effectiveBudget, vector);
+            effectiveBudget, vector, properties.getMaxCandidates());
     }
 
     private static String trimmed(String value, String name, int maxLength) {
@@ -136,11 +139,7 @@ public class RetrievalRequestValidator {
             throw unsupported("unsupported execution mode: null");
         }
         try {
-            ExecutionMode mode = ExecutionMode.valueOf(value.trim().toUpperCase(Locale.ROOT));
-            if (mode != ExecutionMode.SEQUENTIAL) {
-                throw unsupported("unsupported execution mode: " + value);
-            }
-            return mode;
+            return ExecutionMode.valueOf(value.trim().toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException e) {
             throw unsupported("unsupported execution mode: " + value);
         }
