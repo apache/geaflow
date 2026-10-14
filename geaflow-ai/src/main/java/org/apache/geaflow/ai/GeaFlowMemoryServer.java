@@ -35,6 +35,7 @@ import org.apache.geaflow.ai.retrieval.api.model.RetrievalError;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalException;
 import org.apache.geaflow.ai.retrieval.codec.RetrievalApiJson;
 import org.apache.geaflow.ai.retrieval.config.RetrievalProperties;
+import org.apache.geaflow.ai.retrieval.service.RetrievalFixtureRegistry;
 import org.apache.geaflow.ai.retrieval.service.RetrievalMetrics;
 import org.apache.geaflow.ai.retrieval.service.RetrievalService;
 import org.apache.geaflow.ai.search.VectorSearch;
@@ -69,6 +70,9 @@ public class GeaFlowMemoryServer {
 
     @Inject
     private RetrievalService retrievalService;
+
+    @Inject
+    private RetrievalFixtureRegistry retrievalFixtureRegistry;
 
     private static final RetrievalService FALLBACK_SERVICE = new RetrievalService(
         FALLBACK_CACHE, new RetrievalProperties(), FALLBACK_METRICS);
@@ -229,7 +233,13 @@ public class GeaFlowMemoryServer {
         ServerMemoryCache.ReadinessStatus status;
         try {
             properties.validateConfiguration();
-            status = runtimeCache().keywordReadiness(properties.getReadyGraphName());
+            if (retrievalFixtureRegistry != null) {
+                boolean ready = retrievalFixtureRegistry.isReady(properties.getReadyGraphName());
+                status = new ServerMemoryCache.ReadinessStatus(ready, properties.getReadyGraphName(),
+                    null, ready ? "READY" : "RETRIEVAL_FIXTURE_NOT_READY");
+            } else {
+                status = runtimeCache().keywordReadiness(properties.getReadyGraphName());
+            }
         } catch (RetrievalException exception) {
             status = new ServerMemoryCache.ReadinessStatus(false, null, null,
                 "INVALID_CONFIGURATION");
@@ -251,7 +261,9 @@ public class GeaFlowMemoryServer {
         return "{\"total\":" + snapshot.getTotal() + ",\"success\":"
             + snapshot.getSuccess() + ",\"timeout\":" + snapshot.getTimeout()
             + ",\"failure\":" + snapshot.getFailure() + ",\"totalElapsedMs\":"
-            + snapshot.getTotalElapsedMs() + "}";
+            + snapshot.getTotalElapsedMs() + ",\"p50ElapsedMs\":" + snapshot.getP50ElapsedMs()
+            + ",\"p95ElapsedMs\":" + snapshot.getP95ElapsedMs() + ",\"channelCounts\":"
+            + RetrievalApiJson.toJson(snapshot.getChannelCounts()) + "}";
     }
 
     private RetrievalProperties properties() {

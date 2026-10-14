@@ -52,22 +52,30 @@ public class RetrievalService {
     private RetrievalProperties properties;
     @Inject
     private RetrievalMetrics metrics;
+    private final RetrievalFixtureRegistry fixtureRegistry;
     private RetrievalRequestValidator validator;
     private final EvidenceMapper evidenceMapper = new EvidenceMapper();
 
     public RetrievalService() {
-        this(new ServerMemoryCache(), new RetrievalProperties(), new RetrievalMetrics());
+        this(new ServerMemoryCache(), new RetrievalProperties(), new RetrievalMetrics(), null);
     }
 
     public RetrievalService(ServerMemoryCache cache, RetrievalProperties properties) {
-        this(cache, properties, new RetrievalMetrics());
+        this(cache, properties, new RetrievalMetrics(), null);
     }
 
     public RetrievalService(ServerMemoryCache cache, RetrievalProperties properties,
                             RetrievalMetrics metrics) {
+        this(cache, properties, metrics, null);
+    }
+
+    /** Creates the HTTP-facing service with an optional versioned GraphRAG registry. */
+    public RetrievalService(ServerMemoryCache cache, RetrievalProperties properties,
+                            RetrievalMetrics metrics, RetrievalFixtureRegistry fixtureRegistry) {
         this.cache = cache;
         this.properties = properties;
         this.metrics = metrics;
+        this.fixtureRegistry = fixtureRegistry;
         this.properties.validateConfiguration();
         this.validator = new RetrievalRequestValidator(properties);
     }
@@ -87,8 +95,14 @@ public class RetrievalService {
         try {
             if (request != null && request.getMode() != null
                 && !"KEYWORD".equalsIgnoreCase(request.getMode().trim())) {
-                throw new RetrievalException(RetrievalErrorCode.UNSUPPORTED_OPTION,
-                    "HTTP retrieval currently supports KEYWORD only");
+                if (fixtureRegistry == null) {
+                    throw new RetrievalException(RetrievalErrorCode.UNSUPPORTED_OPTION,
+                        "structured retrieval registry is not configured");
+                }
+                RetrievalResponse response = new RecallService(fixtureRegistry).retrieve(request);
+                metrics.recordChannel(request.getMode().trim().toUpperCase(java.util.Locale.ROOT));
+                metrics.recordSuccess(elapsedMs(startedAt));
+                return response;
             }
             RetrievalCommand command = validator.validate(request);
             ServerMemoryCache.ReadyStatus readiness = cache.keywordReadiness(command.getGraphName());

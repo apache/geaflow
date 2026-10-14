@@ -19,6 +19,9 @@
 
 package org.apache.geaflow.ai.retrieval.service;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalErrorCode;
 import org.noear.solon.annotation.Component;
@@ -32,6 +35,9 @@ public final class RetrievalMetrics {
     private final AtomicLong timeout = new AtomicLong();
     private final AtomicLong total = new AtomicLong();
     private final AtomicLong totalElapsedMs = new AtomicLong();
+    private final List<Long> elapsedSamples = new ArrayList<>();
+    private final java.util.concurrent.ConcurrentHashMap<String, AtomicLong> channelCounters =
+        new java.util.concurrent.ConcurrentHashMap<>();
 
     public void recordSuccess() {
         recordSuccess(0L);
@@ -41,6 +47,7 @@ public final class RetrievalMetrics {
         total.incrementAndGet();
         success.incrementAndGet();
         totalElapsedMs.addAndGet(Math.max(0L, elapsedMs));
+        sample(elapsedMs);
     }
 
     public void recordFailure(RetrievalErrorCode code) {
@@ -51,6 +58,7 @@ public final class RetrievalMetrics {
         total.incrementAndGet();
         failure.incrementAndGet();
         totalElapsedMs.addAndGet(Math.max(0L, elapsedMs));
+        sample(elapsedMs);
         if (code == RetrievalErrorCode.RETRIEVAL_TIMEOUT) {
             timeout.incrementAndGet();
         }
@@ -58,7 +66,34 @@ public final class RetrievalMetrics {
 
     public Snapshot snapshot() {
         return new Snapshot(total.get(), success.get(), failure.get(), timeout.get(),
-            totalElapsedMs.get());
+            totalElapsedMs.get(), percentile(0.50D), percentile(0.95D), channelCounters);
+    }
+
+    public void recordChannel(String channel) {
+        if (channel != null) {
+            channelCounters.computeIfAbsent(channel, ignored -> new AtomicLong()).incrementAndGet();
+        }
+    }
+
+    private void sample(long elapsedMs) {
+        synchronized (elapsedSamples) {
+            if (elapsedSamples.size() >= 2048) {
+                elapsedSamples.remove(0);
+            }
+            elapsedSamples.add(Math.max(0L, elapsedMs));
+        }
+    }
+
+    private long percentile(double fraction) {
+        synchronized (elapsedSamples) {
+            if (elapsedSamples.isEmpty()) {
+                return 0L;
+            }
+            List<Long> sorted = new ArrayList<>(elapsedSamples);
+            Collections.sort(sorted);
+            int index = (int) Math.ceil(fraction * sorted.size()) - 1;
+            return sorted.get(Math.max(0, Math.min(index, sorted.size() - 1)));
+        }
     }
 
     public static final class Snapshot {
@@ -67,13 +102,24 @@ public final class RetrievalMetrics {
         private final long failure;
         private final long timeout;
         private final long totalElapsedMs;
+        private final long p50ElapsedMs;
+        private final long p95ElapsedMs;
+        private final java.util.Map<String, Long> channelCounts;
 
-        private Snapshot(long total, long success, long failure, long timeout, long totalElapsedMs) {
+        private Snapshot(long total, long success, long failure, long timeout, long totalElapsedMs,
+                         long p50ElapsedMs, long p95ElapsedMs,
+                         java.util.Map<String, AtomicLong> channelCounters) {
             this.total = total;
             this.success = success;
             this.failure = failure;
             this.timeout = timeout;
             this.totalElapsedMs = totalElapsedMs;
+            this.p50ElapsedMs = p50ElapsedMs;
+            this.p95ElapsedMs = p95ElapsedMs;
+            this.channelCounts = new java.util.LinkedHashMap<>();
+            for (java.util.Map.Entry<String, AtomicLong> entry : channelCounters.entrySet()) {
+                this.channelCounts.put(entry.getKey(), entry.getValue().get());
+            }
         }
 
         public long getTotal() {
@@ -94,6 +140,18 @@ public final class RetrievalMetrics {
 
         public long getTotalElapsedMs() {
             return totalElapsedMs;
+        }
+
+        public long getP50ElapsedMs() {
+            return p50ElapsedMs;
+        }
+
+        public long getP95ElapsedMs() {
+            return p95ElapsedMs;
+        }
+
+        public java.util.Map<String, Long> getChannelCounts() {
+            return java.util.Collections.unmodifiableMap(channelCounts);
         }
     }
 }

@@ -165,6 +165,19 @@ public final class RetrievalFixtureRegistry implements AutoCloseable {
         return fixture;
     }
 
+    /** Returns whether any published READY fixture exists for a graph. */
+    public synchronized boolean isReady(String graphName) {
+        if (graphName == null) {
+            return false;
+        }
+        for (Fixture fixture : fixtures.values()) {
+            if (graphName.equals(fixture.getGraphName()) && fixture.isReady()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** Acquires a lease that keeps the selected fixture readers open until released. */
     public synchronized Fixture.Lease acquire(String graphName, String graphVersion, String indexVersion) {
         return get(graphName, graphVersion, indexVersion).acquire();
