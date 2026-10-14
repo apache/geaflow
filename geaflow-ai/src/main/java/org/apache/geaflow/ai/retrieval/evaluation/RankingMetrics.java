@@ -21,7 +21,7 @@ public final class RankingMetrics {
     }
 
     public static double recallAtK(List<String> ranked, Set<String> relevant, int k) {
-        if (relevant == null || relevant.isEmpty()) {
+        if (ranked == null || relevant == null || relevant.isEmpty() || k < 1) {
             return 0.0D;
         }
         Set<String> found = new HashSet<>();
@@ -34,6 +34,9 @@ public final class RankingMetrics {
     }
 
     public static double reciprocalRank(List<String> ranked, Set<String> relevant) {
+        if (ranked == null || relevant == null || relevant.isEmpty()) {
+            return 0.0D;
+        }
         for (int i = 0; i < ranked.size(); i++) {
             if (relevant.contains(ranked.get(i))) {
                 return 1.0D / (i + 1.0D);
@@ -43,14 +46,20 @@ public final class RankingMetrics {
     }
 
     public static double ndcgAtK(List<String> ranked, Set<String> relevant, int k) {
-        if (relevant == null || relevant.isEmpty()) {
+        if (ranked == null || relevant == null || relevant.isEmpty() || k < 1) {
             return 0.0D;
         }
         double dcg = 0.0D;
-        for (int i = 0; i < Math.min(k, ranked.size()); i++) {
-            if (relevant.contains(ranked.get(i))) {
-                dcg += 1.0D / (Math.log(i + 2.0D) / Math.log(2.0D));
+        Set<String> seen = new HashSet<>();
+        int rank = 0;
+        for (String evidenceId : ranked) {
+            if (rank >= k || !seen.add(evidenceId)) {
+                continue;
             }
+            if (relevant.contains(evidenceId)) {
+                dcg += 1.0D / (Math.log(rank + 2.0D) / Math.log(2.0D));
+            }
+            rank++;
         }
         double ideal = 0.0D;
         for (int i = 0; i < Math.min(k, relevant.size()); i++) {
@@ -60,7 +69,7 @@ public final class RankingMetrics {
     }
 
     public static double relationPathHit(Set<String> predicted, Set<String> targets) {
-        if (targets == null || targets.isEmpty()) {
+        if (predicted == null || targets == null || targets.isEmpty()) {
             return 0.0D;
         }
         for (String target : targets) {
