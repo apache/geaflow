@@ -87,7 +87,9 @@ public class GeaFlowMemoryServer {
             LOGGER.info("Starting {} on port {}", SERVER_NAME, port);
             app.filter(-100, (ctx, chain) -> {
                 String path = ctx.path();
-                if (path.startsWith("/graph/") || path.startsWith("/query/")) {
+                if (path.startsWith("/graph/") || path.startsWith("/query/")
+                    || path.startsWith("/api/v1/retrievals") || path.startsWith("/ready")
+                    || path.startsWith("/metrics/")) {
                     String error = authenticationError(ctx, app.context().getBean(RetrievalProperties.class),
                         resolveRequestId(ctx.header("X-Request-Id")));
                     if (error != null) {
@@ -233,12 +235,11 @@ public class GeaFlowMemoryServer {
         ServerMemoryCache.ReadinessStatus status;
         try {
             properties.validateConfiguration();
-            if (retrievalFixtureRegistry != null) {
-                boolean ready = retrievalFixtureRegistry.isReady(properties.getReadyGraphName());
-                status = new ServerMemoryCache.ReadinessStatus(ready, properties.getReadyGraphName(),
-                    null, ready ? "READY" : "RETRIEVAL_FIXTURE_NOT_READY");
-            } else {
-                status = runtimeCache().keywordReadiness(properties.getReadyGraphName());
+            status = runtimeCache().keywordReadiness(properties.getReadyGraphName());
+            if (!status.isReady() && retrievalFixtureRegistry != null
+                && retrievalFixtureRegistry.isReady(properties.getReadyGraphName())) {
+                status = new ServerMemoryCache.ReadinessStatus(true, properties.getReadyGraphName(),
+                    null, "READY");
             }
         } catch (RetrievalException exception) {
             status = new ServerMemoryCache.ReadinessStatus(false, null, null,

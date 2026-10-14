@@ -37,8 +37,10 @@ import org.apache.geaflow.ai.retrieval.model.document.RetrievalIds;
 import org.apache.geaflow.ai.retrieval.model.document.TextChunk;
 import org.apache.geaflow.ai.retrieval.model.graph.EntityRef;
 import org.apache.geaflow.ai.retrieval.model.graph.GraphEdgeRef;
+import org.noear.solon.annotation.Component;
 
 /** Session-free registry for an atomically published GraphRAG fixture. */
+@Component
 public final class RetrievalFixtureRegistry implements AutoCloseable {
     private final Map<String, Fixture> fixtures = new HashMap<>();
     private boolean closed;

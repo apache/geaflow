@@ -52,7 +52,8 @@ public class RetrievalService {
     private RetrievalProperties properties;
     @Inject
     private RetrievalMetrics metrics;
-    private final RetrievalFixtureRegistry fixtureRegistry;
+    @Inject
+    private RetrievalFixtureRegistry fixtureRegistry;
     private RetrievalRequestValidator validator;
     private final EvidenceMapper evidenceMapper = new EvidenceMapper();
 
@@ -99,7 +100,7 @@ public class RetrievalService {
                     throw new RetrievalException(RetrievalErrorCode.UNSUPPORTED_OPTION,
                         "structured retrieval registry is not configured");
                 }
-                RetrievalResponse response = new RecallService(fixtureRegistry).retrieve(request);
+                RetrievalResponse response = new RecallService(fixtureRegistry).retrieve(request, requestId);
                 if (response.getTrace() != null) {
                     for (String channel : response.getTrace().getSelectedChannels()) {
                         metrics.recordChannel(channel);

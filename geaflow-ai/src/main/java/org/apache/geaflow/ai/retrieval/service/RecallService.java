@@ -333,6 +333,10 @@ public final class RecallService {
     }
 
     public RetrievalResponse retrieve(RetrievalRequest request) {
+        return retrieve(request, null);
+    }
+
+    public RetrievalResponse retrieve(RetrievalRequest request, String requestIdOverride) {
         final long started = clock.getAsLong();
         RetrievalCommand command = new RetrievalRequestValidator(new RetrievalProperties()).validate(request);
         requireStructuredVersions(request);
@@ -354,8 +358,10 @@ public final class RecallService {
             }
             RecallService delegate = new RecallService(fixture, fusion.getConfig(), clock,
                 tokenEstimator, reranker, routingPolicy, maxReplanCount);
-            String requestId = request.getRequestId() == null || request.getRequestId().trim().isEmpty()
-                ? UUID.randomUUID().toString() : request.getRequestId();
+            String requestId = requestIdOverride == null || requestIdOverride.trim().isEmpty()
+                ? request.getRequestId() == null || request.getRequestId().trim().isEmpty()
+                    ? UUID.randomUUID().toString() : request.getRequestId()
+                : requestIdOverride;
             RetrievalResponse response = delegate.execute(command, toFloat(command.getQueryVector()), deadline,
                 request.isAllowPartialResults(), started, fixture, requestId);
             response.setGraphName(fixture.getGraphName());

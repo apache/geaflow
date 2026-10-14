@@ -70,9 +70,7 @@ public class RetrievalProperties {
                 "retrieval config-version must be v1 and ready-graph-name is required");
         }
         try {
-            if (RetrievalMode.valueOf(defaultMode) != RetrievalMode.KEYWORD) {
-                throw invalid("default-mode must be KEYWORD");
-            }
+            RetrievalMode.valueOf(defaultMode.trim().toUpperCase(java.util.Locale.ROOT));
         } catch (IllegalArgumentException | NullPointerException e) {
             throw invalid("default-mode is unsupported: " + defaultMode);
         }
