@@ -84,7 +84,7 @@ def _validate_ready_artifacts(root: Path, metadata: Dict[str, Any]) -> None:
         raise ImportFailure("existing READY metadata has no artifact checksums")
     root = root.resolve()
     required = {"documents.jsonl", "chunks.jsonl", metadata.get("graph_manifest"),
-                metadata.get("quality_report")}
+                metadata.get("quality_report"), metadata.get("source_manifest")}
     for key in ("bm25_artifact", "vector_artifact"):
         artifact_path = metadata.get(key)
         if not isinstance(artifact_path, str) or not artifact_path:
@@ -277,6 +277,25 @@ def run_import(manifest: SourceManifest, output_directory: Path, loader: SourceL
         return existing
     staging = Path(tempfile.mkdtemp(prefix=version + ".", dir=output_directory))
     metadata: Dict[str, Any] = dict(identity, version=version, state="IMPORTING", errors=[])
+    resolved_cache = None
+    if manifest.cache_path:
+        candidate = Path(os.path.expandvars(manifest.cache_path)).expanduser()
+        if candidate.is_file():
+            resolved_cache = str(candidate.resolve())
+    metadata["source_manifest"] = "source-manifest.json"
+    metadata["source_provenance"] = {
+        "dataset": manifest.dataset,
+        "dataset_release": manifest.dataset_release,
+        "split": manifest.split,
+        "cache_path": manifest.cache_path,
+        "official_source_uri": manifest.source_uri,
+        "resolved_cache_path": resolved_cache,
+        "resolved_cache_uri": Path(resolved_cache).as_uri() if resolved_cache else None,
+        "sha256": manifest.sha256,
+        "parser_version": manifest.parser_version,
+        "license_url": manifest.license_url,
+        "license_status": manifest.license_status,
+    }
     try:
         document_count = 0
         chunk_count = 0
@@ -344,6 +363,9 @@ def run_import(manifest: SourceManifest, output_directory: Path, loader: SourceL
             "bm25_artifact": str(bm25_result.path.relative_to(staging)),
             "vector_artifact": str(vector_result.path.relative_to(staging)),
         })
+        (staging / metadata["source_manifest"]).write_text(
+            json.dumps(metadata["source_provenance"], sort_keys=True, indent=2) + "\n",
+            encoding="utf-8")
         for relative in (metadata["graph_manifest"], metadata["bm25_artifact"], metadata["vector_artifact"]):
             candidate = staging / relative
             if not candidate.exists() or staging.resolve() not in candidate.resolve().parents:
@@ -351,7 +373,8 @@ def run_import(manifest: SourceManifest, output_directory: Path, loader: SourceL
         metadata["quality_report"] = "quality-report.json"
         metadata["artifact_checksums"] = {}
         graph_root = staging / "graph" / version
-        for artifact in (staging / "documents.jsonl", staging / "chunks.jsonl", graph_root,
+        for artifact in (staging / "documents.jsonl", staging / "chunks.jsonl",
+                         staging / metadata["source_manifest"], graph_root,
                          bm25_result.path, vector_result.path):
             metadata["artifact_checksums"].update(_artifact_checksums(staging, artifact))
         (staging / metadata["quality_report"]).write_text(

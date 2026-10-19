@@ -6,11 +6,63 @@ import unittest
 import zipfile
 from pathlib import Path
 
-from tools.graphrag.ingest.manifest_cli import dry_run_manifest
+from tools.graphrag.ingest.manifest_cli import dry_run_manifest, resolve_manifest
 from tools.graphrag.ingest.sources.source_loader import SourceError, SourceLoader, SourceManifest
 
 
 class SourceLoaderTest(unittest.TestCase):
+
+    def test_hotpot_annotations_are_canonical_and_validated(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "hotpot.json"
+            source.write_text(json.dumps([{
+                "_id": "q1", "question": "Who?", "answer": "A",
+                "context": [["Title", ["first", "answer"]]],
+                "supporting_facts": [["Title", 1]], "type": "bridge"
+            }]), encoding="utf-8")
+            manifest = SourceManifest("hotpotqa", "official-distractor", "distractor",
+                                     "https://official.example/hotpot.json", str(source),
+                                     hashlib.sha256(source.read_bytes()).hexdigest(), "hotpotqa-parser-v1")
+            record = next(SourceLoader().load(manifest))
+            self.assertEqual("q1", record["document_id"])
+            self.assertEqual([["Title", 1]], record["supporting_facts"])
+            self.assertEqual("bridge", record["question_type"])
+
+    def test_invalid_supporting_fact_is_rejected_with_dataset_location(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "hotpot.json"
+            source.write_text(json.dumps([{
+                "_id": "q1", "question": "Who?", "context": [["Title", ["first"]]],
+                "supporting_facts": [["Missing", 0]]
+            }]), encoding="utf-8")
+            manifest = SourceManifest("hotpotqa", "r", "distractor", None, str(source),
+                                     hashlib.sha256(source.read_bytes()).hexdigest(), "p")
+            with self.assertRaisesRegex(SourceError, "hotpotqa/distractor record 1 supporting_facts"):
+                list(SourceLoader().load(manifest))
+
+    def test_resolve_manifest_records_actual_cache_and_preserves_official_source(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "source.json"
+            source.write_text(json.dumps([{"_id": "q", "question": "q",
+                                          "context": [["T", ["text"]]]}]), encoding="utf-8")
+            manifest = root / "manifest.json"
+            manifest.write_text(json.dumps({
+                "dataset": "hotpotqa", "dataset_release": "official-distractor",
+                "split": "distractor", "source_uri": "https://official.example/data.json",
+                "cache_path": str(source),
+                "sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
+                "parser_version": "hotpotqa-parser-v1",
+                "license": {"url": "https://hotpotqa.github.io/", "status": "reviewed"}
+            }), encoding="utf-8")
+            resolved = root / "resolved-manifest.json"
+            result = resolve_manifest(manifest, resolved)
+            self.assertEqual("RESOLVED", result["state"])
+            self.assertEqual("https://official.example/data.json", result["source_uri"])
+            self.assertEqual(str(source.resolve()), result["resolved_cache_path"])
+            self.assertEqual(result["sha256"], hashlib.sha256(source.read_bytes()).hexdigest())
+            self.assertEqual(result, json.loads(resolved.read_text(encoding="utf-8")))
 
     def test_manifest_dry_run_verifies_license_checksum_split_and_records(self):
         with tempfile.TemporaryDirectory() as directory:
