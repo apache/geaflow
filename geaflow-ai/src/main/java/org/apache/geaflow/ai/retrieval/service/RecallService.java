@@ -21,6 +21,7 @@ package org.apache.geaflow.ai.retrieval.service;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -100,6 +101,8 @@ public final class RecallService {
     private final List<TextChunk> chunks;
     private final Map<String, TextChunk> chunksById;
     private final List<EntityRef> entities;
+    private final EntityAnchorResolver anchorResolver;
+    private final Map<String, Double> idfByToken;
     private final List<GraphEdgeRef> edges;
     private final GraphNeighborProvider graphProvider;
     private final RetrievalFixtureRegistry registry;
@@ -162,6 +165,8 @@ public final class RecallService {
         this.chunks = immutable(chunks);
         this.chunksById = indexChunks(this.chunks);
         this.entities = immutable(entities);
+        this.anchorResolver = new EntityAnchorResolver(this.entities);
+        this.idfByToken = buildIdfIndex(this.chunks);
         this.edges = immutable(edges);
         this.graphProvider = graphProvider;
         this.registry = registry;
@@ -188,9 +193,8 @@ public final class RecallService {
     private RoutingContext routingContext(RetrievalCommand command, GraphNeighborProvider provider,
                                           RetrievalBudget budget, int candidateLimit) {
         int queryLength = queryLength(command.getQuery());
-        double averageIdf = averageIdf(command.getQuery(), chunks);
-        EntityAnchorResolver resolver = new EntityAnchorResolver();
-        List<EntityAnchorResolver.Anchor> anchors = resolver.resolve(command.getQuery(), entities);
+        double averageIdf = averageIdf(command.getQuery(), idfByToken);
+        List<EntityAnchorResolver.Anchor> anchors = anchorResolver.resolve(command.getQuery(), 0L, clock);
         int maxDegree = 0;
         double confidence = 0.0D;
         for (EntityAnchorResolver.Anchor anchor : anchors) {
@@ -237,30 +241,37 @@ public final class RecallService {
             && fusion.getConfig().getGraphWeight() == 1.0D;
     }
 
-    private static double averageIdf(String query, List<TextChunk> chunks) {
+    private static Map<String, Double> buildIdfIndex(List<TextChunk> chunks) {
+        Map<String, Integer> frequencies = new HashMap<>();
+        for (TextChunk chunk : chunks) {
+            Matcher matcher = QUERY_TOKEN.matcher(EntityAnchorResolver.normalize(chunk.getText()));
+            java.util.Set<String> present = new java.util.HashSet<>();
+            while (matcher.find()) {
+                present.add(matcher.group());
+            }
+            for (String token : present) {
+                frequencies.put(token, frequencies.getOrDefault(token, 0) + 1);
+            }
+        }
+        Map<String, Double> index = new HashMap<>();
+        for (Map.Entry<String, Integer> entry : frequencies.entrySet()) {
+            index.put(entry.getKey(), Math.log(1.0D + (chunks.size() + 1.0D) / (entry.getValue() + 1.0D)));
+        }
+        return Collections.unmodifiableMap(index);
+    }
+
+    private static double averageIdf(String query, Map<String, Double> idfByToken) {
         java.util.Set<String> queryTokens = new java.util.TreeSet<>();
         Matcher matcher = QUERY_TOKEN.matcher(EntityAnchorResolver.normalize(query));
         while (matcher.find()) {
             queryTokens.add(matcher.group());
         }
-        if (queryTokens.isEmpty() || chunks.isEmpty()) {
+        if (queryTokens.isEmpty() || idfByToken.isEmpty()) {
             return 0.0D;
         }
         double total = 0.0D;
         for (String token : queryTokens) {
-            int documents = 0;
-            for (TextChunk chunk : chunks) {
-                if (QUERY_TOKEN.matcher(EntityAnchorResolver.normalize(chunk.getText())).find()) {
-                    Matcher chunkTokens = QUERY_TOKEN.matcher(EntityAnchorResolver.normalize(chunk.getText()));
-                    while (chunkTokens.find()) {
-                        if (token.equals(chunkTokens.group())) {
-                            documents++;
-                            break;
-                        }
-                    }
-                }
-            }
-            total += Math.log(1.0D + (chunks.size() + 1.0D) / (documents + 1.0D));
+            total += idfByToken.getOrDefault(token, 1.0D);
         }
         return total / queryTokens.size();
     }
@@ -279,8 +290,7 @@ public final class RecallService {
             ? context.getFeatures().getAnchorCount() : trace.getAnchorsConsidered();
         double confidence = 0.0D;
         if (anchorCount > 0) {
-            for (EntityAnchorResolver.Anchor anchor : new EntityAnchorResolver()
-                .resolve(context.getQuery(), entities)) {
+            for (EntityAnchorResolver.Anchor anchor : anchorResolver.resolve(context.getQuery(), 0L, clock)) {
                 confidence = Math.max(confidence, anchor.getConfidence());
             }
         }
@@ -293,7 +303,7 @@ public final class RecallService {
             .anchorCount(anchorCount).anchorConfidence(confidence)
             .candidateDegree(context.getFeatures().getCandidateDegree())
             .graphGrowthRate(trace.getGraphGrowthRate()).graphMarginalYield(trace.getGraphMarginalYield())
-            .replanCount(0).build();
+            .replanCount(trace.getReplanEvents().size()).build();
     }
 
     private static Map<String, Integer> orderedBudgets(RetrievalPlan plan) {
@@ -321,6 +331,8 @@ public final class RecallService {
         this.chunks = fixture.getChunks();
         this.chunksById = fixture.getChunksById();
         this.entities = fixture.getEntities();
+        this.anchorResolver = fixture.getAnchorResolver();
+        this.idfByToken = fixture.getIdfByToken();
         this.edges = fixture.getEdges();
         this.graphProvider = fixture.getGraphProvider();
         this.registry = null;
@@ -487,6 +499,7 @@ public final class RecallService {
         trace.setOriginalQuery(command.getQuery());
         trace.setSelectedMode(plan.getMode());
         trace.setExecutionMode(command.getExecutionMode());
+        trace.setExactRanking(command.isExactRanking());
         trace.setTokenEstimatorVersion(tokenEstimator.getVersion());
         trace.setRerankerVersion(reranker.getVersion());
         trace.setPrimaryConstraint(budget.getPrimaryConstraint().name());
@@ -542,7 +555,7 @@ public final class RecallService {
             boolean hasTextEvidence = !merged.isEmpty();
             boolean hasProbeEvidence = merged.size() >= 2;
             boolean hasAnchor = hasTextEvidence && !probeDeadline
-                && !new EntityAnchorResolver().resolve(command.getQuery(), entities, deadline, clock).isEmpty();
+                && !anchorResolver.resolve(command.getQuery(), deadline, clock).isEmpty();
             double scoreGap = cascadeProbeScoreGap(merged);
             trace.setCascadeProbeScoreGap(scoreGap);
             if (probeDeadline || !hasTextEvidence || !hasProbeEvidence || !hasAnchor
@@ -857,8 +870,9 @@ public final class RecallService {
             if (bm25 == null) {
                 throw notReady("artifact unavailable");
             }
-            ChannelSearchResult<Bm25Hit> search = bm25.searchWithStats(command.getQuery(), candidateBudget,
-                plan.getTopK(), deadline, clock);
+            ChannelSearchResult<Bm25Hit> search = command.isExactRanking()
+                ? bm25.searchExactWithStats(command.getQuery(), candidateBudget, plan.getTopK(), deadline, clock)
+                : bm25.searchWithStats(command.getQuery(), candidateBudget, plan.getTopK(), deadline, clock);
             output.bm25Hits = search.getHits();
             output.evaluated = search.getCandidatesEvaluated();
             output.rawCandidatesScored = search.getCandidatesEvaluated();
@@ -868,15 +882,16 @@ public final class RecallService {
             if (vector == null) {
                 throw notReady("artifact unavailable");
             }
-            ChannelSearchResult<VectorHit> search = vector.searchWithStats(queryVector, candidateBudget,
-                plan.getTopK(), deadline, clock);
+            ChannelSearchResult<VectorHit> search = command.isExactRanking()
+                ? vector.searchExactWithStats(queryVector, candidateBudget, plan.getTopK(), deadline, clock)
+                : vector.searchWithStats(queryVector, candidateBudget, plan.getTopK(), deadline, clock);
             output.vectorHits = search.getHits();
             output.evaluated = search.getCandidatesEvaluated();
             output.rawCandidatesScored = search.getCandidatesEvaluated();
             output.candidates = search.getHits().size();
             output.reason = search.getStopReason();
         } else {
-            GraphRetriever retriever = new GraphRetriever(new EntityAnchorResolver(), tokenEstimator);
+            GraphRetriever retriever = new GraphRetriever(anchorResolver, tokenEstimator);
             GraphRetrievalConfig graphConfig = GraphRetrievalConfig.builder()
                 .maxHop(plan.getMaxHop())
                 .candidateBudget(candidateBudget)
