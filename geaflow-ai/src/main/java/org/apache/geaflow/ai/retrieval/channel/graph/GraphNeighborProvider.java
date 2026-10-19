@@ -19,6 +19,7 @@
 
 package org.apache.geaflow.ai.retrieval.channel.graph;
 
+import java.util.Comparator;
 import java.util.List;
 import org.apache.geaflow.ai.retrieval.model.graph.EntityRef;
 import org.apache.geaflow.ai.retrieval.model.graph.GraphEdgeRef;
@@ -30,6 +31,16 @@ public interface GraphNeighborProvider {
 
     /** Returns non-null neighbors ordered by edge ID, source, target, and label. */
     List<GraphEdgeRef> neighbors(String entityId);
+
+    /**
+     * Returns up to {@code limit} neighbors in provider-defined priority order. Providers with
+     * an indexed adjacency representation can apply the priority before reading the limit.
+     */
+    default List<GraphEdgeRef> prioritizedNeighbors(String entityId,
+                                                     Comparator<GraphEdgeRef> priority,
+                                                     int limit) {
+        return neighbors(entityId);
+    }
 
     /** Returns the graph vertex identity for an entity; providers may preserve distinct IDs. */
     default GraphVertexRef vertex(EntityRef entity) {

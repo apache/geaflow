@@ -228,6 +228,29 @@ class GraphRetrieverTest {
     }
 
     @Test
+    void relationPriorityIsAppliedBeforeNeighborCapForIndexedProviders() {
+        List<EntityRef> entities = Arrays.asList(
+            new EntityRef("e1", "Confucius", "person"),
+            new EntityRef("e2", "Weak", "topic"),
+            new EntityRef("e3", "Strong", "topic"));
+        List<GraphEdgeRef> edges = Arrays.asList(
+            new GraphEdgeRef("edge-weak", "weak", "e1", "e2", Collections.singletonList("c1")),
+            new GraphEdgeRef("edge-strong", "strong", "e1", "e3", Collections.singletonList("c2")));
+        Map<String, TextChunk> chunks = new HashMap<>();
+        chunks.put("c1", new TextChunk("c1", "doc-1", 0, 0, 1, 1, "weak"));
+        chunks.put("c2", new TextChunk("c2", "doc-2", 0, 0, 1, 1, "strong"));
+        GraphRetrievalConfig config = GraphRetrievalConfig.builder().maxHop(1).neighborCap(1)
+            .candidateBudget(10).edgeScanBudget(10).relationPriority("strong", 10.0)
+            .relationPriority("weak", 0.1).build();
+
+        List<GraphRetriever.GraphHit> hits = new GraphRetriever().retrieve("Confucius", entities,
+            new InMemoryGraphNeighborProvider(edges), chunks, config, 0L, System::nanoTime);
+
+        assertEquals(Collections.singletonList("edge-strong"),
+            Collections.singletonList(hits.get(0).getEdge().getEdgeId()));
+    }
+
+    @Test
     void explicitConfigDeadlineDoesNotReadNeighborsAfterAnchorResolution() {
         AtomicInteger reads = new AtomicInteger();
         GraphNeighborProvider provider = entityId -> {

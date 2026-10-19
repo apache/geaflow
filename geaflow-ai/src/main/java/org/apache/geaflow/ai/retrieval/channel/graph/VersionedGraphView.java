@@ -127,6 +127,15 @@ public final class VersionedGraphView implements GraphNeighborProvider {
     }
 
     @Override
+    public List<GraphEdgeRef> prioritizedNeighbors(String entityId,
+                                                   java.util.Comparator<GraphEdgeRef> priority,
+                                                   int limit) {
+        List<GraphEdgeRef> result = new ArrayList<>(neighbors(entityId));
+        result.sort(priority);
+        return limit < result.size() ? result.subList(0, limit) : result;
+    }
+
+    @Override
     public GraphVertexRef vertex(EntityRef entity) {
         GraphVertexRef vertex = vertices.get(entity.getEntityId());
         return vertex == null ? GraphNeighborProvider.super.vertex(entity) : vertex;

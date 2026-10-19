@@ -270,7 +270,8 @@ public final class GraphRetriever {
                 reachedMaxHop = true;
                 continue;
             }
-            List<GraphEdgeRef> neighbors = provider.neighbors(state.entityId);
+            List<GraphEdgeRef> neighbors = provider.prioritizedNeighbors(state.entityId,
+                edgeComparator(query, state, config), config.getNeighborCap());
             if (neighbors == null) {
                 continue;
             }
@@ -294,7 +295,8 @@ public final class GraphRetriever {
                     sampledEdges.add(edge);
                 }
             }
-            sampledEdges.sort(edgeComparator(query, state, config));
+            // Indexed providers already apply this ordering before the cap. Legacy lazy providers
+            // may return their native order and retain the bounded scan contract.
             for (GraphEdgeRef edge : sampledEdges) {
                 if (expired(deadlineNanos, clock)) {
                     return result;
