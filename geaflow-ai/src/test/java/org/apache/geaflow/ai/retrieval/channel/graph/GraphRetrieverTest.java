@@ -40,6 +40,15 @@ import org.junit.jupiter.api.Test;
 class GraphRetrieverTest {
 
     @Test
+    void defaultPrioritizedNeighborsEnforcesLimitWithoutSorting() {
+        GraphNeighborProvider provider = entityId -> Arrays.asList(edge(0), edge(1), edge(2));
+
+        List<GraphEdgeRef> neighbors = provider.prioritizedNeighbors("e1", (left, right) -> 0, 2);
+
+        assertEquals(2, neighbors.size());
+    }
+
+    @Test
     void edgeCapStopsNeighborIterationWithoutCopyingOrSortingTheWholeList() {
         AtomicInteger reads = new AtomicInteger();
         List<GraphEdgeRef> neighbors = new AbstractList<GraphEdgeRef>() {
