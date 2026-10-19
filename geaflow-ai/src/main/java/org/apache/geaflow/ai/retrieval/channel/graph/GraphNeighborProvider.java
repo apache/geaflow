@@ -39,7 +39,11 @@ public interface GraphNeighborProvider {
     default List<GraphEdgeRef> prioritizedNeighbors(String entityId,
                                                      Comparator<GraphEdgeRef> priority,
                                                      int limit) {
-        return neighbors(entityId);
+        List<GraphEdgeRef> result = neighbors(entityId);
+        if (result == null || limit <= 0 || result.size() <= limit) {
+            return result;
+        }
+        return result.subList(0, limit);
     }
 
     /** Returns the graph vertex identity for an entity; providers may preserve distinct IDs. */
