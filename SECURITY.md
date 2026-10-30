@@ -10,7 +10,7 @@ If you discover a security vulnerability in Apache GeaFlow (Incubating), please 
 
 Please send your security vulnerability report to the Apache Security Team at:
 
-**[dev@geaflow.apache.org](mailto:dev@geaflow.apache.org)**
+**[security@apache.org](mailto:security@apache.org)**
 
 You can also report to the GeaFlow project team directly at:
 
@@ -55,3 +55,7 @@ Security fixes will be released as part of regular GeaFlow releases and announce
 - [Apache Security Team](https://www.apache.org/security/)
 - [Apache GeaFlow Official Website](https://geaflow.apache.org/)
 - [Apache GeaFlow GitHub Repository](https://github.com/apache/geaflow)
+
+## Security Model
+
+- [Kubernetes operator security model and deployment requirements](geaflow-kubernetes-operator/SECURITY_MODEL.md)
