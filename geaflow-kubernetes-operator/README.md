@@ -13,28 +13,14 @@ cd geaflow-kubernetes-operator
 ./build-operator.sh
 ```
 2. The image name and tag can be modified in helm/geaflow-kubernetes-operator/values.
-3. Create the required authentication Secret following [the security model](SECURITY_MODEL.md).
-   Set a unique tag for an image built from this source. Then deploy:
+3. Execute this command in the project root directory to quickly deploy to the kubernetes cluster.
 ```shell
 cd geaflow-kubernetes-operator
-helm install geaflow-kubernetes-operator helm/geaflow-kubernetes-operator \
-  --namespace geaflow-system \
-  --set webSecurity.existingSecret=geaflow-operator-web-auth \
-  --set image.tag=YOUR_UNIQUE_PATCHED_IMAGE_TAG \
-  --set-json 'watchNamespaces=["geaflow-system"]'
+helm install geaflow-kubernetes-operator helm/geaflow-kubernetes-operator
 ```
 ### Frontend Dashboard
-The dashboard requires an administrator or read-only bearer token. Prefer the read-only token.
-The web service listens on port 8089 in Helm (8080 for standalone execution). The default
-NetworkPolicy denies pod ingress; use a local tunnel and open `http://127.0.0.1:8089/`:
-
-```sh
-kubectl -n geaflow-system port-forward --address 127.0.0.1 service/geaflow-kubernetes-operator 8089:80
-```
-
-The dashboard displays job statistics and state. Tokens stay in page memory and must be
-re-entered after reload. For TLS, credential rotation, RBAC and admission requirements,
-read [the security model](SECURITY_MODEL.md). Job submission is reserved for trusted operators.
+Geaflow-kubernetes-operator comes with a frontend dashboard page, which you can access through port 8089.
+The dashboard will display job statistics within the cluster, as well as their current status and basic information.
 
 
 ### Example
@@ -43,5 +29,5 @@ Please refer to example/example.yml and modify the necessary parameters. After h
 is completed, execute this command to submit the example job into your kubernetes cluster.
 ```shell
 cd geaflow-kubernetes-operator
-kubectl -n geaflow-system apply -f example/example_hla.yml
+kubectl apply -f example/example_hla.yml
 ```
