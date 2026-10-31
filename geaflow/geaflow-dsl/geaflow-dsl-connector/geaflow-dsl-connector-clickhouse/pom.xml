@@ -34,7 +34,6 @@
     <properties>
         <clickhouse-jdbc.version>0.6.5</clickhouse-jdbc.version>
         <httpclient5.version>5.2.1</httpclient5.version>
-        <testcontainers.version>1.19.8</testcontainers.version>
     </properties>
 
     <dependencies>
@@ -72,4 +71,18 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <!-- Use the existing Log4j 2 binding so Docker discovery failures are visible. -->
+                    <classpathDependencyExcludes>
+                        <classpathDependencyExclude>org.slf4j:slf4j-log4j12</classpathDependencyExclude>
+                    </classpathDependencyExcludes>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 </project>

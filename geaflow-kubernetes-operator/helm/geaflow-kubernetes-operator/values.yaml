@@ -26,7 +26,7 @@ replicaCount: 1
 image:
   repository: geaflow-kubernetes-operator
   pullPolicy: IfNotPresent
-  # Overrides the image tag whose default is the chart appVersion.
+  # Required: use a unique tag for an image built with this operator's web authentication.
   tag: ""
 
 imagePullSecrets: [ ]
@@ -87,6 +87,19 @@ securityContext: { }
 
 container:
   httpPort: 8089
+
+# Reference a pre-created Secret in the release namespace. No credentials are stored in Helm values.
+webSecurity:
+  existingSecret: ""
+  adminTokenKey: admin-token
+  # Optional key: omit it from the Secret to disable read-only access.
+  viewerTokenKey: viewer-token
+
+# Requires a NetworkPolicy-capable CNI. Default: deny ingress; use kubectl port-forward.
+# Add explicit ingress rules for approved clients or a TLS ingress controller.
+networkPolicy:
+  enabled: true
+  ingress: []
 
 service:
   type: ClusterIP

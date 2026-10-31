@@ -39,23 +39,24 @@ import org.apache.geaflow.ai.graph.io.VertexGroup;
 import org.apache.geaflow.ai.graph.io.VertexSchema;
 import org.apache.geaflow.ai.index.vector.KeywordVector;
 import org.apache.geaflow.ai.operator.GraphSearchStore;
+import org.apache.lucene.queryparser.classic.ParseException;
+import org.apache.lucene.store.AlreadyClosedException;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 /**
- * Lifecycle and retrieval-semantics tests for the keyword index, pinning the behavior issue #856
- * calls out as fragile: the store is rebuilt during every query, retrieval tolerates common-token
- * noise, and deleted entities are filtered at query time rather than removed from the index.
+ * Lifecycle and retrieval-semantics tests for the keyword index: committed writes remain
+ * searchable until the store is closed, retrieval tolerates common-token noise, and deleted
+ * entities are filtered at query time rather than removed from the index.
  *
  * <p>The usage contract these tests document, in one place:
  *
  * <ul>
- *   <li><b>Build, close, search, discard.</b> A query session indexes what it wants searchable,
- *       closes the store (which commits the segments) and only then searches. Searching before
- *       close silently returns nothing — the {@code IndexNotFoundException} of the uncommitted
- *       directory is swallowed. Indexing again after close fails outright, because
- *       {@code SearchStore} reuses one {@code IndexWriterConfig} across writers. The store is
- *       therefore single-shot, and {@code SessionOperator} exercises exactly this order.</li>
+ *   <li><b>Build, finish writing, search, close.</b> A query session indexes its entities and calls
+ *       {@link GraphSearchStore#finishWriting()} to commit the segments while retaining the
+ *       directory and analyzer for reads. Searching before the first commit returns no results.
+ *       Closing the store releases its resources and rejects subsequent reads and writes.</li>
  *   <li><b>Stop words are searchable.</b> The analyzer is built with an empty stop-word set
  *       (see {@link KeywordTokenizationGoldenTest}), so {@code the} matches documents
  *       containing {@code the}.</li>
@@ -76,17 +77,26 @@ public class KeywordIndexLifecycleGoldenTest {
     private static final String LABEL = "chunk";
     private static final String EDGE_LABEL = "rel";
 
-    /** The production order: index, close, search. Everything visible before close is found. */
+    private final List<GraphSearchStore> stores = new ArrayList<>();
+
+    @AfterEach
+    public void closeStores() {
+        for (GraphSearchStore store : stores) {
+            store.close();
+        }
+    }
+
+    /** Finished writes remain searchable until the store is closed. */
     @Test
-    public void indexedEntitiesAreSearchableAfterClose() {
-        LocalMemoryGraphAccessor accessor = graph("v1");
-        GraphSearchStore store = new GraphSearchStore();
+    public void indexedEntitiesAreSearchableAfterFinishWriting() {
+        final LocalMemoryGraphAccessor accessor = graph("v1");
+        GraphSearchStore store = createStore();
         indexVertex(store, "v1", "alpaca", "grazes");
-        store.close();
+        store.finishWriting();
 
         List<String> found = searchIds(store, accessor, "alpaca");
         Assertions.assertEquals(Collections.singletonList("v1"), found,
-            "a term indexed before close must be found after close");
+            "a term indexed before finishWriting must be found after finishWriting");
         Assertions.assertEquals(Collections.singletonList("v1"), searchIds(store, accessor, "ALPACA"),
             "matching is case-insensitive on both sides of the index");
         Assertions.assertEquals(Collections.singletonList("v1"), searchIds(store, accessor, "grazes"),
@@ -96,49 +106,58 @@ public class KeywordIndexLifecycleGoldenTest {
     }
 
     /**
-     * Searching before close returns an empty list instead of failing. This is why the
-     * close-before-search order above is a contract rather than a convention: getting it wrong
-     * fails silently.
+     * The first commit makes buffered documents visible; an earlier empty search must not
+     * prevent the same store from finding those documents after finishWriting.
      */
     @Test
-    public void searchBeforeCloseReturnsEmptyResults() {
-        LocalMemoryGraphAccessor accessor = graph("v1");
-        GraphSearchStore store = new GraphSearchStore();
+    public void searchBeforeFinishWritingReturnsEmptyResults() {
+        final LocalMemoryGraphAccessor accessor = graph("v1");
+        GraphSearchStore store = createStore();
         indexVertex(store, "v1", "alpaca");
         Assertions.assertEquals(Collections.emptyList(), searchIds(store, accessor, "alpaca"),
-            "search before close must return empty, not the committed documents (there are none)");
+            "an uncommitted index has no searchable documents");
+        store.finishWriting();
+        Assertions.assertEquals(Collections.singletonList("v1"), searchIds(store, accessor, "alpaca"));
     }
 
-    /**
-     * Indexing after close throws: {@code SearchStore} hands the same {@code IndexWriterConfig}
-     * to a second {@code IndexWriter} and Lucene rejects that. Combined with the test above this
-     * fixes the lifecycle as index-then-close-then-search with no reopen — the resident index of
-     * PR #825 is the proposed way out of this single-shot shape.
-     */
+    /** Closing is terminal and rejects subsequent indexing at the store boundary. */
     @Test
     public void indexingAfterCloseFails() {
-        LocalMemoryGraphAccessor accessor = graph("v1");
-        GraphSearchStore store = new GraphSearchStore();
+        GraphSearchStore store = createStore();
         indexVertex(store, "v1", "alpaca");
         store.close();
-        RuntimeException failure = Assertions.assertThrows(RuntimeException.class,
-            () -> indexVertex(store, "v2", "lama"),
-            "indexing into a closed store must fail loudly rather than lose the document");
-        Assertions.assertTrue(failure.getCause() instanceof IllegalStateException,
-            "the underlying refusal is Lucene's IndexWriterConfig sharing guard, got: "
-                + failure.getCause());
+        IllegalStateException failure = Assertions.assertThrows(IllegalStateException.class,
+            () -> indexVertex(store, "v2", "lama"));
+        Assertions.assertEquals("graph search store is closed", failure.getMessage());
+    }
+
+    @Test
+    public void closedStoreRejectsReadsAndFinishingAndReleasesDirectory() {
+        final LocalMemoryGraphAccessor accessor = graph("v1");
+        GraphSearchStore store = createStore();
+        indexVertex(store, "v1", "alpaca");
+        store.finishWriting();
+        store.finishWriting();
+        Assertions.assertEquals(Collections.singletonList("v1"), searchIds(store, accessor, "alpaca"));
+        store.close();
+        store.close();
+        Assertions.assertThrows(IllegalStateException.class, () -> store.search("alpaca", accessor));
+        Assertions.assertThrows(IllegalStateException.class, store::finishWriting);
+        Assertions.assertThrows(AlreadyClosedException.class, () -> store.getDirectory().listAll());
     }
 
     /** An empty query reaches the query parser and surfaces as the store's read failure. */
     @Test
     public void emptyQueryFailsTheSearchStore() {
-        LocalMemoryGraphAccessor accessor = graph("v1");
-        GraphSearchStore store = new GraphSearchStore();
+        final LocalMemoryGraphAccessor accessor = graph("v1");
+        GraphSearchStore store = createStore();
         indexVertex(store, "v1", "alpaca");
-        store.close();
+        store.finishWriting();
         RuntimeException failure = Assertions.assertThrows(RuntimeException.class,
             () -> store.search("", accessor));
         Assertions.assertEquals("Cannot read search store", failure.getMessage());
+        Assertions.assertTrue(failure.getCause() instanceof ParseException,
+            "an empty query must reach the parser while the store is still open");
     }
 
     /**
@@ -148,11 +167,11 @@ public class KeywordIndexLifecycleGoldenTest {
      */
     @Test
     public void multiWordQueriesMatchAnyTerm() {
-        LocalMemoryGraphAccessor accessor = graph("v1", "v2");
-        GraphSearchStore store = new GraphSearchStore();
+        final LocalMemoryGraphAccessor accessor = graph("v1", "v2");
+        GraphSearchStore store = createStore();
         indexVertex(store, "v1", "alpaca");
         indexVertex(store, "v2", "grazes");
-        store.close();
+        store.finishWriting();
 
         Assertions.assertEquals(Collections.singletonList("v1"), searchIds(store, accessor, "alpaca.lama"),
             "OR semantics: only one of the two terms needs to be present");
@@ -161,10 +180,10 @@ public class KeywordIndexLifecycleGoldenTest {
     /** Stop words are ordinary searchable terms (the analyzer has no stop-word list). */
     @Test
     public void stopWordsAreSearchableTerms() {
-        LocalMemoryGraphAccessor accessor = graph("v1");
-        GraphSearchStore store = new GraphSearchStore();
+        final LocalMemoryGraphAccessor accessor = graph("v1");
+        GraphSearchStore store = createStore();
         indexVertex(store, "v1", "the", "fox");
-        store.close();
+        store.finishWriting();
         Assertions.assertEquals(Collections.singletonList("v1"), searchIds(store, accessor, "the"),
             "with an empty stop-word set, 'the' indexes and matches like any other word");
     }
@@ -179,11 +198,11 @@ public class KeywordIndexLifecycleGoldenTest {
      */
     @Test
     public void unicodeKeywordsMatchByCharacter() {
-        LocalMemoryGraphAccessor accessor = graph("v1", "v2");
-        GraphSearchStore store = new GraphSearchStore();
+        final LocalMemoryGraphAccessor accessor = graph("v1", "v2");
+        GraphSearchStore store = createStore();
         indexVertex(store, "v1", "学习", "效率");
         indexVertex(store, "v2", "习题", "效率");
-        store.close();
+        store.finishWriting();
 
         Assertions.assertEquals(Arrays.asList("v1", "v2"), searchIds(store, accessor, "效率"),
             "an exact two-character keyword matches the documents carrying it");
@@ -211,15 +230,15 @@ public class KeywordIndexLifecycleGoldenTest {
         for (int i = 0; i < corpusSize; i++) {
             ids[i] = "v" + i;
         }
-        LocalMemoryGraphAccessor accessor = graph(ids);
+        final LocalMemoryGraphAccessor accessor = graph(ids);
 
-        GraphSearchStore store = new GraphSearchStore();
+        GraphSearchStore store = createStore();
         for (int i = 0; i < corpusSize; i++) {
             // One shared filler keyword plus a unique one: every document overlaps its neighbors,
             // none of them is distinguishable through the filler alone.
             indexVertex(store, ids[i], "shared", "unique" + i);
         }
-        store.close();
+        store.finishWriting();
 
         Assertions.assertEquals(Collections.singletonList("v17"),
             searchIds(store, accessor, "unique17"),
@@ -234,21 +253,20 @@ public class KeywordIndexLifecycleGoldenTest {
     }
 
     /**
-     * Incremental addition is accumulation within one open session: documents added in several
-     * batches are all committed by the single close and all searchable. There is no incremental
-     * visibility into an already-searched index (see {@link #indexingAfterCloseFails()}).
+     * Documents added in several batches within one write session are committed together by
+     * finishWriting and remain searchable until close.
      */
     @Test
-    public void incrementalAddsAccumulateUntilClose() {
-        LocalMemoryGraphAccessor accessor = graph("v1", "v2", "v3");
-        GraphSearchStore store = new GraphSearchStore();
+    public void incrementalAddsAccumulateUntilFinishWriting() {
+        final LocalMemoryGraphAccessor accessor = graph("v1", "v2", "v3");
+        GraphSearchStore store = createStore();
         indexVertex(store, "v1", "alpaca");
         indexVertex(store, "v2", "lama");
         indexVertex(store, "v3", "zebra");
-        store.close();
+        store.finishWriting();
 
         Assertions.assertEquals(Arrays.asList("v1", "v2", "v3"), searchIds(store, accessor, "alpaca lama zebra"),
-            "every batch added before close is committed and searchable");
+            "every batch added before finishWriting is committed and searchable");
     }
 
     /**
@@ -258,8 +276,8 @@ public class KeywordIndexLifecycleGoldenTest {
      */
     @Test
     public void deletedEntitiesAreFilteredAtQueryTime() {
-        LocalMemoryGraphAccessor accessor = graph("v1");
-        GraphSearchStore store = new GraphSearchStore();
+        final LocalMemoryGraphAccessor accessor = graph("v1");
+        GraphSearchStore store = createStore();
         indexVertex(store, "v1", "alpaca");
         // A vertex indexed with a registered label but an id the graph does not hold — the shape
         // a deleted entity leaves behind.
@@ -268,7 +286,7 @@ public class KeywordIndexLifecycleGoldenTest {
         store.indexVertex(new GraphVertex(
                 new Vertex("unknown", "v9", Collections.singletonList("x"))),
             Collections.singletonList(new KeywordVector("orphanword")));
-        store.close();
+        store.finishWriting();
 
         Assertions.assertEquals(Collections.singletonList("v1"), searchIds(store, accessor, "alpaca"));
         Assertions.assertTrue(searchIds(store, accessor, "ghostword").isEmpty(),
@@ -278,6 +296,12 @@ public class KeywordIndexLifecycleGoldenTest {
     }
 
     // ------------------------------------------------------------------ helpers
+
+    private GraphSearchStore createStore() {
+        GraphSearchStore store = new GraphSearchStore();
+        stores.add(store);
+        return store;
+    }
 
     private LocalMemoryGraphAccessor graph(String... ids) {
         GraphSchema schema = new GraphSchema();
