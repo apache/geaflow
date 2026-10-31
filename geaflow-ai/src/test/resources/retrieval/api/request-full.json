@@ -1,0 +1,13 @@
+{
+  "graphName": "week1-keyword-graph",
+  "query": "Who is Confucius?",
+  "queryVector": [],
+  "mode": "KEYWORD",
+  "executionMode": "SEQUENTIAL",
+  "budget": {
+    "topK": 10,
+    "timeoutMs": 3000,
+    "maxCandidates": 100,
+    "tokenBudget": 4096
+  }
+}

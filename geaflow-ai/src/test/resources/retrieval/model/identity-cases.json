@@ -1,0 +1,10 @@
+{
+  "sourceDocument": {"documentId":"doc-1","dataset":"set","datasetVersion":"v1","split":"dev","title":"Title","sourceUri":"uri","sourceHash":"hash"},
+  "sourceDocumentVariant": {"documentId":"doc-1","dataset":"set","datasetVersion":"v1","split":"dev","title":"Renamed","sourceUri":"uri","sourceHash":"hash"},
+  "chunk": {"chunkId":"chunk-1","documentId":"doc-1","chunkIndex":0,"startOffset":0,"endOffset":4,"tokenEstimate":1,"text":"text","policyVersion":"policy-v1","textHash":"hash"},
+  "chunkVariant": {"chunkId":"chunk-1","documentId":"doc-1","chunkIndex":0,"startOffset":0,"endOffset":4,"tokenEstimate":99,"text":"text","policyVersion":"policy-v1","textHash":"hash"},
+  "entity": {"entityId":"entity-1","canonicalName":"Name","aliases":["A"],"type":"PERSON","sourceChunkIds":["chunk-1"]},
+  "entityVariant": {"entityId":"entity-1","canonicalName":"Name","aliases":["B"],"type":"PERSON","sourceChunkIds":["chunk-2"]},
+  "edge": {"edgeId":"edge-1","label":"knows","sourceEntityId":"entity-1","targetEntityId":"entity-2","sourceChunkIds":["chunk-1"]},
+  "edgeVariant": {"edgeId":"edge-1","label":"knows","sourceEntityId":"entity-1","targetEntityId":"entity-2","sourceChunkIds":["chunk-2"]}
+}

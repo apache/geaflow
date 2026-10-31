@@ -28,7 +28,7 @@ import org.apache.geaflow.api.graph.function.vc.VertexCentricTraversalFunction.V
 import org.apache.geaflow.common.config.Configuration;
 import org.apache.geaflow.common.exception.GeaflowRuntimeException;
 import org.apache.geaflow.common.iterator.CloseableIterator;
-import org.apache.geaflow.dsl.common.algo.AlgorithmRuntimeContext;
+import org.apache.geaflow.dsl.common.algo.AlgorithmSamplingRuntimeContext;
 import org.apache.geaflow.dsl.common.data.Row;
 import org.apache.geaflow.dsl.common.data.RowEdge;
 import org.apache.geaflow.dsl.common.exception.GeaFlowDSLException;
@@ -42,7 +42,7 @@ import org.apache.geaflow.state.pushdown.filter.IFilter;
 import org.apache.geaflow.state.pushdown.filter.InEdgeFilter;
 import org.apache.geaflow.state.pushdown.filter.OutEdgeFilter;
 
-public class GeaFlowAlgorithmRuntimeContext implements AlgorithmRuntimeContext<Object, Object> {
+public class GeaFlowAlgorithmRuntimeContext implements AlgorithmSamplingRuntimeContext<Object, Object> {
 
     private final VertexCentricTraversalFuncContext<Object, Row, Row, Object, Row> traversalContext;
 
@@ -111,6 +111,11 @@ public class GeaFlowAlgorithmRuntimeContext implements AlgorithmRuntimeContext<O
     @Override
     public List<RowEdge> loadStaticEdges(EdgeDirection direction) {
         return loadEdges(direction);
+    }
+
+    @Override
+    public long getSamplingSnapshotVersion() {
+        return traversalContext.getRuntimeContext().getWindowId();
     }
 
     @Override

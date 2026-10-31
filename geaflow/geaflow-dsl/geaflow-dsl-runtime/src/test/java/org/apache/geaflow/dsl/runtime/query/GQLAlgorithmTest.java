@@ -209,6 +209,36 @@ public class GQLAlgorithmTest {
     }
 
     @Test
+    public void testAlgorithmConnectedComponentsModern() throws Exception {
+        QueryTester
+            .build()
+            .withGraphDefine("/query/modern_graph.sql")
+            .withQueryPath("/query/gql_algorithm_cc_modern.sql")
+            .execute()
+            .checkSinkResult();
+    }
+
+    @Test
+    public void testAlgorithmWeakConnectedComponentsModern() throws Exception {
+        QueryTester
+            .build()
+            .withGraphDefine("/query/modern_graph.sql")
+            .withQueryPath("/query/gql_algorithm_wcc_modern.sql")
+            .execute()
+            .checkSinkResult();
+    }
+
+    @Test
+    public void testAlgorithmKCoreModern() throws Exception {
+        QueryTester
+            .build()
+            .withGraphDefine("/query/modern_graph.sql")
+            .withQueryPath("/query/gql_algorithm_kcore_modern.sql")
+            .execute()
+            .checkSinkResult();
+    }
+
+    @Test
     public void testIncGraphAlgorithm_001() throws Exception {
         QueryTester
             .build()

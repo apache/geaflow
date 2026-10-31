@@ -72,6 +72,12 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
+      - name: Verify Docker environment
+        timeout-minutes: 2
+        run: |
+          python3 tools/ci/test_check_docker.py
+          bash tools/ci/check-docker.sh
+
       - name: Setup Protoc
         uses: arduino/setup-protoc@v2
         with:
@@ -81,5 +87,5 @@ jobs:
         run: |
           mvn -B -e clean test -Pjdk8 \
             -pl !geaflow/geaflow-plugins/geaflow-store/geaflow-store-vector \
-            -Duser.timezone=Asia/Shanghai \
+            -Dclickhouse.it.required=true -Duser.timezone=Asia/Shanghai \
             -Dlog4j.configuration="log4j .rootLogger=WARN, stdout"

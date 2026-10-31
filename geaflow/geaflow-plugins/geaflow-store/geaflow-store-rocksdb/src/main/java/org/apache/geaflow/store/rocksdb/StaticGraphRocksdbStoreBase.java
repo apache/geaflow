@@ -54,6 +54,9 @@ public class StaticGraphRocksdbStoreBase<K, VV, EV> extends BaseRocksdbGraphStor
         // Init partition type for rocksdb graph store
         partitionType = PartitionType.getEnum(storeContext.getConfig()
             .getString(RocksdbConfigKeys.ROCKSDB_GRAPH_STORE_PARTITION_TYPE));
+        // Fail fast on unsupported partition types before super.init opens the RocksDB instance,
+        // so an unsupported partition.type does not leave a half-initialized store on disk.
+        ProxyBuilder.checkPartitionTypeSupported(partitionType);
 
         super.init(storeContext);
         IGraphKVEncoder<K, VV, EV> encoder = GraphKVEncoderFactory.build(config,

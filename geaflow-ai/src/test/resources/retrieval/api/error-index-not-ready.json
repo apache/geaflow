@@ -1,0 +1,6 @@
+{
+  "requestId": "request-2",
+  "code": "INDEX_NOT_READY",
+  "message": "retrieval index is not ready",
+  "retriable": true
+}

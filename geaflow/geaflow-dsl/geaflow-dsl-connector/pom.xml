@@ -49,7 +49,15 @@
         <module>geaflow-dsl-connector-paimon</module>
         <module>geaflow-dsl-connector-neo4j</module>
         <module>geaflow-dsl-connector-elasticsearch</module>
+        <module>geaflow-dsl-connector-doris</module>
+        <module>geaflow-dsl-connector-mongodb</module>
+        <module>geaflow-dsl-connector-clickhouse</module>
     </modules>
+
+    <properties>
+        <!-- Keep the Java 8-compatible client aligned with current Docker Engine APIs. -->
+        <testcontainers.version>1.21.4</testcontainers.version>
+    </properties>
 
     <dependencyManagement>
         <dependencies>

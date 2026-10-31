@@ -25,7 +25,9 @@ import static org.apache.geaflow.dsl.schema.function.GeaFlowBuiltinFunctions.asi
 import static org.apache.geaflow.dsl.schema.function.GeaFlowBuiltinFunctions.atan;
 import static org.apache.geaflow.dsl.schema.function.GeaFlowBuiltinFunctions.ceil;
 import static org.apache.geaflow.dsl.schema.function.GeaFlowBuiltinFunctions.cos;
+import static org.apache.geaflow.dsl.schema.function.GeaFlowBuiltinFunctions.cbrt;
 import static org.apache.geaflow.dsl.schema.function.GeaFlowBuiltinFunctions.cot;
+import static org.apache.geaflow.dsl.schema.function.GeaFlowBuiltinFunctions.trunc;
 import static org.apache.geaflow.dsl.schema.function.GeaFlowBuiltinFunctions.degrees;
 import static org.apache.geaflow.dsl.schema.function.GeaFlowBuiltinFunctions.divide;
 import static org.apache.geaflow.dsl.schema.function.GeaFlowBuiltinFunctions.equal;
@@ -643,6 +645,24 @@ public class InternalFunctionsTest {
         Assert.assertEquals(round(double1, 2), 1.0);
 
         Assert.assertNull(round(doubleNull, 2));
+    }
+
+    @Test
+    public void testCbrt() {
+        assertEquals(cbrt(8.0), 2.0);
+        assertEquals(cbrt(27.0), 3.0);
+        assertEquals(cbrt(-8.0), -2.0);
+        assertEquals(cbrt(0.0), 0.0);
+        Assert.assertNull(cbrt(doubleNull));
+    }
+
+    @Test
+    public void testTrunc() {
+        assertEquals(trunc(3.567, 2), 3.56);
+        assertEquals(trunc(3.567, 0), 3.0);
+        assertEquals(trunc(-3.567, 2), -3.56);
+        Assert.assertNull(trunc(doubleNull, 2));
+        Assert.assertNull(trunc(3.567, intNull));
     }
 
     @Test

@@ -1,0 +1,1 @@
+"""Offline GraphRAG ingestion components."""

@@ -17,32 +17,14 @@
  * under the License.
  */
 
-package org.apache.geaflow.cluster.util;
+package org.apache.geaflow.ai.retrieval.channel.graph;
 
-import java.security.Permission;
-import java.util.concurrent.atomic.AtomicBoolean;
-import org.apache.geaflow.common.exception.GeaflowRuntimeException;
+import java.util.List;
+import org.apache.geaflow.ai.retrieval.model.graph.GraphEdgeRef;
 
-public class SystemExitSignalCatcher extends SecurityManager {
+/** Versioned graph boundary used by the bounded graph retriever. */
+public interface GraphNeighborProvider {
 
-    private AtomicBoolean hasSignal;
-
-    public SystemExitSignalCatcher(AtomicBoolean hasSignal) {
-        this.hasSignal = hasSignal;
-    }
-
-    @Override
-    public void checkPermission(Permission perm) {
-    }
-
-    @Override
-    public void checkPermission(Permission perm, Object context) {
-    }
-
-    @Override
-    public void checkExit(int status) {
-        super.checkExit(status);
-        hasSignal.set(true);
-        throw new GeaflowRuntimeException("throw exception instead of exit process");
-    }
+    /** Returns non-null neighbors ordered by edge ID, source, target, and label. */
+    List<GraphEdgeRef> neighbors(String entityId);
 }

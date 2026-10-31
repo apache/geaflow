@@ -1,0 +1,19 @@
+# Golden output of SearchStore's analyzer (lucene-core 8.11.2, StandardAnalyzer).
+# One input per line: <input> => <term>|<term>|...
+#
+# Facts pinned here that are easy to break silently on a Lucene upgrade:
+#  - terms are lower-cased;
+#  - hyphens, slashes and '?' split tokens, while intra-word dots and '@' do not;
+#  - English stop words are NOT removed: StandardAnalyzer() is built with an
+#    EMPTY stop-word set in lucene-core 8.11.2, so "the", "and", "is" are indexed;
+#  - CJK text is emitted as single characters (one term per character).
+The Quick Brown Fox => the|quick|brown|fox
+state-of-the-art design => state|of|the|art|design
+http://example.com/path?q=1 => http|example.com|path|q|1
+v2.0 release 2024 => v2.0|release|2024
+the and is of it => the|and|is|of|it
+学习而不思则罔 => 学|习|而|不|思|则|罔
+GeaFlow 图计算 engine => geaflow|图|计|算|engine
+a.b@c.com => a.b|c.com
+don't stop => don't|stop
+ => 

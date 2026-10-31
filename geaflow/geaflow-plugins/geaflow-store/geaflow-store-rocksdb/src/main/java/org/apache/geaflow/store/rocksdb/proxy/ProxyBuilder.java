@@ -29,11 +29,29 @@ import org.apache.geaflow.store.rocksdb.RocksdbConfigKeys;
 
 public class ProxyBuilder {
 
+    /**
+     * Rejects partition types that have no proxy implementation yet. Callers should invoke this
+     * before opening the RocksDB instance so an unsupported {@code partition.type} fails fast
+     * without leaving a half-initialized store on disk.
+     *
+     * <p>{@code DT_LABEL} (partition by both timestamp and label) has no proxy, so it is rejected
+     * with an explicit message that names the type rather than falling through to a generic
+     * "unexpected partition type" error later in {@link #build}.
+     */
+    public static void checkPartitionTypeSupported(PartitionType partitionType) {
+        if (partitionType == PartitionType.DT_LABEL) {
+            throw new GeaflowRuntimeException(
+                "partition type DT_LABEL (partition by both timestamp and label) is not "
+                    + "supported yet");
+        }
+    }
+
     public static <K, VV, EV> IGraphRocksdbProxy<K, VV, EV> build(
         Configuration config, RocksdbClient rocksdbClient,
         IGraphKVEncoder<K, VV, EV> encoder) {
         PartitionType partitionType = PartitionType.getEnum(
             config.getString(RocksdbConfigKeys.ROCKSDB_GRAPH_STORE_PARTITION_TYPE));
+        checkPartitionTypeSupported(partitionType);
         if (partitionType.isPartition()) {
             if (partitionType == PartitionType.LABEL) {
                 // TODO: Support async graph proxy partitioned by label

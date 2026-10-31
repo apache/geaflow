@@ -69,6 +69,12 @@ jobs:
           java-version: '11'
           distribution: 'temurin'
 
+      - name: Verify Docker environment
+        timeout-minutes: 2
+        run: |
+          python3 tools/ci/test_check_docker.py
+          bash tools/ci/check-docker.sh
+
       - name: Setup Protoc
         uses: arduino/setup-protoc@v2
         with:
@@ -79,4 +85,4 @@ jobs:
         run: |
           test_modules="!geaflow/geaflow-dsl/geaflow-dsl-connector/geaflow-dsl-connector-hive,"
           test_modules+="!geaflow/geaflow-dsl/geaflow-dsl-connector-tests"
-          mvn -B -e clean test -Pjdk11 -pl "${test_modules}" -Duser.timezone=Asia/Shanghai -Dlog4j.configuration="log4j.rootLogger=WARN, stdout"
+          mvn -B -e clean test -Pjdk11 -pl "${test_modules}" -Dclickhouse.it.required=true -Duser.timezone=Asia/Shanghai -Dlog4j.configuration="log4j.rootLogger=WARN, stdout"

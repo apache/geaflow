@@ -48,11 +48,13 @@ public class SearchStore {
     private IndexReader reader;
     private IndexSearcher searcher;
     private boolean readStats = false;
+    private boolean closed;
 
     public SearchStore() {
     }
 
-    public void addDoc(Map<String, String> kv) throws IOException {
+    public synchronized void addDoc(Map<String, String> kv) throws IOException {
+        ensureOpen();
         initWriter();
         Document doc = new Document();
         for (Map.Entry<String, String> entry : kv.entrySet()) {
@@ -62,16 +64,26 @@ public class SearchStore {
     }
 
     public TopDocs searchDoc(String field, String content) throws ParseException, IOException {
+        return searchDoc(field, content, Constants.GRAPH_SEARCH_STORE_DEFAULT_TOPN);
+    }
+
+    public synchronized TopDocs searchDoc(String field, String content, int topN)
+        throws ParseException, IOException {
+        ensureOpen();
+        if (topN < 1) {
+            throw new IllegalArgumentException("topN must be positive");
+        }
         if (!readStats) {
             reader = DirectoryReader.open(directory);
             searcher = new IndexSearcher(reader);
             readStats = true;
         }
         QueryParser parser = new QueryParser(field, analyzer);
-        return searcher.search(parser.parse(content), Constants.GRAPH_SEARCH_STORE_DEFAULT_TOPN);
+        return searcher.search(parser.parse(content), topN);
     }
 
-    public Document getDoc(int docId) {
+    public synchronized Document getDoc(int docId) {
+        ensureOpen();
         try {
             if (!readStats) {
                 reader = DirectoryReader.open(directory);
@@ -85,22 +97,80 @@ public class SearchStore {
 
     }
 
-    public void initWriter() throws IOException {
+    public synchronized void initWriter() throws IOException {
+        ensureOpen();
         if (!writeStats) {
             writer = new IndexWriter(directory, config);
             writeStats = true;
         }
     }
 
-    public void close() throws IOException {
+    public synchronized void close() throws IOException {
+        if (closed) {
+            return;
+        }
+        closed = true;
+        IOException failure = null;
         if (writeStats) {
-            writer.close();
-            writeStats = false;
+            try {
+                writer.close();
+            } catch (IOException error) {
+                failure = error;
+            } finally {
+                writer = null;
+                writeStats = false;
+            }
         }
         if (readStats) {
-            reader.close();
-            readStats = false;
+            try {
+                reader.close();
+            } catch (IOException error) {
+                failure = append(failure, error);
+            } finally {
+                reader = null;
+                searcher = null;
+                readStats = false;
+            }
         }
+        try {
+            directory.close();
+        } catch (IOException error) {
+            failure = append(failure, error);
+        }
+        try {
+            analyzer.close();
+        } catch (RuntimeException error) {
+            IOException wrapped = new IOException("failed to close analyzer", error);
+            failure = append(failure, wrapped);
+        }
+        if (failure != null) {
+            throw failure;
+        }
+    }
+
+    public synchronized void finishWriting() throws IOException {
+        if (writeStats) {
+            try {
+                writer.close();
+            } finally {
+                writer = null;
+                writeStats = false;
+            }
+        }
+    }
+
+    private void ensureOpen() {
+        if (closed) {
+            throw new IllegalStateException("search store is closed");
+        }
+    }
+
+    private static IOException append(IOException current, IOException next) {
+        if (current == null) {
+            return next;
+        }
+        current.addSuppressed(next);
+        return current;
     }
 
 

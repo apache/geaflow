@@ -33,6 +33,7 @@ import org.apache.geaflow.dsl.udf.table.date.DateSub;
 import org.apache.geaflow.dsl.udf.table.date.DateTrunc;
 import org.apache.geaflow.dsl.udf.table.date.Day;
 import org.apache.geaflow.dsl.udf.table.date.DayOfMonth;
+import org.apache.geaflow.dsl.udf.table.date.DayOfYear;
 import org.apache.geaflow.dsl.udf.table.date.FromUnixTime;
 import org.apache.geaflow.dsl.udf.table.date.FromUnixTimeMillis;
 import org.apache.geaflow.dsl.udf.table.date.Hour;
@@ -41,6 +42,7 @@ import org.apache.geaflow.dsl.udf.table.date.LastDay;
 import org.apache.geaflow.dsl.udf.table.date.Minute;
 import org.apache.geaflow.dsl.udf.table.date.Month;
 import org.apache.geaflow.dsl.udf.table.date.Now;
+import org.apache.geaflow.dsl.udf.table.date.Quarter;
 import org.apache.geaflow.dsl.udf.table.date.Second;
 import org.apache.geaflow.dsl.udf.table.date.UnixTimeStamp;
 import org.apache.geaflow.dsl.udf.table.date.UnixTimeStampMillis;
@@ -278,6 +280,53 @@ public class UDFDateTest {
         assertNull(test.eval((java.sql.Timestamp) null));
         assertEquals((long) test.eval("1987-06-05"), 23);
         assertEquals((long) test.eval(new java.sql.Timestamp(1667900725)), 4);
+    }
+
+    @Test
+    public void testQuarter() {
+        Quarter test = new Quarter();
+        test.open(null);
+        // Q1: Jan-Mar
+        assertEquals((long) test.eval("1987-01-15 00:11:22"), 1);
+        assertEquals((long) test.eval("1987-03-31"), 1);
+        // Q2: Apr-Jun
+        assertEquals((long) test.eval("1987-06-05 00:11:22"), 2);
+        assertEquals((long) test.eval("1987-04-01"), 2);
+        // Q3: Jul-Sep
+        assertEquals((long) test.eval("1987-07-01 00:00:00"), 3);
+        assertEquals((long) test.eval("1987-09-30"), 3);
+        // Q4: Oct-Dec
+        assertEquals((long) test.eval("1987-10-01 00:00:00"), 4);
+        assertEquals((long) test.eval("1987-12-31"), 4);
+        // Null inputs
+        assertNull(test.eval((String) null));
+        assertNull(test.eval((java.sql.Timestamp) null));
+        // Timestamp
+        assertEquals((long) test.eval(new java.sql.Timestamp(1667900725)), 1);
+    }
+
+    @Test
+    public void testDayOfYear() {
+        DayOfYear test = new DayOfYear();
+        test.open(null);
+        // Normal date
+        assertEquals((long) test.eval("1987-06-05 00:11:22"), 156);
+        assertEquals((long) test.eval("1987-06-05"), 156);
+        // Start of year
+        assertEquals((long) test.eval("1987-01-01 00:00:00"), 1);
+        // End of non-leap year
+        assertEquals((long) test.eval("1987-12-31"), 365);
+        // Leap year: 2020-02-29 is day 60, 2020-12-31 is day 366
+        assertEquals((long) test.eval("2020-02-29"), 60);
+        assertEquals((long) test.eval("2020-12-31"), 366);
+        // Non-leap year: 2019-03-01 is day 60 (no Feb 29)
+        assertEquals((long) test.eval("2019-03-01"), 60);
+        assertEquals((long) test.eval("2019-12-31"), 365);
+        // Null inputs
+        assertNull(test.eval((String) null));
+        assertNull(test.eval((java.sql.Timestamp) null));
+        // Timestamp (1667900725ms = 1970-01-20, day 20)
+        assertEquals((long) test.eval(new java.sql.Timestamp(1667900725)), 20);
     }
 
     @Test

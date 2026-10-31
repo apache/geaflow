@@ -1,0 +1,24 @@
+{
+  "requestId": "request-1",
+  "graphName": "week1-keyword-graph",
+  "graphVersion": "v1",
+  "evidence": [],
+  "paths": [],
+  "sources": [],
+  "trace": {
+    "traceVersion": "v1",
+    "requestId": "request-1",
+    "originalQuery": "unknown",
+    "selectedMode": "KEYWORD",
+    "executionMode": "SEQUENTIAL",
+    "stages": [],
+    "stopReason": "NO_EVIDENCE"
+  },
+  "effectiveBudget": {
+    "topK": 10,
+    "timeoutMs": 3000,
+    "maxCandidates": 100,
+    "tokenBudget": 4096
+  },
+  "degradedChannels": []
+}
