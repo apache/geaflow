@@ -1,0 +1,215 @@
+{
+  "schemaVersion": 2,
+  "name": "05-conflict-coexistence",
+  "events": [
+    {
+      "alias": "paris",
+      "id": "event-1",
+      "operation": "ASSERT",
+      "subject": {
+        "id": "alice",
+        "label": "person"
+      },
+      "predicate": "city",
+      "scope": "profile",
+      "factId": "fact-paris",
+      "value": {
+        "kind": "LITERAL",
+        "value": "Paris"
+      },
+      "validFrom": "2024-01-01T00:00:00Z",
+      "validTo": "2024-01-10T00:00:00Z",
+      "recordedAt": "2024-02-01T00:00:00Z",
+      "evidence": [
+        {
+          "id": "ev-1",
+          "source": {
+            "id": "source-1",
+            "name": "source 1"
+          },
+          "content": "Evidence 1."
+        }
+      ]
+    },
+    {
+      "alias": "berlin",
+      "id": "event-2",
+      "operation": "ASSERT",
+      "subject": {
+        "id": "alice",
+        "label": "person"
+      },
+      "predicate": "city",
+      "scope": "profile",
+      "factId": "fact-berlin",
+      "value": {
+        "kind": "LITERAL",
+        "value": "Berlin"
+      },
+      "validFrom": "2024-01-04T00:00:00Z",
+      "validTo": "2024-01-07T00:00:00Z",
+      "recordedAt": "2024-02-02T00:00:00Z",
+      "evidence": [
+        {
+          "id": "ev-2",
+          "source": {
+            "id": "source-2",
+            "name": "source 2"
+          },
+          "content": "Evidence 2."
+        }
+      ]
+    }
+  ],
+  "batches": [
+    {
+      "endExclusive": 1,
+      "decisions": [
+        {
+          "event": "paris",
+          "code": "ACCEPTED"
+        }
+      ]
+    },
+    {
+      "endExclusive": 2,
+      "decisions": [
+        {
+          "event": "berlin",
+          "code": "ACCEPTED"
+        }
+      ]
+    }
+  ],
+  "expected": {
+    "identities": [],
+    "versions": [
+      {
+        "alias": "paris-version",
+        "event": "paris",
+        "sourceVersion": null,
+        "subject": {
+          "id": "alice",
+          "label": "person"
+        },
+        "predicate": "city",
+        "scope": "profile",
+        "factId": "fact-paris",
+        "value": {
+          "kind": "LITERAL",
+          "value": "Paris"
+        },
+        "status": "ACTIVE",
+        "validFrom": "2024-01-01T00:00:00Z",
+        "validTo": "2024-01-10T00:00:00Z",
+        "systemFrom": "2024-02-01T00:00:00Z",
+        "systemTo": null,
+        "evidence": [
+          {
+            "id": "ev-1",
+            "source": {
+              "id": "source-1",
+              "name": "source 1"
+            },
+            "content": "Evidence 1."
+          }
+        ]
+      },
+      {
+        "alias": "berlin-version",
+        "event": "berlin",
+        "sourceVersion": null,
+        "subject": {
+          "id": "alice",
+          "label": "person"
+        },
+        "predicate": "city",
+        "scope": "profile",
+        "factId": "fact-berlin",
+        "value": {
+          "kind": "LITERAL",
+          "value": "Berlin"
+        },
+        "status": "ACTIVE",
+        "validFrom": "2024-01-04T00:00:00Z",
+        "validTo": "2024-01-07T00:00:00Z",
+        "systemFrom": "2024-02-02T00:00:00Z",
+        "systemTo": null,
+        "evidence": [
+          {
+            "id": "ev-2",
+            "source": {
+              "id": "source-2",
+              "name": "source 2"
+            },
+            "content": "Evidence 2."
+          }
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "type": "CONFLICTS_WITH",
+        "from": "paris-version",
+        "to": "berlin-version"
+      }
+    ],
+    "queries": [
+      {
+        "mode": "CURRENT",
+        "subjectId": "alice",
+        "predicate": "city",
+        "scope": "profile",
+        "validAt": "2024-01-04T00:00:00Z",
+        "versions": [
+          "paris-version",
+          "berlin-version"
+        ]
+      },
+      {
+        "mode": "CURRENT",
+        "subjectId": "alice",
+        "predicate": "city",
+        "scope": "profile",
+        "validAt": "2024-01-07T00:00:00Z",
+        "versions": [
+          "paris-version"
+        ]
+      },
+      {
+        "mode": "HISTORICAL",
+        "subjectId": "alice",
+        "predicate": "city",
+        "scope": "profile",
+        "validAt": "2024-01-05T00:00:00Z",
+        "versions": [
+          "paris-version",
+          "berlin-version"
+        ]
+      },
+      {
+        "mode": "AS_OF",
+        "subjectId": "alice",
+        "predicate": "city",
+        "scope": "profile",
+        "validAt": "2024-01-05T00:00:00Z",
+        "versions": [
+          "paris-version"
+        ],
+        "systemAt": "2024-02-01T00:00:00Z"
+      },
+      {
+        "mode": "AS_OF",
+        "subjectId": "alice",
+        "predicate": "city",
+        "scope": "profile",
+        "validAt": "2024-01-05T00:00:00Z",
+        "versions": [
+          "paris-version",
+          "berlin-version"
+        ],
+        "systemAt": "2024-02-02T00:00:00Z"
+      }
+    ]
+  }
+}

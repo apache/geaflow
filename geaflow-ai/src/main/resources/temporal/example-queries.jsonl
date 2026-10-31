@@ -1,0 +1,13 @@
+{"mode":"AS_OF","validAt":"2024-01-16T00:00:00Z","systemAt":"2024-03-01T00:00:00Z","values":["Beijing"],"evidenceIds":["city-evidence-1"]}
+{"mode":"AS_OF","validAt":"2024-01-16T00:00:00Z","systemAt":"2024-03-02T00:00:00Z","values":["Beijing"],"evidenceIds":["city-evidence-1","city-evidence-2"]}
+{"mode":"AS_OF","validAt":"2024-01-16T00:00:00Z","systemAt":"2024-03-03T00:00:00Z","values":["Shanghai"],"evidenceIds":["city-evidence-3"]}
+{"mode":"AS_OF","validAt":"2024-01-16T00:00:00Z","systemAt":"2024-03-04T00:00:00Z","values":["Shanghai","Tianjin"],"evidenceIds":["city-evidence-3","city-evidence-4"]}
+{"mode":"AS_OF","validAt":"2024-01-16T00:00:00Z","systemAt":"2024-03-05T00:00:00Z","values":["Tianjin"],"evidenceIds":["city-evidence-4"]}
+{"mode":"CURRENT","validAt":"2024-01-09T00:00:00Z","systemAt":null,"values":["Beijing"],"evidenceIds":["city-evidence-1","city-evidence-2"]}
+{"mode":"CURRENT","validAt":"2024-01-11T00:00:00Z","systemAt":null,"values":["Shanghai"],"evidenceIds":["city-evidence-3"]}
+{"mode":"CURRENT","validAt":"2024-01-16T00:00:00Z","systemAt":null,"values":["Tianjin"],"evidenceIds":["city-evidence-4"]}
+{"mode":"CURRENT","validAt":"2024-01-21T00:00:00Z","systemAt":null,"values":["Shanghai","Tianjin"],"evidenceIds":["city-evidence-3","city-evidence-4"]}
+{"mode":"CURRENT","validAt":"2024-01-22T00:00:00Z","systemAt":null,"values":["Shanghai"],"evidenceIds":["city-evidence-3"]}
+{"mode":"CURRENT","validAt":"2024-01-26T00:00:00Z","systemAt":null,"values":["Beijing"],"evidenceIds":["city-evidence-1","city-evidence-2"]}
+{"mode":"CURRENT","validAt":"2024-02-01T00:00:00Z","systemAt":null,"values":[],"evidenceIds":[]}
+{"mode":"HISTORICAL","validAt":"2024-01-16T00:00:00Z","systemAt":null,"values":["Beijing","Beijing","Shanghai","Shanghai","Tianjin"],"evidenceIds":["city-evidence-1","city-evidence-2","city-evidence-3","city-evidence-4","city-evidence-5"]}

@@ -84,6 +84,13 @@
             <version>${lucene.version}</version>
         </dependency>
 
+        <!-- Lucene English analysis -->
+        <dependency>
+            <groupId>org.apache.lucene</groupId>
+            <artifactId>lucene-analyzers-common</artifactId>
+            <version>${lucene.version}</version>
+        </dependency>
+
         <!-- Lucene Query Parser -->
         <dependency>
             <groupId>org.apache.lucene</groupId>
@@ -121,8 +128,31 @@
         <artifactId>geaflow-api</artifactId>
         <version>${project.version}</version>
       </dependency>
+      <dependency>
+        <groupId>org.apache.geaflow</groupId>
+        <artifactId>geaflow-dsl-common</artifactId>
+        <version>${project.version}</version>
+      </dependency>
 
         <!-- test -->
+        <dependency>
+            <groupId>org.apache.geaflow</groupId>
+            <artifactId>geaflow-pipeline</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.geaflow</groupId>
+            <artifactId>geaflow-on-local</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.geaflow</groupId>
+            <artifactId>geaflow-dsl-runtime</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
@@ -147,6 +177,17 @@
   <build>
     <plugins>
       <plugin>
+        <groupId>org.apache.rat</groupId>
+        <artifactId>apache-rat-plugin</artifactId>
+        <configuration>
+          <excludes combine.children="append">
+            <!-- Executable JSONL examples cannot contain comment headers. -->
+            <exclude>src/main/resources/temporal/example-events.jsonl</exclude>
+            <exclude>src/main/resources/temporal/example-queries.jsonl</exclude>
+          </excludes>
+        </configuration>
+      </plugin>
+      <plugin>
         <artifactId>maven-assembly-plugin</artifactId>
         <configuration>
           <archive>
@@ -154,9 +195,9 @@
               <mainClass>org.apache.geaflow.ai.client.GeaFlowMemoryClientCLI</mainClass>
             </manifest>
           </archive>
-          <descriptorRefs>
-            <descriptorRef>jar-with-dependencies</descriptorRef>
-          </descriptorRefs>
+          <descriptors>
+            <descriptor>src/assembly/jar-with-dependencies.xml</descriptor>
+          </descriptors>
         </configuration>
         <executions>
           <execution>
