@@ -59,42 +59,46 @@ public class KeywordIndexSerializationGoldenTest {
     private static final String SERIALIZATION_GOLDEN = "/index/keyword/serialized_docs_golden.txt";
 
     /**
-     * Indexes one vertex, one edge and one vertex carrying two vectors, closes the store the way
-     * the production path does, then reads every document back field by field and compares against
+     * Indexes one vertex, one edge and one vertex carrying two vectors, finishes writing, then
+     * reads every document back before releasing the store and compares against
      * the golden file. Rendering is {@code <kind> field=[value] ...} with the production field
      * order (vertices id/label/content, edges src/dst/label/content).
      */
     @Test
     public void indexedDocumentsMatchGolden() throws IOException {
         GraphSearchStore store = new GraphSearchStore();
-        store.indexVertex(new GraphVertex(
-                new Vertex("chunk", "v1", Collections.singletonList("the alpaca grazes"))),
-            Collections.singletonList(new KeywordVector("alpaca", "grazes")));
-        store.indexEdge(new GraphEdge(
-                new Edge("rel", "v1", "v2", Collections.singletonList("x"))),
-            Collections.singletonList(new KeywordVector("master")));
-        store.indexVertex(new GraphVertex(
-                new Vertex("chunk", "v3", Collections.singletonList("two vectors"))),
-            Arrays.asList(new KeywordVector("a"), new KeywordVector("b")));
-        store.close();
+        try {
+            store.indexVertex(new GraphVertex(
+                    new Vertex("chunk", "v1", Collections.singletonList("the alpaca grazes"))),
+                Collections.singletonList(new KeywordVector("alpaca", "grazes")));
+            store.indexEdge(new GraphEdge(
+                    new Edge("rel", "v1", "v2", Collections.singletonList("x"))),
+                Collections.singletonList(new KeywordVector("master")));
+            store.indexVertex(new GraphVertex(
+                    new Vertex("chunk", "v3", Collections.singletonList("two vectors"))),
+                Arrays.asList(new KeywordVector("a"), new KeywordVector("b")));
+            store.finishWriting();
 
-        List<String> actual = new ArrayList<>();
-        try (DirectoryReader reader = DirectoryReader.open(store.getDirectory())) {
-            for (int i = 0; i < reader.maxDoc(); i++) {
-                Document doc = reader.document(i);
-                if (doc.get("id") != null) {
-                    actual.add(String.format("vertex id=[%s] label=[%s] content=[%s]",
-                        doc.get("id"), doc.get("label"), doc.get("content")));
-                } else {
-                    actual.add(String.format("edge src=[%s] dst=[%s] label=[%s] content=[%s]",
-                        doc.get("src"), doc.get("dst"), doc.get("label"), doc.get("content")));
+            List<String> actual = new ArrayList<>();
+            try (DirectoryReader reader = DirectoryReader.open(store.getDirectory())) {
+                for (int i = 0; i < reader.maxDoc(); i++) {
+                    Document doc = reader.document(i);
+                    if (doc.get("id") != null) {
+                        actual.add(String.format("vertex id=[%s] label=[%s] content=[%s]",
+                            doc.get("id"), doc.get("label"), doc.get("content")));
+                    } else {
+                        actual.add(String.format("edge src=[%s] dst=[%s] label=[%s] content=[%s]",
+                            doc.get("src"), doc.get("dst"), doc.get("label"), doc.get("content")));
+                    }
                 }
             }
-        }
 
-        Assertions.assertEquals(goldenLines(), actual,
-            "the serialized form of indexed keyword vectors changed; review against "
-                + SERIALIZATION_GOLDEN);
+            Assertions.assertEquals(goldenLines(), actual,
+                "the serialized form of indexed keyword vectors changed; review against "
+                    + SERIALIZATION_GOLDEN);
+        } finally {
+            store.close();
+        }
     }
 
     private static List<String> goldenLines() throws IOException {
