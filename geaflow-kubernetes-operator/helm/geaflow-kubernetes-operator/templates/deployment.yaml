@@ -75,8 +75,8 @@ spec:
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           env:
-            - name: USE_LOCAL_K8S
-              value: "true"
+            - name: IS_LOCAL_MODE
+              value: "false"
             - name: HTTP_SERVER_PORT
               value: "{{ .Values.container.httpPort }}"
             - name: GEAFLOW_OPERATOR_ADMIN_TOKEN

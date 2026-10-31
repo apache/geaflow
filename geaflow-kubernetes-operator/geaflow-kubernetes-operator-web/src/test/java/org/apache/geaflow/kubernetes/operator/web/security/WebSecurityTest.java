@@ -35,10 +35,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.net.URI;
 import java.util.Collections;
 import javax.servlet.Filter;
 import javax.servlet.http.Cookie;
 import org.apache.geaflow.kubernetes.operator.core.job.GeaflowJobApiService;
+import org.apache.geaflow.kubernetes.operator.core.job.JobCRCache;
 import org.apache.geaflow.kubernetes.operator.core.model.customresource.GeaflowJob;
 import org.apache.geaflow.kubernetes.operator.web.controller.HealthController;
 import org.apache.geaflow.kubernetes.operator.web.controller.api.JobController;
@@ -192,8 +194,8 @@ public class WebSecurityTest {
     @Test
     public void rejectsNonCanonicalPathsBeforeControllerDispatch() throws Exception {
         for (String path : new String[] {"/api//jobs", "/api/./jobs", "/api/jobs;x=1"}) {
-            mvc.perform(get(path).header(HttpHeaders.AUTHORIZATION, "Bearer " + ADMIN))
-                .andExpect(status().isBadRequest());
+            mvc.perform(get(URI.create(path)).header(HttpHeaders.AUTHORIZATION, "Bearer " + ADMIN))
+                .andExpect(result -> assertEquals(path, 400, result.getResponse().getStatus()));
         }
         verifyNoInteractions(service);
     }
@@ -215,6 +217,11 @@ public class WebSecurityTest {
         @Bean
         GeaflowJobApiService geaflowJobApiService() {
             return mock(GeaflowJobApiService.class);
+        }
+
+        @Bean
+        JobCRCache jobCRCache() {
+            return mock(JobCRCache.class);
         }
     }
 }
