@@ -78,4 +78,25 @@ The run writes a timestamped directory containing the manifest, request traces, 
 resource samples, service metrics, quality diagnostics, failure drills, and acceptance result.
 Typed `RETRIEVAL_TIMEOUT` responses are counted separately and do not count as protocol errors;
 unexpected server errors, transport failures, client drops, protocol violations, and hard budget
-violations fail acceptance. No latency SLO is imposed by this profile.
+violations fail acceptance.
+
+## Latency SLO
+
+A run without thresholds only shows that requests succeeded, not that latency was acceptable, so
+`acceptance.json` reports `latencySloConfigured: false` and the run cannot be claimed to meet an
+SLO. Set explicit ceilings to make latency part of acceptance:
+
+```bash
+  --slo-p95-ms 200 --slo-p99-ms 500
+```
+
+Each phase is then compared against both ceilings, every breach is appended to `failures` as
+`METHOD/phase: p95 ...`, and `acceptance.json` records `p95LimitMs`/`p99LimitMs` with
+`latencySloConfigured: true`. Published reference values for the 2Wiki dev bundle are
+**P95 <= 200 ms and P99 <= 500 ms at 50 QPS**; treat them as a starting point to re-baseline on your
+own hardware, and always report the `codeRevision` alongside the result.
+
+The 2026-10-18 full profile (`production-load/20261018T132744Z`) was recorded before any SLO
+existed and its `acceptance.json` is `passed: false` with `latencySloConfigured: false`. It stays in
+the repository as a historical capacity baseline and is not evidence of SLO compliance; re-run the
+profile with the flags above before quoting latency guarantees.

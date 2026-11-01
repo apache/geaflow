@@ -2,7 +2,7 @@ from argparse import Namespace
 import gzip
 import json
 
-from tools.graphrag.production_load import (METHODS, _failure_drills,
+from tools.graphrag.production_load import (METHODS, _evaluate_slo, _failure_drills,
                                             _select_target_queries, _write_report, request_body,
                                             schedule_offsets, summarize_phase, validate_response)
 
@@ -146,3 +146,28 @@ def test_phase_summary_distinguishes_target_misses_from_server_failures():
     assert summary['typedTimeout'] == 1
     assert summary['clientRejected'] == 1
     assert summary['p99LatencyMs'] == 990.1
+
+
+def test_slo_is_unconfigured_without_thresholds():
+    summary = {'method': 'VECTOR_ONLY', 'phase': 'steady', 'p95LatencyMs': 900.0,
+               'p99LatencyMs': 1500.0}
+    slo = _evaluate_slo([summary], None, None)
+    assert slo['latencySloConfigured'] is False
+    assert slo['sloViolations'] == []
+
+
+def test_slo_breach_is_reported_per_phase():
+    summary = {'method': 'VECTOR_ONLY', 'phase': 'steady_50_qps', 'p95LatencyMs': 900.0,
+               'p99LatencyMs': 1500.0}
+    slo = _evaluate_slo([summary], 200.0, 500.0)
+    assert slo['latencySloConfigured'] is True
+    assert any('p95' in v for v in slo['sloViolations'])
+    assert any('p99' in v for v in slo['sloViolations'])
+
+
+def test_slo_pass_reports_no_violations():
+    summary = {'method': 'VECTOR_ONLY', 'phase': 'steady_50_qps', 'p95LatencyMs': 120.0,
+               'p99LatencyMs': 300.0}
+    slo = _evaluate_slo([summary], 200.0, 500.0)
+    assert slo['latencySloConfigured'] is True
+    assert slo['sloViolations'] == []

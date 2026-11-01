@@ -544,6 +544,30 @@ def _summarize_quality(path: Path, gold_path: Optional[Path]) -> Dict[str, Any]:
             for method, values in by_method.items() if values}
 
 
+def _evaluate_slo(summaries, p95_limit_ms, p99_limit_ms):
+    """Compares phase latencies against configured SLO ceilings.
+
+    Without thresholds the load run can only prove that requests succeeded, not
+    that latency was acceptable, so the result explicitly reports
+    ``latencySloConfigured: False`` instead of implying a passing SLO.
+    """
+    configured = p95_limit_ms is not None or p99_limit_ms is not None
+    violations = []
+    for summary in summaries:
+        label = '%s/%s' % (summary['method'], summary['phase'])
+        if p95_limit_ms is not None and summary.get('p95LatencyMs') is not None \
+                and summary['p95LatencyMs'] > p95_limit_ms:
+            violations.append('%s: p95 %.1fms > %.1fms' % (
+                label, summary['p95LatencyMs'], p95_limit_ms))
+        if p99_limit_ms is not None and summary.get('p99LatencyMs') is not None \
+                and summary['p99LatencyMs'] > p99_limit_ms:
+            violations.append('%s: p99 %.1fms > %.1fms' % (
+                label, summary['p99LatencyMs'], p99_limit_ms))
+    return {'latencySloConfigured': configured,
+            'p95LimitMs': p95_limit_ms, 'p99LimitMs': p99_limit_ms,
+            'sloViolations': violations}
+
+
 def _write_report(path: Path, manifest: Dict[str, Any], summaries: Sequence[Dict[str, Any]],
                   quality: Dict[str, Any], resource_rows: Sequence[Dict[str, Any]],
                   acceptance: Dict[str, Any]) -> None:
@@ -714,8 +738,12 @@ def run(args: argparse.Namespace) -> Dict[str, Any]:
             acceptance_failures.append('%s/%s' % (summary['method'], summary['phase']))
     if any(not drill['passed'] for drill in failure_drills):
         acceptance_failures.append('failure_drills')
+    slo = _evaluate_slo(summaries, getattr(args, 'slo_p95_ms', None),
+                        getattr(args, 'slo_p99_ms', None))
+    acceptance_failures.extend(slo['sloViolations'])
     acceptance = {'passed': not acceptance_failures, 'failures': acceptance_failures,
-                  'latencySloConfigured': False,
+                  'latencySloConfigured': slo['latencySloConfigured'],
+                  'p95LimitMs': slo['p95LimitMs'], 'p99LimitMs': slo['p99LimitMs'],
                   'typedRetrievalTimeoutsAreReportedSeparately': True}
     _write_csv(output / 'summary.csv', summaries,
                ('method', 'phase', 'targetQps', 'scheduled', 'issued', 'completed', 'success',
@@ -764,6 +792,10 @@ def main() -> None:
     parser.add_argument('--soak-seconds', type=float, default=600.0)
     parser.add_argument('--targeted-qps', type=float, default=20.0)
     parser.add_argument('--targeted-seconds', type=float, default=60.0)
+    parser.add_argument('--slo-p95-ms', type=float, default=None,
+                        help='fail the run when a phase P95 exceeds this ceiling')
+    parser.add_argument('--slo-p99-ms', type=float, default=None,
+                        help='fail the run when a phase P99 exceeds this ceiling')
     parser.add_argument('--max-inflight', type=int, default=512)
     parser.add_argument('--sample-interval', type=float, default=1.0)
     parser.add_argument('--metrics-interval', type=float, default=5.0)
