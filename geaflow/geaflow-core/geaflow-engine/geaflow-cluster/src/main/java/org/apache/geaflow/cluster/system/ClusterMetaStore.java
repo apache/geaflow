@@ -196,11 +196,25 @@ public class ClusterMetaStore {
     }
 
     private <T> void save(ClusterMetaKey key, T value) {
-        getBackend(key).put(key.name(), value);
+        synchronized (ClusterMetaStore.class) {
+            IClusterMetaKVStore<String, Object> backend = getBackend(key);
+            if (backend == null) {
+                LOGGER.debug("skip saving {} after ClusterMetaStore was closed", key);
+                return;
+            }
+            backend.put(key.name(), value);
+        }
     }
 
     private <T> void save(ClusterMetaKey key, T value, long pipelineTaskId) {
-        getBackend(key).put(getKeyTag(key.name(), pipelineTaskId), value);
+        synchronized (ClusterMetaStore.class) {
+            IClusterMetaKVStore<String, Object> backend = getBackend(key);
+            if (backend == null) {
+                LOGGER.debug("skip saving {} after ClusterMetaStore was closed", key);
+                return;
+            }
+            backend.put(getKeyTag(key.name(), pipelineTaskId), value);
+        }
     }
 
     private <T> T get(ClusterMetaKey key) {
@@ -216,6 +230,10 @@ public class ClusterMetaStore {
     }
 
     private IClusterMetaKVStore<String, Object> getBackend(ClusterMetaKey metaKey) {
+        // Avoid returning a closed component backend after shutdown.
+        if (backends == null) {
+            return null;
+        }
         String namespace;
         switch (metaKey) {
             case WORKERS:
@@ -226,10 +244,6 @@ public class ClusterMetaStore {
                 break;
             default:
                 return componentBackend;
-        }
-        // Cluster meta store is closed.
-        if (backends == null) {
-            return null;
         }
         if (!backends.containsKey(namespace)) {
             synchronized (ClusterMetaStore.class) {

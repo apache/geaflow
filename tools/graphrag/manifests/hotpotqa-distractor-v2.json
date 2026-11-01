@@ -16,6 +16,8 @@
   "random_seed": 0,
   "license": {
     "url": "https://hotpotqa.github.io/",
-    "status": "pending-review"
+    "declared": "CC BY-SA 4.0",
+    "status": "pending-review",
+    "note": "Declared licence recorded for release review; approval is a manual action."
   }
 }

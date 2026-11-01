@@ -34,15 +34,37 @@ curl -H 'Content-Type: application/json' -H 'X-Request-Id: release-1' \
   -d '{"graphName":"Confucius","query":"teacher","mode":"HYBRID",'\
       '"executionMode":"SEQUENTIAL","budget":{"topK":5,"timeoutMs":3000}}' \
   http://127.0.0.1:8080/api/v1/retrievals
+curl -H 'Content-Type: application/json' -H 'X-Request-Id: answer-1' \
+  -d '{"question":"Who taught ethics?","tokenBudget":64,"mode":"KEYWORD",
+       "graphName":"Confucius","graphVersion":"v4","indexVersion":"v4"}' \
+  http://127.0.0.1:8080/api/v1/answers
 curl http://127.0.0.1:8080/health
 curl http://127.0.0.1:8080/ready
 curl http://127.0.0.1:8080/metrics/retrieval
 ```
 
 Record the exact dataset release, graph/index versions, configuration, JDK,
-commit, and benchmark seed. The current evaluation package provides
-deterministic answer and ranking metrics; dataset adapters, six-method batch
-reports, and complete cost accounting remain follow-up work until their
-artifacts are present. Release blockers include missing READY artifacts,
-non-deterministic ordering, leaked readers or leases, untyped failures, and
-any command above failing in a clean environment.
+commit, and benchmark seed. Dataset adapters (`tools/graphrag/eval/retrieval.py`),
+the six-method batch runner (`tools/graphrag/benchmark_http.py`) and cost
+accounting (`meanTokensRetained`, `meanEdgesExamined`, independent edge-scan
+budget) are implemented, and every benchmark row records `codeRevision`,
+`datasetRelease`, `randomSeed`, `configVersion`, `policyId`,
+`tokenEstimatorVersion` and `replanCount` so runs cannot be silently mixed.
+
+Reproduce the pipeline end to end with one command:
+
+```bash
+export GEAFLOW_QUERIES=tmp/graphrag/data/queries/2wikimultihopqa-dev.jsonl
+export GEAFLOW_VECTORS=tmp/graphrag/data/runs/2wikimultihopqa-query-vectors-gte.npz
+export GEAFLOW_GOLD=tmp/graphrag/data/cache/2wikimultihopqa-dev.zip
+tools/graphrag/reproduce.sh --dataset 2wikimultihopqa
+```
+
+See `tools/graphrag/REPRODUCE.md` for inputs and outputs. The generated
+`<dataset>-six-methods.csv` carries `evidenceRecallAtK`, `mrr`, `ndcgAtK`,
+`relationPathHit`, `answerExactMatch`, `answerF1` and P50/P95/P99 latency.
+
+Release blockers include missing READY artifacts, non-deterministic ordering,
+leaked readers or leases, untyped failures, and any command above failing in a
+clean environment. The dataset licences are recorded as `pending-review`; obtain
+approval before publishing artifacts derived from them.

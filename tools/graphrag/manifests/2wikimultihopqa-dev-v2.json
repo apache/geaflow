@@ -16,6 +16,8 @@
   "random_seed": 0,
   "license": {
     "url": "https://github.com/Alab-NII/2wikimultihop",
-    "status": "pending-review"
+    "declared": "Apache-2.0",
+    "status": "pending-review",
+    "note": "Declared licence recorded for release review; approval is a manual action."
   }
 }

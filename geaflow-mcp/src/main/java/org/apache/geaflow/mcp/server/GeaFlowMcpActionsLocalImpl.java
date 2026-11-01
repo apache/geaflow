@@ -61,8 +61,9 @@ public class GeaFlowMcpActionsLocalImpl implements GeaFlowMcpActions {
         try {
             graph = runner.compileGraph();
         } catch (Throwable e) {
-            LOGGER.error("Compile error: " + e.getCause().getMessage());
-            throw new GeaflowRuntimeException("Compile error: " + e.getCause().getMessage());
+            String message = causeMessage(e);
+            LOGGER.error("Compile error: " + message);
+            throw new GeaflowRuntimeException("Compile error: " + message);
         }
         if (graph == null) {
             LOGGER.error("Cannot create graph: " + graphName);
@@ -107,8 +108,9 @@ public class GeaFlowMcpActionsLocalImpl implements GeaFlowMcpActions {
         try {
             runner.execute();
         } catch (Throwable e) {
-            LOGGER.error("Run query error: " + e.getCause().getMessage());
-            throw new GeaflowRuntimeException("Run query error: " + e.getCause().getMessage());
+            String message = causeMessage(e);
+            LOGGER.error("Run query error: " + message);
+            throw new GeaflowRuntimeException("Run query error: " + message);
         }
         return "run query success: " + dml;
     }
@@ -217,5 +219,14 @@ public class GeaFlowMcpActionsLocalImpl implements GeaFlowMcpActions {
             content.append(readText);
         }
         return content.toString().trim();
+    }
+
+    private static String causeMessage(Throwable error) {
+        Throwable cause = error.getCause();
+        String message = cause == null ? null : cause.getMessage();
+        if (StringUtils.isBlank(message)) {
+            message = error.getMessage();
+        }
+        return StringUtils.defaultString(message, error.getClass().getSimpleName());
     }
 }

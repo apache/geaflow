@@ -47,7 +47,10 @@ curl -H 'Content-Type: application/json' -H 'X-Request-Id: answer-1' \
 
 ## 2. Retrieval modes
 
-Five modes are accepted by `mode`. All five are reachable over HTTP.
+Five modes are accepted by `mode`; `KEYWORD` remains a compatibility alias of
+`BM25_ONLY`. All five modes and all three execution modes are covered by
+`RetrievalModeContractTest` against a published bundle, and the answer layer is
+exercised over HTTP by `MemoryServerTest`.
 
 | Mode | Channels | Notes |
 |---|---|---|
@@ -228,8 +231,14 @@ verified against the manifest checksum before use.
 
 | Dataset | Split | Manifest | Licence |
 |---|---|---|---|
-| HotpotQA (official distractor) | validation/dev | `tools/graphrag/manifests/hotpotqa-distractor-v2.json` | CC BY-SA 4.0 |
-| 2WikiMultiHopQA (official) | dev | `tools/graphrag/manifests/2wikimultihopqa-dev-v2.json` | Apache-2.0 |
+| HotpotQA (official distractor) | validation/dev | `tools/graphrag/manifests/hotpotqa-distractor-v2.json` | CC BY-SA 4.0 (declared) |
+| 2WikiMultiHopQA (official) | dev | `tools/graphrag/manifests/2wikimultihopqa-dev-v2.json` | Apache-2.0 (declared) |
+
+The `license` block in each manifest records the declared licence that the
+upstream project publishes, together with `status`. Both manifests currently
+carry `pending-review`: the declared licence is documented so downstream users
+can plan, but approval is a manual release action and is **not** implied by this
+table. Do not treat `pending-review` as cleared.
 
 Each manifest pins the dataset release, parser version, preprocessing
 version, chunking configuration, vector source and random seed so an
