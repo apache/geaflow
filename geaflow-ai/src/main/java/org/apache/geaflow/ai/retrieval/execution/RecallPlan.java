@@ -28,6 +28,14 @@ import org.apache.geaflow.ai.retrieval.api.model.RetrievalMode;
 
 /** Immutable bounded plan with fixed channel allocations and one optional absolute deadline. */
 public final class RecallPlan {
+    /**
+     * Default hop bound for plans that do not come from an adaptive routing decision.
+     *
+     * <p>The design allows up to two hops of budget-constrained expansion. A non-adaptive plan
+     * still has to honour that capability, otherwise stronger settings such as the association
+     * floor and the marginal-yield stop can never take effect on the hop frontier.
+     */
+    private static final int DEFAULT_MAX_HOP = 2;
     private final RetrievalMode mode;
     private final int topK;
     private final long deadlineNanos;
@@ -88,7 +96,7 @@ public final class RecallPlan {
                 : this.mode == RetrievalMode.VECTOR_ONLY ? "VECTOR" : "GRAPH", allocatedCandidates);
         }
         channelBudgets = Collections.unmodifiableMap(budgets);
-        this.maxHop = this.mode == RetrievalMode.GRAPH_ONLY ? 1 : 1;
+        this.maxHop = DEFAULT_MAX_HOP;
         this.neighborCap = Math.max(1, candidates);
         this.maxDiffusionGrowth = Double.POSITIVE_INFINITY;
     }

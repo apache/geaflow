@@ -1136,6 +1136,11 @@ public final class RecallService {
                 .edgeScanBudget(resolveEdgeScanBudget(command.getBudget()))
                 .neighborCap(Math.min(candidateBudget, plan.getNeighborCap()))
                 .maxDiffusionGrowth(plan.getMaxDiffusionGrowth())
+                .sampleRate(graphSampleRate())
+                .relationPriorities(graphRelationPriorities())
+                .minMarginalYield(graphMinMarginalYield())
+                .minAssociationScore(graphMinAssociationScore())
+                .minAssociationSurvivalRate(graphMinAssociationSurvivalRate())
                 .tokenBudget(command.getBudget().getPrimaryConstraint() == BudgetConstraint.TOKENS
                     ? command.getBudget().getTokenBudget() : Integer.MAX_VALUE)
                 .samplingSeed(DeterministicSeed.graphSeed(command.getQuery(), plan.getGraphVersion(),
@@ -1274,6 +1279,26 @@ public final class RecallService {
      * request that only sets {@code maxCandidates} still gets the configured default scan bound
      * rather than silently inheriting the candidate budget.
      */
+    private double graphSampleRate() {
+        return properties == null ? 1.0D : properties.getGraphSampleRate();
+    }
+
+    private Map<String, Double> graphRelationPriorities() {
+        return properties == null ? Collections.emptyMap() : properties.getGraphRelationPriorities();
+    }
+
+    private double graphMinMarginalYield() {
+        return properties == null ? 0.0D : properties.getGraphMinMarginalYield();
+    }
+
+    private double graphMinAssociationScore() {
+        return properties == null ? 0.0D : properties.getGraphMinAssociationScore();
+    }
+
+    private double graphMinAssociationSurvivalRate() {
+        return properties == null ? 0.0D : properties.getGraphMinAssociationSurvivalRate();
+    }
+
     private int resolveEdgeScanBudget(RetrievalBudget budget) {
         if (budget.getMaxEdgeScans() != null && budget.getMaxEdgeScans() > 0) {
             return budget.getMaxEdgeScans();

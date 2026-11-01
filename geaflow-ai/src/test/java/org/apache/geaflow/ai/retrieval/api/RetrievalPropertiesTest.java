@@ -153,6 +153,45 @@ public class RetrievalPropertiesTest {
     }
 
     @Test
+    public void validatesGraphExpansionBoundaries() {
+        RetrievalProperties properties = new RetrievalProperties();
+        properties.setGraphSampleRate(0.5D);
+        properties.setGraphMinMarginalYield(0.1D);
+        properties.setGraphMinAssociationScore(0.2D);
+        properties.setGraphMinAssociationSurvivalRate(0.3D);
+        properties.validateConfiguration();
+
+        properties = new RetrievalProperties();
+        properties.setGraphSampleRate(1.5D);
+        assertInvalid(properties);
+
+        properties = new RetrievalProperties();
+        properties.setGraphSampleRate(-0.1D);
+        assertInvalid(properties);
+
+        properties = new RetrievalProperties();
+        properties.setGraphMinAssociationScore(1.5D);
+        assertInvalid(properties);
+
+        properties = new RetrievalProperties();
+        properties.setGraphMinMarginalYield(-1.0D);
+        assertInvalid(properties);
+
+        properties = new RetrievalProperties();
+        properties.setGraphMinAssociationSurvivalRate(1.5D);
+        assertInvalid(properties);
+
+        properties = new RetrievalProperties();
+        properties.setDefaultMaxEdgeScans(0);
+        assertInvalid(properties);
+
+        properties = new RetrievalProperties();
+        properties.setDefaultMaxEdgeScans(100);
+        properties.setMaxEdgeScans(10);
+        assertInvalid(properties);
+    }
+
+    @Test
     public void rejectsBlankIdentityAndInvertedDefaults() {
         RetrievalProperties properties = new RetrievalProperties();
         properties.setConfigVersion(" ");

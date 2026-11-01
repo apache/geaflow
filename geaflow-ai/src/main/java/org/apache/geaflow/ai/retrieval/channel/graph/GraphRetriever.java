@@ -292,7 +292,6 @@ public final class GraphRetriever {
                 return result;
             }
             int examined = batch.getExamined();
-            lastStats.neighborsSampled += examined;
             lastStats.edgesExamined += examined;
             increment(edgesExaminedByHop, state.hop + 1, examined);
             int scoredThisHop = 0;
@@ -302,7 +301,11 @@ public final class GraphRetriever {
                 if (expired(deadlineNanos, clock)) {
                     return result;
                 }
-                if (!sampled(query, state, edge, config) || !scannedEdges.add(edge.getEdgeId())) {
+                if (!sampled(query, state, edge, config)) {
+                    continue;
+                }
+                lastStats.neighborsSampled++;
+                if (!scannedEdges.add(edge.getEdgeId())) {
                     continue;
                 }
                 String targetId = otherEndpoint(state.entityId, edge);
@@ -474,11 +477,16 @@ public final class GraphRetriever {
 
     private static boolean sampled(String query, ExpansionState state, GraphEdgeRef edge,
                                    GraphRetrievalConfig config) {
+        return sampledEdge(query, state.anchor.getEntity().getEntityId(), state.entityId, edge, config);
+    }
+
+    private static boolean sampledEdge(String query, String anchorEntityId, String currentEntityId,
+                                       GraphEdgeRef edge, GraphRetrievalConfig config) {
         if (config.getSampleRate() >= 1.0) {
             return true;
         }
-        String key = query + "\u001f" + state.anchor.getEntity().getEntityId() + "\u001f"
-            + state.entityId + "\u001f" + otherEndpoint(state.entityId, edge) + "\u001f"
+        String key = query + "\u001f" + anchorEntityId + "\u001f"
+            + currentEntityId + "\u001f" + otherEndpoint(currentEntityId, edge) + "\u001f"
             + config.getSamplingSeed();
         long value = Long.parseUnsignedLong(GraphSnapshot.sha256(key).substring(0, 16), 16);
         double normalized = (value >>> 1) / (double) Long.MAX_VALUE;

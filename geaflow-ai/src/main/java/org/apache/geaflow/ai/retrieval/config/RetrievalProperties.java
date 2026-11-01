@@ -20,6 +20,8 @@ package org.apache.geaflow.ai.retrieval.config;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import org.apache.geaflow.ai.retrieval.api.model.ExecutionMode;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalException;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalMode;
@@ -109,6 +111,15 @@ public class RetrievalProperties {
     private double highGrowthRate = 2.0D;
     @Inject("${retrieval.deterministic-rule.base-neighbor-cap:16}")
     private int baseNeighborCap = 16;
+    @Inject("${retrieval.graph.sample-rate:1.0}")
+    private double graphSampleRate = 1.0D;
+    @Inject("${retrieval.graph.min-marginal-yield:0.0}")
+    private double graphMinMarginalYield;
+    @Inject("${retrieval.graph.min-association-score:0.0}")
+    private double graphMinAssociationScore;
+    @Inject("${retrieval.graph.min-association-survival-rate:0.0}")
+    private double graphMinAssociationSurvivalRate;
+    private Map<String, Double> graphRelationPriorities = new LinkedHashMap<>();
 
     @Init
     public void validateConfiguration() {
@@ -170,6 +181,7 @@ public class RetrievalProperties {
             || !(highGrowthRate >= 0.0D) || !Double.isFinite(highGrowthRate) || baseNeighborCap < 1) {
             throw invalid("deterministic-rule thresholds are invalid");
         }
+        validateGraphExpansion();
     }
 
     private static void positiveLimit(int defaultValue, int maxValue, String name) {
@@ -500,6 +512,79 @@ public class RetrievalProperties {
 
     public void setHighGrowthRate(double highGrowthRate) {
         this.highGrowthRate = highGrowthRate;
+    }
+
+    /**
+     * Rejects graph expansion controls outside their physical range.
+     *
+     * <p>These values are operator-tunable, so a typo such as a sample rate of {@code 1.5} or a
+     * negative floor must fail at startup instead of silently producing a skewed retrieval.
+     */
+    private void validateGraphExpansion() {
+        if (!(graphSampleRate >= 0.0D) || !(graphSampleRate <= 1.0D) || !Double.isFinite(graphSampleRate)) {
+            throw invalid("graph.sample-rate must be between 0.0 and 1.0");
+        }
+        if (!(graphMinMarginalYield >= 0.0D) || !Double.isFinite(graphMinMarginalYield)) {
+            throw invalid("graph.min-marginal-yield must be finite and non-negative");
+        }
+        if (!(graphMinAssociationScore >= 0.0D) || !(graphMinAssociationScore <= 1.0D)
+            || !Double.isFinite(graphMinAssociationScore)) {
+            throw invalid("graph.min-association-score must be between 0.0 and 1.0");
+        }
+        if (!(graphMinAssociationSurvivalRate >= 0.0D) || !(graphMinAssociationSurvivalRate <= 1.0D)
+            || !Double.isFinite(graphMinAssociationSurvivalRate)) {
+            throw invalid("graph.min-association-survival-rate must be between 0.0 and 1.0");
+        }
+        for (Map.Entry<String, Double> entry : graphRelationPriorities.entrySet()) {
+            if (entry.getKey() == null || entry.getKey().trim().isEmpty()) {
+                throw invalid("graph.relation-priorities keys must be non-empty");
+            }
+            Double value = entry.getValue();
+            if (value == null || !(value >= 0.0D) || !Double.isFinite(value)) {
+                throw invalid("graph.relation-priorities values must be finite and non-negative");
+            }
+        }
+    }
+
+    public double getGraphSampleRate() {
+        return graphSampleRate;
+    }
+
+    public void setGraphSampleRate(double graphSampleRate) {
+        this.graphSampleRate = graphSampleRate;
+    }
+
+    public double getGraphMinMarginalYield() {
+        return graphMinMarginalYield;
+    }
+
+    public void setGraphMinMarginalYield(double graphMinMarginalYield) {
+        this.graphMinMarginalYield = graphMinMarginalYield;
+    }
+
+    public double getGraphMinAssociationScore() {
+        return graphMinAssociationScore;
+    }
+
+    public void setGraphMinAssociationScore(double graphMinAssociationScore) {
+        this.graphMinAssociationScore = graphMinAssociationScore;
+    }
+
+    public double getGraphMinAssociationSurvivalRate() {
+        return graphMinAssociationSurvivalRate;
+    }
+
+    public void setGraphMinAssociationSurvivalRate(double graphMinAssociationSurvivalRate) {
+        this.graphMinAssociationSurvivalRate = graphMinAssociationSurvivalRate;
+    }
+
+    public Map<String, Double> getGraphRelationPriorities() {
+        return new LinkedHashMap<>(graphRelationPriorities);
+    }
+
+    public void setGraphRelationPriorities(Map<String, Double> graphRelationPriorities) {
+        this.graphRelationPriorities = graphRelationPriorities == null
+            ? new LinkedHashMap<>() : new LinkedHashMap<>(graphRelationPriorities);
     }
 
     public int getBaseNeighborCap() {

@@ -40,6 +40,8 @@ retrieval:
   max-timeout-ms: 10000
   default-max-candidates: 100
   max-candidates: 1000
+  default-max-edge-scans: ${GEAFLOW_RETRIEVAL_DEFAULT_MAX_EDGE_SCANS:100}
+  max-edge-scans: ${GEAFLOW_RETRIEVAL_MAX_EDGE_SCANS:5000}
   default-token-budget: 4096
   max-token-budget: 16384
   remote-access-enabled: ${GEAFLOW_REMOTE_ACCESS_ENABLED:false}
@@ -58,6 +60,11 @@ retrieval:
   strict-plan-validation: ${GEAFLOW_RETRIEVAL_STRICT_PLAN_VALIDATION:true}
   reranker-id: ${GEAFLOW_RETRIEVAL_RERANKER_ID:deterministic-reranker-v1}
   token-estimator-id: ${GEAFLOW_RETRIEVAL_TOKEN_ESTIMATOR_ID:chars4-v1}
+  graph:
+    sample-rate: ${GEAFLOW_RETRIEVAL_GRAPH_SAMPLE_RATE:1.0}
+    min-marginal-yield: ${GEAFLOW_RETRIEVAL_GRAPH_MIN_MARGINAL_YIELD:0.0}
+    min-association-score: ${GEAFLOW_RETRIEVAL_GRAPH_MIN_ASSOCIATION_SCORE:0.0}
+    min-association-survival-rate: ${GEAFLOW_RETRIEVAL_GRAPH_MIN_ASSOCIATION_SURVIVAL_RATE:0.0}
   deterministic-rule:
     high-average-idf: ${GEAFLOW_RETRIEVAL_HIGH_AVERAGE_IDF:1.5}
     high-score-gap: ${GEAFLOW_RETRIEVAL_HIGH_SCORE_GAP:0.20}
