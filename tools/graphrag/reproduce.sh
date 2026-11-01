@@ -144,7 +144,8 @@ if [[ ! -f "${QUERIES}" ]]; then
     fail "query set not found: ${QUERIES}
        Provide GEAFLOW_QUERIES pointing at a JSONL query file for this dataset"
 fi
-BENCH_OUT="${RUN_DIR}/${DATASET}-six-methods.jsonl"
+# A full run embeds every response body; gzip keeps the artifact on disk.
+BENCH_OUT="${RUN_DIR}/${DATASET}-six-methods.jsonl.gz"
 BENCH_ARGS=(
     --url "http://127.0.0.1:${PORT}/api/v1/retrievals" \
     --queries "${QUERIES}" \

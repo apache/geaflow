@@ -6,7 +6,7 @@ import pytest
 
 from types import SimpleNamespace
 
-from tools.graphrag.benchmark_http import (METHODS, METHOD_CONFIG, apply_ablation,
+from tools.graphrag.benchmark_http import (METHODS, METHOD_CONFIG, _open_output, _summary_path, apply_ablation,
                                             assert_equal_budget, request_body, run_provenance)
 from tools.graphrag.eval.retrieval import (load_query_vectors, load_supporting_facts,
                                             load_supporting_sentences, load_supporting_targets,
@@ -235,3 +235,27 @@ def test_equal_budget_rejects_divergent_candidate_multipliers():
             raise AssertionError('a widened candidate budget must be rejected')
     finally:
         METHOD_CONFIG['VECTOR_OVERFETCH']['candidateMultiplier'] = original
+
+
+def test_output_stream_is_gzip_when_suffix_says_so(tmp_path):
+    import gzip, json
+    target = tmp_path / 'rows.jsonl.gz'
+    with _open_output(target) as stream:
+        stream.write(json.dumps({'a': 1}) + '\n')
+    with gzip.open(target, 'rt', encoding='utf-8') as stream:
+        assert json.loads(stream.readline()) == {'a': 1}
+
+
+def test_output_stream_is_plain_text_otherwise(tmp_path):
+    target = tmp_path / 'rows.jsonl'
+    with _open_output(target) as stream:
+        stream.write('{"a": 1}\n')
+    assert target.read_text(encoding='utf-8') == '{"a": 1}\n'
+
+
+def test_summary_path_drops_compressed_suffix():
+    from pathlib import Path
+    from tools.graphrag.benchmark_http import _summary_path
+
+    assert _summary_path(Path('run/six.jsonl')).name == 'six.csv'
+    assert _summary_path(Path('run/six.jsonl.gz')).name == 'six.csv'

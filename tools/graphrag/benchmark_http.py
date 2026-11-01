@@ -1,6 +1,7 @@
 """HTTP benchmark runner; writes one JSON object per request and a summary."""
 import argparse
 import csv
+import gzip
 import hashlib
 import json
 import subprocess
@@ -71,6 +72,27 @@ METHOD_CONFIG = {
     'ADAPTIVE_HYBRID': {'mode': 'HYBRID', 'executionMode': 'SEQUENTIAL', 'candidateMultiplier': 1,
                         'requiresVector': True, 'exactRanking': True},
 }
+
+
+def _summary_path(output):
+    """Returns the CSV sibling of a JSONL result, ignoring any compression suffix."""
+    name = Path(output).name
+    for suffix in ('.jsonl.gz', '.jsonl'):
+        if name.endswith(suffix):
+            return Path(output).with_name(name[:-len(suffix)] + '.csv')
+    return Path(output).with_suffix('.csv')
+
+
+def _open_output(path):
+    """Opens a result stream, compressing when the name ends in .gz.
+
+    Full-dataset runs embed every response body, which reaches many gigabytes for
+    a six-method matrix. Compressing keeps a reproducible artifact on disk instead
+    of forcing operators to delete it.
+    """
+    if str(path).endswith('.gz'):
+        return gzip.open(path, 'wt', encoding='utf-8')
+    return Path(path).open('w', encoding='utf-8')
 
 
 def request(url, body):
@@ -240,7 +262,7 @@ def run(args):
     active_methods = METHODS if not getattr(args, 'ablation', None) else ABLATION_METHODS
     jobs = ((index, query, method) for index, query in enumerate(selected_queries)
             for method in active_methods)
-    with output.open('w', encoding='utf-8') as stream, ThreadPoolExecutor(max_workers=args.workers) as pool:
+    with _open_output(output) as stream, ThreadPoolExecutor(max_workers=args.workers) as pool:
         for row in pool.map(execute, jobs):
             stream.write(json.dumps(row, ensure_ascii=False) + '\n')
             rows.append({key: value for key, value in row.items()
@@ -249,7 +271,7 @@ def run(args):
                 stream.flush()
                 print('completed %d/%d requests' % (len(rows),
                                                      len(selected_queries) * len(active_methods)), flush=True)
-    summary = output.with_suffix('.csv')
+    summary = _summary_path(output)
     fields = ('method', 'ablation', 'mode', 'executionMode', 'exactRanking', 'topKLimit',
               'candidateLimit', 'requests', 'success',
               'protocolValid', 'nonempty', 'withPaths', 'withGraphTraces', 'withProvenance',
