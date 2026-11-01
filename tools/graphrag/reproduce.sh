@@ -162,7 +162,7 @@ BENCH_ARGS=(
 # cache-less environment can still exercise the wire protocol, and the CSV then leaves the
 # evidence-quality columns empty instead of inventing numbers.
 GOLD="${GEAFLOW_GOLD:-}"
-if [[ -n "${GOLD}" && -f "${GOLD}" ]]; then
+if [[ -n "${GOLD}" && -e "${GOLD}" ]]; then
     BENCH_ARGS+=(--gold "${GOLD}")
     if [[ -f "${BUNDLE}/chunks.jsonl" ]]; then
         BENCH_ARGS+=(--chunks "${BUNDLE}/chunks.jsonl")

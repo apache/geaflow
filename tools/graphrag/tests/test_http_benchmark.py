@@ -289,3 +289,34 @@ def test_reported_budget_reflects_the_ablated_request():
     body = request_body(base, {'question': 'q'}, 'ADAPTIVE_HYBRID', [1.0, 0.0])
     assert body['budget']['maxCandidates'] == 25
     assert base.max_candidates == 100, 'the CLI default must stay untouched'
+
+
+def test_gold_supports_hotpotqa_parquet(tmp_path):
+    """HotpotQA gold ships as parquet; loading it must not require a JSON conversion step."""
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+    from tools.graphrag.eval.retrieval import load_supporting_targets
+
+    # Mirror the columnar shape Hugging Face ships for HotpotQA.
+    schema = pa.schema([
+        ('id', pa.string()), ('question', pa.string()), ('answer', pa.string()),
+        ('supporting_facts', pa.struct([('title', pa.list_(pa.string())),
+                                        ('sent_id', pa.list_(pa.int32()))])),
+        ('context', pa.struct([('title', pa.list_(pa.string())),
+                               ('sentences', pa.list_(pa.list_(pa.string())))])),
+    ])
+    table = pa.table({
+        'id': ['q1'],
+        'question': ['Who wrote it?'],
+        'answer': ['Alice'],
+        'supporting_facts': [{'title': ['Article A'], 'sent_id': [0]}],
+        'context': [{'title': ['Article A'],
+                     'sentences': [['Alice wrote it.', 'Other sentence.']]}],
+    }, schema=schema)
+    path = tmp_path / 'dev.parquet'
+    pq.write_table(table, path)
+
+    targets = load_supporting_targets(path)
+
+    assert 'q1' in targets
+    assert targets['q1']['supportingSentences'] == ['Alice wrote it.']

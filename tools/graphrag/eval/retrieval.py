@@ -124,7 +124,42 @@ def load_supporting_targets(gold_path, chunks_path=None):
     return result
 
 
+def _parquet_record(row):
+    """Normalizes one Hugging Face parquet row into the JSON record shape.
+
+    The distributed HotpotQA parquet is columnar: ``supporting_facts`` is
+    ``{title: [...], sent_id: [...]}`` and ``context`` is ``{title: [...], sentences: [[...]]}``
+    rather than a list of pairs.
+    """
+    record = {'id': str(row['id']), 'question': str(row['question']),
+              'answer': str(row['answer'])}
+    facts = row.get('supporting_facts')
+    if facts is None:
+        record['supporting_facts'] = []
+    else:
+        titles = list(facts['title'])
+        sentences = list(facts['sent_id'])
+        record['supporting_facts'] = [[str(title), int(index)]
+                                      for title, index in zip(titles, sentences)]
+    context = row.get('context')
+    if context is None:
+        record['context'] = []
+    else:
+        titles = list(context['title'])
+        sentences = list(context['sentences'])
+        record['context'] = [[str(title), [str(sentence) for sentence in group]]
+                             for title, group in zip(titles, sentences)]
+    return record
+
+
 def _load_json_records(path):
+    if str(path).lower().endswith('.parquet'):
+        # Hugging Face distributes HotpotQA as parquet. Reading it directly avoids a lossy
+        # conversion step that would have to be maintained separately.
+        import pandas as pd
+
+        frame = pd.read_parquet(path)
+        return [_parquet_record(row) for _, row in frame.iterrows()]
     if str(path).lower().endswith('.zip'):
         with zipfile.ZipFile(path) as archive:
             names = sorted(name for name in archive.namelist()
