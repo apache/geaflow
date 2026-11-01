@@ -259,6 +259,77 @@ public final class RetrievalFixtureRegistry implements AutoCloseable {
         return fixture != null && fixture.isReady();
     }
 
+    /**
+     * Reports readiness per artifact component instead of a single boolean.
+     *
+     * <p>A published fixture is only usable when its graph provider and its graph-backed readers
+     * are individually present and open. Reporting the components lets {@code /ready} fail with the
+     * specific missing artifact rather than staying green because some fixture exists.
+     */
+    public synchronized ReadinessReport readiness(String graphName, String graphVersion,
+                                                  String indexVersion) {
+        Map<String, String> components = new LinkedHashMap<>();
+        if (graphName == null) {
+            return new ReadinessReport(false, components, "MISSING_GRAPH_NAME");
+        }
+        Fixture fixture = graphVersion == null || indexVersion == null
+            ? firstFixture(graphName) : fixtures.get(key(graphName, graphVersion, indexVersion));
+        if (fixture == null) {
+            return new ReadinessReport(false, components, "GRAPH_NOT_READY");
+        }
+        components.put("graph", component(fixture.isReady() && fixture.getGraphProvider() != null,
+            "GRAPH_NOT_READY"));
+        components.put("bm25", component(fixture.getBm25() != null, "BM25_NOT_READY"));
+        components.put("vector", component(fixture.getVector() != null, "VECTOR_NOT_READY"));
+        if (!fixture.isReady()) {
+            return new ReadinessReport(false, components, "GRAPH_NOT_READY");
+        }
+        for (Map.Entry<String, String> entry : components.entrySet()) {
+            if (!"READY".equals(entry.getValue())) {
+                return new ReadinessReport(false, components, entry.getValue());
+            }
+        }
+        return new ReadinessReport(true, components, "READY");
+    }
+
+    private Fixture firstFixture(String graphName) {
+        for (Fixture fixture : fixtures.values()) {
+            if (graphName.equals(fixture.getGraphName())) {
+                return fixture;
+            }
+        }
+        return null;
+    }
+
+    private static String component(boolean ready, String failure) {
+        return ready ? "READY" : failure;
+    }
+
+    /** Per-component readiness outcome. */
+    public static final class ReadinessReport {
+        private final boolean ready;
+        private final Map<String, String> components;
+        private final String reason;
+
+        ReadinessReport(boolean ready, Map<String, String> components, String reason) {
+            this.ready = ready;
+            this.components = Collections.unmodifiableMap(new LinkedHashMap<>(components));
+            this.reason = reason;
+        }
+
+        public boolean isReady() {
+            return ready;
+        }
+
+        public Map<String, String> getComponents() {
+            return components;
+        }
+
+        public String getReason() {
+            return reason;
+        }
+    }
+
     /** Acquires a lease that keeps the selected fixture readers open until released. */
     public synchronized Fixture.Lease acquire(String graphName, String graphVersion, String indexVersion) {
         return get(graphName, graphVersion, indexVersion).acquire();

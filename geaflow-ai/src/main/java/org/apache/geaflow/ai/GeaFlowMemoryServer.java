@@ -253,13 +253,21 @@ public class GeaFlowMemoryServer {
             status = runtimeCache().keywordReadiness(configuredGraph);
             boolean bundleConfigured = properties.getArtifactBundleRoot() != null
                 && !properties.getArtifactBundleRoot().trim().isEmpty();
-            boolean bundleReady = bundleConfigured && retrievalFixtureRegistry != null
-                && retrievalFixtureRegistry.isReady(configuredGraph,
-                    properties.getArtifactGraphVersion(), properties.getArtifactIndexVersion());
-            if (!status.isReady() && (bundleReady || !bundleConfigured
-                && retrievalFixtureRegistry != null && retrievalFixtureRegistry.isReady(configuredGraph))) {
-                status = new ServerMemoryCache.ReadinessStatus(true, configuredGraph,
-                    properties.getArtifactGraphVersion(), "READY");
+            if (retrievalFixtureRegistry != null) {
+                // A published fixture is only usable when every artifact it needs is present.
+                // Checking the components individually keeps /ready honest instead of reporting
+                // green because some fixture happens to exist.
+                RetrievalFixtureRegistry.ReadinessReport report = bundleConfigured
+                    ? retrievalFixtureRegistry.readiness(configuredGraph,
+                        properties.getArtifactGraphVersion(), properties.getArtifactIndexVersion())
+                    : retrievalFixtureRegistry.readiness(configuredGraph, null, null);
+                if (report.isReady()) {
+                    status = new ServerMemoryCache.ReadinessStatus(true, configuredGraph,
+                        properties.getArtifactGraphVersion(), "READY");
+                } else if (bundleConfigured) {
+                    status = new ServerMemoryCache.ReadinessStatus(false, configuredGraph,
+                        properties.getArtifactGraphVersion(), report.getReason());
+                }
             }
         } catch (RetrievalException exception) {
             status = new ServerMemoryCache.ReadinessStatus(false, null, null,
