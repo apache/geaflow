@@ -92,6 +92,16 @@ public final class Bm25IndexReader implements Closeable {
         return identity;
     }
 
+    /**
+     * Returns how many chunk documents this index carries.
+     *
+     * <p>Index coverage is published in the quality report, so the reader exposes its own document
+     * count rather than forcing callers to guess from the artifact directory.
+     */
+    public int getDocumentCount() {
+        return reader.numDocs();
+    }
+
     public List<Bm25Hit> search(String queryText, int candidateLimit, int topK) {
         return search(queryText, candidateLimit, topK, 0L);
     }

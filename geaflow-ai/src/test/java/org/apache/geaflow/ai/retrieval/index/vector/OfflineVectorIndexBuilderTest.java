@@ -20,6 +20,7 @@
 package org.apache.geaflow.ai.retrieval.index.vector;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -108,6 +109,9 @@ class OfflineVectorIndexBuilderTest {
              VectorIndexReader reader = new VectorIndexReader(directory.resolve("vector-v1.bin"))) {
             assertEquals("c1", reader.search(new float[] {0.0F, 1.0F}, 1, 1).get(0).getChunkId());
             assertEquals("c2", reader.searchExact(new float[] {0.0F, 1.0F}, 1, 1).get(0).getChunkId());
+            assertEquals(2, reader.getChunkCount(),
+                "readers must report how many chunks they cover so index coverage is measurable");
+            assertTrue(reader.coversChunk("c1"));
         }
     }
 

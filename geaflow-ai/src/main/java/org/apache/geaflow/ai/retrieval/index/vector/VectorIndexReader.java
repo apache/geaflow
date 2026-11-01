@@ -111,6 +111,29 @@ public final class VectorIndexReader implements Closeable {
         return identity;
     }
 
+    /**
+     * Returns how many chunks this artifact carries.
+     *
+     * <p>Index coverage is part of the published quality report, so a reader has to be able to
+     * state its own footprint instead of leaving callers to infer it from artifact size.
+     */
+    public int getChunkCount() {
+        return entries.size();
+    }
+
+    /** Returns whether the artifact carries a vector for the given chunk. */
+    public boolean coversChunk(String chunkId) {
+        if (chunkId == null) {
+            return false;
+        }
+        for (Entry entry : entries) {
+            if (chunkId.equals(entry.chunkId)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public int getDimensions() {
         return dimensions;
     }

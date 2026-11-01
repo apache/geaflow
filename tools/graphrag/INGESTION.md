@@ -51,3 +51,21 @@ when READY metadata is identical; conflicting output is rejected.
 The native Java index builders currently accept in-memory chunk lists and vector maps.
 The importer and embedding exporter stream their inputs, while native artifact building
 still requires memory proportional to the corpus and vector set.
+
+## Index coverage for bridge-published bundles
+
+`publish_bundle.py` publishes artifacts through the canonical-JSONL bridge, which does not run the
+Python index builders, so `quality_report.index_coverage` starts as `{}`. Measure it from the
+published bundle instead of leaving it empty:
+
+```bash
+java -cp "geaflow-ai/target/classes:$(cat /tmp/cp.txt)" \
+  org.apache.geaflow.ai.retrieval.ingest.IndexCoverageCli \
+  --bundle  <bundle-dir> \
+  --report  <release-dir>/quality-report.json
+```
+
+The tool opens `bm25/` and `vector.bin` (or their versioned equivalents), counts covered chunks
+against `chunks.jsonl`, and rewrites `index_coverage` in place while preserving the other fields.
+Measured values for the checked-in releases: 2Wiki 48,851/48,851 and HotpotQA distractor
+41,976/41,976 for both indexes (ratio 1.0).
