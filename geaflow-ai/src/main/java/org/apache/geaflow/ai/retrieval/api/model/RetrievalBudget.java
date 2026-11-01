@@ -27,6 +27,7 @@ public class RetrievalBudget {
     private Integer timeoutMs;
     private Integer maxCandidates;
     private Integer tokenBudget;
+    private Integer maxEdgeScans;
     private BudgetConstraint primaryConstraint = BudgetConstraint.CANDIDATES;
 
     public RetrievalBudget() {
@@ -76,6 +77,37 @@ public class RetrievalBudget {
 
     public void setTokenBudget(Integer tokenBudget) {
         this.tokenBudget = tokenBudget;
+    }
+
+    /**
+     * Returns the independent bound on graph edges examined, or {@code null} to use the server
+     * default.
+     *
+     * <p>Graph edge scans are the dominant implicit cost of diffusion: a request can inspect many
+     * edges and still return only a handful of evidence items. Keeping this bound independent of
+     * {@link #getMaxCandidates()} lets callers and benchmarks trade scan work against candidate
+     * work explicitly, and lets cost reports attribute the two separately.
+     */
+    public Integer getMaxEdgeScans() {
+        return maxEdgeScans;
+    }
+
+    public void setMaxEdgeScans(Integer maxEdgeScans) {
+        this.maxEdgeScans = maxEdgeScans;
+    }
+
+    /**
+     * Returns a defensive copy carrying every budget dimension.
+     *
+     * <p>Use this instead of constructing a new budget field by field: a partial copy silently
+     * drops bounds such as {@link #getMaxEdgeScans()} and makes an explicit caller limit look like
+     * an unset one further down the pipeline.
+     */
+    public RetrievalBudget copy() {
+        RetrievalBudget copy = new RetrievalBudget(topK, timeoutMs, maxCandidates, tokenBudget,
+            primaryConstraint);
+        copy.maxEdgeScans = maxEdgeScans;
+        return copy;
     }
 
     public BudgetConstraint getPrimaryConstraint() {

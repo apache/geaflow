@@ -83,7 +83,7 @@ public class RetrievalRequestValidator {
             throw invalid("HYBRID requires maxCandidates >= 3");
         }
         return new RetrievalCommand(graphName, query, mode, executionMode,
-            effectiveBudget, vector, properties.getMaxCandidates());
+            effectiveBudget, vector, properties.getMaxCandidates(), request.isExactRanking());
     }
 
     private static String trimmed(String value, String name, int maxLength) {

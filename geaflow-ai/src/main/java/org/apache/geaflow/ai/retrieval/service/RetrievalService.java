@@ -101,11 +101,7 @@ public class RetrievalService {
                         "structured retrieval registry is not configured");
                 }
                 RetrievalResponse response = new RecallService(fixtureRegistry).retrieve(request, requestId);
-                if (response.getTrace() != null) {
-                    for (String channel : response.getTrace().getSelectedChannels()) {
-                        metrics.recordChannel(channel);
-                    }
-                }
+                metrics.recordResponse(response);
                 metrics.recordSuccess(elapsedMs(startedAt));
                 return response;
             }
@@ -155,6 +151,7 @@ public class RetrievalService {
             trace.setStopReason(hits.isEmpty() ? "NO_MATCH" : "TOP_K");
             response.setTrace(trace);
             long elapsedMs = elapsedMs(startedAt);
+            metrics.recordResponse(response);
             metrics.recordSuccess(elapsedMs);
             LOGGER.info("retrieval completed graph={} mode={} topK={} maxCandidates={} "
                     + "timeoutMs={} candidateBudget={} results={} status=SUCCESS elapsedMs={}",

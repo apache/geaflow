@@ -19,16 +19,20 @@
 
 package org.apache.geaflow.ai.retrieval.index.graph;
 
+import java.io.ByteArrayInputStream;
 import java.io.Closeable;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.AbstractList;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.RandomAccess;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -36,7 +40,8 @@ import org.apache.geaflow.ai.retrieval.api.model.RetrievalErrorCode;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalException;
 import org.apache.geaflow.ai.retrieval.channel.graph.GraphNeighborProvider;
 import org.apache.geaflow.ai.retrieval.channel.graph.GraphSnapshot;
-import org.apache.geaflow.ai.retrieval.channel.graph.VersionedGraphView;
+import org.apache.geaflow.ai.retrieval.channel.graph.GraphStatistics;
+import org.apache.geaflow.ai.retrieval.channel.graph.IndexedGraphNeighborProvider;
 import org.apache.geaflow.ai.retrieval.index.ArtifactIdentity;
 import org.apache.geaflow.ai.retrieval.model.document.RetrievalIds;
 import org.apache.geaflow.ai.retrieval.model.document.TextChunk;
@@ -54,12 +59,19 @@ public final class GraphArtifactReader implements Closeable {
     private final List<GraphEdgeRef> edges;
     private final List<GraphVertexRef> vertices;
     private final GraphNeighborProvider neighbors;
+    private final byte[] artifactBytes;
 
     public GraphArtifactReader(Path artifact, String expectedGraphVersion, String expectedIndexVersion) {
         if (artifact == null || !Files.isRegularFile(artifact)) {
             throw notReady("missing graph artifact: " + artifact);
         }
-        try (DataInputStream input = new DataInputStream(Files.newInputStream(artifact))) {
+        try {
+            artifactBytes = Files.readAllBytes(artifact);
+        } catch (IOException error) {
+            throw new RetrievalException(RetrievalErrorCode.INDEX_NOT_READY,
+                "unable to read graph artifact", error);
+        }
+        try (DataInputStream input = new DataInputStream(new ByteArrayInputStream(artifactBytes))) {
             String magic = input.readUTF();
             boolean currentFormat = MAGIC.equals(magic);
             if (!currentFormat && !LEGACY_MAGIC.equals(magic)) {
@@ -103,10 +115,14 @@ public final class GraphArtifactReader implements Closeable {
                     ? readEntityWithProvenance(input, entityId, canonical, aliases, type, sources)
                     : new EntityRef(entityId, canonical, aliases, type, sources));
             }
-            edges = new ArrayList<>(edgeCount);
+            long[] edgeOffsets = new long[edgeCount];
+            int[] edgeLengths = new int[edgeCount];
+            Map<String, List<Integer>> edgeIndexes = new HashMap<>();
+            GraphStatistics.Builder statistics = GraphStatistics.builder();
             Set<String> edgeIds = new HashSet<>();
             String previousEdgeId = null;
             for (int index = 0; index < edgeCount; index++) {
+                edgeOffsets[index] = artifactBytes.length - input.available();
                 String edgeId = input.readUTF();
                 final String label = input.readUTF();
                 String source = input.readUTF();
@@ -120,29 +136,70 @@ public final class GraphArtifactReader implements Closeable {
                 validateStringCount(input, sourceCount);
                 previousEdgeId = edgeId;
                 List<String> sourceChunks = readStrings(input, sourceCount);
-                edges.add(currentFormat
+                GraphEdgeRef edge = currentFormat
                     ? readEdgeWithProvenance(input, edgeId, label, source, target, sourceChunks)
-                    : new GraphEdgeRef(edgeId, label, source, target, sourceChunks));
-            }
-            for (GraphEdgeRef edge : edges) {
-                if (!entityIds.contains(edge.getSourceEntityId())
-                    || !entityIds.contains(edge.getTargetEntityId())) {
-                    throw new IOException("graph edge references unknown entity");
+                    : new GraphEdgeRef(edgeId, label, source, target, sourceChunks);
+                edgeLengths[index] = artifactBytes.length - input.available() - (int) edgeOffsets[index];
+                statistics.add(source, target, label);
+                edgeIndexes.computeIfAbsent(source, ignored -> new ArrayList<>()).add(index);
+                if (!source.equals(target)) {
+                    edgeIndexes.computeIfAbsent(target, ignored -> new ArrayList<>()).add(index);
                 }
             }
+            edges = new LazyEdgeList(artifactBytes, edgeOffsets, edgeLengths, currentFormat);
             vertices = currentFormat ? readVertices(input, vertexCount, entities)
                 : defaultVertices(entities);
             if (input.read() != -1) {
                 throw new IOException("trailing graph artifact data");
             }
-            neighbors = VersionedGraphView.from(new GraphSnapshot(
+            neighbors = IndexedGraphNeighborProvider.fromImmutableEdgeList(
                 new GraphVersion(identity.getGraphName(), identity.getGraphVersion()),
-                java.util.Collections.emptyList(), entities, vertices, edges));
+                entities, vertices, edges, edgeIndexes, statistics.build());
         } catch (RetrievalException error) {
             throw error;
         } catch (Exception error) {
             throw new RetrievalException(RetrievalErrorCode.INDEX_NOT_READY,
                 "unable to read graph artifact", error);
+        }
+    }
+
+    private static final class LazyEdgeList extends AbstractList<GraphEdgeRef> implements RandomAccess {
+        private final byte[] data;
+        private final long[] offsets;
+        private final int[] lengths;
+        private final boolean currentFormat;
+
+        private LazyEdgeList(byte[] data, long[] offsets, int[] lengths, boolean currentFormat) {
+            this.data = data;
+            this.offsets = offsets;
+            this.lengths = lengths;
+            this.currentFormat = currentFormat;
+        }
+
+        @Override
+        public GraphEdgeRef get(int index) {
+            if (index < 0 || index >= offsets.length) {
+                throw new IndexOutOfBoundsException("edge index: " + index);
+            }
+            try (DataInputStream input = new DataInputStream(new ByteArrayInputStream(
+                data, (int) offsets[index], lengths[index]))) {
+                String edgeId = input.readUTF();
+                String label = input.readUTF();
+                String source = input.readUTF();
+                String target = input.readUTF();
+                int sourceCount = input.readInt();
+                List<String> sourceChunks = readStrings(input, sourceCount);
+                return currentFormat
+                    ? readEdgeWithProvenance(input, edgeId, label, source, target, sourceChunks)
+                    : new GraphEdgeRef(edgeId, label, source, target, sourceChunks);
+            } catch (IOException error) {
+                throw new IllegalStateException("unable to decode graph edge at index " + index, error);
+            }
+        }
+
+        @Override
+        public int size() {
+            return offsets.length;
         }
     }
 
@@ -265,6 +322,12 @@ public final class GraphArtifactReader implements Closeable {
     public GraphSnapshot toSnapshot() {
         return new GraphSnapshot(new GraphVersion(identity.getGraphName(), identity.getGraphVersion()),
             java.util.Collections.emptyList(), entities, vertices, edges);
+    }
+
+    /** Adapts this graph artifact to a snapshot that also owns its canonical chunks. */
+    public GraphSnapshot toSnapshot(List<TextChunk> chunks) {
+        return new GraphSnapshot(new GraphVersion(identity.getGraphName(), identity.getGraphVersion()),
+            chunks, entities, vertices, edges);
     }
 
     /** Validates that all graph provenance references point at the supplied chunks. */

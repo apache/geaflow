@@ -19,8 +19,11 @@
 
 package org.apache.geaflow.ai.retrieval.channel.graph;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.PriorityQueue;
 import org.apache.geaflow.ai.retrieval.model.graph.EntityRef;
 import org.apache.geaflow.ai.retrieval.model.graph.GraphEdgeRef;
 import org.apache.geaflow.ai.retrieval.model.graph.GraphVertexRef;
@@ -33,17 +36,85 @@ public interface GraphNeighborProvider {
     List<GraphEdgeRef> neighbors(String entityId);
 
     /**
-     * Returns up to {@code limit} neighbors in provider-defined priority order. Providers with
-     * an indexed adjacency representation can apply the priority before reading the limit.
+     * Returns up to {@code limit} prioritized neighbors from a bounded prefix scan.
      */
     default List<GraphEdgeRef> prioritizedNeighbors(String entityId,
                                                      Comparator<GraphEdgeRef> priority,
                                                      int limit) {
-        List<GraphEdgeRef> result = neighbors(entityId);
-        if (result == null || limit <= 0 || result.size() <= limit) {
-            return result;
+        return prioritizedNeighbors(entityId, priority, limit, limit).getEdges();
+    }
+
+    /** Selects a prioritized page while bounding the number of adjacency records examined. */
+    default NeighborBatch prioritizedNeighbors(String entityId, Comparator<GraphEdgeRef> priority,
+                                                int candidateLimit, int scanLimit) {
+        List<GraphEdgeRef> values = neighbors(entityId);
+        if (values == null || values.isEmpty()) {
+            return new NeighborBatch(Collections.emptyList(), 0, false);
         }
-        return result.subList(0, limit);
+        if (candidateLimit <= 0) {
+            return new NeighborBatch(Collections.emptyList(), 0, false);
+        }
+        if (scanLimit <= 0) {
+            return new NeighborBatch(Collections.emptyList(), 0, true);
+        }
+        NeighborBatch batch = NeighborBatch.select(values, priority, candidateLimit,
+            Math.min(candidateLimit, scanLimit));
+        return new NeighborBatch(batch.getEdges(), batch.getExamined(),
+            candidateLimit >= scanLimit && batch.hasMore());
+    }
+
+    /** Bounded selection result; examined counts records inspected before priority selection. */
+    final class NeighborBatch {
+        private final List<GraphEdgeRef> edges;
+        private final int examined;
+        private final boolean hasMore;
+
+        private NeighborBatch(List<GraphEdgeRef> edges, int examined, boolean hasMore) {
+            this.edges = edges;
+            this.examined = examined;
+            this.hasMore = hasMore;
+        }
+
+        static NeighborBatch select(List<GraphEdgeRef> values, Comparator<GraphEdgeRef> priority,
+                                    int candidateLimit, int scanLimit) {
+            if (values == null || values.isEmpty() || candidateLimit <= 0) {
+                return new NeighborBatch(Collections.emptyList(), 0, false);
+            }
+            if (scanLimit <= 0) {
+                return new NeighborBatch(Collections.emptyList(), 0, true);
+            }
+            PriorityQueue<GraphEdgeRef> best = new PriorityQueue<>(candidateLimit, priority.reversed());
+            int examined = 0;
+            java.util.Iterator<GraphEdgeRef> iterator = values.iterator();
+            while (iterator.hasNext() && examined < scanLimit) {
+                GraphEdgeRef edge = iterator.next();
+                examined++;
+                if (edge == null) {
+                    continue;
+                }
+                if (best.size() < candidateLimit) {
+                    best.add(edge);
+                } else if (priority.compare(edge, best.peek()) < 0) {
+                    best.poll();
+                    best.add(edge);
+                }
+            }
+            List<GraphEdgeRef> result = new ArrayList<>(best);
+            result.sort(priority);
+            return new NeighborBatch(Collections.unmodifiableList(result), examined, iterator.hasNext());
+        }
+
+        public List<GraphEdgeRef> getEdges() {
+            return edges;
+        }
+
+        public int getExamined() {
+            return examined;
+        }
+
+        public boolean hasMore() {
+            return hasMore;
+        }
     }
 
     /** Returns the graph vertex identity for an entity; providers may preserve distinct IDs. */

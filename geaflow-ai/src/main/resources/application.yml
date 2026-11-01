@@ -44,3 +44,26 @@ retrieval:
   max-token-budget: 16384
   remote-access-enabled: ${GEAFLOW_REMOTE_ACCESS_ENABLED:false}
   api-token: ${GEAFLOW_RETRIEVAL_API_TOKEN:}
+  artifact-bundle-root: ${GEAFLOW_RETRIEVAL_ARTIFACT_BUNDLE_ROOT:}
+  artifact-graph-name: ${GEAFLOW_RETRIEVAL_ARTIFACT_GRAPH_NAME:}
+  artifact-graph-version: ${GEAFLOW_RETRIEVAL_ARTIFACT_GRAPH_VERSION:}
+  artifact-index-version: ${GEAFLOW_RETRIEVAL_ARTIFACT_INDEX_VERSION:}
+  artifact-graph-path: ${GEAFLOW_RETRIEVAL_ARTIFACT_GRAPH_PATH:graph.bin}
+  artifact-bm25-path: ${GEAFLOW_RETRIEVAL_ARTIFACT_BM25_PATH:bm25}
+  artifact-vector-path: ${GEAFLOW_RETRIEVAL_ARTIFACT_VECTOR_PATH:vector.bin}
+  artifact-vector-source: ${GEAFLOW_RETRIEVAL_ARTIFACT_VECTOR_SOURCE:}
+  artifact-vector-version: ${GEAFLOW_RETRIEVAL_ARTIFACT_VECTOR_VERSION:}
+  routing-policy-id: ${GEAFLOW_RETRIEVAL_ROUTING_POLICY_ID:deterministic-rule}
+  max-replan-count: ${GEAFLOW_RETRIEVAL_MAX_REPLAN_COUNT:1}
+  strict-plan-validation: ${GEAFLOW_RETRIEVAL_STRICT_PLAN_VALIDATION:true}
+  reranker-id: ${GEAFLOW_RETRIEVAL_RERANKER_ID:deterministic-reranker-v1}
+  token-estimator-id: ${GEAFLOW_RETRIEVAL_TOKEN_ESTIMATOR_ID:chars4-v1}
+  deterministic-rule:
+    high-average-idf: ${GEAFLOW_RETRIEVAL_HIGH_AVERAGE_IDF:1.5}
+    high-score-gap: ${GEAFLOW_RETRIEVAL_HIGH_SCORE_GAP:0.20}
+    long-query-length: ${GEAFLOW_RETRIEVAL_LONG_QUERY_LENGTH:12}
+    strong-anchor-confidence: ${GEAFLOW_RETRIEVAL_STRONG_ANCHOR_CONFIDENCE:0.75}
+    minimum-anchor-count: ${GEAFLOW_RETRIEVAL_MINIMUM_ANCHOR_COUNT:1}
+    high-candidate-degree: ${GEAFLOW_RETRIEVAL_HIGH_CANDIDATE_DEGREE:32}
+    high-growth-rate: ${GEAFLOW_RETRIEVAL_HIGH_GROWTH_RATE:2.0}
+    base-neighbor-cap: ${GEAFLOW_RETRIEVAL_BASE_NEIGHBOR_CAP:16}

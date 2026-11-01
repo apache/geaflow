@@ -82,6 +82,12 @@ public final class InMemoryGraphNeighborProvider implements GraphNeighborProvide
     }
 
     @Override
+    public NeighborBatch prioritizedNeighbors(String entityId, Comparator<GraphEdgeRef> priority,
+                                               int candidateLimit, int scanLimit) {
+        return NeighborBatch.select(neighbors(entityId), priority, candidateLimit, scanLimit);
+    }
+
+    @Override
     public GraphVertexRef vertex(EntityRef entity) {
         GraphVertexRef vertex = vertices.get(entity.getEntityId());
         return vertex == null ? GraphNeighborProvider.super.vertex(entity) : vertex;

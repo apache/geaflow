@@ -32,6 +32,12 @@ public final class RetrievalPlanSummary {
     private final int maxHop;
     private final int neighborCap;
     private final Map<String, Double> weights;
+    private final int topK;
+    private final int candidateBudget;
+    private final int tokenBudget;
+    private final double maxDiffusionGrowth;
+    private final String policyId;
+    private final String policyVersion;
 
     public RetrievalPlanSummary(RetrievalPlan plan) {
         selectedMode = plan.getSelectedMode().name();
@@ -39,6 +45,12 @@ public final class RetrievalPlanSummary {
         channelBudgets = Collections.unmodifiableMap(new LinkedHashMap<>(plan.getChannelBudgets()));
         maxHop = plan.getMaxHop();
         neighborCap = plan.getNeighborCap();
+        topK = plan.getTopK();
+        candidateBudget = plan.getCandidateBudget();
+        tokenBudget = plan.getTokenBudget();
+        maxDiffusionGrowth = plan.getMaxDiffusionGrowth();
+        policyId = plan.getPolicyId();
+        policyVersion = plan.getPolicyVersion();
         Map<String, Double> values = new LinkedHashMap<>();
         values.put("BM25", plan.getBm25Weight());
         values.put("VECTOR", plan.getVectorWeight());
@@ -68,5 +80,29 @@ public final class RetrievalPlanSummary {
 
     public Map<String, Double> getWeights() {
         return weights;
+    }
+
+    public int getTopK() {
+        return topK;
+    }
+
+    public int getCandidateBudget() {
+        return candidateBudget;
+    }
+
+    public int getTokenBudget() {
+        return tokenBudget;
+    }
+
+    public double getMaxDiffusionGrowth() {
+        return maxDiffusionGrowth;
+    }
+
+    public String getPolicyId() {
+        return policyId;
+    }
+
+    public String getPolicyVersion() {
+        return policyVersion;
     }
 }

@@ -21,6 +21,7 @@ package org.apache.geaflow.ai.retrieval.channel.graph;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -69,7 +70,7 @@ public final class GraphDelta {
         this.edges = immutableValues(builder.edges);
         this.aliases = immutableAliases(builder.aliases);
         this.tombstones = new GraphTombstones(builder.deletedChunks, builder.deletedEntities,
-            builder.deletedEdges, builder.deletedAliases);
+            builder.deletedVertices, builder.deletedEdges, builder.deletedAliases);
         rejectConflicts();
         this.digest = digest();
     }
@@ -104,6 +105,7 @@ public final class GraphDelta {
     private void rejectConflicts() {
         if (overlap(tombstones.getChunks(), chunks, TextChunk::getChunkId)
             || overlap(tombstones.getEntities(), entities, EntityRef::getEntityId)
+            || overlap(tombstones.getVertices(), vertices, GraphVertexRef::getVertexId)
             || overlap(tombstones.getEdges(), edges, GraphEdgeRef::getEdgeId)) {
             throw new GraphViewException(GraphViewException.Code.DELTA_CONFLICT,
                 "delta cannot update and delete the same record");
@@ -174,6 +176,7 @@ public final class GraphDelta {
         }
         appendSet(value, "dc", tombstones.getChunks());
         appendSet(value, "de", tombstones.getEntities());
+        appendSet(value, "dv", tombstones.getVertices());
         appendSet(value, "dr", tombstones.getEdges());
         appendSet(value, "da", tombstones.getAliases());
         return GraphSnapshot.sha256(value.toString());
@@ -187,26 +190,73 @@ public final class GraphDelta {
 
     /** Applies this delta to exactly its parent snapshot. */
     public GraphSnapshot applyTo(GraphSnapshot parent) {
-        if (parent == null || !parent.getGraphVersion().equals(parentVersion)) {
+        return applyChainTo(parent, Collections.singletonList(this));
+    }
+
+    /** Applies an ordered delta chain with one mutable copy of the parent records. */
+    static GraphSnapshot applyChainTo(GraphSnapshot parent, List<GraphDelta> deltas) {
+        if (parent == null) {
             throw new GraphViewException(GraphViewException.Code.MISSING_PARENT,
-                "delta parent is not available: " + parentVersion.getVersion());
+                "delta parent is not available");
+        }
+        if (deltas == null || deltas.isEmpty()) {
+            return parent;
         }
         Map<String, TextChunk> chunksById = mapChunks(parent.getChunks());
         Map<String, EntityRef> entitiesById = mapEntities(parent.getEntities());
         Map<String, GraphVertexRef> verticesById = mapVertices(parent.getVertices());
         Map<String, GraphEdgeRef> edgesById = mapEdges(parent.getEdges());
-        validateTombstones(chunksById, entitiesById, edgesById);
+        Map<String, Set<String>> edgeIdsByEntity = indexEdgeIds(edgesById.values());
+        Map<String, String> vertexIdsByEntity = indexVertexIds(verticesById.values());
+        GraphVersion currentVersion = parent.getGraphVersion();
+        for (GraphDelta delta : deltas) {
+            if (delta == null || !currentVersion.equals(delta.parentVersion)) {
+                throw new GraphViewException(GraphViewException.Code.MISSING_PARENT,
+                    "delta parent is not available: " + (delta == null ? "null" : delta.parentVersion));
+            }
+            delta.applyTo(currentVersion, chunksById, entitiesById, verticesById, edgesById,
+                edgeIdsByEntity, vertexIdsByEntity);
+            currentVersion = delta.graphVersion;
+        }
+        return new GraphSnapshot(currentVersion, new ArrayList<>(chunksById.values()),
+            new ArrayList<>(entitiesById.values()), new ArrayList<>(verticesById.values()),
+            new ArrayList<>(edgesById.values()));
+    }
+
+    private void applyTo(GraphVersion currentVersion, Map<String, TextChunk> chunksById,
+                         Map<String, EntityRef> entitiesById,
+                         Map<String, GraphVertexRef> verticesById,
+                         Map<String, GraphEdgeRef> edgesById,
+                         Map<String, Set<String>> edgeIdsByEntity,
+                         Map<String, String> vertexIdsByEntity) {
+        if (!currentVersion.equals(parentVersion)) {
+            throw new GraphViewException(GraphViewException.Code.MISSING_PARENT,
+                "delta parent is not available: " + parentVersion.getVersion());
+        }
+        validateTombstones(chunksById, entitiesById, verticesById, edgesById);
         for (String id : tombstones.getChunks()) {
             chunksById.remove(id);
         }
         for (String id : tombstones.getEdges()) {
-            edgesById.remove(id);
+            removeEdge(id, edgesById, edgeIdsByEntity);
         }
         for (String id : tombstones.getEntities()) {
             entitiesById.remove(id);
-            verticesById.values().removeIf(vertex -> vertex.getEntityId().equals(id));
-            edgesById.values().removeIf(edge -> edge.getSourceEntityId().equals(id)
-                || edge.getTargetEntityId().equals(id));
+            String vertexId = vertexIdsByEntity.remove(id);
+            if (vertexId != null) {
+                verticesById.remove(vertexId);
+            }
+            Set<String> incidentEdges = new HashSet<>(edgeIdsByEntity.getOrDefault(id,
+                Collections.emptySet()));
+            for (String edgeId : incidentEdges) {
+                removeEdge(edgeId, edgesById, edgeIdsByEntity);
+            }
+        }
+        for (String id : tombstones.getVertices()) {
+            GraphVertexRef vertex = verticesById.remove(id);
+            if (vertex != null) {
+                vertexIdsByEntity.remove(vertex.getEntityId(), id);
+            }
         }
         for (EntityRef entity : entities) {
             entitiesById.put(entity.getEntityId(), entity);
@@ -237,19 +287,70 @@ public final class GraphDelta {
             chunksById.put(chunk.getChunkId(), chunk);
         }
         for (GraphVertexRef vertex : vertices) {
-            verticesById.values().removeIf(existing -> existing.getEntityId().equals(vertex.getEntityId()));
+            GraphVertexRef previousById = verticesById.get(vertex.getVertexId());
+            if (previousById != null && !previousById.getEntityId().equals(vertex.getEntityId())) {
+                vertexIdsByEntity.remove(previousById.getEntityId());
+            }
+            String previousVertexId = vertexIdsByEntity.put(vertex.getEntityId(), vertex.getVertexId());
+            if (previousVertexId != null) {
+                verticesById.remove(previousVertexId);
+            }
             verticesById.put(vertex.getVertexId(), vertex);
         }
         for (GraphEdgeRef edge : edges) {
+            removeEdge(edge.getEdgeId(), edgesById, edgeIdsByEntity);
             edgesById.put(edge.getEdgeId(), edge);
+            addEdge(edge, edgeIdsByEntity);
         }
-        return new GraphSnapshot(graphVersion, new ArrayList<>(chunksById.values()),
-            new ArrayList<>(entitiesById.values()), new ArrayList<>(verticesById.values()),
-            new ArrayList<>(edgesById.values()));
+    }
+
+    private static Map<String, Set<String>> indexEdgeIds(Iterable<GraphEdgeRef> edges) {
+        Map<String, Set<String>> result = new LinkedHashMap<>();
+        for (GraphEdgeRef edge : edges) {
+            addEdge(edge, result);
+        }
+        return result;
+    }
+
+    private static Map<String, String> indexVertexIds(Iterable<GraphVertexRef> vertices) {
+        Map<String, String> result = new LinkedHashMap<>();
+        for (GraphVertexRef vertex : vertices) {
+            result.put(vertex.getEntityId(), vertex.getVertexId());
+        }
+        return result;
+    }
+
+    private static void addEdge(GraphEdgeRef edge, Map<String, Set<String>> edgeIdsByEntity) {
+        edgeIdsByEntity.computeIfAbsent(edge.getSourceEntityId(), ignored -> new LinkedHashSet<>())
+            .add(edge.getEdgeId());
+        edgeIdsByEntity.computeIfAbsent(edge.getTargetEntityId(), ignored -> new LinkedHashSet<>())
+            .add(edge.getEdgeId());
+    }
+
+    private static void removeEdge(String edgeId, Map<String, GraphEdgeRef> edgesById,
+                                   Map<String, Set<String>> edgeIdsByEntity) {
+        GraphEdgeRef edge = edgesById.remove(edgeId);
+        if (edge == null) {
+            return;
+        }
+        removeEdgeId(edgeId, edge.getSourceEntityId(), edgeIdsByEntity);
+        removeEdgeId(edgeId, edge.getTargetEntityId(), edgeIdsByEntity);
+    }
+
+    private static void removeEdgeId(String edgeId, String entityId,
+                                     Map<String, Set<String>> edgeIdsByEntity) {
+        Set<String> edgeIds = edgeIdsByEntity.get(entityId);
+        if (edgeIds != null) {
+            edgeIds.remove(edgeId);
+            if (edgeIds.isEmpty()) {
+                edgeIdsByEntity.remove(entityId);
+            }
+        }
     }
 
     private void validateTombstones(Map<String, TextChunk> chunksById,
                                     Map<String, EntityRef> entitiesById,
+                                    Map<String, GraphVertexRef> verticesById,
                                     Map<String, GraphEdgeRef> edgesById) {
         for (String id : tombstones.getChunks()) {
             if (!chunksById.containsKey(id)) {
@@ -267,6 +368,12 @@ public final class GraphDelta {
             if (!edgesById.containsKey(id)) {
                 throw new GraphViewException(GraphViewException.Code.BAD_REFERENCE,
                     "delta deletes unknown edge " + id);
+            }
+        }
+        for (String id : tombstones.getVertices()) {
+            if (!verticesById.containsKey(id)) {
+                throw new GraphViewException(GraphViewException.Code.BAD_REFERENCE,
+                    "delta deletes unknown vertex " + id);
             }
         }
         for (String aliasKey : tombstones.getAliases()) {
@@ -384,6 +491,7 @@ public final class GraphDelta {
         private final Map<String, Set<String>> aliases = new TreeMap<>();
         private final Set<String> deletedChunks = new TreeSet<>();
         private final Set<String> deletedEntities = new TreeSet<>();
+        private final Set<String> deletedVertices = new TreeSet<>();
         private final Set<String> deletedEdges = new TreeSet<>();
         private final Set<String> deletedAliases = new TreeSet<>();
 
@@ -434,6 +542,11 @@ public final class GraphDelta {
 
         public Builder deleteEntity(String entityId) {
             delete(deletedEntities, entityId, entities, "entity");
+            return this;
+        }
+
+        public Builder deleteVertex(String vertexId) {
+            delete(deletedVertices, vertexId, vertices, "vertex");
             return this;
         }
 

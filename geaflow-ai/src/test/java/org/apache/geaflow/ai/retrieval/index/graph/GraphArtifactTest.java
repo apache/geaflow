@@ -20,6 +20,7 @@
 package org.apache.geaflow.ai.retrieval.index.graph;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -36,6 +37,7 @@ import java.util.Collections;
 import java.util.List;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalErrorCode;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalException;
+import org.apache.geaflow.ai.retrieval.channel.graph.GraphNeighborProvider;
 import org.apache.geaflow.ai.retrieval.ingest.IngestionContext;
 import org.apache.geaflow.ai.retrieval.metadata.ChunkingConfiguration;
 import org.apache.geaflow.ai.retrieval.metadata.DatasetManifest;
@@ -89,6 +91,8 @@ class GraphArtifactTest {
             assertEquals("e1", reader.getVertices().get(0).getEntityId());
             assertEquals(edges, reader.getNeighbors().neighbors("e1"));
             assertEquals(new GraphVersion(GRAPH, VERSION), reader.getNeighbors().getGraphVersion());
+            assertEquals(org.apache.geaflow.ai.retrieval.channel.graph.VersionedGraphView
+                .from(reader.toSnapshot()).getFingerprint(), reader.getNeighbors().getFingerprint());
             assertEquals("", reader.getNeighbors().getDeltaDigest());
             assertTrue(reader.getNeighbors().getStatisticsVersion().startsWith("stats-"));
             reader.validateReferences(chunks);
@@ -115,6 +119,36 @@ class GraphArtifactTest {
             assertEquals(VERSION, response.getTrace().getGraphVersion());
         } finally {
             registry.close();
+        }
+    }
+
+    @Test
+    void artifactNeighborIndexPrioritizesWithinTheRequestedScanBudget() throws Exception {
+        List<TextChunk> chunks = chunks();
+        List<EntityRef> entities = Arrays.asList(new EntityRef("e1", "Confucius", "person"),
+            new EntityRef("e2", "Weak", "topic"), new EntityRef("e3", "Strong", "topic"));
+        List<GraphEdgeRef> edges = Arrays.asList(
+            new GraphEdgeRef("a-weak", "weak", "e1", "e2", Collections.singletonList("c1")),
+            new GraphEdgeRef("z-strong", "strong", "e1", "e3", Collections.singletonList("c2")));
+        Path artifact;
+        try (org.apache.geaflow.ai.retrieval.ingest.GraphArtifact ignored =
+                 new OfflineGraphArtifactBuilder(tempDir).build(context(), chunks, entities, edges)) {
+            artifact = tempDir.resolve("graph-v1.bin");
+        }
+
+        try (GraphArtifactReader reader = new GraphArtifactReader(artifact, VERSION, VERSION)) {
+            GraphNeighborProvider.NeighborBatch batch = reader.getNeighbors().prioritizedNeighbors("e1",
+                java.util.Comparator.comparingDouble((GraphEdgeRef edge) ->
+                    "strong".equals(edge.getLabel()) ? 0.0 : 1.0)
+                    .thenComparing(GraphEdgeRef::getEdgeId), 1, 2);
+
+            assertEquals(2, batch.getExamined());
+            assertEquals("z-strong", batch.getEdges().get(0).getEdgeId());
+            assertFalse(batch.hasMore());
+            assertEquals(edges, reader.getEdges());
+            assertEquals(2, reader.getNeighbors().getStatistics().getDegree("e1"));
+            assertEquals(Collections.singletonMap("weak", 1),
+                reader.getNeighbors().getStatistics().getRelationCounts("e2"));
         }
     }
 

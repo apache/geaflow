@@ -1027,11 +1027,17 @@ class GraphRagMvpEndToEndTest {
         assertEquals(1, response.getEvidence().get(0).getPaths().size());
         assertEquals(response.getTrace().getGraphCandidatesProduced(),
             response.getTrace().getRawCandidatesScored().get("GRAPH"));
-        assertEquals(response.getTrace().getEdgesExamined(),
-            response.getTrace().getEvaluatedCounts().get("GRAPH"));
+        assertEquals(response.getTrace().getGraphCandidatesProduced(),
+            response.getTrace().getEvaluatedCounts().get("GRAPH"),
+            "candidate work counts produced candidates, not raw edge scans");
+        assertTrue(response.getTrace().getEdgesExamined() >= 0,
+            "edge scans stay a separately reported secondary cost");
         RetrievalRequest capped = request("GRAPH_ONLY", null);
-        capped.setBudget(new RetrievalBudget(1, 1000, 1, 100));
-        assertTrue(service.retrieve(capped).getTrace().getEdgesExamined() <= 1);
+        RetrievalBudget cappedBudget = new RetrievalBudget(1, 1000, 1, 100);
+        cappedBudget.setMaxEdgeScans(1);
+        capped.setBudget(cappedBudget);
+        assertTrue(service.retrieve(capped).getTrace().getEdgesExamined() <= 1,
+            "an explicit edge-scan bound caps scan work");
         AtomicLong time = new AtomicLong();
         RecallService timed = new RecallService(registry, WeightedRrfConfig.DEFAULT, () -> time.getAndAdd(1_000_000L));
         capped.setBudget(new RetrievalBudget(1, 2, 2, 100, BudgetConstraint.LATENCY));
@@ -1107,7 +1113,9 @@ class GraphRagMvpEndToEndTest {
                 if (index % 2 == 0) {
                     assertTrue(response.getTrace().getTotalCandidatesEvaluated() > 4);
                 } else {
-                    assertEquals(2, response.getTrace().getTotalCandidatesEvaluated());
+                    assertEquals(response.getTrace().getGraphCandidatesProduced(),
+                        response.getTrace().getTotalCandidatesEvaluated(),
+                        "graph candidate work is independent from edge scan work");
                 }
                 assertEquals(Collections.singletonList("GRAPH"), response.getDegradedChannels());
             }

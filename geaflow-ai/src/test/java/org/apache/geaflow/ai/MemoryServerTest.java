@@ -21,6 +21,7 @@ package org.apache.geaflow.ai;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -108,6 +109,20 @@ public class MemoryServerTest {
             assertEquals(1, response.getEvidence().size());
             assertTrue(response.getEvidence().get(0).getFinalScore() > 0);
             assertTrue(response.getEvidence().get(0).getStageScores().containsKey("keyword"));
+            HttpTestResponse retrievalMetrics = client.get("/metrics/retrieval");
+            assertEquals(200, retrievalMetrics.getStatus(), retrievalMetrics.getBody());
+            assertTrue(retrievalMetrics.getBody().contains("\"candidateCounts\":"),
+                retrievalMetrics.getBody());
+            assertTrue(retrievalMetrics.getBody().contains("\"stageElapsedNanos\":"),
+                retrievalMetrics.getBody());
+            assertTrue(retrievalMetrics.getBody().contains("\"edgesExamined\":"),
+                retrievalMetrics.getBody());
+            assertTrue(retrievalMetrics.getBody().contains("\"tokensRetained\":"),
+                retrievalMetrics.getBody());
+            assertTrue(retrievalMetrics.getBody().contains("\"degradationReasons\":"),
+                retrievalMetrics.getBody());
+            assertTrue(retrievalMetrics.getBody().contains("\"replanReasons\":"),
+                retrievalMetrics.getBody());
 
             int previousMaxTopK = properties.getMaxTopK();
             try {
@@ -189,6 +204,85 @@ public class MemoryServerTest {
         assertNotSame(firstVertices.get(0), secondVertices.get(0));
         first.graphSchema().setName("changed");
         assertEquals(RetrievalTestFixture.GRAPH_NAME, second.graphSchema().getName());
+    }
+
+    @Test
+    void httpContractCoversEveryModeAndExecutionMode() {
+        String base = "{\"graphName\":\"" + RetrievalTestFixture.GRAPH_NAME
+            + "\",\"graphVersion\":\"v4\",\"indexVersion\":\"v4\","
+            + "\"query\":\"Confucius\",\"budget\":{\"topK\":1,\"timeoutMs\":3000,"
+            + "\"maxCandidates\":10,\"tokenBudget\":4096}}";
+        Map<String, String> headers = Collections.singletonMap("X-Request-Id", "request-contract");
+        String port = System.getProperty("server.port",
+            System.getenv().getOrDefault("GEAFLOW_SERVER_PORT", "8080"));
+        try (HttpTestClient client = new HttpTestClient("http://localhost:" + port)) {
+            // KEYWORD is the legacy alias of BM25_ONLY and must stay callable over HTTP. The
+            // graph may or may not be loaded depending on test order, so accept both the success
+            // path and the typed not-ready/not-found path, but never an untyped 5xx.
+            for (String mode : new String[] {"KEYWORD", "BM25_ONLY"}) {
+                HttpTestResponse response = client.postWithHeaders("/api/v1/retrievals",
+                    withField(base, "mode", mode), headers);
+                assertEquals("request-contract", response.getHeaders().get("X-Request-Id"));
+                assertNotEquals(500, response.getStatus(), response.getBody());
+                if (response.getStatus() == 200) {
+                    assertEquals(mode, RetrievalApiJson.parseResponse(response.getBody())
+                        .getTrace().getSelectedMode().name());
+                } else {
+                    assertTrue(response.getBody().contains("INDEX_NOT_READY")
+                        || response.getBody().contains("GRAPH_NOT_FOUND"), response.getBody());
+                }
+            }
+            // GRAPH/VECTOR/HYBRID need indexes the keyword-only fixture does not have. They must
+            // fail with a typed client/index code and never surface a 5xx.
+            for (String mode : new String[] {"GRAPH_ONLY", "VECTOR_ONLY", "HYBRID"}) {
+                String body = withField(base, "mode", mode)
+                    .replace("\"graphVersion\":", "\"queryVector\":[1,0],\"graphVersion\":");
+                HttpTestResponse response = client.postWithHeaders("/api/v1/retrievals", body, headers);
+                assertEquals("request-contract", response.getHeaders().get("X-Request-Id"));
+                assertTrue(response.getStatus() == 400 || response.getStatus() == 404
+                    || response.getStatus() == 503,
+                    mode + " -> " + response.getStatus() + " " + response.getBody());
+                assertTrue(response.getBody().contains("UNSUPPORTED_OPTION")
+                    || response.getBody().contains("INDEX_NOT_READY")
+                    || response.getBody().contains("GRAPH_NOT_FOUND"), response.getBody());
+            }
+            // The execution-mode field must be accepted by the HTTP contract for every value.
+            for (String execution : new String[] {"SEQUENTIAL", "PARALLEL", "CASCADED"}) {
+                String body = withField(withField(base, "mode", "KEYWORD"),
+                    "executionMode", execution);
+                HttpTestResponse response = client.postWithHeaders("/api/v1/retrievals", body, headers);
+                assertNotEquals(500, response.getStatus(), response.getBody());
+                if (response.getStatus() == 200) {
+                    assertEquals(execution, RetrievalApiJson.parseResponse(response.getBody())
+                        .getTrace().getExecutionMode().name());
+                }
+            }
+        }
+    }
+
+    @Test
+    void readyResponseIsAlwaysValidJsonForSpecialCharacterGraphNames() {
+        String quoted = GeaFlowMemoryServer.readyBody(false, "graph-\"quoted\"", "v\\1",
+            "GRAPH_NOT_LOADED");
+        assertValidReadyJson(quoted, "graph-\"quoted\"", "v\\1");
+        String unicode = GeaFlowMemoryServer.readyBody(true, "图\u0001", null, "READY");
+        assertValidReadyJson(unicode, "图\u0001", null);
+    }
+
+    private static void assertValidReadyJson(String body, String graphName, String graphVersion) {
+        JsonObject parsed = new JsonParser().parse(body).getAsJsonObject();
+        assertEquals(graphName, parsed.get("graphName").getAsString());
+        if (graphVersion == null) {
+            assertTrue(parsed.get("graphVersion").isJsonNull(), body);
+        } else {
+            assertEquals(graphVersion, parsed.get("graphVersion").getAsString());
+        }
+        assertTrue(parsed.has("status"), body);
+        assertTrue(parsed.has("reason"), body);
+    }
+
+    private static String withField(String request, String field, String value) {
+        return request.replace("\"query\":", "\"" + field + "\":\"" + value + "\",\"query\":");
     }
 
     private static void success(HttpTestResponse response) {

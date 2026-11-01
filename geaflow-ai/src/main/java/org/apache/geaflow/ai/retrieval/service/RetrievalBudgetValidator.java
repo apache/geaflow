@@ -54,13 +54,21 @@ public final class RetrievalBudgetValidator {
         if (primaryConstraint == BudgetConstraint.CANDIDATES && topK > maxCandidates) {
             throw invalid("topK must not exceed maxCandidates");
         }
-        return new RetrievalBudget(topK, timeoutMs, maxCandidates, tokenBudget, primaryConstraint);
+        Integer maxEdgeScans = valueOrDefault(budget.getMaxEdgeScans(),
+            properties.getDefaultMaxEdgeScans());
+        range("maxEdgeScans", maxEdgeScans, properties.getMaxEdgeScans());
+        RetrievalBudget validated = new RetrievalBudget(topK, timeoutMs, maxCandidates, tokenBudget,
+            primaryConstraint);
+        validated.setMaxEdgeScans(maxEdgeScans);
+        return validated;
     }
 
     private static RetrievalBudget defaults(RetrievalProperties properties) {
-        return new RetrievalBudget(properties.getDefaultTopK(), properties.getDefaultTimeoutMs(),
-            properties.getDefaultMaxCandidates(), properties.getDefaultTokenBudget(),
-            BudgetConstraint.CANDIDATES);
+        RetrievalBudget defaults = new RetrievalBudget(properties.getDefaultTopK(),
+            properties.getDefaultTimeoutMs(), properties.getDefaultMaxCandidates(),
+            properties.getDefaultTokenBudget(), BudgetConstraint.CANDIDATES);
+        defaults.setMaxEdgeScans(properties.getDefaultMaxEdgeScans());
+        return defaults;
     }
 
     private static int valueOrDefault(Integer value, int defaultValue) {

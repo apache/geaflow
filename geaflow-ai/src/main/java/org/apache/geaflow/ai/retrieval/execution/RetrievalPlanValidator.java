@@ -18,8 +18,10 @@
  */
 package org.apache.geaflow.ai.retrieval.execution;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -32,6 +34,200 @@ public final class RetrievalPlanValidator {
     private static final Set<String> CHANNELS = new HashSet<>(Arrays.asList("BM25", "VECTOR", "GRAPH"));
 
     private RetrievalPlanValidator() {
+    }
+
+    /**
+     * Validates a plan and repairs the recoverable violations instead of rejecting them.
+     *
+     * <p>Structural problems (unknown channels, unknown upper-bound keys, all-zero weights,
+     * unresolvable budgets) remain typed rejects. Availability, hop, neighbor-cap and budget
+     * overflow problems are clamped, and every clamp is recorded so the trace can replay the
+     * decision.</p>
+     */
+    public static Result validateAndAdjust(RetrievalPlan plan, RoutingContext context) {
+        if (plan == null || context == null) {
+            throw invalid("routing plan and context are required");
+        }
+        if (plan.getSelectedMode() == null || plan.getExecutionMode() == null) {
+            throw invalid("routing plan mode is required");
+        }
+        validateStructural(plan, context);
+        List<PlanAdjustment> adjustments = new ArrayList<>();
+        RetrievalPlan adjusted = clampToBudget(clampToContext(plan, context, adjustments), context, adjustments);
+        adjusted = clampChannels(adjusted, context, adjustments);
+        validate(adjusted, context);
+        return new Result(adjusted, adjustments);
+    }
+
+    private static void validateStructural(RetrievalPlan plan, RoutingContext context) {
+        if (plan.getTopK() < 1 || plan.getCandidateBudget() < 1 || plan.getTokenBudget() < 1
+            || plan.getLatencyBudgetNanos() < 0L || plan.getNeighborCap() < 1 || plan.getMaxHop() < 0) {
+            throw invalid("routing plan contains invalid limits");
+        }
+        validateWeights(plan);
+        for (String channel : plan.getChannelOrder()) {
+            if (!CHANNELS.contains(channel)) {
+                throw invalid("routing plan contains an unknown channel: " + channel);
+            }
+        }
+        if (!plan.getHardUpperBounds().isEmpty()) {
+            for (Map.Entry<String, Integer> entry : plan.getHardUpperBounds().entrySet()) {
+                if (!Arrays.asList("candidates", "tokens", "latencyNanos", "maxHop").contains(entry.getKey())) {
+                    throw invalid("unknown hard upper bound: " + entry.getKey());
+                }
+            }
+        }
+        if (!plan.getChannelOrder().isEmpty()
+            && !plan.getChannelBudgets().keySet().equals(new HashSet<>(plan.getChannelOrder()))) {
+            throw invalid("channel budgets do not match channel order");
+        }
+    }
+
+    private static RetrievalPlan clampToContext(RetrievalPlan plan, RoutingContext context,
+                                                List<PlanAdjustment> adjustments) {
+        RetrievalPlan.Builder builder = RetrievalPlan.builder(plan);
+        boolean changed = false;
+        if (plan.getMaxHop() > context.getMaxHop()) {
+            builder.maxHop(context.getMaxHop());
+            adjustments.add(new PlanAdjustment("maxHop", plan.getMaxHop(), context.getMaxHop(),
+                PlanAdjustment.CLAMPED_MAX_HOP));
+            changed = true;
+        }
+        if (plan.getNeighborCap() > plan.getCandidateBudget()) {
+            builder.neighborCap(plan.getCandidateBudget());
+            adjustments.add(new PlanAdjustment("neighborCap", plan.getNeighborCap(),
+                plan.getCandidateBudget(), PlanAdjustment.CLAMPED_NEIGHBOR_CAP));
+            changed = true;
+        }
+        return changed ? builder.build() : plan;
+    }
+
+    private static RetrievalPlan clampToBudget(RetrievalPlan plan, RoutingContext context,
+                                               List<PlanAdjustment> adjustments) {
+        RetrievalPlan.Builder builder = RetrievalPlan.builder(plan);
+        boolean changed = false;
+        int maxCandidates = context.getBudget().getMaxCandidates();
+        if (plan.getCandidateBudget() > maxCandidates) {
+            builder.candidateBudget(maxCandidates);
+            adjustments.add(new PlanAdjustment("candidateBudget", plan.getCandidateBudget(),
+                maxCandidates, PlanAdjustment.CLAMPED_HARD_UPPER_BOUND));
+            changed = true;
+        }
+        if (plan.getTokenBudget() > context.getBudget().getTokenBudget()) {
+            builder.tokenBudget(context.getBudget().getTokenBudget());
+            adjustments.add(new PlanAdjustment("tokenBudget", plan.getTokenBudget(),
+                context.getBudget().getTokenBudget(), PlanAdjustment.CLAMPED_HARD_UPPER_BOUND));
+            changed = true;
+        }
+        long maxLatency = context.getBudget().getTimeoutMs().longValue() * 1_000_000L;
+        if (plan.getLatencyBudgetNanos() > maxLatency) {
+            builder.latencyBudgetNanos(maxLatency);
+            adjustments.add(new PlanAdjustment("latencyBudgetNanos", plan.getLatencyBudgetNanos(),
+                maxLatency, PlanAdjustment.CLAMPED_HARD_UPPER_BOUND));
+            changed = true;
+        }
+        int effectiveCandidates = changed ? builder.build().getCandidateBudget() : plan.getCandidateBudget();
+        if (plan.getTopK() > effectiveCandidates) {
+            builder.topK(effectiveCandidates);
+            adjustments.add(new PlanAdjustment("topK", plan.getTopK(), effectiveCandidates,
+                PlanAdjustment.CLAMPED_TOP_K));
+            changed = true;
+        }
+        return changed ? builder.build() : plan;
+    }
+
+    private static RetrievalPlan clampChannels(RetrievalPlan plan, RoutingContext context,
+                                               List<PlanAdjustment> adjustments) {
+        List<String> available = new ArrayList<>();
+        for (String channel : plan.getChannelOrder()) {
+            if (context.hasIndex(channel)) {
+                available.add(channel);
+            } else {
+                adjustments.add(new PlanAdjustment("channelOrder." + channel, channel, "removed",
+                    PlanAdjustment.DROPPED_UNAVAILABLE_CHANNEL));
+            }
+        }
+        if (available.isEmpty()) {
+            throw invalid("routing plan selected no available index");
+        }
+        RetrievalMode mode = plan.getSelectedMode();
+        if (mode == RetrievalMode.HYBRID && (!available.contains("BM25") || !available.contains("VECTOR"))) {
+            RetrievalMode downgraded = available.contains("BM25") ? RetrievalMode.BM25_ONLY
+                : available.contains("VECTOR") ? RetrievalMode.VECTOR_ONLY : RetrievalMode.GRAPH_ONLY;
+            adjustments.add(new PlanAdjustment("selectedMode", mode, downgraded,
+                PlanAdjustment.DOWNGRADED_HYBRID_MODE));
+            mode = downgraded;
+        }
+        if (mode == RetrievalMode.BM25_ONLY && !available.contains("BM25")
+            || mode == RetrievalMode.VECTOR_ONLY && !available.contains("VECTOR")
+            || mode == RetrievalMode.GRAPH_ONLY && !available.contains("GRAPH")) {
+            throw invalid("selected mode does not match any available channel");
+        }
+        int candidateBudget = plan.getCandidateBudget();
+        Map<String, Integer> budgets = allocate(plan.getChannelBudgets(), available, candidateBudget, adjustments);
+        int maxHop = available.contains("GRAPH") ? Math.max(1, plan.getMaxHop()) : 0;
+        if (maxHop == 0 && plan.getMaxHop() != 0) {
+            adjustments.add(new PlanAdjustment("maxHop", plan.getMaxHop(), 0, PlanAdjustment.CLAMPED_MAX_HOP));
+        }
+        RetrievalPlan.Builder builder = RetrievalPlan.builder(plan).selectedMode(mode)
+            .channelOrder(available).channelBudgets(budgets).maxHop(maxHop);
+        if (!available.contains("GRAPH") && plan.getNeighborCap() > candidateBudget) {
+            builder.neighborCap(candidateBudget);
+        }
+        return builder.build();
+    }
+
+    private static Map<String, Integer> allocate(Map<String, Integer> requested, List<String> available,
+                                                 int candidateBudget, List<PlanAdjustment> adjustments) {
+        Map<String, Integer> budgets = new LinkedHashMap<>();
+        int total = 0;
+        for (String channel : available) {
+            Integer value = requested.get(channel);
+            int budget = value == null || value < 1 ? 1 : value;
+            if (value == null || value < 1) {
+                adjustments.add(new PlanAdjustment("channelBudget." + channel, String.valueOf(value), 1,
+                    PlanAdjustment.CLAMPED_CHANNEL_BUDGET));
+            }
+            budgets.put(channel, budget);
+            total += budget;
+        }
+        while (total > candidateBudget) {
+            String largest = null;
+            for (Map.Entry<String, Integer> entry : budgets.entrySet()) {
+                if (entry.getValue() > 1 && (largest == null
+                    || entry.getValue() > budgets.get(largest))) {
+                    largest = entry.getKey();
+                }
+            }
+            if (largest == null) {
+                throw invalid("candidate budget cannot fund every selected channel");
+            }
+            int before = budgets.get(largest);
+            budgets.put(largest, before - 1);
+            adjustments.add(new PlanAdjustment("channelBudget." + largest, before, before - 1,
+                PlanAdjustment.CLAMPED_CHANNEL_BUDGET));
+            total--;
+        }
+        return budgets;
+    }
+
+    /** Validated plan plus every correction applied to get there. */
+    public static final class Result {
+        private final RetrievalPlan plan;
+        private final List<PlanAdjustment> adjustments;
+
+        Result(RetrievalPlan plan, List<PlanAdjustment> adjustments) {
+            this.plan = plan;
+            this.adjustments = java.util.Collections.unmodifiableList(new ArrayList<>(adjustments));
+        }
+
+        public RetrievalPlan getPlan() {
+            return plan;
+        }
+
+        public List<PlanAdjustment> getAdjustments() {
+            return adjustments;
+        }
     }
 
     public static RetrievalPlan validate(RetrievalPlan plan, RoutingContext context) {

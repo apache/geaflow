@@ -101,6 +101,7 @@ public final class RecallService {
     private static final String UNMEASURED_SCORE_GAP_REASON = "FIRST_STAGE_SCORE_GAP_UNMEASURED";
     private static final String UNKNOWN_GROWTH_REASON = "GRAPH_GROWTH_UNKNOWN_INITIAL";
     private static final long DEFAULT_CONFIG_SEED = 0L;
+    private static final int DEFAULT_MAX_EDGE_SCANS = 100;
     private static final Pattern QUERY_TOKEN = Pattern.compile("[\\p{L}\\p{N}]+", Pattern.UNICODE_CHARACTER_CLASS);
 
     private final Bm25IndexReader bm25;
@@ -609,6 +610,7 @@ public final class RecallService {
         RetrievalBudget budget = command.getBudget();
         int executionCandidateLimit = budget.getPrimaryConstraint() == BudgetConstraint.CANDIDATES
             ? budget.getMaxCandidates() : command.getExecutionCandidateLimit();
+        budget.setMaxEdgeScans(resolveEdgeScanBudget(budget));
         RetrievalPlan routingPlan = null;
         boolean adaptive = command.getMode().canonical() == RetrievalMode.HYBRID
             && command.getExecutionMode() != ExecutionMode.CASCADED && bm25 != null && vector != null
@@ -1131,7 +1133,7 @@ public final class RecallService {
             GraphRetrievalConfig graphConfig = GraphRetrievalConfig.builder()
                 .maxHop(plan.getMaxHop())
                 .candidateBudget(candidateBudget)
-                .edgeScanBudget(candidateBudget)
+                .edgeScanBudget(resolveEdgeScanBudget(command.getBudget()))
                 .neighborCap(Math.min(candidateBudget, plan.getNeighborCap()))
                 .maxDiffusionGrowth(plan.getMaxDiffusionGrowth())
                 .tokenBudget(command.getBudget().getPrimaryConstraint() == BudgetConstraint.TOKENS
@@ -1142,7 +1144,7 @@ public final class RecallService {
             output.graphHits = retriever.retrieve(command.getQuery(), entities, pinnedGraphProvider,
                 byId, graphConfig, deadline, clock, tokenLedger, candidateChunkIds);
             output.graphStats = retriever.getLastStats();
-            output.evaluated = output.graphStats.getEdgesExamined();
+            output.evaluated = output.graphStats.getCandidatesProduced();
             output.rawCandidatesScored = output.graphStats.getCandidatesProduced();
             output.candidates = output.graphStats.getCandidatesProduced();
             output.reason = output.graphStats.getStopReason();
@@ -1263,6 +1265,20 @@ public final class RecallService {
      */
     private static long configSeed() {
         return DEFAULT_CONFIG_SEED;
+    }
+
+    /**
+     * Resolves the graph edge-scan bound independently from the candidate bound.
+     *
+     * <p>Edge scanning is the dominant implicit cost of diffusion, so it keeps its own bound. A
+     * request that only sets {@code maxCandidates} still gets the configured default scan bound
+     * rather than silently inheriting the candidate budget.
+     */
+    private int resolveEdgeScanBudget(RetrievalBudget budget) {
+        if (budget.getMaxEdgeScans() != null && budget.getMaxEdgeScans() > 0) {
+            return budget.getMaxEdgeScans();
+        }
+        return properties == null ? DEFAULT_MAX_EDGE_SCANS : properties.getDefaultMaxEdgeScans();
     }
 
     private static void timedOut(boolean partial) {

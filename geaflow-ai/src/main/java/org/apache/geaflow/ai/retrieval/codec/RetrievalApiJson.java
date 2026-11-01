@@ -173,6 +173,7 @@ public final class RetrievalApiJson {
         optionalString(object, "vectorSource");
         optionalString(object, "mode");
         optionalString(object, "executionMode");
+        optionalBoolean(object, "exactRanking");
         if (object.has("queryVector") && !object.get("queryVector").isJsonNull()) {
             JsonElement value = object.get("queryVector");
             if (!value.isJsonArray()) {
@@ -191,6 +192,14 @@ public final class RetrievalApiJson {
         }
     }
 
+    private static void optionalBoolean(JsonObject object, String name) {
+        if (object.has(name) && !object.get(name).isJsonNull()
+            && (!object.get(name).isJsonPrimitive()
+            || !object.get(name).getAsJsonPrimitive().isBoolean())) {
+            throw new JsonParseException(name + " must be boolean");
+        }
+    }
+
     private static RetrievalBudget parseBudget(JsonObject object, boolean requiredValues) {
         if (object == null) {
             throw new JsonParseException("budget must be an object");
@@ -199,13 +208,16 @@ public final class RetrievalApiJson {
         Integer timeoutMs = optionalInt(object, "timeoutMs");
         Integer maxCandidates = optionalInt(object, "maxCandidates");
         Integer tokenBudget = optionalInt(object, "tokenBudget");
+        Integer maxEdgeScans = optionalInt(object, "maxEdgeScans");
         BudgetConstraint primaryConstraint = optionalBudgetConstraint(object);
         if (requiredValues && (topK == null || timeoutMs == null || maxCandidates == null
             || tokenBudget == null)) {
             throw new JsonParseException("effectiveBudget contains invalid values");
         }
-        return new RetrievalBudget(topK, timeoutMs, maxCandidates, tokenBudget,
+        RetrievalBudget budget = new RetrievalBudget(topK, timeoutMs, maxCandidates, tokenBudget,
             primaryConstraint == null ? BudgetConstraint.CANDIDATES : primaryConstraint);
+        budget.setMaxEdgeScans(maxEdgeScans);
+        return budget;
     }
 
     private static RetrievalTrace parseTrace(JsonObject object) {
@@ -219,6 +231,13 @@ public final class RetrievalApiJson {
         trace.setSelectedMode(enumValue(object, "selectedMode",
             org.apache.geaflow.ai.retrieval.api.model.RetrievalMode.class));
         trace.setExecutionMode(enumValue(object, "executionMode", ExecutionMode.class));
+        if (object.has("exactRanking")) {
+            if (!object.get("exactRanking").isJsonPrimitive()
+                || !object.get("exactRanking").getAsJsonPrimitive().isBoolean()) {
+                throw new JsonParseException("trace.exactRanking must be boolean");
+            }
+            trace.setExactRanking(object.get("exactRanking").getAsBoolean());
+        }
         requireArray(object, "stages");
         trace.setStages(traceStages(object, "stages"));
         trace.setStopReason(optionalString(object, "stopReason"));
@@ -246,6 +265,7 @@ public final class RetrievalApiJson {
         trace.setTokensRetained(optionalLong(object, "tokensRetained"));
         trace.setTokenEstimatorVersion(optionalString(object, "tokenEstimatorVersion"));
         trace.setRerankerVersion(optionalString(object, "rerankerVersion"));
+        trace.setFusionVersion(optionalString(object, "fusionVersion"));
         trace.setPrimaryConstraint(optionalString(object, "primaryConstraint"));
         trace.setCascadeProbeScoreGap(optionalDouble(object, "cascadeProbeScoreGap", 0.0));
         trace.setCascadeDecision(optionalString(object, "cascadeDecision"));

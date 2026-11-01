@@ -33,7 +33,14 @@ import java.util.HashMap;
 import java.util.Map;
 import org.apache.geaflow.ai.retrieval.metadata.ChunkingConfiguration;
 import org.apache.geaflow.ai.retrieval.metadata.DatasetManifest;
+import org.apache.geaflow.ai.retrieval.metadata.MetadataJson;
+import org.apache.geaflow.ai.retrieval.api.model.RetrievalBudget;
+import org.apache.geaflow.ai.retrieval.api.model.RetrievalRequest;
+import org.apache.geaflow.ai.retrieval.api.model.RetrievalResponse;
+import org.apache.geaflow.ai.retrieval.config.RetrievalProperties;
 import org.apache.geaflow.ai.retrieval.model.version.GraphVersion;
+import org.apache.geaflow.ai.retrieval.service.RecallService;
+import org.apache.geaflow.ai.retrieval.service.RetrievalFixtureRegistry;
 import org.junit.jupiter.api.Test;
 
 class CanonicalJsonlArtifactBridgeTest {
@@ -90,6 +97,118 @@ class CanonicalJsonlArtifactBridgeTest {
             Collections.singletonMap(CHUNK_ID, new float[] {1.0F, 0.5F}), "fixture", "v1"));
     }
 
+    @Test
+    void cliPublishesAtomicBundleWithCompleteCoverageAndReusesOnlyValidOutput() throws Exception {
+        Path release = createRelease();
+        Path output = Files.createTempDirectory("bridge-cli-parent").resolve("bundle");
+        Path manifest = output.getParent().resolve("manifest.json");
+        Files.writeString(manifest, MetadataJson.toJson(manifest()), StandardCharsets.UTF_8);
+        Path vectors = output.getParent().resolve("vectors.jsonl");
+        Files.writeString(vectors, "{\"chunkId\":\"" + CHUNK_ID
+            + "\",\"vector\":[1.0,0.5]}\n", StandardCharsets.UTF_8);
+        String[] args = {"--release", release.toString(), "--output", output.toString(),
+            "--manifest", manifest.toString(), "--vectors", vectors.toString(),
+            "--graph-name", "graph", "--graph-version", "g1", "--index-version", "index-1",
+            "--vector-source", "fixture", "--vector-version", "v1"};
+
+        CanonicalJsonlArtifactBridgeCli.main(args);
+
+        JsonObject ready = new JsonParser().parse(Files.readString(output.resolve("READY.json"),
+            StandardCharsets.UTF_8)).getAsJsonObject();
+        JsonObject quality = new JsonParser().parse(Files.readString(output.resolve("quality-report.json"),
+            StandardCharsets.UTF_8)).getAsJsonObject();
+        org.junit.jupiter.api.Assertions.assertEquals("READY", ready.get("state").getAsString());
+        org.junit.jupiter.api.Assertions.assertEquals(1.0,
+            quality.getAsJsonObject("index_coverage").getAsJsonObject("vector")
+                .get("ratio").getAsDouble());
+        assertDoesNotThrow(() -> CanonicalJsonlArtifactBridgeCli.main(args));
+
+        Files.writeString(output.resolve("chunks.jsonl"), "corrupt\n", StandardCharsets.UTF_8);
+        assertThrows(java.io.IOException.class, () -> CanonicalJsonlArtifactBridgeCli.main(args));
+    }
+
+    @Test
+    void cliPublishesDeltaBundleAgainstReadyParentSnapshot() throws Exception {
+        Path base = Files.createTempDirectory("bridge-delta");
+        Path manifest = base.resolve("manifest.json");
+        Files.writeString(manifest, MetadataJson.toJson(manifest()), StandardCharsets.UTF_8);
+        Path vectors = base.resolve("vectors.jsonl");
+        Files.writeString(vectors, "{\"chunkId\":\"" + CHUNK_ID
+            + "\",\"vector\":[1.0,0.5]}\n", StandardCharsets.UTF_8);
+        Path parentRelease = createRelease("g1");
+        Path parentBundle = base.resolve("parent");
+        CanonicalJsonlArtifactBridgeCli.main(cliArgs(parentRelease, parentBundle, manifest, vectors,
+            "g1", "index-1", null));
+        Path childRelease = createRelease("g2");
+        Path childBundle = base.resolve("child");
+        CanonicalJsonlArtifactBridgeCli.main(cliArgs(childRelease, childBundle, manifest, vectors,
+            "g2", "index-2", parentBundle));
+
+        JsonObject ready = new JsonParser().parse(Files.readString(childBundle.resolve("READY.json"),
+            StandardCharsets.UTF_8)).getAsJsonObject();
+        org.junit.jupiter.api.Assertions.assertEquals("g1",
+            ready.getAsJsonObject("graph_snapshot").get("version").getAsString());
+        org.junit.jupiter.api.Assertions.assertEquals("g2",
+            ready.getAsJsonArray("graph_delta_chain").get(0).getAsJsonObject()
+                .getAsJsonObject("graph_version").get("version").getAsString());
+        org.junit.jupiter.api.Assertions.assertTrue(Files.isRegularFile(childBundle.resolve(
+            ready.getAsJsonArray("graph_delta_chain").get(0).getAsJsonObject()
+                .get("artifact").getAsString())));
+
+        RetrievalProperties properties = new RetrievalProperties();
+        properties.setArtifactBundleRoot(childBundle.toString());
+        properties.setArtifactGraphName("graph");
+        properties.setArtifactGraphVersion("g2");
+        properties.setArtifactIndexVersion("index-2");
+        properties.setArtifactVectorSource("fixture");
+        properties.setArtifactVectorVersion("v1");
+        properties.validateConfiguration();
+        RetrievalFixtureRegistry registry = new RetrievalFixtureRegistry();
+        org.apache.geaflow.ai.retrieval.service.ArtifactBundleLoader loader =
+            new org.apache.geaflow.ai.retrieval.service.ArtifactBundleLoader();
+        setField(loader, "properties", properties);
+        setField(loader, "registry", registry);
+        try {
+            loader.initialize();
+            RetrievalRequest request = new RetrievalRequest();
+            request.setGraphName("graph");
+            request.setGraphVersion("g2");
+            request.setIndexVersion("index-2");
+            request.setMode("GRAPH_ONLY");
+            request.setQuery("Alpha");
+            request.setBudget(new RetrievalBudget(5, 1000, 10, 100));
+            RetrievalResponse response = new RecallService(registry).retrieve(request);
+            org.junit.jupiter.api.Assertions.assertEquals("g2", response.getTrace().getGraphVersion());
+            org.junit.jupiter.api.Assertions.assertEquals("g2",
+                response.getTrace().getActualVisibleGraphVersion());
+            org.junit.jupiter.api.Assertions.assertFalse(response.getTrace().getDeltaDigest().isEmpty());
+            org.junit.jupiter.api.Assertions.assertEquals(ready.get("statistics_version").getAsString(),
+                response.getTrace().getStatisticsVersion());
+        } finally {
+            registry.close();
+        }
+    }
+
+    private static String[] cliArgs(Path release, Path output, Path manifest, Path vectors,
+                                    String graphVersion, String indexVersion, Path parentBundle) {
+        java.util.List<String> args = new java.util.ArrayList<>(java.util.Arrays.asList(
+            "--release", release.toString(), "--output", output.toString(),
+            "--manifest", manifest.toString(), "--vectors", vectors.toString(),
+            "--graph-name", "graph", "--graph-version", graphVersion,
+            "--index-version", indexVersion, "--vector-source", "fixture", "--vector-version", "v1"));
+        if (parentBundle != null) {
+            args.add("--parent-bundle");
+            args.add(parentBundle.toString());
+        }
+        return args.toArray(new String[0]);
+    }
+
+    private static void setField(Object target, String name, Object value) throws Exception {
+        java.lang.reflect.Field field = target.getClass().getDeclaredField(name);
+        field.setAccessible(true);
+        field.set(target, value);
+    }
+
     private static DatasetManifest manifest() {
         return new DatasetManifest("v1", "fixture", "release", "dev", "file:///fixture", null,
             SOURCE_HASH, "preprocess", new ChunkingConfiguration("policy", 100, 10),
@@ -97,8 +216,13 @@ class CanonicalJsonlArtifactBridgeTest {
     }
 
     private static Path createRelease() throws Exception {
+        return createRelease("g1");
+    }
+
+    private static Path createRelease(String graphVersion) throws Exception {
         Path root = Files.createTempDirectory("python-release");
-        Files.createDirectories(root.resolve("graph/g1"));
+        Path graphRoot = root.resolve("graph").resolve(graphVersion);
+        Files.createDirectories(graphRoot);
         Files.writeString(root.resolve("documents.jsonl"), "{}\n", StandardCharsets.UTF_8);
         Files.writeString(root.resolve("chunks.jsonl"), chunkJson(), StandardCharsets.UTF_8);
         String vertex = "{\"canonical_name\":\"Alpha\",\"dataset\":\"fixture\","
@@ -107,20 +231,20 @@ class CanonicalJsonlArtifactBridgeTest {
             + CHUNK_ID + "\"],"
             + "\"source_document_ids\":[\"doc-1\"],\"source_hash\":\"" + SOURCE_HASH
             + "\",\"split\":\"dev\",\"vertex_id\":\"entity-1\",\"vertex_type\":\"ENTITY\"}\n";
-        Files.writeString(root.resolve("graph/g1/vertices.jsonl"), vertex, StandardCharsets.UTF_8);
-        Files.writeString(root.resolve("graph/g1/edges.jsonl"), "", StandardCharsets.UTF_8);
-        String verticesChecksum = sha256(root.resolve("graph/g1/vertices.jsonl"));
-        String edgesChecksum = sha256(root.resolve("graph/g1/edges.jsonl"));
-        Files.writeString(root.resolve("graph/g1/manifest.json"),
+        Files.writeString(graphRoot.resolve("vertices.jsonl"), vertex, StandardCharsets.UTF_8);
+        Files.writeString(graphRoot.resolve("edges.jsonl"), "", StandardCharsets.UTF_8);
+        String verticesChecksum = sha256(graphRoot.resolve("vertices.jsonl"));
+        String edgesChecksum = sha256(graphRoot.resolve("edges.jsonl"));
+        Files.writeString(graphRoot.resolve("manifest.json"),
             "{\"edge_count\":0,\"extractor_version\":\"extractor\","
-                + "\"graph_version\":\"g1\",\"schema_version\":\"schema\","
+                + "\"graph_version\":\"" + graphVersion + "\",\"schema_version\":\"schema\","
                 + "\"vertex_count\":1,\"vertices_sha256\":\"" + verticesChecksum
                 + "\",\"edges_sha256\":\"" + edgesChecksum + "\"}\n",
             StandardCharsets.UTF_8);
         Files.writeString(root.resolve("quality-report.json"), "{}\n", StandardCharsets.UTF_8);
         Files.writeString(root.resolve("bm25.artifact"), "placeholder\n", StandardCharsets.UTF_8);
         Files.writeString(root.resolve("vector.artifact"), "placeholder\n", StandardCharsets.UTF_8);
-        writeReady(root);
+        writeReady(root, graphVersion);
         return root;
     }
 
@@ -136,7 +260,7 @@ class CanonicalJsonlArtifactBridgeTest {
             + "\"token_estimate\":2}\n";
     }
 
-    private static void writeReady(Path root) throws Exception {
+    private static void writeReady(Path root, String graphVersion) throws Exception {
         Map<String, String> checksums = new HashMap<>();
         try (java.util.stream.Stream<Path> paths = Files.walk(root)) {
             paths.filter(Files::isRegularFile).filter(path -> !path.getFileName().toString().equals("READY.json"))
@@ -161,10 +285,12 @@ class CanonicalJsonlArtifactBridgeTest {
         json.append("},\"dataset\":\"fixture\",\"dataset_release\":\"release\","
             + "\"documents\":1,\"chunks\":1,\"vertices\":1,\"edges\":0,"
             + "\"entity_extractor_version\":\"extractor\",\"entity_schema_version\":\"schema\","
-            + "\"graph_manifest\":\"graph/g1/manifest.json\",\"pipeline_version\":\"disk-spill-v1\","
+            + "\"graph_manifest\":\"graph/" + graphVersion
+            + "/manifest.json\",\"pipeline_version\":\"disk-spill-v1\","
             + "\"preprocessing_version\":\"preprocess\","
             + "\"policy_version\":\"policy\",\"random_seed\":7,\"sha256\":\"" + SOURCE_HASH
-            + "\",\"split\":\"dev\",\"state\":\"READY\",\"version\":\"g1\","
+            + "\",\"split\":\"dev\",\"state\":\"READY\",\"version\":\""
+            + graphVersion + "\","
             + "\"vector_source\":\"fixture\",\"vector_version\":\"v1\","
             + "\"bm25_artifact\":\"bm25.artifact\",\"vector_artifact\":\"vector.artifact\","
             + "\"quality_report\":\"quality-report.json\"}\n");

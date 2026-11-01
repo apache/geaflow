@@ -21,6 +21,7 @@ package org.apache.geaflow.ai.retrieval.execution;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
@@ -54,6 +55,45 @@ class ExecutionBudgetTest {
         assertTrue(ledger.tryRetain("c1", chunk, new DeterministicTokenEstimator()));
         assertEquals(2, ledger.getTokensRetained());
         assertEquals(RecallStopReason.CANDIDATE_BUDGET, ledger.getStopReason());
+    }
+
+
+    @Test
+    void batchCandidateChargeMatchesPerCandidateCharge() {
+        BudgetLedger perCandidate = new BudgetLedger(5, 100, 0L);
+        BudgetLedger batched = new BudgetLedger(5, 100, 0L);
+
+        int perCandidateCharged = 0;
+        for (int i = 0; i < 7; i++) {
+            if (perCandidate.tryEvaluateCandidate()) {
+                perCandidateCharged++;
+            }
+        }
+        int batchedCharged = 0;
+        for (int remaining = 7; remaining > 0; remaining -= 3) {
+            batchedCharged += batched.tryEvaluateCandidates(Math.min(3, remaining));
+        }
+
+        assertEquals(perCandidateCharged, batchedCharged);
+        assertEquals(5, batchedCharged);
+        assertEquals(perCandidate.getCandidatesEvaluated(), batched.getCandidatesEvaluated());
+        assertEquals(perCandidate.getStopReason(), batched.getStopReason());
+        assertEquals(RecallStopReason.CANDIDATE_BUDGET, batched.getStopReason());
+        assertEquals(0, batched.tryEvaluateCandidates(0));
+        assertEquals(0, new BudgetLedger(5, 100, 0L).tryEvaluateCandidates(0));
+    }
+
+    @Test
+    void batchCandidateChargeRespectsDeadlineAndRejectsNegativeCounts() {
+        BudgetLedger expired = new BudgetLedger(5, 100, 1L, () -> 2L);
+        assertEquals(0, expired.tryEvaluateCandidates(3));
+        assertEquals(RecallStopReason.DEADLINE, expired.getStopReason());
+        assertEquals(0, expired.getCandidatesEvaluated());
+
+        BudgetLedger ledger = new BudgetLedger(5, 100, 0L);
+        assertThrows(IllegalArgumentException.class, () -> ledger.tryEvaluateCandidates(-1));
+        assertEquals(1, ledger.tryEvaluateCandidates(1));
+        assertEquals(RecallStopReason.COMPLETED, ledger.getStopReason());
     }
 
     @Test

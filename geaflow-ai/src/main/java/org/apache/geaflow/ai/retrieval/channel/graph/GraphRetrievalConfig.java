@@ -31,6 +31,7 @@ public final class GraphRetrievalConfig {
     private final int neighborCap;
     private final int tokenBudget;
     private final double minAssociationScore;
+    private final double minAssociationSurvivalRate;
     private final double maxDiffusionGrowth;
     private final double minMarginalYield;
     private final double hopDecay;
@@ -49,6 +50,7 @@ public final class GraphRetrievalConfig {
         this.neighborCap = builder.neighborCap;
         this.tokenBudget = builder.tokenBudget;
         this.minAssociationScore = builder.minAssociationScore;
+        this.minAssociationSurvivalRate = builder.minAssociationSurvivalRate;
         this.maxDiffusionGrowth = builder.maxDiffusionGrowth;
         this.minMarginalYield = builder.minMarginalYield;
         this.hopDecay = builder.hopDecay;
@@ -104,6 +106,10 @@ public final class GraphRetrievalConfig {
 
     public int getTokenBudget() {
         return tokenBudget;
+    }
+
+    public double getMinAssociationSurvivalRate() {
+        return minAssociationSurvivalRate;
     }
 
     public double getMinAssociationScore() {
@@ -174,6 +180,7 @@ public final class GraphRetrievalConfig {
         private int neighborCap = 100;
         private int tokenBudget = Integer.MAX_VALUE;
         private double minAssociationScore;
+        private double minAssociationSurvivalRate = 1.0D;
         private double maxDiffusionGrowth = Double.POSITIVE_INFINITY;
         private double minMarginalYield;
         private double hopDecay = 0.8;
@@ -224,6 +231,16 @@ public final class GraphRetrievalConfig {
 
         public Builder minAssociationScore(double value) {
             minAssociationScore = value;
+            return this;
+        }
+
+        /**
+         * Fraction of scored edges in one hop that must pass {@code minAssociationScore} for the
+         * expansion to keep going. A value of 1.0 (the default) disables the early stop and keeps
+         * the historical behaviour of only skipping the individual low-scoring edges.
+         */
+        public Builder minAssociationSurvivalRate(double value) {
+            minAssociationSurvivalRate = value;
             return this;
         }
 
@@ -312,6 +329,7 @@ public final class GraphRetrievalConfig {
             }
             requireUnitInterval(hopDecay, "hopDecay");
             requireNonNegative(minAssociationScore, "minAssociationScore");
+            requireUnitInterval(minAssociationSurvivalRate, "minAssociationSurvivalRate");
             requireNonNegative(maxDiffusionGrowth, "maxDiffusionGrowth", true);
             requireNonNegative(minMarginalYield, "minMarginalYield");
             requireNonNegative(degreePenalty, "degreePenalty");

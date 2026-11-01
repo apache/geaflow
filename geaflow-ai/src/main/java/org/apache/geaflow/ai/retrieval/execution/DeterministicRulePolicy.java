@@ -104,13 +104,17 @@ public final class DeterministicRulePolicy implements RetrievalRoutingPolicy {
         if (requested != RetrievalMode.HYBRID) {
             return singleChannelPlan(context, requested);
         }
-        RoutingFeatures features = progress == null ? context.getFeatures() : mergedFeatures(context, progress);
+        boolean replanExhausted = progress != null && context.getMaxReplanCount() > 0
+            && progress.getReplanCount() >= context.getMaxReplanCount();
+        RoutingFeatures features = progress == null || replanExhausted ? context.getFeatures()
+            : mergedFeatures(context, progress);
         RetrievalBudget budget = context.getBudget();
         boolean bm25 = context.hasIndex("BM25");
         boolean vector = context.hasIndex("VECTOR");
-        boolean graph = context.hasIndex("GRAPH") && features.getAnchorCount() >= minimumAnchorCount
-            && features.getAnchorConfidence() >= strongAnchorConfidence
-            && features.getGraphGrowthRate() <= highGrowthRate;
+        // A graph index remains useful as a bounded fallback even when entity
+        // linking is weak.  Anchor confidence controls hop/neighbor limits;
+        // growth remains the hard stop that can disable the channel.
+        boolean graph = context.hasIndex("GRAPH") && features.getGraphGrowthRate() <= highGrowthRate;
         if (!bm25 && !vector && !graph) {
             throw new IllegalArgumentException("no retrieval index is available");
         }
@@ -147,6 +151,9 @@ public final class DeterministicRulePolicy implements RetrievalRoutingPolicy {
         if (!graph) {
             builder.reason(features.getGraphGrowthRate() > highGrowthRate
                 ? "GRAPH_STOPPED_GROWTH" : "GRAPH_ANCHOR_OR_INDEX_UNAVAILABLE");
+        } else if (features.getAnchorCount() < minimumAnchorCount
+            || features.getAnchorConfidence() < strongAnchorConfidence) {
+            builder.reason("GRAPH_BOUNDED_ANCHOR_FALLBACK");
         }
         if (features.getAverageIdf() >= highAverageIdf
             || features.getFirstStageScoreGap() >= highScoreGap) {
@@ -158,7 +165,8 @@ public final class DeterministicRulePolicy implements RetrievalRoutingPolicy {
         } else {
             builder.reason("BALANCED_QUERY");
         }
-        addChannels(builder, bm25, vector, graph, features, budget.getMaxCandidates());
+        addChannels(builder, bm25, vector, graph, features, budget.getMaxCandidates(), budget.getTopK(),
+            progress != null && "AFTER_TEXT".equals(progress.getBoundary()), replanExhausted);
         return builder.build();
     }
 
@@ -189,10 +197,41 @@ public final class DeterministicRulePolicy implements RetrievalRoutingPolicy {
     }
 
     private void addChannels(RetrievalPlan.Builder builder, boolean bm25, boolean vector, boolean graph,
-                             RoutingFeatures features, int candidateBudget) {
+                             RoutingFeatures features, int candidateBudget, int topK, boolean afterText,
+                             boolean replanExhausted) {
+        if (replanExhausted) {
+            builder.reason("REPLAN_BUDGET_EXHAUSTED");
+        }
         int selectedCount = (bm25 ? 1 : 0) + (vector ? 1 : 0) + (graph ? 1 : 0);
         if (candidateBudget < selectedCount) {
             throw new IllegalArgumentException("candidate budget cannot fund every selected channel");
+        }
+        if (afterText && graph) {
+            int graphBudget = candidateBudget - (bm25 ? 1 : 0) - (vector ? 1 : 0);
+            if (bm25) {
+                builder.channelBudget("BM25", 1);
+            }
+            if (vector) {
+                builder.channelBudget("VECTOR", 1);
+            }
+            builder.channelBudget("GRAPH", graphBudget);
+            order(builder, bm25, vector, true, "BM25");
+            return;
+        }
+        int textChannelBudget = Math.max(10, topK);
+        if (graph && bm25 && vector && candidateBudget > 2 * textChannelBudget + selectedCount) {
+            int textBudget = 2 * textChannelBudget;
+            int baseTextBudget = textBudget / 2;
+            int textRemainder = textBudget % 2;
+            if (bm25) {
+                builder.channelBudget("BM25", baseTextBudget + (textRemainder-- > 0 ? 1 : 0));
+            }
+            if (vector) {
+                builder.channelBudget("VECTOR", baseTextBudget + (textRemainder > 0 ? 1 : 0));
+            }
+            builder.channelBudget("GRAPH", candidateBudget - textBudget);
+            order(builder, bm25, vector, true, features.getQueryLength() >= longQueryLength ? "VECTOR" : "BM25");
+            return;
         }
         int base = candidateBudget / selectedCount;
         int remainder = candidateBudget % selectedCount;

@@ -49,18 +49,91 @@ public final class GraphStatistics {
 
     /** Computes degree and relation-label counts from a stable edge collection. */
     public static GraphStatistics from(Iterable<GraphEdgeRef> edges) {
-        Map<String, Integer> degrees = new TreeMap<>();
-        Map<String, Map<String, Integer>> relations = new TreeMap<>();
+        Builder builder = builder();
         for (GraphEdgeRef edge : edges) {
-            increment(degrees, edge.getSourceEntityId());
-            incrementRelation(relations, edge.getSourceEntityId(), edge.getLabel());
-            if (!edge.getSourceEntityId().equals(edge.getTargetEntityId())) {
-                increment(degrees, edge.getTargetEntityId());
-                incrementRelation(relations, edge.getTargetEntityId(), edge.getLabel());
+            builder.add(edge.getSourceEntityId(), edge.getTargetEntityId(), edge.getLabel());
+        }
+        return builder.build();
+    }
+
+    public static Builder builder() {
+        return new Builder();
+    }
+
+    /** Mutable single-pass accumulator for graph artifact readers. */
+    public static final class Builder {
+        private final Map<String, Integer> degrees = new TreeMap<>();
+        private final Map<String, Map<String, Integer>> relations = new TreeMap<>();
+
+        public Builder add(String sourceEntityId, String targetEntityId, String relation) {
+            increment(degrees, sourceEntityId);
+            incrementRelation(relations, sourceEntityId, relation);
+            if (!sourceEntityId.equals(targetEntityId)) {
+                increment(degrees, targetEntityId);
+                incrementRelation(relations, targetEntityId, relation);
             }
+            return this;
+        }
+
+        public GraphStatistics build() {
+            String digest = digest(degrees, relations);
+            return new GraphStatistics("stats-" + digest.substring(0, 16), degrees, relations);
+        }
+    }
+
+    /** Applies only the changed edges to a previous immutable statistics snapshot. */
+    public static GraphStatistics apply(GraphStatistics parent, Iterable<GraphEdgeRef> removed,
+                                        Iterable<GraphEdgeRef> added) {
+        Map<String, Integer> degrees = new TreeMap<>(parent.degrees);
+        Map<String, Map<String, Integer>> relations = new TreeMap<>();
+        for (Map.Entry<String, Map<String, Integer>> entry : parent.relations.entrySet()) {
+            relations.put(entry.getKey(), new TreeMap<>(entry.getValue()));
+        }
+        for (GraphEdgeRef edge : removed) {
+            adjust(degrees, relations, edge, -1);
+        }
+        for (GraphEdgeRef edge : added) {
+            adjust(degrees, relations, edge, 1);
         }
         String digest = digest(degrees, relations);
         return new GraphStatistics("stats-" + digest.substring(0, 16), degrees, relations);
+    }
+
+    private static void adjust(Map<String, Integer> degrees, Map<String, Map<String, Integer>> relations,
+                               GraphEdgeRef edge, int amount) {
+        adjustOne(degrees, edge.getSourceEntityId(), amount);
+        adjustRelation(relations, edge.getSourceEntityId(), edge.getLabel(), amount);
+        if (!edge.getSourceEntityId().equals(edge.getTargetEntityId())) {
+            adjustOne(degrees, edge.getTargetEntityId(), amount);
+            adjustRelation(relations, edge.getTargetEntityId(), edge.getLabel(), amount);
+        }
+    }
+
+    private static void adjustOne(Map<String, Integer> values, String key, int amount) {
+        int next = values.getOrDefault(key, 0) + amount;
+        if (next <= 0) {
+            values.remove(key);
+        } else {
+            values.put(key, next);
+        }
+    }
+
+    private static void adjustRelation(Map<String, Map<String, Integer>> values,
+                                       String entityId, String label, int amount) {
+        Map<String, Integer> entityRelations = values.get(entityId);
+        if (entityRelations == null) {
+            entityRelations = new TreeMap<>();
+            values.put(entityId, entityRelations);
+        }
+        int next = entityRelations.getOrDefault(label, 0) + amount;
+        if (next <= 0) {
+            entityRelations.remove(label);
+            if (entityRelations.isEmpty()) {
+                values.remove(entityId);
+            }
+        } else {
+            entityRelations.put(label, next);
+        }
     }
 
     private static void increment(Map<String, Integer> values, String key) {

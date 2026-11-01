@@ -14,6 +14,7 @@ public final class AnswerResponse {
     private final List<Citation> citations;
     private final List<String> evidenceIds;
     private final List<String> traceIds;
+    private final int consideredEvidenceCount;
 
     public AnswerResponse(String answer, String abstentionReason, String context, int tokens,
                           List<Citation> citations) {
@@ -23,8 +24,24 @@ public final class AnswerResponse {
 
     public AnswerResponse(String answer, String abstentionReason, String context, int tokens,
                           List<Citation> citations, List<String> evidenceIds, List<String> traceIds) {
+        this(answer, abstentionReason, context, tokens, citations, evidenceIds, traceIds,
+            evidenceIds.size());
+    }
+
+    /**
+     * Builds a response that also records how much evidence the consumer was offered.
+     *
+     * @param consideredEvidenceCount evidence offered before token truncation, used to report how
+     *     much of it actually reached the citation list
+     */
+    public AnswerResponse(String answer, String abstentionReason, String context, int tokens,
+                          List<Citation> citations, List<String> evidenceIds, List<String> traceIds,
+                          int consideredEvidenceCount) {
         if (tokens < 0) {
             throw new IllegalArgumentException("tokens must not be negative");
+        }
+        if (consideredEvidenceCount < 0) {
+            throw new IllegalArgumentException("consideredEvidenceCount must not be negative");
         }
         if (citations == null) {
             throw new IllegalArgumentException("citations are required");
@@ -46,6 +63,7 @@ public final class AnswerResponse {
         this.citations = Collections.unmodifiableList(new ArrayList<>(citations));
         this.evidenceIds = Collections.unmodifiableList(new ArrayList<>(evidenceIds));
         this.traceIds = Collections.unmodifiableList(new ArrayList<>(traceIds));
+        this.consideredEvidenceCount = consideredEvidenceCount;
     }
 
     public String getAnswer() {
@@ -74,6 +92,22 @@ public final class AnswerResponse {
 
     public List<String> getTraceIds() {
         return traceIds;
+    }
+
+    /**
+     * Fraction of the offered evidence that is actually cited, in {@code [0, 1]}.
+     *
+     * <p>Zero when no evidence was offered, so an abstained response reports 0.0 instead of NaN.
+     */
+    public double getCitationCoverage() {
+        if (consideredEvidenceCount == 0) {
+            return 0.0D;
+        }
+        return (double) evidenceIds.size() / (double) consideredEvidenceCount;
+    }
+
+    public int getConsideredEvidenceCount() {
+        return consideredEvidenceCount;
     }
 
     public boolean isAbstained() {

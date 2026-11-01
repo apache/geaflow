@@ -108,7 +108,7 @@ public final class ExtractiveAnswerConsumer {
         }
         return new AnswerResponse(answer, null, context.toString().trim(),
             request.getTokenBudget() - remaining, citations, evidenceIds,
-            new ArrayList<>(traceIds));
+            new ArrayList<>(traceIds), ordered.size());
     }
 
     private static double score(Evidence evidence) {

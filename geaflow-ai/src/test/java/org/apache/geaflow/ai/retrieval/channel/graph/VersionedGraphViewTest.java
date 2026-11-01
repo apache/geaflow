@@ -23,11 +23,16 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.BufferedReader;
+import java.io.StringReader;
+import java.io.StringWriter;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import org.apache.geaflow.ai.retrieval.codec.GraphDeltaJson;
 import org.apache.geaflow.ai.retrieval.model.graph.EntityRef;
 import org.apache.geaflow.ai.retrieval.model.graph.GraphEdgeRef;
+import org.apache.geaflow.ai.retrieval.model.graph.GraphVertexRef;
 import org.apache.geaflow.ai.retrieval.model.version.GraphVersion;
 import org.junit.jupiter.api.Test;
 
@@ -122,6 +127,66 @@ class VersionedGraphViewTest {
     }
 
     @Test
+    void appliesDeltaChainInOneSnapshotAndMatchesSequentialRebuild() {
+        GraphVersion first = new GraphVersion("knowledge", "s1");
+        GraphSnapshot snapshot = new GraphSnapshot(first,
+            Arrays.asList(entity("a", "A"), entity("b", "B")),
+            Collections.singletonList(edge("ab", "a", "b", "related")));
+        String originalFingerprint = snapshot.getFingerprint();
+
+        GraphVersion second = new GraphVersion("knowledge", "s2");
+        GraphDelta firstDelta = GraphDelta.builder(second, first)
+            .upsertEntity(entityWithAlias("a", "A", "alias"))
+            .upsertEntity(entity("c", "C"))
+            .upsertEdge(edge("ac", "a", "c", "mentions"))
+            .deleteEdge("ab")
+            .build();
+        GraphVersion third = new GraphVersion("knowledge", "s3");
+        GraphDelta secondDelta = GraphDelta.builder(third, second)
+            .upsertEntity(entity("d", "D"))
+            .upsertEdge(edge("ad", "a", "d", "mentions"))
+            .deleteAlias("a", "alias")
+            .deleteEntity("c")
+            .build();
+
+        GraphSnapshot sequential = secondDelta.applyTo(firstDelta.applyTo(snapshot));
+        VersionedGraphView batched = VersionedGraphView.from(snapshot,
+            Arrays.asList(firstDelta, secondDelta));
+
+        assertEquals(sequential.getFingerprint(), batched.getSnapshot().getFingerprint());
+        assertEquals(Collections.singletonList(edge("ad", "a", "d", "mentions")),
+            batched.neighbors("a"));
+        assertTrue(batched.neighbors("c").isEmpty());
+        assertEquals(Collections.emptyList(), batched.getSnapshot().getEntities().get(0).getAliases());
+        assertEquals(originalFingerprint, snapshot.getFingerprint());
+    }
+
+    @Test
+    void graphDeltaJsonRoundTripsOperationsAndVerifiesDigest() throws Exception {
+        GraphVersion parent = new GraphVersion("knowledge", "s1");
+        GraphVersion version = new GraphVersion("knowledge", "s2");
+        GraphDelta delta = GraphDelta.builder(version, parent)
+            .upsertEntity(entityWithAlias("b", "Beta", "B"))
+            .upsertEdge(edge("ab", "a", "b", "related"))
+            .deleteEntity("a")
+            .deleteVertex("vertex-a")
+            .deleteAlias("b", "old-name")
+            .build();
+        StringWriter output = new StringWriter();
+        GraphDeltaJson.write(delta, output);
+
+        GraphDelta decoded = GraphDeltaJson.read(new BufferedReader(new StringReader(output.toString())),
+            version, parent, delta.getDigest());
+        assertEquals(delta.getDigest(), decoded.getDigest());
+        assertEquals(delta.getEntities(), decoded.getEntities());
+        assertEquals(delta.getEdges(), decoded.getEdges());
+        assertEquals(delta.getTombstones().getEntities(), decoded.getTombstones().getEntities());
+        assertEquals(delta.getTombstones().getVertices(), decoded.getTombstones().getVertices());
+        assertThrows(java.io.IOException.class, () -> GraphDeltaJson.read(
+            new BufferedReader(new StringReader(output.toString())), version, parent, "invalid"));
+    }
+
+    @Test
     void rejectsNullInputsAndUnknownTombstonesWithTypedErrors() {
         GraphVersion first = new GraphVersion("knowledge", "s1");
         GraphSnapshot snapshot = new GraphSnapshot(first,
@@ -167,6 +232,45 @@ class VersionedGraphViewTest {
         GraphDelta delta = GraphDelta.builder(second, first).build();
         GraphViewException error = assertThrows(GraphViewException.class, () -> registry.register(delta));
         assertEquals(GraphViewException.Code.NOT_READY, error.getCode());
+    }
+
+    @Test
+    void vertexIdReplacementMasksPreviousEntityInOverlay() {
+        GraphVersion first = new GraphVersion("knowledge", "s1");
+        EntityRef alpha = entity("alpha", "Alpha");
+        EntityRef beta = entity("beta", "Beta");
+        GraphSnapshot snapshot = new GraphSnapshot(first, Collections.emptyList(),
+            Arrays.asList(alpha, beta), Arrays.asList(
+                new GraphVertexRef("person", "shared-vertex", "alpha")), Collections.emptyList());
+        GraphVersion second = new GraphVersion("knowledge", "s2");
+        GraphDelta delta = GraphDelta.builder(second, first)
+            .upsertVertex(new GraphVertexRef("topic", "shared-vertex", "beta"))
+            .build();
+
+        VersionedGraphView view = VersionedGraphView.from(VersionedGraphView.from(snapshot), delta);
+
+        assertEquals("alpha", view.vertex(alpha).getVertexId());
+        assertEquals("shared-vertex", view.vertex(beta).getVertexId());
+        assertEquals(Collections.singletonList("beta"), view.getSnapshot().getVertices().stream()
+            .map(GraphVertexRef::getEntityId).collect(java.util.stream.Collectors.toList()));
+    }
+
+    @Test
+    void vertexTombstoneRemovesMappingWithoutDeletingEntity() {
+        GraphVersion first = new GraphVersion("knowledge", "s1");
+        EntityRef alpha = entity("alpha", "Alpha");
+        GraphSnapshot snapshot = new GraphSnapshot(first, Collections.emptyList(),
+            Collections.singletonList(alpha),
+            Collections.singletonList(new GraphVertexRef("person", "vertex-alpha", "alpha")),
+            Collections.emptyList());
+        GraphVersion second = new GraphVersion("knowledge", "s2");
+        GraphDelta delta = GraphDelta.builder(second, first).deleteVertex("vertex-alpha").build();
+
+        VersionedGraphView view = VersionedGraphView.from(VersionedGraphView.from(snapshot), delta);
+
+        assertEquals("alpha", view.vertex(alpha).getVertexId());
+        assertTrue(view.getSnapshot().getVertices().isEmpty());
+        assertEquals(Collections.singletonList(alpha), view.getSnapshot().getEntities());
     }
 
     private static EntityRef entity(String id, String name) {

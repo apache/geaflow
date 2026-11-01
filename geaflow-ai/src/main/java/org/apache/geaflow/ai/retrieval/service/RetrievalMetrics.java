@@ -24,6 +24,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalErrorCode;
+import org.apache.geaflow.ai.retrieval.api.model.RetrievalResponse;
+import org.apache.geaflow.ai.retrieval.api.model.RetrievalTrace;
 import org.noear.solon.annotation.Component;
 
 /** Process-local counters for the Week 1 retrieval endpoint. */
@@ -38,6 +40,16 @@ public final class RetrievalMetrics {
     private final List<Long> elapsedSamples = new ArrayList<>();
     private final java.util.concurrent.ConcurrentHashMap<String, AtomicLong> channelCounters =
         new java.util.concurrent.ConcurrentHashMap<>();
+    private final java.util.concurrent.ConcurrentHashMap<String, AtomicLong> candidateCounters =
+        new java.util.concurrent.ConcurrentHashMap<>();
+    private final java.util.concurrent.ConcurrentHashMap<String, AtomicLong> stageElapsedNanos =
+        new java.util.concurrent.ConcurrentHashMap<>();
+    private final java.util.concurrent.ConcurrentHashMap<String, AtomicLong> degradationReasons =
+        new java.util.concurrent.ConcurrentHashMap<>();
+    private final java.util.concurrent.ConcurrentHashMap<String, AtomicLong> replanReasons =
+        new java.util.concurrent.ConcurrentHashMap<>();
+    private final AtomicLong edgesExamined = new AtomicLong();
+    private final AtomicLong tokensRetained = new AtomicLong();
 
     public void recordSuccess() {
         recordSuccess(0L);
@@ -66,12 +78,43 @@ public final class RetrievalMetrics {
 
     public Snapshot snapshot() {
         return new Snapshot(total.get(), success.get(), failure.get(), timeout.get(),
-            totalElapsedMs.get(), percentile(0.50D), percentile(0.95D), channelCounters);
+            totalElapsedMs.get(), percentile(0.50D), percentile(0.95D), channelCounters,
+            candidateCounters, stageElapsedNanos, degradationReasons, replanReasons,
+            edgesExamined.get(), tokensRetained.get());
     }
 
     public void recordChannel(String channel) {
         if (channel != null) {
             channelCounters.computeIfAbsent(channel, ignored -> new AtomicLong()).incrementAndGet();
+        }
+    }
+
+    public void recordResponse(RetrievalResponse response) {
+        if (response == null || response.getTrace() == null) {
+            return;
+        }
+        RetrievalTrace trace = response.getTrace();
+        trace.getSelectedChannels().forEach(this::recordChannel);
+        trace.getEvaluatedCounts().forEach((channel, count) -> add(candidateCounters, channel, count));
+        trace.getStageElapsedNanos().forEach((stage, elapsed) -> add(stageElapsedNanos, stage, elapsed));
+        trace.getDegradationReasons().forEach((channel, reason) -> increment(degradationReasons,
+            channel + ":" + reason));
+        trace.getReplanEvents().forEach(event -> increment(replanReasons, event.getReason()));
+        edgesExamined.addAndGet(trace.getEdgesExamined());
+        tokensRetained.addAndGet(trace.getTokensRetained());
+    }
+
+    private static void add(java.util.concurrent.ConcurrentHashMap<String, AtomicLong> counters,
+                            String key, long value) {
+        if (key != null && value > 0) {
+            counters.computeIfAbsent(key, ignored -> new AtomicLong()).addAndGet(value);
+        }
+    }
+
+    private static void increment(java.util.concurrent.ConcurrentHashMap<String, AtomicLong> counters,
+                                  String key) {
+        if (key != null) {
+            counters.computeIfAbsent(key, ignored -> new AtomicLong()).incrementAndGet();
         }
     }
 
@@ -105,10 +148,21 @@ public final class RetrievalMetrics {
         private final long p50ElapsedMs;
         private final long p95ElapsedMs;
         private final java.util.Map<String, Long> channelCounts;
+        private final java.util.Map<String, Long> candidateCounts;
+        private final java.util.Map<String, Long> stageElapsedNanos;
+        private final java.util.Map<String, Long> degradationReasons;
+        private final java.util.Map<String, Long> replanReasons;
+        private final long edgesExamined;
+        private final long tokensRetained;
 
         private Snapshot(long total, long success, long failure, long timeout, long totalElapsedMs,
                          long p50ElapsedMs, long p95ElapsedMs,
-                         java.util.Map<String, AtomicLong> channelCounters) {
+                         java.util.Map<String, AtomicLong> channelCounters,
+                         java.util.Map<String, AtomicLong> candidateCounters,
+                         java.util.Map<String, AtomicLong> stageElapsedNanos,
+                         java.util.Map<String, AtomicLong> degradationReasons,
+                         java.util.Map<String, AtomicLong> replanReasons,
+                         long edgesExamined, long tokensRetained) {
             this.total = total;
             this.success = success;
             this.failure = failure;
@@ -117,8 +171,23 @@ public final class RetrievalMetrics {
             this.p50ElapsedMs = p50ElapsedMs;
             this.p95ElapsedMs = p95ElapsedMs;
             this.channelCounts = new java.util.LinkedHashMap<>();
-            for (java.util.Map.Entry<String, AtomicLong> entry : channelCounters.entrySet()) {
-                this.channelCounts.put(entry.getKey(), entry.getValue().get());
+            copyCounts(channelCounters, this.channelCounts);
+            this.candidateCounts = new java.util.LinkedHashMap<>();
+            copyCounts(candidateCounters, this.candidateCounts);
+            this.stageElapsedNanos = new java.util.LinkedHashMap<>();
+            copyCounts(stageElapsedNanos, this.stageElapsedNanos);
+            this.degradationReasons = new java.util.LinkedHashMap<>();
+            copyCounts(degradationReasons, this.degradationReasons);
+            this.replanReasons = new java.util.LinkedHashMap<>();
+            copyCounts(replanReasons, this.replanReasons);
+            this.edgesExamined = edgesExamined;
+            this.tokensRetained = tokensRetained;
+        }
+
+        private static void copyCounts(java.util.Map<String, AtomicLong> source,
+                                       java.util.Map<String, Long> target) {
+            for (java.util.Map.Entry<String, AtomicLong> entry : source.entrySet()) {
+                target.put(entry.getKey(), entry.getValue().get());
             }
         }
 
@@ -152,6 +221,30 @@ public final class RetrievalMetrics {
 
         public java.util.Map<String, Long> getChannelCounts() {
             return java.util.Collections.unmodifiableMap(channelCounts);
+        }
+
+        public java.util.Map<String, Long> getCandidateCounts() {
+            return java.util.Collections.unmodifiableMap(candidateCounts);
+        }
+
+        public java.util.Map<String, Long> getStageElapsedNanos() {
+            return java.util.Collections.unmodifiableMap(stageElapsedNanos);
+        }
+
+        public java.util.Map<String, Long> getDegradationReasons() {
+            return java.util.Collections.unmodifiableMap(degradationReasons);
+        }
+
+        public java.util.Map<String, Long> getReplanReasons() {
+            return java.util.Collections.unmodifiableMap(replanReasons);
+        }
+
+        public long getEdgesExamined() {
+            return edgesExamined;
+        }
+
+        public long getTokensRetained() {
+            return tokensRetained;
         }
     }
 }

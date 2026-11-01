@@ -55,6 +55,22 @@ public final class GraphQueryLease implements GraphNeighborProvider, AutoCloseab
     }
 
     @Override
+    public List<GraphEdgeRef> prioritizedNeighbors(String entityId,
+                                                   java.util.Comparator<GraphEdgeRef> priority,
+                                                   int limit) {
+        ensureOpen();
+        return provider.prioritizedNeighbors(entityId, priority, limit);
+    }
+
+    @Override
+    public NeighborBatch prioritizedNeighbors(String entityId,
+                                               java.util.Comparator<GraphEdgeRef> priority,
+                                               int candidateLimit, int scanLimit) {
+        ensureOpen();
+        return provider.prioritizedNeighbors(entityId, priority, candidateLimit, scanLimit);
+    }
+
+    @Override
     public GraphVertexRef vertex(EntityRef entity) {
         ensureOpen();
         return provider.vertex(entity);

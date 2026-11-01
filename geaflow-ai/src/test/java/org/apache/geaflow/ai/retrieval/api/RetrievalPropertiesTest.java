@@ -47,6 +47,85 @@ public class RetrievalPropertiesTest {
     }
 
     @Test
+    public void exposesAdaptiveRoutingDefaults() {
+        RetrievalProperties properties = new RetrievalProperties();
+        properties.validateConfiguration();
+
+        Assertions.assertEquals("deterministic-rule", properties.getRoutingPolicyId());
+        Assertions.assertEquals(1, properties.getMaxReplanCount());
+        Assertions.assertTrue(properties.isStrictPlanValidation());
+        Assertions.assertEquals("deterministic-reranker-v1", properties.getRerankerId());
+        Assertions.assertEquals("chars4-v1", properties.getTokenEstimatorId());
+        Assertions.assertEquals(1.5D, properties.getHighAverageIdf(), 1.0e-12);
+        Assertions.assertEquals(0.20D, properties.getHighScoreGap(), 1.0e-12);
+        Assertions.assertEquals(12, properties.getLongQueryLength());
+        Assertions.assertEquals(0.75D, properties.getStrongAnchorConfidence(), 1.0e-12);
+        Assertions.assertEquals(1, properties.getMinimumAnchorCount());
+        Assertions.assertEquals(32, properties.getHighCandidateDegree());
+        Assertions.assertEquals(2.0D, properties.getHighGrowthRate(), 1.0e-12);
+        Assertions.assertEquals(16, properties.getBaseNeighborCap());
+    }
+
+    @Test
+    public void rejectsUnsupportedAdaptiveRoutingConfiguration() {
+        RetrievalProperties properties = new RetrievalProperties();
+        properties.setRoutingPolicyId("learned-policy");
+        assertInvalid(properties);
+
+        properties = new RetrievalProperties();
+        properties.setMaxReplanCount(5);
+        assertInvalid(properties);
+
+        properties = new RetrievalProperties();
+        properties.setMaxReplanCount(-1);
+        assertInvalid(properties);
+
+        properties = new RetrievalProperties();
+        properties.setRerankerId("unknown");
+        assertInvalid(properties);
+
+        properties = new RetrievalProperties();
+        properties.setTokenEstimatorId("unknown");
+        assertInvalid(properties);
+
+        properties = new RetrievalProperties();
+        properties.setHighAverageIdf(Double.NaN);
+        assertInvalid(properties);
+
+        properties = new RetrievalProperties();
+        properties.setHighScoreGap(-0.1D);
+        assertInvalid(properties);
+
+        properties = new RetrievalProperties();
+        properties.setLongQueryLength(0);
+        assertInvalid(properties);
+
+        properties = new RetrievalProperties();
+        properties.setStrongAnchorConfidence(1.1D);
+        assertInvalid(properties);
+
+        properties = new RetrievalProperties();
+        properties.setMinimumAnchorCount(0);
+        assertInvalid(properties);
+
+        properties = new RetrievalProperties();
+        properties.setHighCandidateDegree(0);
+        assertInvalid(properties);
+
+        properties = new RetrievalProperties();
+        properties.setHighGrowthRate(-1.0D);
+        assertInvalid(properties);
+
+        properties = new RetrievalProperties();
+        properties.setBaseNeighborCap(0);
+        assertInvalid(properties);
+
+        properties = new RetrievalProperties();
+        properties.setMaxReplanCount(4);
+        properties.validateConfiguration();
+    }
+
+    @Test
     public void rejectsInvalidModesAndLimits() {
         RetrievalProperties properties = new RetrievalProperties();
         properties.setDefaultMode("UNKNOWN");

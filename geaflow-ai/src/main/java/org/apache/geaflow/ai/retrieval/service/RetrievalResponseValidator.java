@@ -201,7 +201,7 @@ public final class RetrievalResponseValidator {
             if (channelBudget == null || channelBudget < 1) {
                 throw invalid("channel budget must be positive: " + channel);
             }
-            if (evaluated == null || evaluated < 0 || evaluated > channelBudget) {
+            if (evaluated == null || evaluated < 0 || !trace.isExactRanking() && evaluated > channelBudget) {
                 throw invalid("invalid evaluated count: " + channel);
             }
             if (candidates == null || candidates < 0
@@ -244,6 +244,7 @@ public final class RetrievalResponseValidator {
         if (trace.getExecutionMode() == ExecutionMode.CASCADED) {
             required(trace.getCascadeDecision(), "trace.cascadeDecision");
             if (!"RUN_GRAPH".equals(trace.getCascadeDecision())
+                && !"RUN_GRAPH_FALLBACK_NO_ANCHOR".equals(trace.getCascadeDecision())
                 && !"SKIP_DEADLINE".equals(trace.getCascadeDecision())
                 && !"SKIP_NO_EVIDENCE".equals(trace.getCascadeDecision())
                 && !"SKIP_INSUFFICIENT_EVIDENCE".equals(trace.getCascadeDecision())
@@ -289,12 +290,12 @@ public final class RetrievalResponseValidator {
         if (graphStatus == null || graphStage == null || !graphStatus.name().equals(graphStage.getStatus())) {
             throw invalid("Graph trace stage must match channel status");
         }
-        if ("RUN_GRAPH".equals(decision)) {
+        if ("RUN_GRAPH".equals(decision) || "RUN_GRAPH_FALLBACK_NO_ANCHOR".equals(decision)) {
             if (graphStatus == null || graphStatus == RecallStageStatus.NOT_RUN
                 || graphReason == RecallStopReason.NO_RESULT
                 || graphReason == RecallStopReason.NO_RELIABLE_ANCHOR
                 || graphReason == RecallStopReason.LOW_SCORE_GAP) {
-                throw invalid("RUN_GRAPH requires an executed graph stage");
+                throw invalid("graph run decision requires an executed graph stage");
             }
             return;
         }

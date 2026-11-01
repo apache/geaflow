@@ -247,11 +247,19 @@ public class GeaFlowMemoryServer {
         ServerMemoryCache.ReadinessStatus status;
         try {
             properties.validateConfiguration();
-            status = runtimeCache().keywordReadiness(properties.getReadyGraphName());
-            if (!status.isReady() && retrievalFixtureRegistry != null
-                && retrievalFixtureRegistry.isReady(properties.getReadyGraphName())) {
-                status = new ServerMemoryCache.ReadinessStatus(true, properties.getReadyGraphName(),
-                    null, "READY");
+            String configuredGraph = properties.getArtifactBundleRoot() == null
+                || properties.getArtifactBundleRoot().trim().isEmpty()
+                ? properties.getReadyGraphName() : properties.getArtifactGraphName();
+            status = runtimeCache().keywordReadiness(configuredGraph);
+            boolean bundleConfigured = properties.getArtifactBundleRoot() != null
+                && !properties.getArtifactBundleRoot().trim().isEmpty();
+            boolean bundleReady = bundleConfigured && retrievalFixtureRegistry != null
+                && retrievalFixtureRegistry.isReady(configuredGraph,
+                    properties.getArtifactGraphVersion(), properties.getArtifactIndexVersion());
+            if (!status.isReady() && (bundleReady || !bundleConfigured
+                && retrievalFixtureRegistry != null && retrievalFixtureRegistry.isReady(configuredGraph))) {
+                status = new ServerMemoryCache.ReadinessStatus(true, configuredGraph,
+                    properties.getArtifactGraphVersion(), "READY");
             }
         } catch (RetrievalException exception) {
             status = new ServerMemoryCache.ReadinessStatus(false, null, null,
@@ -259,10 +267,69 @@ public class GeaFlowMemoryServer {
         }
         ctx.status(status.isReady() ? 200 : 503);
         ctx.contentType("application/json; charset=utf-8");
-        return "{\"status\":\"" + (status.isReady() ? "READY" : "NOT_READY")
-            + "\",\"graphName\":\"" + String.valueOf(status.getGraphName())
-            + "\",\"graphVersion\":\"" + String.valueOf(status.getGraphVersion())
-            + "\",\"reason\":\"" + status.getReason() + "\"}";
+        return readyBody(status.isReady(), status.getGraphName(), status.getGraphVersion(),
+            status.getReason());
+    }
+
+    /**
+     * Serializes the readiness body with Gson's writer so string escaping is correct.
+     *
+     * <p>{@code graphName}/{@code graphVersion} come from configuration and may contain quotes,
+     * backslashes or control characters, which hand-built JSON would emit as an invalid document.
+     * The body is written directly instead of through {@code RetrievalApiJson.toJson}: that path
+     * re-serializes the map and would drop the explicit JSON null placeholders.
+     */
+    static String readyBody(boolean ready, String graphName, String graphVersion, String reason) {
+        StringBuilder body = new StringBuilder("{\"status\":");
+        appendJsonString(body, ready ? "READY" : "NOT_READY");
+        body.append(",\"graphName\":");
+        appendJsonString(body, graphName);
+        body.append(",\"graphVersion\":");
+        appendJsonString(body, graphVersion);
+        body.append(",\"reason\":");
+        appendJsonString(body, reason);
+        return body.append('}').toString();
+    }
+
+    private static void appendJsonString(StringBuilder target, String value) {
+        if (value == null) {
+            target.append("null");
+            return;
+        }
+        target.append('"');
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            switch (c) {
+                case '"':
+                    target.append("\\\"");
+                    break;
+                case '\\':
+                    target.append("\\\\");
+                    break;
+                case '\n':
+                    target.append("\\n");
+                    break;
+                case '\r':
+                    target.append("\\r");
+                    break;
+                case '\t':
+                    target.append("\\t");
+                    break;
+                case '\b':
+                    target.append("\\b");
+                    break;
+                case '\f':
+                    target.append("\\f");
+                    break;
+                default:
+                    if (c < 0x20) {
+                        target.append(String.format("\\u%04x", (int) c));
+                    } else {
+                        target.append(c);
+                    }
+            }
+        }
+        target.append('"');
     }
 
     @Get
@@ -282,7 +349,12 @@ public class GeaFlowMemoryServer {
             + ",\"failure\":" + snapshot.getFailure() + ",\"totalElapsedMs\":"
             + snapshot.getTotalElapsedMs() + ",\"p50ElapsedMs\":" + snapshot.getP50ElapsedMs()
             + ",\"p95ElapsedMs\":" + snapshot.getP95ElapsedMs() + ",\"channelCounts\":"
-            + RetrievalApiJson.toJson(snapshot.getChannelCounts()) + "}";
+            + RetrievalApiJson.toJson(snapshot.getChannelCounts()) + ",\"candidateCounts\":"
+            + RetrievalApiJson.toJson(snapshot.getCandidateCounts()) + ",\"stageElapsedNanos\":"
+            + RetrievalApiJson.toJson(snapshot.getStageElapsedNanos()) + ",\"edgesExamined\":"
+            + snapshot.getEdgesExamined() + ",\"tokensRetained\":" + snapshot.getTokensRetained()
+            + ",\"degradationReasons\":" + RetrievalApiJson.toJson(snapshot.getDegradationReasons())
+            + ",\"replanReasons\":" + RetrievalApiJson.toJson(snapshot.getReplanReasons()) + "}";
     }
 
     private RetrievalProperties properties() {

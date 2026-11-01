@@ -19,6 +19,7 @@
 package org.apache.geaflow.ai.retrieval.channel.graph;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.AbstractList;
@@ -40,12 +41,15 @@ import org.junit.jupiter.api.Test;
 class GraphRetrieverTest {
 
     @Test
-    void defaultPrioritizedNeighborsEnforcesLimitWithoutSorting() {
+    void defaultPrioritizedNeighborsRanksWithinTheScanWindow() {
         GraphNeighborProvider provider = entityId -> Arrays.asList(edge(0), edge(1), edge(2));
 
-        List<GraphEdgeRef> neighbors = provider.prioritizedNeighbors("e1", (left, right) -> 0, 2);
+        List<GraphEdgeRef> neighbors = provider.prioritizedNeighbors("e1",
+            java.util.Comparator.comparing(GraphEdgeRef::getEdgeId).reversed(), 2);
 
         assertEquals(2, neighbors.size());
+        assertEquals("edge-000001", neighbors.get(0).getEdgeId());
+        assertEquals("edge-000000", neighbors.get(1).getEdgeId());
     }
 
     @Test
@@ -104,6 +108,31 @@ class GraphRetrieverTest {
             10, 10, 1L, () -> 1L);
 
         assertEquals(0, reads.get());
+    }
+
+    @Test
+    void expandsFromTextCandidateAnchorWhenQuestionHasNoEntityMention() {
+        EntityRef first = new EntityRef("e1", "Confucius", Collections.emptyList(), "person",
+            Collections.singletonList("c1"));
+        EntityRef second = new EntityRef("e2", "Ethics", Collections.emptyList(), "topic",
+            Collections.singletonList("c2"));
+        List<EntityRef> entities = Arrays.asList(first, second);
+        GraphEdgeRef edge = new GraphEdgeRef("edge-1", "supports", "e1", "e2",
+            Collections.singletonList("c2"));
+        Map<String, TextChunk> chunks = new HashMap<>();
+        chunks.put("c1", new TextChunk("c1", "doc-1", 0, 0, 8, 2, "candidate"));
+        chunks.put("c2", new TextChunk("c2", "doc-2", 0, 0, 6, 1, "evidence"));
+        GraphRetriever retriever = new GraphRetriever(new EntityAnchorResolver(entities));
+        GraphRetrievalConfig config = GraphRetrievalConfig.builder().maxHop(1).candidateBudget(4)
+            .edgeScanBudget(4).neighborCap(4).build();
+
+        List<GraphRetriever.GraphHit> hits = retriever.retrieve("unmatched question", entities,
+            new InMemoryGraphNeighborProvider(Collections.singletonList(edge)), chunks, config,
+            0L, System::nanoTime, null, Collections.singletonList("c1"));
+
+        assertEquals(1, hits.size());
+        assertEquals("TEXT_CANDIDATE", hits.get(0).getAnchor().getMatchType());
+        assertEquals(1, retriever.getLastStats().getAnchorsConsidered());
     }
 
     @Test
@@ -200,6 +229,48 @@ class GraphRetrieverTest {
     }
 
     @Test
+    void lowAssociationFloorTerminatesHopInsteadOfScanningEveryEdge() {
+        List<EntityRef> entities = Arrays.asList(
+            new EntityRef("e1", "Confucius", "person"),
+            new EntityRef("e2", "Ethics", "topic"),
+            new EntityRef("e3", "Rites", "topic"));
+        List<GraphEdgeRef> edges = Arrays.asList(
+            new GraphEdgeRef("edge-1", "teaches", "e1", "e2", Collections.singletonList("c1")),
+            new GraphEdgeRef("edge-2", "teaches", "e1", "e3", Collections.singletonList("c2")));
+        Map<String, TextChunk> chunks = new HashMap<>();
+        chunks.put("c1", new TextChunk("c1", "doc-1", 0, 0, 1, 1, "one"));
+        chunks.put("c2", new TextChunk("c2", "doc-2", 0, 0, 1, 1, "two"));
+        // Association scores grow with hop decay and edge strength; a floor high enough to reject
+        // every edge plus a survival rate below 1.0 must abandon the hop early.
+        GraphRetrievalConfig terminating = GraphRetrievalConfig.builder().maxHop(1)
+            .candidateBudget(10).edgeScanBudget(10).neighborCap(10)
+            .minAssociationScore(10.0D).minAssociationSurvivalRate(0.5D).build();
+        GraphRetriever retriever = new GraphRetriever();
+        List<GraphRetriever.GraphHit> hits = retriever.retrieve("Confucius", entities,
+            new InMemoryGraphNeighborProvider(edges), chunks, terminating, 0L, System::nanoTime);
+
+        assertTrue(hits.isEmpty());
+        GraphRetriever.GraphStats stats = retriever.getLastStats();
+        assertEquals(RecallStopReason.LOW_ASSOCIATION_SCORE, stats.getStopReason());
+        assertEquals(1, stats.getTerminatedHop());
+        // Both edges are examined lazily but only one is scored before the hop is abandoned.
+        assertEquals(1, stats.getFilteredByAssociation());
+        assertEquals(1, stats.getTerminatedHop());
+
+        // The default survival rate of 1.0 keeps the historical skip-one-edge behaviour.
+        GraphRetrievalConfig historical = GraphRetrievalConfig.builder().maxHop(1)
+            .candidateBudget(10).edgeScanBudget(10).neighborCap(10)
+            .minAssociationScore(10.0D).build();
+        GraphRetriever baseline = new GraphRetriever();
+        baseline.retrieve("Confucius", entities, new InMemoryGraphNeighborProvider(edges),
+            chunks, historical, 0L, System::nanoTime);
+        GraphRetriever.GraphStats baselineStats = baseline.getLastStats();
+        assertNotEquals(RecallStopReason.LOW_ASSOCIATION_SCORE, baselineStats.getStopReason());
+        assertEquals(2, baselineStats.getFilteredByAssociation());
+        assertEquals(-1, baselineStats.getTerminatedHop());
+    }
+
+    @Test
     void maxHopOnePreservesMvpFrontierAndLazyNeighborCap() {
         AtomicInteger reads = new AtomicInteger();
         List<EntityRef> entities = Arrays.asList(
@@ -237,26 +308,74 @@ class GraphRetrieverTest {
     }
 
     @Test
-    void relationPriorityIsAppliedBeforeNeighborCapForIndexedProviders() {
+    void relationPrioritySelectsStrongEdgeBeyondNeighborCapWithinScanBudget() {
         List<EntityRef> entities = Arrays.asList(
             new EntityRef("e1", "Confucius", "person"),
             new EntityRef("e2", "Weak", "topic"),
             new EntityRef("e3", "Strong", "topic"));
         List<GraphEdgeRef> edges = Arrays.asList(
-            new GraphEdgeRef("edge-weak", "weak", "e1", "e2", Collections.singletonList("c1")),
-            new GraphEdgeRef("edge-strong", "strong", "e1", "e3", Collections.singletonList("c2")));
+            new GraphEdgeRef("edge-1", "weak", "e1", "e2", Collections.singletonList("c1")),
+            new GraphEdgeRef("edge-2", "strong", "e1", "e3", Collections.singletonList("c2")));
         Map<String, TextChunk> chunks = new HashMap<>();
         chunks.put("c1", new TextChunk("c1", "doc-1", 0, 0, 1, 1, "weak"));
         chunks.put("c2", new TextChunk("c2", "doc-2", 0, 0, 1, 1, "strong"));
         GraphRetrievalConfig config = GraphRetrievalConfig.builder().maxHop(1).neighborCap(1)
-            .candidateBudget(10).edgeScanBudget(10).relationPriority("strong", 10.0)
+            .candidateBudget(10).edgeScanBudget(2).relationPriority("strong", 10.0)
             .relationPriority("weak", 0.1).build();
 
-        List<GraphRetriever.GraphHit> hits = new GraphRetriever().retrieve("Confucius", entities,
+        GraphRetriever retriever = new GraphRetriever();
+        List<GraphRetriever.GraphHit> hits = retriever.retrieve("Confucius", entities,
             new InMemoryGraphNeighborProvider(edges), chunks, config, 0L, System::nanoTime);
 
-        assertEquals(Collections.singletonList("edge-strong"),
+        assertEquals(Collections.singletonList("edge-2"),
             Collections.singletonList(hits.get(0).getEdge().getEdgeId()));
+        assertEquals(2, retriever.getLastStats().getEdgesExamined());
+    }
+
+    @Test
+    void boundedPriorityScanKeepsEvidenceBeforeReportingTruncation() {
+        AtomicInteger reads = new AtomicInteger();
+        List<GraphEdgeRef> neighbors = new AbstractList<GraphEdgeRef>() {
+            @Override
+            public GraphEdgeRef get(int index) {
+                reads.incrementAndGet();
+                return edge(index);
+            }
+
+            @Override
+            public int size() {
+                return 100_000;
+            }
+        };
+        GraphNeighborProvider provider = new GraphNeighborProvider() {
+            @Override
+            public List<GraphEdgeRef> neighbors(String entityId) {
+                return neighbors;
+            }
+
+            @Override
+            public NeighborBatch prioritizedNeighbors(String entityId,
+                                                       java.util.Comparator<GraphEdgeRef> priority,
+                                                       int candidateLimit, int scanLimit) {
+                return NeighborBatch.select(neighbors, priority, candidateLimit, scanLimit);
+            }
+        };
+        List<EntityRef> entities = Arrays.asList(
+            new EntityRef("e1", "Confucius", "person"),
+            new EntityRef("e2", "Ethics", "topic"));
+        Map<String, TextChunk> chunks = Collections.singletonMap("c1",
+            new TextChunk("c1", "doc-1", 0, 0, 1, 1, "Confucius"));
+        GraphRetrievalConfig config = GraphRetrievalConfig.builder().maxHop(1).neighborCap(1)
+            .candidateBudget(10).edgeScanBudget(2).build();
+        GraphRetriever retriever = new GraphRetriever();
+
+        List<GraphRetriever.GraphHit> hits = retriever.retrieve("Confucius", entities, provider,
+            chunks, config, 0L, System::nanoTime);
+
+        assertEquals(1, hits.size());
+        assertEquals(2, reads.get());
+        assertEquals(2, retriever.getLastStats().getEdgesExamined());
+        assertEquals(RecallStopReason.EDGE_SCAN_LIMIT, retriever.getLastStats().getStopReason());
     }
 
     @Test
@@ -425,6 +544,41 @@ class GraphRetrieverTest {
         assertEquals(2, hits.size());
         assertEquals(RecallStopReason.DIFFUSION_GROWTH_LIMIT, retriever.getLastStats().getStopReason());
         assertEquals(2.0, retriever.getLastStats().getGrowthRate(), 1e-9);
+    }
+
+    @Test
+    void growthLimitPreservesAllDirectAnchorEvidence() {
+        List<EntityRef> entities = Arrays.asList(
+            new EntityRef("a1", "Confucius", "person"),
+            new EntityRef("a2", "Plato", "person"),
+            new EntityRef("e1", "Ethics", "topic"),
+            new EntityRef("e2", "Wisdom", "topic"),
+            new EntityRef("e3", "Ideas", "topic"),
+            new EntityRef("e4", "Forms", "topic"),
+            new EntityRef("e5", "Knowledge", "topic"));
+        List<GraphEdgeRef> edges = Arrays.asList(
+            new GraphEdgeRef("edge-1", "supports", "a1", "e1", Collections.singletonList("c1")),
+            new GraphEdgeRef("edge-2", "supports", "a1", "e2", Collections.singletonList("c2")),
+            new GraphEdgeRef("edge-3", "supports", "a2", "e3", Collections.singletonList("c3")),
+            new GraphEdgeRef("edge-4", "supports", "a2", "e4", Collections.singletonList("c4")),
+            new GraphEdgeRef("edge-5", "supports", "a2", "e5", Collections.singletonList("c5")));
+        Map<String, TextChunk> chunks = new HashMap<>();
+        for (int index = 1; index <= 5; index++) {
+            String chunkId = "c" + index;
+            chunks.put(chunkId, new TextChunk(chunkId, "doc-" + index, 0, 0, 1, 1, "fact"));
+        }
+        GraphRetrievalConfig config = GraphRetrievalConfig.builder()
+            .maxHop(2).candidateBudget(10).edgeScanBudget(5).neighborCap(5)
+            .maxDiffusionGrowth(1.5).build();
+        GraphRetriever retriever = new GraphRetriever(new EntityAnchorResolver(entities));
+
+        List<GraphRetriever.GraphHit> hits = retriever.retrieve("Confucius Plato", entities,
+            new InMemoryGraphNeighborProvider(edges), chunks, config, 0L, System::nanoTime);
+
+        assertEquals(5, hits.size(), "anchors=" + retriever.getLastStats().getAnchorsConsidered()
+            + ", edges=" + retriever.getLastStats().getEdgesExamined());
+        assertEquals(RecallStopReason.DIFFUSION_GROWTH_LIMIT, retriever.getLastStats().getStopReason());
+        assertEquals(5, retriever.getLastStats().getEdgesExamined());
     }
 
     private static GraphEdgeRef edge(int index) {

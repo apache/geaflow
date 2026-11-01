@@ -31,6 +31,36 @@ class AnswerConsumerTest {
     }
 
     @Test
+    void reportsCitationCoverageOverTheOfferedEvidence() {
+        TextChunk first = new TextChunk("c1", "d1", 0, 0, 5, 4, "Paris");
+        TextChunk second = new TextChunk("c2", "d2", 0, 0, 5, 4, "Lyon");
+        Evidence firstEvidence = new Evidence("e1", EvidenceKind.CHUNK, "Paris",
+            Collections.singletonList(first), Collections.emptyList(), Collections.emptyList(),
+            Collections.singletonList(new SourceRef("d1", "file:///d1")), new HashMap<>(), null, 2);
+        Evidence secondEvidence = new Evidence("e2", EvidenceKind.CHUNK, "Lyon",
+            Collections.singletonList(second), Collections.emptyList(), Collections.emptyList(),
+            Collections.singletonList(new SourceRef("d2", "file:///d2")), new HashMap<>(), null, 1);
+        ExtractiveAnswerConsumer consumer =
+            new ExtractiveAnswerConsumer(new DeterministicTokenEstimator());
+
+        // Only the highest-scored evidence fits the budget: 1 of 2 offered items is cited.
+        AnswerResponse partial = consumer.consume(new AnswerRequest("where", 4),
+            java.util.Arrays.asList(firstEvidence, secondEvidence));
+        assertEquals(2, partial.getConsideredEvidenceCount());
+        assertEquals(1, partial.getEvidenceIds().size());
+        assertEquals(0.5D, partial.getCitationCoverage(), 1.0e-12);
+
+        // An abstained response never reports NaN.
+        AnswerResponse abstained = consumer.consume(new AnswerRequest("where", 1),
+            java.util.Arrays.asList(firstEvidence, secondEvidence));
+        assertEquals(0.0D, abstained.getCitationCoverage(), 1.0e-12);
+
+        // No evidence at all also reports 0.0 rather than dividing by zero.
+        assertEquals(0.0D, consumer.consume(new AnswerRequest("where", 10),
+            Collections.emptyList()).getCitationCoverage(), 1.0e-12);
+    }
+
+    @Test
     void abstainsWhenBudgetCannotFitEvidence() {
         TextChunk chunk = new TextChunk("c1", "d1", 0, 0, 5, 2, "Paris");
         Evidence evidence = new Evidence("e1", EvidenceKind.CHUNK, "Paris",

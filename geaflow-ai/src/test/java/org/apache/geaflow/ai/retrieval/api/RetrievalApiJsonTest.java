@@ -88,6 +88,20 @@ public class RetrievalApiJsonTest {
     }
 
     @Test
+    public void parsesExactRankingFlag() {
+        RetrievalRequest request = RetrievalApiJson.parseRequest(
+            "{\"graphName\":\"graph\",\"query\":\"confucius\",\"exactRanking\":true}");
+        Assertions.assertTrue(request.isExactRanking());
+        org.apache.geaflow.ai.retrieval.api.model.RetrievalCommand command =
+            new org.apache.geaflow.ai.retrieval.service.RetrievalRequestValidator(
+                new org.apache.geaflow.ai.retrieval.config.RetrievalProperties()).validate(request);
+        Assertions.assertTrue(command.isExactRanking());
+        Assertions.assertThrows(com.google.gson.JsonParseException.class,
+            () -> RetrievalApiJson.parseRequest("{\"graphName\":\"g\",\"query\":\"q\","
+                + "\"exactRanking\":\"true\"}"));
+    }
+
+    @Test
     public void parsesLegacyPrimaryConstraintAliasesIntoCanonicalValues() {
         RetrievalBudget candidate = RetrievalApiJson.parseRequest(
             "{\"graphName\":\"graph\",\"query\":\"q\","

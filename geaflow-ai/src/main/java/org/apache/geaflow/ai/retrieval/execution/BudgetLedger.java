@@ -62,6 +62,33 @@ public final class BudgetLedger {
         return true;
     }
 
+    /**
+     * Charges a batch of already-scored candidates in a single critical section.
+     *
+     * <p>Equivalent to calling {@link #tryEvaluateCandidate()} {@code evaluated} times, but
+     * acquires the ledger lock once instead of once per candidate. Returns the number of
+     * candidates actually charged, which is below {@code evaluated} only when the candidate
+     * budget or the deadline ran out mid-batch.
+     */
+    public synchronized int tryEvaluateCandidates(int evaluated) {
+        if (evaluated < 0) {
+            throw new IllegalArgumentException("evaluated must not be negative");
+        }
+        if (evaluated == 0) {
+            return 0;
+        }
+        if (!checkDeadline()) {
+            return 0;
+        }
+        int remaining = candidateBudget - candidatesEvaluated;
+        int charged = Math.min(evaluated, remaining);
+        candidatesEvaluated += charged;
+        if (charged < evaluated && stopReason == RecallStopReason.COMPLETED) {
+            stopReason = RecallStopReason.CANDIDATE_BUDGET;
+        }
+        return charged;
+    }
+
     /** Charges unique evidence context; duplicate evidence does not consume token budget twice. */
     public synchronized boolean tryRetain(String evidenceId, TextChunk chunk, TokenEstimator estimator) {
         if (evidenceId == null || chunk == null || estimator == null) {

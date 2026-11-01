@@ -26,8 +26,12 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalErrorCode;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalException;
+import org.apache.geaflow.ai.retrieval.channel.graph.EntityAnchorResolver;
 import org.apache.geaflow.ai.retrieval.channel.graph.GraphNeighborProvider;
 import org.apache.geaflow.ai.retrieval.channel.graph.InMemoryGraphNeighborProvider;
 import org.apache.geaflow.ai.retrieval.index.bm25.Bm25IndexReader;
@@ -58,6 +62,15 @@ public final class RetrievalFixtureRegistry implements AutoCloseable {
                                        List<TextChunk> chunks, List<EntityRef> entities, List<GraphEdgeRef> edges,
                                        boolean ready, GraphNeighborProvider graphProvider,
                                        Map<String, RetrievalException> failures) {
+        register(graphName, graphVersion, indexVersion, bm25, vector, chunks, entities, edges, ready,
+            graphProvider, failures, false);
+    }
+
+    private synchronized void register(String graphName, String graphVersion, String indexVersion,
+                                       Bm25IndexReader bm25, VectorIndexReader vector,
+                                       List<TextChunk> chunks, List<EntityRef> entities, List<GraphEdgeRef> edges,
+                                       boolean ready, GraphNeighborProvider graphProvider,
+                                       Map<String, RetrievalException> failures, boolean immutableEdges) {
         boolean registered = false;
         try {
             requireVersion(graphName, graphVersion, indexVersion);
@@ -89,7 +102,7 @@ public final class RetrievalFixtureRegistry implements AutoCloseable {
                     ? new InMemoryGraphNeighborProvider(edges) : previous.getGraphProvider();
             }
             Fixture replacement = new Fixture(graphName, graphVersion, indexVersion, bm25, vector,
-                chunks, entities, edges, publishedGraphProvider, ready, failures);
+                chunks, entities, edges, publishedGraphProvider, ready, failures, immutableEdges);
             fixtures.put(fixtureKey, replacement);
             registered = true;
             if (previous != null) {
@@ -151,10 +164,67 @@ public final class RetrievalFixtureRegistry implements AutoCloseable {
             reader.getIdentity().validate(graphName, graphVersion, indexVersion, chunks);
             reader.validateReferences(chunks);
             register(graphName, graphVersion, indexVersion, null, null, chunks, reader.getEntities(),
-                reader.getEdges(), true, reader.getNeighbors(), Collections.emptyMap());
+                reader.getEdges(), true, reader.getNeighbors(), Collections.emptyMap(), true);
         } catch (RuntimeException error) {
             reader.close();
             throw error;
+        }
+    }
+
+    /** Loads graph, BM25, and vector artifacts and publishes them as one fixture. */
+    public void loadBundle(String graphName, String graphVersion, String indexVersion,
+                           Path graphArtifact, Path bm25Artifact, Path vectorArtifact,
+                           List<TextChunk> chunks, String vectorSource, String vectorVersion) {
+        requireVersion(graphName, graphVersion, indexVersion);
+        Objects.requireNonNull(chunks, "chunks");
+        GraphArtifactReader graph = new GraphArtifactReader(graphArtifact, graphVersion, indexVersion);
+        Bm25IndexReader bm25 = null;
+        VectorIndexReader vector = null;
+        boolean published = false;
+        try {
+            graph.getIdentity().validate(graphName, graphVersion, indexVersion, chunks);
+            graph.validateReferences(chunks);
+            bm25 = new Bm25IndexReader(bm25Artifact, graphVersion, indexVersion);
+            bm25.getIdentity().validate(graphName, graphVersion, indexVersion, chunks);
+            vector = new VectorIndexReader(vectorArtifact, graphVersion, indexVersion,
+                vectorSource, vectorVersion);
+            vector.getIdentity().validate(graphName, graphVersion, indexVersion, chunks);
+            register(graphName, graphVersion, indexVersion, bm25, vector, chunks,
+                graph.getEntities(), graph.getEdges(), true, graph.getNeighbors(), Collections.emptyMap(), true);
+            published = true;
+        } finally {
+            if (!published) {
+                closeReaders(bm25, vector, new IllegalStateException("bundle load failed"));
+            }
+            graph.close();
+        }
+    }
+
+    /** Loads rebuilt indexes with a graph provider assembled from a snapshot and delta chain. */
+    public void loadBundle(String graphName, String graphVersion, String indexVersion,
+                           Path bm25Artifact, Path vectorArtifact, List<TextChunk> chunks,
+                           List<EntityRef> entities, List<GraphEdgeRef> edges,
+                           GraphNeighborProvider graphProvider,
+                           String vectorSource, String vectorVersion) {
+        requireVersion(graphName, graphVersion, indexVersion);
+        Objects.requireNonNull(chunks, "chunks");
+        Objects.requireNonNull(graphProvider, "graphProvider");
+        Bm25IndexReader bm25 = null;
+        VectorIndexReader vector = null;
+        boolean published = false;
+        try {
+            bm25 = new Bm25IndexReader(bm25Artifact, graphVersion, indexVersion);
+            bm25.getIdentity().validate(graphName, graphVersion, indexVersion, chunks);
+            vector = new VectorIndexReader(vectorArtifact, graphVersion, indexVersion,
+                vectorSource, vectorVersion);
+            vector.getIdentity().validate(graphName, graphVersion, indexVersion, chunks);
+            register(graphName, graphVersion, indexVersion, bm25, vector, chunks,
+                entities, edges, true, graphProvider, Collections.emptyMap());
+            published = true;
+        } finally {
+            if (!published) {
+                closeReaders(bm25, vector, new IllegalStateException("bundle load failed"));
+            }
         }
     }
 
@@ -178,6 +248,15 @@ public final class RetrievalFixtureRegistry implements AutoCloseable {
             }
         }
         return false;
+    }
+
+    /** Returns whether the exact graph, graph version, and index version are READY. */
+    public synchronized boolean isReady(String graphName, String graphVersion, String indexVersion) {
+        if (graphName == null || graphVersion == null || indexVersion == null) {
+            return false;
+        }
+        Fixture fixture = fixtures.get(key(graphName, graphVersion, indexVersion));
+        return fixture != null && fixture.isReady();
     }
 
     /** Acquires a lease that keeps the selected fixture readers open until released. */
@@ -341,6 +420,8 @@ public final class RetrievalFixtureRegistry implements AutoCloseable {
         private final List<EntityRef> entities;
         private final List<GraphEdgeRef> edges;
         private final GraphNeighborProvider graphProvider;
+        private final EntityAnchorResolver anchorResolver;
+        private final Map<String, Double> idfByToken;
         private final boolean ready;
         private final Map<String, RetrievalException> failures;
         private boolean closed;
@@ -350,8 +431,7 @@ public final class RetrievalFixtureRegistry implements AutoCloseable {
         private Fixture(String graphName, String graphVersion, String indexVersion,
                         Bm25IndexReader bm25, VectorIndexReader vector, List<TextChunk> chunks,
                         List<EntityRef> entities, List<GraphEdgeRef> edges, GraphNeighborProvider graphProvider,
-                        boolean ready,
-                        Map<String, RetrievalException> failures) {
+                        boolean ready, Map<String, RetrievalException> failures, boolean immutableEdges) {
             this.graphName = graphName;
             this.graphVersion = graphVersion;
             this.indexVersion = indexVersion;
@@ -364,8 +444,10 @@ public final class RetrievalFixtureRegistry implements AutoCloseable {
             }
             this.chunksById = Collections.unmodifiableMap(indexedChunks);
             this.entities = immutable(entities);
-            this.edges = immutable(edges);
+            this.edges = immutableEdges ? Collections.unmodifiableList(edges) : immutable(edges);
             this.graphProvider = graphProvider;
+            this.anchorResolver = new EntityAnchorResolver(this.entities);
+            this.idfByToken = buildIdfIndex(this.chunks);
             this.ready = ready;
             this.failures = Collections.unmodifiableMap(new LinkedHashMap<>(failures));
         }
@@ -412,6 +494,35 @@ public final class RetrievalFixtureRegistry implements AutoCloseable {
 
         public GraphNeighborProvider getGraphProvider() {
             return graphProvider;
+        }
+
+        public EntityAnchorResolver getAnchorResolver() {
+            return anchorResolver;
+        }
+
+        public Map<String, Double> getIdfByToken() {
+            return idfByToken;
+        }
+
+        private static Map<String, Double> buildIdfIndex(List<TextChunk> chunks) {
+            Map<String, Integer> frequencies = new HashMap<>();
+            Pattern tokens = Pattern.compile("[\\p{L}\\p{N}]+", Pattern.UNICODE_CHARACTER_CLASS);
+            for (TextChunk chunk : chunks) {
+                Matcher matcher = tokens.matcher(EntityAnchorResolver.normalize(chunk.getText()));
+                java.util.Set<String> present = new java.util.HashSet<>();
+                while (matcher.find()) {
+                    present.add(matcher.group());
+                }
+                for (String token : present) {
+                    frequencies.put(token, frequencies.getOrDefault(token, 0) + 1);
+                }
+            }
+            Map<String, Double> index = new HashMap<>();
+            for (Map.Entry<String, Integer> entry : frequencies.entrySet()) {
+                index.put(entry.getKey(), Math.log(1.0D + (chunks.size() + 1.0D)
+                    / (entry.getValue() + 1.0D)));
+            }
+            return Collections.unmodifiableMap(index);
         }
 
         public Map<String, RetrievalException> getFailures() {

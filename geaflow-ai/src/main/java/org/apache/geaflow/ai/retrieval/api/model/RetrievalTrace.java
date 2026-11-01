@@ -34,6 +34,7 @@ public class RetrievalTrace {
     private String originalQuery;
     private RetrievalMode selectedMode;
     private ExecutionMode executionMode;
+    private boolean exactRanking;
     private List<TraceStage> stages = new ArrayList<>();
     private String stopReason;
     private String graphVersion;
@@ -76,6 +77,7 @@ public class RetrievalTrace {
     private long tokensRetained;
     private String tokenEstimatorVersion;
     private String rerankerVersion;
+    private String fusionVersion;
     private String primaryConstraint;
     private double cascadeProbeScoreGap;
     private String cascadeDecision;
@@ -128,6 +130,14 @@ public class RetrievalTrace {
 
     public void setExecutionMode(ExecutionMode executionMode) {
         this.executionMode = executionMode;
+    }
+
+    public boolean isExactRanking() {
+        return exactRanking;
+    }
+
+    public void setExactRanking(boolean exactRanking) {
+        this.exactRanking = exactRanking;
     }
 
     public List<TraceStage> getStages() {
@@ -469,6 +479,14 @@ public class RetrievalTrace {
 
     public String getRerankerVersion() {
         return rerankerVersion;
+    }
+
+    public String getFusionVersion() {
+        return fusionVersion;
+    }
+
+    public void setFusionVersion(String value) {
+        fusionVersion = value;
     }
 
     public void setRerankerVersion(String value) {

@@ -51,6 +51,10 @@ public class RetrievalProperties {
     private int defaultMaxCandidates = 100;
     @Inject("${retrieval.max-candidates:1000}")
     private int maxCandidates = 1000;
+    @Inject("${retrieval.default-max-edge-scans:100}")
+    private int defaultMaxEdgeScans = 100;
+    @Inject("${retrieval.max-edge-scans:5000}")
+    private int maxEdgeScans = 5000;
     @Inject("${retrieval.default-token-budget:4096}")
     private int defaultTokenBudget = 4096;
     @Inject("${retrieval.max-token-budget:16384}")
@@ -61,6 +65,50 @@ public class RetrievalProperties {
     private boolean remoteAccessEnabled;
     @Inject("${retrieval.api-token:}")
     private String apiToken;
+    @Inject("${retrieval.artifact-bundle-root:}")
+    private String artifactBundleRoot;
+    @Inject("${retrieval.artifact-graph-name:}")
+    private String artifactGraphName;
+    @Inject("${retrieval.artifact-graph-version:}")
+    private String artifactGraphVersion;
+    @Inject("${retrieval.artifact-index-version:}")
+    private String artifactIndexVersion;
+    @Inject("${retrieval.artifact-graph-path:graph.bin}")
+    private String artifactGraphPath = "graph.bin";
+    @Inject("${retrieval.artifact-bm25-path:bm25}")
+    private String artifactBm25Path = "bm25";
+    @Inject("${retrieval.artifact-vector-path:vector.bin}")
+    private String artifactVectorPath = "vector.bin";
+    @Inject("${retrieval.artifact-vector-source:}")
+    private String artifactVectorSource;
+    @Inject("${retrieval.artifact-vector-version:}")
+    private String artifactVectorVersion;
+    @Inject("${retrieval.routing-policy-id:deterministic-rule}")
+    private String routingPolicyId = "deterministic-rule";
+    @Inject("${retrieval.max-replan-count:1}")
+    private int maxReplanCount = 1;
+    @Inject("${retrieval.strict-plan-validation:true}")
+    private boolean strictPlanValidation = true;
+    @Inject("${retrieval.reranker-id:deterministic-reranker-v1}")
+    private String rerankerId = "deterministic-reranker-v1";
+    @Inject("${retrieval.token-estimator-id:chars4-v1}")
+    private String tokenEstimatorId = "chars4-v1";
+    @Inject("${retrieval.deterministic-rule.high-average-idf:1.5}")
+    private double highAverageIdf = 1.5D;
+    @Inject("${retrieval.deterministic-rule.high-score-gap:0.20}")
+    private double highScoreGap = 0.20D;
+    @Inject("${retrieval.deterministic-rule.long-query-length:12}")
+    private int longQueryLength = 12;
+    @Inject("${retrieval.deterministic-rule.strong-anchor-confidence:0.75}")
+    private double strongAnchorConfidence = 0.75D;
+    @Inject("${retrieval.deterministic-rule.minimum-anchor-count:1}")
+    private int minimumAnchorCount = 1;
+    @Inject("${retrieval.deterministic-rule.high-candidate-degree:32}")
+    private int highCandidateDegree = 32;
+    @Inject("${retrieval.deterministic-rule.high-growth-rate:2.0}")
+    private double highGrowthRate = 2.0D;
+    @Inject("${retrieval.deterministic-rule.base-neighbor-cap:16}")
+    private int baseNeighborCap = 16;
 
     @Init
     public void validateConfiguration() {
@@ -82,6 +130,7 @@ public class RetrievalProperties {
         positiveLimit(defaultTopK, maxTopK, "topK");
         positiveLimit(defaultTimeoutMs, maxTimeoutMs, "timeoutMs");
         positiveLimit(defaultMaxCandidates, maxCandidates, "maxCandidates");
+        positiveLimit(defaultMaxEdgeScans, maxEdgeScans, "maxEdgeScans");
         positiveLimit(defaultTokenBudget, maxTokenBudget, "tokenBudget");
         if (defaultTopK > defaultMaxCandidates) {
             throw invalid("default-top-k must not exceed default-max-candidates");
@@ -92,6 +141,34 @@ public class RetrievalProperties {
         }
         if (remoteAccessEnabled && blank(apiToken)) {
             throw invalid("retrieval.api-token is required when remote access is enabled");
+        }
+        if (!blank(artifactBundleRoot)) {
+            if (blank(artifactGraphName) || blank(artifactGraphVersion) || blank(artifactIndexVersion)
+                || blank(artifactVectorSource) || blank(artifactVectorVersion)) {
+                throw invalid("artifact bundle identity and vector metadata are required");
+            }
+            if (blank(artifactGraphPath) || blank(artifactBm25Path) || blank(artifactVectorPath)) {
+                throw invalid("artifact bundle paths are required");
+            }
+        }
+        if (routingPolicyId == null || !"deterministic-rule".equals(routingPolicyId.trim())) {
+            throw invalid("routing-policy-id is unsupported: " + routingPolicyId);
+        }
+        if (maxReplanCount < 0 || maxReplanCount > 4) {
+            throw invalid("max-replan-count must be between 0 and 4");
+        }
+        if (rerankerId == null || !"deterministic-reranker-v1".equals(rerankerId.trim())) {
+            throw invalid("reranker-id is unsupported: " + rerankerId);
+        }
+        if (tokenEstimatorId == null || !"chars4-v1".equals(tokenEstimatorId.trim())) {
+            throw invalid("token-estimator-id is unsupported: " + tokenEstimatorId);
+        }
+        if (!(highAverageIdf >= 0.0D) || !Double.isFinite(highAverageIdf)
+            || !(highScoreGap >= 0.0D) || !Double.isFinite(highScoreGap)
+            || longQueryLength < 1 || !(strongAnchorConfidence >= 0.0D) || !(strongAnchorConfidence <= 1.0D)
+            || minimumAnchorCount < 1 || highCandidateDegree < 1
+            || !(highGrowthRate >= 0.0D) || !Double.isFinite(highGrowthRate) || baseNeighborCap < 1) {
+            throw invalid("deterministic-rule thresholds are invalid");
         }
     }
 
@@ -201,6 +278,22 @@ public class RetrievalProperties {
         this.maxCandidates = maxCandidates;
     }
 
+    public int getDefaultMaxEdgeScans() {
+        return defaultMaxEdgeScans;
+    }
+
+    public void setDefaultMaxEdgeScans(int defaultMaxEdgeScans) {
+        this.defaultMaxEdgeScans = defaultMaxEdgeScans;
+    }
+
+    public int getMaxEdgeScans() {
+        return maxEdgeScans;
+    }
+
+    public void setMaxEdgeScans(int maxEdgeScans) {
+        this.maxEdgeScans = maxEdgeScans;
+    }
+
     public int getDefaultTokenBudget() {
         return defaultTokenBudget;
     }
@@ -239,5 +332,181 @@ public class RetrievalProperties {
 
     public void setApiToken(String apiToken) {
         this.apiToken = apiToken;
+    }
+
+    public String getArtifactBundleRoot() {
+        return artifactBundleRoot;
+    }
+
+    public void setArtifactBundleRoot(String artifactBundleRoot) {
+        this.artifactBundleRoot = artifactBundleRoot;
+    }
+
+    public String getArtifactGraphName() {
+        return artifactGraphName;
+    }
+
+    public void setArtifactGraphName(String artifactGraphName) {
+        this.artifactGraphName = artifactGraphName;
+    }
+
+    public String getArtifactGraphVersion() {
+        return artifactGraphVersion;
+    }
+
+    public void setArtifactGraphVersion(String artifactGraphVersion) {
+        this.artifactGraphVersion = artifactGraphVersion;
+    }
+
+    public String getArtifactIndexVersion() {
+        return artifactIndexVersion;
+    }
+
+    public void setArtifactIndexVersion(String artifactIndexVersion) {
+        this.artifactIndexVersion = artifactIndexVersion;
+    }
+
+    public String getArtifactGraphPath() {
+        return artifactGraphPath;
+    }
+
+    public void setArtifactGraphPath(String artifactGraphPath) {
+        this.artifactGraphPath = artifactGraphPath;
+    }
+
+    public String getArtifactBm25Path() {
+        return artifactBm25Path;
+    }
+
+    public void setArtifactBm25Path(String artifactBm25Path) {
+        this.artifactBm25Path = artifactBm25Path;
+    }
+
+    public String getArtifactVectorPath() {
+        return artifactVectorPath;
+    }
+
+    public void setArtifactVectorPath(String artifactVectorPath) {
+        this.artifactVectorPath = artifactVectorPath;
+    }
+
+    public String getArtifactVectorSource() {
+        return artifactVectorSource;
+    }
+
+    public void setArtifactVectorSource(String artifactVectorSource) {
+        this.artifactVectorSource = artifactVectorSource;
+    }
+
+    public String getArtifactVectorVersion() {
+        return artifactVectorVersion;
+    }
+
+    public void setArtifactVectorVersion(String artifactVectorVersion) {
+        this.artifactVectorVersion = artifactVectorVersion;
+    }
+
+    public String getRoutingPolicyId() {
+        return routingPolicyId;
+    }
+
+    public void setRoutingPolicyId(String routingPolicyId) {
+        this.routingPolicyId = routingPolicyId;
+    }
+
+    public int getMaxReplanCount() {
+        return maxReplanCount;
+    }
+
+    public void setMaxReplanCount(int maxReplanCount) {
+        this.maxReplanCount = maxReplanCount;
+    }
+
+    public boolean isStrictPlanValidation() {
+        return strictPlanValidation;
+    }
+
+    public void setStrictPlanValidation(boolean strictPlanValidation) {
+        this.strictPlanValidation = strictPlanValidation;
+    }
+
+    public String getRerankerId() {
+        return rerankerId;
+    }
+
+    public void setRerankerId(String rerankerId) {
+        this.rerankerId = rerankerId;
+    }
+
+    public String getTokenEstimatorId() {
+        return tokenEstimatorId;
+    }
+
+    public void setTokenEstimatorId(String tokenEstimatorId) {
+        this.tokenEstimatorId = tokenEstimatorId;
+    }
+
+    public double getHighAverageIdf() {
+        return highAverageIdf;
+    }
+
+    public void setHighAverageIdf(double highAverageIdf) {
+        this.highAverageIdf = highAverageIdf;
+    }
+
+    public double getHighScoreGap() {
+        return highScoreGap;
+    }
+
+    public void setHighScoreGap(double highScoreGap) {
+        this.highScoreGap = highScoreGap;
+    }
+
+    public int getLongQueryLength() {
+        return longQueryLength;
+    }
+
+    public void setLongQueryLength(int longQueryLength) {
+        this.longQueryLength = longQueryLength;
+    }
+
+    public double getStrongAnchorConfidence() {
+        return strongAnchorConfidence;
+    }
+
+    public void setStrongAnchorConfidence(double strongAnchorConfidence) {
+        this.strongAnchorConfidence = strongAnchorConfidence;
+    }
+
+    public int getMinimumAnchorCount() {
+        return minimumAnchorCount;
+    }
+
+    public void setMinimumAnchorCount(int minimumAnchorCount) {
+        this.minimumAnchorCount = minimumAnchorCount;
+    }
+
+    public int getHighCandidateDegree() {
+        return highCandidateDegree;
+    }
+
+    public void setHighCandidateDegree(int highCandidateDegree) {
+        this.highCandidateDegree = highCandidateDegree;
+    }
+
+    public double getHighGrowthRate() {
+        return highGrowthRate;
+    }
+
+    public void setHighGrowthRate(double highGrowthRate) {
+        this.highGrowthRate = highGrowthRate;
+    }
+
+    public int getBaseNeighborCap() {
+        return baseNeighborCap;
+    }
+
+    public void setBaseNeighborCap(int baseNeighborCap) {
+        this.baseNeighborCap = baseNeighborCap;
     }
 }

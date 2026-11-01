@@ -28,20 +28,27 @@ public final class GraphTombstones {
 
     private final Set<String> chunks;
     private final Set<String> entities;
+    private final Set<String> vertices;
     private final Set<String> edges;
     private final Set<String> aliases;
 
     public GraphTombstones(Set<String> chunks, Set<String> entities, Set<String> edges,
                            Set<String> aliases) {
+        this(chunks, entities, Collections.emptySet(), edges, aliases);
+    }
+
+    public GraphTombstones(Set<String> chunks, Set<String> entities, Set<String> vertices,
+                           Set<String> edges, Set<String> aliases) {
         this.chunks = immutable(chunks);
         this.entities = immutable(entities);
+        this.vertices = immutable(vertices);
         this.edges = immutable(edges);
         this.aliases = immutable(aliases);
     }
 
     public static GraphTombstones empty() {
         return new GraphTombstones(Collections.emptySet(), Collections.emptySet(),
-            Collections.emptySet(), Collections.emptySet());
+            Collections.emptySet(), Collections.emptySet(), Collections.emptySet());
     }
 
     private static Set<String> immutable(Set<String> values) {
@@ -54,6 +61,10 @@ public final class GraphTombstones {
 
     public Set<String> getEntities() {
         return entities;
+    }
+
+    public Set<String> getVertices() {
+        return vertices;
     }
 
     public Set<String> getEdges() {

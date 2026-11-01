@@ -101,6 +101,57 @@ public final class Bm25IndexReader implements Closeable {
         return new ArrayList<>(found.getHits().subList(0, Math.min(topK, found.getHits().size())));
     }
 
+    /**
+     * Executes a full Lucene ranking pass and returns the best {@code topK}
+     * matches. Unlike {@link #search}, the candidate limit is applied after
+     * ranking and does not truncate Lucene's document traversal order.
+     */
+    public List<Bm25Hit> searchExact(String queryText, int candidateLimit, int topK) {
+        return searchExact(queryText, candidateLimit, topK, 0L);
+    }
+
+    public List<Bm25Hit> searchExact(String queryText, int candidateLimit, int topK, long deadlineNanos) {
+        ChannelSearchResult<Bm25Hit> found = searchExactWithStats(queryText, candidateLimit, topK, deadlineNanos);
+        return new ArrayList<>(found.getHits().subList(0, Math.min(topK, found.getHits().size())));
+    }
+
+    /** Returns exact Lucene ranking statistics while retaining deadline handling. */
+    public ChannelSearchResult<Bm25Hit> searchExactWithStats(String queryText, int candidateLimit,
+                                                             int topK, long deadlineNanos) {
+        return searchExactWithStats(queryText, candidateLimit, topK, deadlineNanos, System::nanoTime);
+    }
+
+    public ChannelSearchResult<Bm25Hit> searchExactWithStats(String queryText, int candidateLimit,
+                                                             int topK, long deadlineNanos,
+                                                             LongSupplier clock) {
+        if (queryText == null || queryText.trim().isEmpty() || candidateLimit < 1 || topK < 1) {
+            throw new RetrievalException(RetrievalErrorCode.INVALID_REQUEST, "invalid BM25 query or budget");
+        }
+        BoundedCollector collector = new BoundedCollector(Integer.MAX_VALUE, deadlineNanos, clock);
+        try (StandardAnalyzer analyzer = new StandardAnalyzer()) {
+            collector.checkDeadline();
+            Query query = new QueryParser("text", analyzer).parse(QueryParser.escape(queryText));
+            collector.checkDeadline();
+            searcher.search(query, collector);
+            collector.checkDeadline();
+        } catch (SearchStopped stopped) {
+            // Preserve fully evaluated hits and the deadline reason.
+        } catch (org.apache.lucene.queryparser.classic.ParseException error) {
+            throw new RetrievalException(RetrievalErrorCode.INVALID_REQUEST, "invalid BM25 query", error);
+        } catch (IOException | RuntimeException error) {
+            throw new RetrievalException(RetrievalErrorCode.INDEX_NOT_READY, "BM25 artifact search failed", error);
+        }
+        collector.hits.sort(Comparator.comparing(Bm25Hit::getScore).reversed()
+            .thenComparing(Bm25Hit::getDocumentId).thenComparing(Bm25Hit::getChunkId));
+        int resultSize = Math.min(candidateLimit, collector.hits.size());
+        List<Bm25Hit> result = new ArrayList<>(resultSize);
+        for (int index = 0; index < resultSize; index++) {
+            Bm25Hit hit = collector.hits.get(index);
+            result.add(new Bm25Hit(hit.getChunkId(), hit.getDocumentId(), hit.getScore(), index + 1, hit.getText()));
+        }
+        return new ChannelSearchResult<>(result, collector.evaluated, collector.reason);
+    }
+
     public ChannelSearchResult<Bm25Hit> searchWithStats(String queryText, int candidateLimit,
                                                        int topK, long deadlineNanos) {
         return searchWithStats(queryText, candidateLimit, topK, deadlineNanos, System::nanoTime);
@@ -115,7 +166,10 @@ public final class Bm25IndexReader implements Closeable {
         BoundedCollector collector = new BoundedCollector(candidateLimit, deadlineNanos, clock);
         try (StandardAnalyzer analyzer = new StandardAnalyzer()) {
             collector.checkDeadline();
-            Query query = new QueryParser("text", analyzer).parse(queryText);
+            // Retrieval queries are natural language, not Lucene query syntax. Escaping here
+            // prevents punctuation in questions (for example "film (Film)?") from becoming
+            // parser operators and turning an otherwise valid request into HTTP 400.
+            Query query = new QueryParser("text", analyzer).parse(QueryParser.escape(queryText));
             collector.checkDeadline();
             searcher.search(query, collector);
             collector.checkDeadline();

@@ -219,6 +219,15 @@ public final class GraphRetriever {
     public List<GraphHit> retrieve(String query, List<EntityRef> entities, GraphNeighborProvider provider,
                                    Map<String, TextChunk> chunks, GraphRetrievalConfig config,
                                    long deadlineNanos, LongSupplier clock, BudgetLedger ledger) {
+        return retrieve(query, entities, provider, chunks, config, deadlineNanos, clock, ledger,
+            Collections.emptyList());
+    }
+
+    /** Uses bounded text-channel candidates to resolve anchors when the question has no direct mention. */
+    public List<GraphHit> retrieve(String query, List<EntityRef> entities, GraphNeighborProvider provider,
+                                   Map<String, TextChunk> chunks, GraphRetrievalConfig config,
+                                   long deadlineNanos, LongSupplier clock, BudgetLedger ledger,
+                                   List<String> candidateChunkIds) {
         lastStats = new GraphStats();
         if (config == null || entities == null || provider == null || chunks == null) {
             return Collections.emptyList();
@@ -226,7 +235,9 @@ public final class GraphRetriever {
         if (expired(deadlineNanos, clock)) {
             return Collections.emptyList();
         }
-        List<EntityAnchorResolver.Anchor> anchors = resolver.resolve(query, entities, deadlineNanos, clock);
+        List<EntityAnchorResolver.Anchor> anchors = resolver.resolveFromCandidates(query, entities,
+            candidateChunkIds, Math.min(config.getNeighborCap(), config.getCandidateBudget()),
+            deadlineNanos, clock);
         if (expired(deadlineNanos, clock)) {
             return Collections.emptyList();
         }
@@ -270,34 +281,24 @@ public final class GraphRetriever {
                 reachedMaxHop = true;
                 continue;
             }
-            List<GraphEdgeRef> neighbors = provider.prioritizedNeighbors(state.entityId,
-                edgeComparator(query, state, config), config.getNeighborCap());
-            if (neighbors == null) {
+            if (state.hop > 0 && lastStats.growthRate > config.getMaxDiffusionGrowth()) {
+                stopWithValidation(RecallStopReason.DIFFUSION_GROWTH_LIMIT);
                 continue;
             }
-            int sampledForVertex = 0;
-            List<GraphEdgeRef> sampledEdges = new ArrayList<>();
-            java.util.Iterator<GraphEdgeRef> iterator = neighbors.iterator();
-            while (iterator.hasNext() && sampledForVertex < config.getNeighborCap()) {
-                if (expired(deadlineNanos, clock)) {
-                    return result;
-                }
-                if (lastStats.edgesExamined >= config.getEdgeScanBudget()) {
-                    stopForBudget(RecallStopReason.EDGE_SCAN_LIMIT);
-                    return result;
-                }
-                final GraphEdgeRef edge = iterator.next();
-                sampledForVertex++;
-                lastStats.neighborsSampled++;
-                lastStats.edgesExamined++;
-                increment(edgesExaminedByHop, state.hop + 1);
-                if (edge != null) {
-                    sampledEdges.add(edge);
-                }
+            int remainingEdgeBudget = config.getEdgeScanBudget() - lastStats.edgesExamined;
+            GraphNeighborProvider.NeighborBatch batch = provider.prioritizedNeighbors(state.entityId,
+                edgeComparator(query, state, config), config.getNeighborCap(), remainingEdgeBudget);
+            if (expired(deadlineNanos, clock)) {
+                return result;
             }
-            // Indexed providers already apply this ordering before the cap. Legacy lazy providers
-            // may return their native order and retain the bounded scan contract.
-            for (GraphEdgeRef edge : sampledEdges) {
+            int examined = batch.getExamined();
+            lastStats.neighborsSampled += examined;
+            lastStats.edgesExamined += examined;
+            increment(edgesExaminedByHop, state.hop + 1, examined);
+            int scoredThisHop = 0;
+            int survivedThisHop = 0;
+            boolean associationTerminated = false;
+            for (GraphEdgeRef edge : batch.getEdges()) {
                 if (expired(deadlineNanos, clock)) {
                     return result;
                 }
@@ -314,9 +315,17 @@ public final class GraphRetriever {
                     continue;
                 }
                 double score = associationScore(state, edge, targetId, provider, config);
+                scoredThisHop++;
                 if (score < config.getMinAssociationScore()) {
+                    lastStats.filteredByAssociation++;
+                    associationTerminated = exceedsAssociationFloor(
+                        survivedThisHop, scoredThisHop, config);
+                    if (associationTerminated) {
+                        break;
+                    }
                     continue;
                 }
+                survivedThisHop++;
                 List<String> sourceIds = sourceIds(state, edge, entityMap);
                 if (sourceIds.isEmpty()) {
                     lastStats.validationErrors.add("edge " + edge.getEdgeId()
@@ -413,7 +422,7 @@ public final class GraphRetriever {
                 }
                 if (lastStats.growthRate > config.getMaxDiffusionGrowth()) {
                     stopWithValidation(RecallStopReason.DIFFUSION_GROWTH_LIMIT);
-                    return result;
+                    continue;
                 }
                 if (hop < config.getMaxHop()) {
                     increment(frontierSizes, hop);
@@ -425,6 +434,15 @@ public final class GraphRetriever {
                     stopWithValidation(RecallStopReason.MARGINAL_YIELD_LIMIT);
                     return result;
                 }
+            }
+            if (batch.hasMore()) {
+                stopForBudget(RecallStopReason.EDGE_SCAN_LIMIT);
+                return result;
+            }
+            if (associationTerminated) {
+                lastStats.terminatedHop = state.hop + 1;
+                stopWithValidation(RecallStopReason.LOW_ASSOCIATION_SCORE);
+                return result;
             }
         }
         if (lastStats.stopReason == RecallStopReason.COMPLETED && !lastStats.validationErrors.isEmpty()) {
@@ -439,6 +457,19 @@ public final class GraphRetriever {
                                    Map<String, TextChunk> chunks, GraphRetrievalConfig config,
                                    long deadlineNanos) {
         return retrieve(query, entities, provider, chunks, config, deadlineNanos, System::nanoTime);
+    }
+
+    /**
+     * Returns true when too few scored edges survived the association floor for this hop to keep
+     * consuming the edge-scan budget. A survival rate of 1.0 disables the early stop.
+     */
+    private static boolean exceedsAssociationFloor(int survived, int scored,
+                                                   GraphRetrievalConfig config) {
+        double floor = config.getMinAssociationSurvivalRate();
+        if (floor >= 1.0D || scored == 0) {
+            return false;
+        }
+        return (double) survived / (double) scored < floor;
     }
 
     private static boolean sampled(String query, ExpansionState state, GraphEdgeRef edge,
@@ -547,8 +578,8 @@ public final class GraphRetriever {
 
     private static final class ExpansionState {
         private static final Comparator<ExpansionState> ORDER = Comparator
-            .comparingDouble((ExpansionState value) -> value.score).reversed()
-            .thenComparingInt(value -> value.hop)
+            .comparingInt((ExpansionState value) -> value.hop)
+            .thenComparing(Comparator.comparingDouble((ExpansionState value) -> value.score).reversed())
             .thenComparing(value -> value.entityId)
             .thenComparing(value -> edgeIds(value.pathEdges).toString());
         private final EntityAnchorResolver.Anchor anchor;
@@ -691,8 +722,19 @@ public final class GraphRetriever {
         private int evidenceYield;
         private double growthRate;
         private double marginalYield;
+        private int filteredByAssociation;
+        private int terminatedHop = -1;
         private RecallStopReason stopReason = RecallStopReason.COMPLETED;
         private final List<String> validationErrors = new ArrayList<>();
+
+        public int getFilteredByAssociation() {
+            return filteredByAssociation;
+        }
+
+        /** Hop index that was abandoned because too few edges passed the association floor. */
+        public int getTerminatedHop() {
+            return terminatedHop;
+        }
 
         public int getAnchorsConsidered() {
             return anchorsConsidered;

@@ -23,19 +23,166 @@ import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.LongSupplier;
 import org.apache.geaflow.ai.retrieval.model.graph.EntityRef;
 
 /** Deterministic canonical-name and alias resolver used as the graph expansion boundary. */
 public final class EntityAnchorResolver {
+    private final List<NameEntry> names;
+    private final Map<String, List<NameEntry>> namesByToken;
+    private final Map<String, List<EntityRef>> entitiesBySourceChunk;
+
+    public EntityAnchorResolver() {
+        this.names = Collections.emptyList();
+        this.namesByToken = Collections.emptyMap();
+        this.entitiesBySourceChunk = Collections.emptyMap();
+    }
+
+    /** Builds a reusable normalized name index for an immutable graph fixture. */
+    public EntityAnchorResolver(List<EntityRef> entities) {
+        Map<String, NameEntry> indexed = new LinkedHashMap<>();
+        Map<String, List<EntityRef>> sourceEntities = new HashMap<>();
+        if (entities != null) {
+            for (EntityRef entity : entities) {
+                if (entity == null) {
+                    continue;
+                }
+                add(indexed, entity.getCanonicalName(), entity, "CANONICAL", 1.0D);
+                for (String alias : entity.getAliases()) {
+                    add(indexed, alias, entity, "ALIAS", 0.9D);
+                }
+                for (String chunkId : entity.getSourceChunkIds()) {
+                    sourceEntities.computeIfAbsent(chunkId, ignored -> new ArrayList<>()).add(entity);
+                }
+            }
+        }
+        List<NameEntry> ordered = new ArrayList<>(indexed.values());
+        ordered.sort(Comparator.comparingInt((NameEntry value) -> value.name.length()).reversed()
+            .thenComparing(value -> value.entity.getEntityId()).thenComparing(value -> value.name));
+        this.names = Collections.unmodifiableList(ordered);
+        Map<String, List<NameEntry>> byToken = new HashMap<>();
+        for (NameEntry entry : ordered) {
+            String[] parts = entry.name.split(" ");
+            if (parts.length == 0 || parts[0].isEmpty()) {
+                continue;
+            }
+            byToken.computeIfAbsent(parts[0], ignored -> new ArrayList<>()).add(entry);
+        }
+        for (List<NameEntry> entries : byToken.values()) {
+            entries.sort(Comparator.comparingInt((NameEntry value) -> value.name.length()).reversed()
+                .thenComparing(value -> value.entity.getEntityId()).thenComparing(value -> value.name));
+        }
+        this.namesByToken = Collections.unmodifiableMap(byToken);
+        for (List<EntityRef> values : sourceEntities.values()) {
+            values.sort(Comparator.comparing(EntityRef::getEntityId));
+        }
+        this.entitiesBySourceChunk = Collections.unmodifiableMap(sourceEntities);
+    }
+
+    private static void add(Map<String, NameEntry> indexed, String name, EntityRef entity,
+                            String type, double confidence) {
+        String normalized = normalize(name);
+        if (!normalized.isEmpty()) {
+            String key = entity.getEntityId().length() + ":" + entity.getEntityId() + normalized;
+            NameEntry previous = indexed.get(key);
+            if (previous == null || confidence > previous.confidence) {
+                indexed.put(key, new NameEntry(normalized, entity, type, confidence));
+            }
+        }
+    }
+
+    /** Resolves question mentions using a fixture index built once at load time. */
+    public List<Anchor> resolve(String query, long deadlineNanos, LongSupplier clock) {
+        if (query == null || names.isEmpty()) {
+            return Collections.emptyList();
+        }
+        String normalized = normalize(query);
+        Map<String, Anchor> matches = new LinkedHashMap<>();
+        Set<NameEntry> candidates = new HashSet<>();
+        for (String token : normalized.split(" ")) {
+            List<NameEntry> entries = namesByToken.get(token);
+            if (entries != null) {
+                candidates.addAll(entries);
+            }
+        }
+        List<NameEntry> orderedCandidates = new ArrayList<>(candidates);
+        orderedCandidates.sort(Comparator.comparingInt((NameEntry value) -> value.name.length()).reversed()
+            .thenComparing(value -> value.entity.getEntityId()).thenComparing(value -> value.name));
+        for (NameEntry entry : orderedCandidates) {
+            if (deadlineNanos != 0L && clock.getAsLong() - deadlineNanos >= 0L) {
+                break;
+            }
+            if (containsName(normalized, entry.name)) {
+                Anchor previous = matches.get(entry.entity.getEntityId());
+                if (previous == null || entry.confidence > previous.getConfidence()) {
+                    matches.put(entry.entity.getEntityId(), new Anchor(entry.entity, entry.type, entry.confidence));
+                }
+            }
+        }
+        List<Anchor> result = new ArrayList<>(matches.values());
+        result.sort(Comparator.comparing(Anchor::getConfidence).reversed()
+            .thenComparing(a -> a.getEntity().getEntityId()));
+        return result;
+    }
+
+    /** Resolves anchors from already retrieved chunks when the question has no name match. */
+    public List<Anchor> resolveFromCandidates(String query, List<EntityRef> entities, List<String> chunkIds,
+                                              int maxAnchors, long deadlineNanos, LongSupplier clock) {
+        List<Anchor> direct = resolve(query, entities, deadlineNanos, clock);
+        if (!direct.isEmpty() || chunkIds == null || maxAnchors < 1) {
+            return direct;
+        }
+        Map<String, EntityRef> matches = new LinkedHashMap<>();
+        for (String chunkId : chunkIds) {
+            if (deadlineNanos != 0L && clock.getAsLong() - deadlineNanos >= 0L) {
+                break;
+            }
+            for (EntityRef entity : entitiesBySourceChunk.getOrDefault(chunkId, Collections.emptyList())) {
+                matches.putIfAbsent(entity.getEntityId(), entity);
+                if (matches.size() >= maxAnchors) {
+                    break;
+                }
+            }
+            if (matches.size() >= maxAnchors) {
+                break;
+            }
+        }
+        List<Anchor> result = new ArrayList<>();
+        for (EntityRef entity : matches.values()) {
+            result.add(new Anchor(entity, "TEXT_CANDIDATE", 0.35D));
+        }
+        return result;
+    }
+
+    private static boolean containsName(String query, String name) {
+        int offset = -1;
+        while ((offset = query.indexOf(name, offset + 1)) >= 0) {
+            int end = offset + name.length();
+            boolean leftBoundary = offset == 0 || !Character.isLetterOrDigit(query.charAt(offset - 1));
+            boolean rightBoundary = end == query.length() || !Character.isLetterOrDigit(query.charAt(end));
+            if (leftBoundary && rightBoundary) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public List<Anchor> resolve(String query, List<EntityRef> entities) {
         return resolve(query, entities, 0L, System::nanoTime);
     }
 
     public List<Anchor> resolve(String query, List<EntityRef> entities, long deadlineNanos, LongSupplier clock) {
+        if (!names.isEmpty()) {
+            return resolve(query, deadlineNanos, clock);
+        }
         if (query == null || entities == null) {
             return Collections.emptyList();
         }
@@ -74,6 +221,20 @@ public final class EntityAnchorResolver {
         }
         String normalized = Normalizer.normalize(value, Normalizer.Form.NFKC);
         return normalized.trim().toLowerCase(Locale.ROOT).replaceAll("\\s+", " ");
+    }
+
+    private static final class NameEntry {
+        private final String name;
+        private final EntityRef entity;
+        private final String type;
+        private final double confidence;
+
+        private NameEntry(String name, EntityRef entity, String type, double confidence) {
+            this.name = name;
+            this.entity = entity;
+            this.type = type;
+            this.confidence = confidence;
+        }
     }
 
     /** An entity matched to a query with deterministic confidence metadata. */
