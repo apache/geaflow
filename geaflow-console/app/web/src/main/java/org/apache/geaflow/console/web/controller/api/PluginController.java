@@ -19,10 +19,13 @@
 
 package org.apache.geaflow.console.web.controller.api;
 
+import org.apache.geaflow.console.biz.shared.AuthorizationManager;
 import org.apache.geaflow.console.biz.shared.PluginManager;
 import org.apache.geaflow.console.biz.shared.view.PluginView;
 import org.apache.geaflow.console.common.dal.model.PageList;
 import org.apache.geaflow.console.common.dal.model.PluginSearch;
+import org.apache.geaflow.console.common.util.context.ContextHolder;
+import org.apache.geaflow.console.core.model.security.GeaflowRole;
 import org.apache.geaflow.console.web.api.GeaflowApiResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -43,13 +46,24 @@ public class PluginController {
     @Autowired
     private PluginManager pluginManager;
 
+    @Autowired
+    private AuthorizationManager authorizationManager;
+
+    private void authorizeSystemSession() {
+        if (ContextHolder.get().isSystemSession()) {
+            authorizationManager.hasRole(GeaflowRole.SYSTEM_ADMIN);
+        }
+    }
+
     @GetMapping("/{pluginId}")
     public GeaflowApiResponse<PluginView> queryPlugin(@PathVariable String pluginId) {
+        authorizeSystemSession();
         return GeaflowApiResponse.success(pluginManager.get(pluginId));
     }
 
     @GetMapping
     public GeaflowApiResponse<PageList<PluginView>> searchPlugins(PluginSearch search) {
+        authorizeSystemSession();
         return GeaflowApiResponse.success(pluginManager.search(search));
     }
 
@@ -57,17 +71,20 @@ public class PluginController {
     public GeaflowApiResponse<String> createPlugin(PluginView pluginView,
                                                    @RequestParam(required = false) MultipartFile jarFile,
                                                    @RequestParam(required = false) String fileId) {
+        authorizeSystemSession();
         return GeaflowApiResponse.success(pluginManager.createPlugin(pluginView, jarFile, fileId));
     }
 
     @PutMapping("/{pluginId}")
     public GeaflowApiResponse<Boolean> updatePlugin(@PathVariable String pluginId, PluginView view,
                                                     @RequestParam(required = false) MultipartFile jarFile) {
+        authorizeSystemSession();
         return GeaflowApiResponse.success(pluginManager.updatePlugin(pluginId, view, jarFile));
     }
 
     @DeleteMapping("/{pluginId}")
     public GeaflowApiResponse<Boolean> deletePlugin(@PathVariable String pluginId) {
+        authorizeSystemSession();
         return GeaflowApiResponse.success(pluginManager.drop(pluginId));
     }
 

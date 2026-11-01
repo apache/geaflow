@@ -56,7 +56,7 @@ public class GraphViewConverter extends DataViewConverter<GeaflowGraph, GraphVie
             // update pluginConfig info
             e.setId(view.getPluginConfig().getId());
             e.setCategory(GeaflowPluginCategory.GRAPH);
-            view.setPluginConfig(e);
+            pluginConfigViewConverter.merge(view.getPluginConfig(), e);
         });
     }
 

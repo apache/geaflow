@@ -64,6 +64,7 @@ public class JdbcPluginConfigClass extends PluginConfigClass {
     private Integer connectionPoolSize;
 
     @GeaflowConfigKey(value = "geaflow.store.jdbc.connect.config.json", comment = "i18n.key.connection.ext.config.json")
+    @GeaflowConfigValue(masked = true)
     private String configJson;
 
     public JdbcPluginConfigClass() {
