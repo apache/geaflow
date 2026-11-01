@@ -39,3 +39,17 @@ def test_answer_metrics_handle_empty_predictions():
     assert exact_match('', 'answer') == 0.0
     assert f1('', 'answer') == 0.0
     assert f1('answer', 'answer') == 1.0
+
+
+def test_matches_java_shared_golden_fixture():
+    """The Java evaluator reads the same fixture; both must agree on EM/F1."""
+    import json
+    from pathlib import Path
+
+    fixture = (Path(__file__).resolve().parents[3]
+               / 'geaflow-ai' / 'src' / 'test' / 'resources' / 'answer' / 'em-f1-golden.json')
+    cases = json.loads(fixture.read_text(encoding='utf-8'))['cases']
+    assert len(cases) == 8
+    for case in cases:
+        assert exact_match(case['prediction'], case['answer']) == case['exactMatch'], case
+        assert abs(f1(case['prediction'], case['answer']) - case['f1']) < 1e-9, case
