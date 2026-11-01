@@ -30,13 +30,17 @@ import java.util.HashMap;
 import java.util.Map;
 import org.apache.geaflow.cluster.clustermanager.AbstractClusterManager;
 import org.apache.geaflow.cluster.container.ContainerInfo;
+import org.apache.geaflow.cluster.rpc.RpcClient;
 import org.apache.geaflow.common.config.Configuration;
 import org.apache.geaflow.common.config.keys.ExecutionConfigKeys;
 import org.apache.geaflow.common.exception.GeaflowHeartbeatException;
 import org.apache.geaflow.common.heartbeat.Heartbeat;
 import org.apache.geaflow.common.utils.SleepUtils;
 import org.apache.geaflow.rpc.proto.Master.HeartbeatResponse;
+import org.apache.geaflow.rpc.proto.Supervisor.StatusResponse;
 import org.mockito.Mock;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
@@ -104,17 +108,22 @@ public class HeartbeatManagerTest {
         verify(clusterManager, times(1)).doFailover(eq(1), isA(GeaflowHeartbeatException.class));
     }
 
-    @Test
+    @Test(timeOut = 10000)
     public void checkWorkHealth_LogsWarningsAndErrors() {
         Map<Integer, String> containerMap = new HashMap<>();
         containerMap.put(1, "container1");
         when(clusterManager.getContainerIds()).thenReturn(containerMap);
         when(clusterManager.getDriverIds()).thenReturn(new HashMap<Integer, String>());
 
-        heartbeatManager.checkWorkerHealth();
-        heartbeatManager.close();
-
-        verify(clusterManager, times(1)).doFailover(eq(1), isA(GeaflowHeartbeatException.class));
+        RpcClient rpcClient = Mockito.mock(RpcClient.class);
+        when(rpcClient.queryWorkerStatusBySupervisor("container1")).thenReturn(
+            StatusResponse.newBuilder().setIsAlive(false).build());
+        try (MockedStatic<RpcClient> mocked = Mockito.mockStatic(RpcClient.class)) {
+            mocked.when(RpcClient::getInstance).thenReturn(rpcClient);
+            heartbeatManager.checkWorkerHealth();
+            verify(rpcClient).queryWorkerStatusBySupervisor("container1");
+            verify(clusterManager, times(1)).doFailover(eq(1), isA(GeaflowHeartbeatException.class));
+        }
     }
 
     @Test

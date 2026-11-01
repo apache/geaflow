@@ -77,12 +77,26 @@
             <artifactId>druid-core</artifactId>
             <version>${druid.version}</version>
             <scope>test</scope>
+            <exclusions>
+                <!-- Native system monitoring is not used by the allocation benchmark. -->
+                <exclusion>
+                    <groupId>org.hyperic</groupId>
+                    <artifactId>sigar</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>org.apache.druid</groupId>
             <artifactId>druid-server</artifactId>
             <version>${druid.version}</version>
             <scope>test</scope>
+            <exclusions>
+                <!-- Native system monitoring is not used by the allocation benchmark. -->
+                <exclusion>
+                    <groupId>org.hyperic</groupId>
+                    <artifactId>sigar</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>org.apache.flink</groupId>
