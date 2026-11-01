@@ -23,7 +23,8 @@ METHODS = ('BM25_ONLY', 'VECTOR_ONLY', 'VECTOR_OVERFETCH', 'GRAPH_ONLY',
 # Ablation conditions required by the design document: no-anchor, high-degree, lexical,
 # semantic and multi-hop. Each condition adjusts only the wire request, never the Java engine.
 ABLATION_METHODS = ('FIXED_HYBRID', 'ADAPTIVE_HYBRID')
-ABLATIONS = ('none', 'no-anchor', 'high-degree', 'lexical', 'semantic', 'multi-hop')
+ABLATIONS = ('none', 'no-anchor', 'high-degree', 'lexical', 'semantic', 'multi-hop',
+             'budget-tight', 'budget-loose')
 
 
 def apply_ablation(body, ablation):
@@ -48,6 +49,12 @@ def apply_ablation(body, ablation):
     elif ablation == 'multi-hop':
         # Force a single hop by capping the candidate window; the server derives maxHop.
         budget['maxCandidates'] = max(1, budget['maxCandidates'] // 2)
+    elif ablation == 'budget-tight':
+        # Budget-level ablation: shrink the candidate budget without changing the method, so a
+        # quality drop is attributable to budget rather than to a different retriever.
+        budget['maxCandidates'] = max(1, budget['maxCandidates'] // 4)
+    elif ablation == 'budget-loose':
+        budget['maxCandidates'] = budget['maxCandidates'] * 4
     else:
         raise ValueError('unknown ablation: %s' % ablation)
     return shaped
@@ -194,8 +201,10 @@ def run(args):
     def execute(item):
         index, query, method = item
         config = METHOD_CONFIG[method]
-        candidate_limit = args.max_candidates * config['candidateMultiplier']
         body = request_body(args, query, method, vectors[index] if vectors is not None else None)
+        # The recorded budget must be the one the request carried; an ablation changes it, and
+        # reporting the pre-ablation value would mislabel the experiment.
+        candidate_limit = body['budget']['maxCandidates']
         status, response, latency, error = request(args.url, body)
         attempts = 1
         while status != 200 and attempts <= args.retries:
@@ -296,10 +305,11 @@ def run(args):
                              'ablation': getattr(args, 'ablation', None) or 'none',
                              'mode': METHOD_CONFIG[method]['mode'],
                              'executionMode': METHOD_CONFIG[method]['executionMode'],
-                             'topKLimit': args.top_k * METHOD_CONFIG[method].get('topKMultiplier', 1),
+                             'topKLimit': max((row['topKLimit'] for row in selected), default=0),
                              'exactRanking': int(bool(args.exact_ranking and
                                                      METHOD_CONFIG[method]['exactRanking'])),
-                             'candidateLimit': args.max_candidates * METHOD_CONFIG[method]['candidateMultiplier'],
+                             'candidateLimit': max((row['candidateLimit'] for row in selected),
+                                                  default=0),
                              'requests': len(selected),
                              'success': sum(row['status'] == 200 for row in selected),
                              'protocolValid': sum(row['protocolValid'] for row in selected),
@@ -386,7 +396,8 @@ if __name__ == '__main__':
                         help='scan the complete text/vector index before ranking (quality mode)')
     parser.add_argument('--ablation', choices=ABLATIONS[1:], default=None,
                         help='Run the FIXED_HYBRID/ADAPTIVE_HYBRID pair under one ablation '
-                             'condition (no-anchor, high-degree, lexical, semantic, multi-hop).')
+                             'condition (query-category: no-anchor, high-degree, lexical, semantic, '
+                             'multi-hop; budget-level: budget-tight, budget-loose).')
     parser.add_argument('--seed', type=int, default=0,
                         help='reproducibility seed recorded with every result row')
     parser.add_argument('--config-version', default='v1',

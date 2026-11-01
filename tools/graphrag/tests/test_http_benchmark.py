@@ -6,7 +6,8 @@ import pytest
 
 from types import SimpleNamespace
 
-from tools.graphrag.benchmark_http import (METHODS, METHOD_CONFIG, _open_output, _summary_path, apply_ablation,
+from tools.graphrag.benchmark_http import (METHODS, METHOD_CONFIG, _open_output, _summary_path,
+                                            apply_ablation,
                                             assert_equal_budget, request_body, run_provenance)
 from tools.graphrag.eval.retrieval import (load_query_vectors, load_supporting_facts,
                                             load_supporting_sentences, load_supporting_targets,
@@ -262,3 +263,29 @@ def test_summary_path_drops_compressed_suffix():
 
     assert _summary_path(Path('run/six.jsonl')).name == 'six.csv'
     assert _summary_path(Path('run/six.jsonl.gz')).name == 'six.csv'
+
+
+def test_budget_ablations_scale_the_wire_budget_only():
+    base = SimpleNamespace(graph_name='g', graph_version='gv', index_version='iv',
+                           top_k=10, timeout_ms=5000, max_candidates=100, token_budget=4000,
+                           exact_ranking=True, ablation=None)
+    query = {'question': 'q'}
+    reference = request_body(base, query, 'ADAPTIVE_HYBRID', [1.0, 0.0])
+    assert reference['budget']['maxCandidates'] == 100
+
+    for name, expected in (('budget-tight', 25), ('budget-loose', 400)):
+        shaped = apply_ablation(dict(reference, budget=dict(reference['budget'])), name)
+        assert shaped['budget']['maxCandidates'] == expected, name
+        # A budget ablation must change cost only, never the retrieval method under test.
+        assert shaped['mode'] == reference['mode'], name
+        assert shaped['executionMode'] == reference['executionMode'], name
+
+
+def test_reported_budget_reflects_the_ablated_request():
+    """A budget ablation must be visible in the recorded budget, not masked by the CLI default."""
+    base = SimpleNamespace(graph_name='g', graph_version='gv', index_version='iv',
+                           top_k=10, timeout_ms=5000, max_candidates=100, token_budget=4000,
+                           exact_ranking=True, ablation='budget-tight')
+    body = request_body(base, {'question': 'q'}, 'ADAPTIVE_HYBRID', [1.0, 0.0])
+    assert body['budget']['maxCandidates'] == 25
+    assert base.max_candidates == 100, 'the CLI default must stay untouched'
