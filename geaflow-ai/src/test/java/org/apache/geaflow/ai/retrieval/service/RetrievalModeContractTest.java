@@ -147,4 +147,37 @@ class RetrievalModeContractTest {
             "policy", new ChunkingConfiguration("chunk-v1", 100, 10), "graph", "fixture", VERSION, 1L);
         return new IngestionContext(manifest, new GraphVersion(GRAPH, VERSION), "test");
     }
+
+    @Test
+    void parallelAndSequentialAgreeOnPerStageCostGolden() throws Exception {
+        RecallService service = new RecallService(fixture());
+
+        RetrievalRequest sequential = request("HYBRID");
+        sequential.setExecutionMode("SEQUENTIAL");
+        RetrievalResponse first = service.retrieve(sequential);
+
+        RetrievalRequest parallel = request("HYBRID");
+        parallel.setExecutionMode("PARALLEL");
+        RetrievalResponse second = service.retrieve(parallel);
+
+        // Stage latency is wall-clock and must not be compared; the budget and work counters are
+        // deterministic and must match exactly, otherwise "same plan" does not mean "same cost".
+        assertEquals(first.getTrace().getChannelBudgets(), second.getTrace().getChannelBudgets(),
+            "channel budgets must not depend on execution mode");
+        assertEquals(first.getTrace().getEvaluatedCounts(), second.getTrace().getEvaluatedCounts(),
+            "evaluated work per channel must not depend on execution mode");
+        assertEquals(first.getTrace().getRawCandidatesScored(),
+            second.getTrace().getRawCandidatesScored(),
+            "raw scored work per channel must not depend on execution mode");
+        assertEquals(first.getTrace().getCandidateCounts(), second.getTrace().getCandidateCounts());
+        assertEquals(first.getTrace().getEdgesExamined(), second.getTrace().getEdgesExamined(),
+            "edge scan work must not depend on execution mode");
+        assertEquals(first.getTrace().getTokensRetained(), second.getTrace().getTokensRetained(),
+            "retained token cost must not depend on execution mode");
+        assertEquals(first.getTrace().getTotalCandidatesEvaluated(),
+            second.getTrace().getTotalCandidatesEvaluated());
+        assertEquals(first.getTrace().getChannelStopReasons(),
+            second.getTrace().getChannelStopReasons(),
+            "stop reasons must be identical so cost is attributable to the same cause");
+    }
 }
