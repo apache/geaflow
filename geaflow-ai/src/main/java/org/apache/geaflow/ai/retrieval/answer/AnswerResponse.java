@@ -3,7 +3,9 @@ package org.apache.geaflow.ai.retrieval.answer;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /** Structured answer result; abstention is explicit and citation-bearing. */
 public final class AnswerResponse {
@@ -15,6 +17,10 @@ public final class AnswerResponse {
     private final List<String> evidenceIds;
     private final List<String> traceIds;
     private final int consideredEvidenceCount;
+    private final Map<String, String> suppressReasons;
+    private final String requestId;
+    private final String graphVersion;
+    private final String indexVersion;
 
     public AnswerResponse(String answer, String abstentionReason, String context, int tokens,
                           List<Citation> citations) {
@@ -37,6 +43,23 @@ public final class AnswerResponse {
     public AnswerResponse(String answer, String abstentionReason, String context, int tokens,
                           List<Citation> citations, List<String> evidenceIds, List<String> traceIds,
                           int consideredEvidenceCount) {
+        this(answer, abstentionReason, context, tokens, citations, evidenceIds, traceIds,
+            consideredEvidenceCount, Collections.emptyMap(), null, null, null);
+    }
+
+    /**
+     * Full result constructor.
+     *
+     * @param suppressReasons why each offered evidence item was withheld, keyed by evidence id, so
+     *     an operator can explain a thin or abstained answer without re-running the search
+     * @param requestId retrieval request that produced the evidence
+     * @param graphVersion graph version behind the evidence
+     * @param indexVersion index version behind the evidence
+     */
+    public AnswerResponse(String answer, String abstentionReason, String context, int tokens,
+                          List<Citation> citations, List<String> evidenceIds, List<String> traceIds,
+                          int consideredEvidenceCount, Map<String, String> suppressReasons,
+                          String requestId, String graphVersion, String indexVersion) {
         if (tokens < 0) {
             throw new IllegalArgumentException("tokens must not be negative");
         }
@@ -64,6 +87,11 @@ public final class AnswerResponse {
         this.evidenceIds = Collections.unmodifiableList(new ArrayList<>(evidenceIds));
         this.traceIds = Collections.unmodifiableList(new ArrayList<>(traceIds));
         this.consideredEvidenceCount = consideredEvidenceCount;
+        this.suppressReasons = suppressReasons == null ? Collections.emptyMap()
+            : Collections.unmodifiableMap(new LinkedHashMap<>(suppressReasons));
+        this.requestId = requestId;
+        this.graphVersion = graphVersion;
+        this.indexVersion = indexVersion;
     }
 
     public String getAnswer() {
@@ -112,5 +140,22 @@ public final class AnswerResponse {
 
     public boolean isAbstained() {
         return abstentionReason != null;
+    }
+
+    /** Returns why each offered evidence item was withheld, keyed by evidence id. */
+    public Map<String, String> getSuppressReasons() {
+        return suppressReasons;
+    }
+
+    public String getRequestId() {
+        return requestId;
+    }
+
+    public String getGraphVersion() {
+        return graphVersion;
+    }
+
+    public String getIndexVersion() {
+        return indexVersion;
     }
 }

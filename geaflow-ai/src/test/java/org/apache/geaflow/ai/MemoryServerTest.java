@@ -109,6 +109,22 @@ public class MemoryServerTest {
             assertEquals(1, response.getEvidence().size());
             assertTrue(response.getEvidence().get(0).getFinalScore() > 0);
             assertTrue(response.getEvidence().get(0).getStageScores().containsKey("keyword"));
+            String answerRequest = "{\"question\":\"Confucius\",\"tokenBudget\":64,"
+                + "\"requestId\":\"answer-1\",\"graphVersion\":\"v4\","
+                + "\"indexVersion\":\"v4\",\"graphName\":\"" + RetrievalTestFixture.GRAPH_NAME
+                + "\",\"mode\":\"KEYWORD\"}";
+            HttpTestResponse answer = client.postWithHeaders("/api/v1/answers", answerRequest,
+                Collections.singletonMap("X-Request-Id", "answer-1"));
+            assertEquals(200, answer.getStatus(), answer.getBody());
+            JsonObject answerBody = new JsonParser().parse(answer.getBody()).getAsJsonObject();
+            assertTrue(answerBody.has("abstentionReason"), answer.getBody());
+            assertTrue(answerBody.has("citations"), answer.getBody());
+            assertTrue(answerBody.has("suppressReasons"), answer.getBody());
+            assertTrue(answerBody.has("citationCoverage"), answer.getBody());
+            assertEquals("answer-1", answerBody.get("requestId").getAsString(), answer.getBody());
+            assertEquals(400, client.post("/api/v1/answers", "{\"question\":\"\"}",
+                Collections.emptyMap()).getStatus());
+
             HttpTestResponse retrievalMetrics = client.get("/metrics/retrieval");
             assertEquals(200, retrievalMetrics.getStatus(), retrievalMetrics.getBody());
             assertTrue(retrievalMetrics.getBody().contains("\"candidateCounts\":"),

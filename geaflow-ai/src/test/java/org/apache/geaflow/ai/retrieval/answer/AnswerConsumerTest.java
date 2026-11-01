@@ -118,4 +118,55 @@ class AnswerConsumerTest {
         assertEquals("Paris", response.getContext());
         assertEquals(1, response.getTokens());
     }
+
+    @Test
+    void recordsWhyEachEvidenceItemWasSuppressed() {
+        TextChunk first = new TextChunk("c1", "d1", 0, 0, 5, 4, "Paris");
+        TextChunk tooLarge = new TextChunk("c2", "d2", 0, 0, 40, 8, "A very long Lyon passage indeed");
+        Evidence kept = new Evidence("e1", EvidenceKind.CHUNK, "Paris",
+            Collections.singletonList(first), Collections.emptyList(), Collections.emptyList(),
+            Collections.singletonList(new SourceRef("d1", "file:///d1")), new HashMap<>(), null, 2);
+        Evidence overBudget = new Evidence("e2", EvidenceKind.CHUNK, "Lyon",
+            Collections.singletonList(tooLarge), Collections.emptyList(), Collections.emptyList(),
+            Collections.singletonList(new SourceRef("d2", "file:///d2")), new HashMap<>(), null, 1);
+
+        AnswerResponse response = new ExtractiveAnswerConsumer(new DeterministicTokenEstimator())
+            .consume(new AnswerRequest("where", 4), Arrays.asList(kept, overBudget));
+
+        assertEquals("TOKEN_BUDGET_EXCEEDED", response.getSuppressReasons().get("e2"),
+            "each suppressed item needs an explicit reason: " + response.getSuppressReasons());
+        assertTrue(!response.getSuppressReasons().containsKey("e1"));
+    }
+
+    @Test
+    void recordsInvalidProvenanceAsASuppressReason() {
+        Evidence broken = new Evidence("e9", EvidenceKind.CHUNK, "text",
+            Collections.emptyList(), Collections.emptyList(), Collections.emptyList(),
+            Collections.emptyList(), new HashMap<>(), null, 1);
+
+        AnswerResponse response = new ExtractiveAnswerConsumer(new DeterministicTokenEstimator())
+            .consume(new AnswerRequest("where", 10), Collections.singletonList(broken));
+
+        assertEquals("TOKEN_BUDGET_OR_INVALID_PROVENANCE", response.getAbstentionReason());
+        assertEquals("INVALID_PROVENANCE", response.getSuppressReasons().get("e9"),
+            "an unusable evidence item must be reported: " + response.getSuppressReasons());
+        assertTrue(response.getSuppressReasons().containsKey("e9"),
+            "an unusable evidence item must be reported: " + response.getSuppressReasons());
+    }
+
+    @Test
+    void carriesRetrievalVersionsForTraceability() {
+        TextChunk chunk = new TextChunk("c1", "d1", 0, 0, 5, 2, "Paris");
+        Evidence evidence = new Evidence("e1", EvidenceKind.CHUNK, "Paris",
+            Collections.singletonList(chunk), Collections.emptyList(), Collections.emptyList(),
+            Collections.singletonList(new SourceRef("d1", "file:///d1")), new HashMap<>(), null, 1);
+
+        AnswerResponse response = new ExtractiveAnswerConsumer(new DeterministicTokenEstimator())
+            .consume(new AnswerRequest("where", 4, "req-1", "gv-1", "iv-1"),
+                Collections.singletonList(evidence));
+
+        assertEquals("req-1", response.getRequestId());
+        assertEquals("gv-1", response.getGraphVersion());
+        assertEquals("iv-1", response.getIndexVersion());
+    }
 }

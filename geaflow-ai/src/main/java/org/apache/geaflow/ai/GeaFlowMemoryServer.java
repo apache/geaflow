@@ -168,6 +168,85 @@ public class GeaFlowMemoryServer {
         }
     }
 
+    /**
+     * Answers a question from the evidence returned by a retrieval call.
+     *
+     * <p>This is the constrained consumption layer: the answer is extractive, every sentence is
+     * cited to a returned evidence id, and an unsupported request abstains instead of inventing
+     * text. Retrieval identity is echoed so callers can reconcile an answer with its search.
+     */
+    @Post
+    @Mapping("/api/v1/answers")
+    public String answer(org.noear.solon.core.handle.Context ctx, @Body String input) {
+        String requestId = resolveRequestId(ctx.header("X-Request-Id"));
+        long startedAt = System.nanoTime();
+        ctx.headerSet("X-Request-Id", requestId);
+        ctx.contentType("application/json; charset=utf-8");
+        RetrievalProperties properties = properties();
+        String authenticationFailure = authenticationError(ctx, properties, requestId);
+        if (authenticationFailure != null) {
+            return authenticationFailure;
+        }
+        try {
+            org.apache.geaflow.ai.retrieval.answer.AnswerRequest answerRequest =
+                org.apache.geaflow.ai.retrieval.codec.AnswerApiJson.parseRequest(input);
+            org.apache.geaflow.ai.retrieval.api.model.RetrievalRequest retrievalRequest =
+                new org.apache.geaflow.ai.retrieval.api.model.RetrievalRequest();
+            retrievalRequest.setGraphName(firstNonBlank(answerRequest.getGraphName(),
+                properties.getArtifactGraphName() == null
+                || properties.getArtifactGraphName().trim().isEmpty()
+                ? properties.getReadyGraphName() : properties.getArtifactGraphName()));
+            retrievalRequest.setGraphVersion(firstNonBlank(answerRequest.getGraphVersion(),
+                properties.getArtifactGraphVersion()));
+            retrievalRequest.setIndexVersion(firstNonBlank(answerRequest.getIndexVersion(),
+                properties.getArtifactIndexVersion()));
+            retrievalRequest.setQuery(answerRequest.getQuestion());
+            // The answer layer works from text evidence. Callers choose the mode; the default is
+            // the configured one because an answer-only caller has no precomputed query vector to
+            // satisfy HYBRID/VECTOR_ONLY.
+            retrievalRequest.setMode(firstNonBlank(answerRequest.getMode(),
+                properties.getDefaultMode()));
+            org.apache.geaflow.ai.retrieval.api.model.RetrievalBudget budget =
+                new org.apache.geaflow.ai.retrieval.api.model.RetrievalBudget(
+                    properties.getDefaultTopK(), properties.getDefaultTimeoutMs(),
+                    properties.getDefaultMaxCandidates(), properties.getDefaultTokenBudget());
+            retrievalRequest.setBudget(budget);
+            org.apache.geaflow.ai.retrieval.api.model.RetrievalResponse retrieval =
+                runtimeRetrievalService().retrieve(retrievalRequest, requestId);
+            org.apache.geaflow.ai.retrieval.answer.AnswerResponse response =
+                new org.apache.geaflow.ai.retrieval.answer.ExtractiveAnswerConsumer(
+                    org.apache.geaflow.ai.retrieval.execution.RetrievalStrategyFactory.tokenEstimator(
+                        properties.getTokenEstimatorId()))
+                    .consume(new org.apache.geaflow.ai.retrieval.answer.AnswerRequest(
+                            answerRequest.getQuestion(), answerRequest.getTokenBudget(), requestId,
+                            retrieval.getGraphVersion(), answerRequest.getIndexVersion(),
+                            retrievalRequest.getGraphName()),
+                        retrieval.getEvidence());
+            ctx.status(200);
+            return org.apache.geaflow.ai.retrieval.codec.AnswerApiJson.toJson(response);
+        } catch (RetrievalException exception) {
+            ctx.status(exception.getCode().getHttpStatus());
+            return RetrievalApiJson.toJson(new RetrievalError(requestId, exception.getCode(),
+                exception.getMessage()));
+        } catch (com.google.gson.JsonParseException exception) {
+            ctx.status(400);
+            runtimeMetrics().recordFailure(
+                org.apache.geaflow.ai.retrieval.api.model.RetrievalErrorCode.INVALID_REQUEST,
+                elapsedMs(startedAt));
+            return RetrievalApiJson.toJson(new RetrievalError(requestId,
+                org.apache.geaflow.ai.retrieval.api.model.RetrievalErrorCode.INVALID_REQUEST,
+                "Malformed JSON request"));
+        } catch (RuntimeException exception) {
+            ctx.status(500);
+            runtimeMetrics().recordFailure(
+                org.apache.geaflow.ai.retrieval.api.model.RetrievalErrorCode.INTERNAL_ERROR,
+                elapsedMs(startedAt));
+            return RetrievalApiJson.toJson(new RetrievalError(requestId,
+                org.apache.geaflow.ai.retrieval.api.model.RetrievalErrorCode.INTERNAL_ERROR,
+                "internal answer error"));
+        }
+    }
+
     private static String authenticationError(org.noear.solon.core.handle.Context ctx,
                                               RetrievalProperties properties, String requestId) {
         if (!properties.isRemoteAccessEnabled()) {
@@ -375,6 +454,10 @@ public class GeaFlowMemoryServer {
 
     private RetrievalMetrics runtimeMetrics() {
         return metrics == null ? FALLBACK_METRICS : metrics;
+    }
+
+    private static String firstNonBlank(String preferred, String fallback) {
+        return preferred == null || preferred.trim().isEmpty() ? fallback : preferred;
     }
 
     private RetrievalService runtimeRetrievalService() {

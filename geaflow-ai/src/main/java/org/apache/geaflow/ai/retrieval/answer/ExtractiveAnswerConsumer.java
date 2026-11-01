@@ -4,7 +4,9 @@ package org.apache.geaflow.ai.retrieval.answer;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.apache.geaflow.ai.retrieval.execution.TokenEstimator;
 import org.apache.geaflow.ai.retrieval.model.document.SourceRef;
@@ -23,9 +25,10 @@ public final class ExtractiveAnswerConsumer {
             throw new IllegalArgumentException("request is required");
         }
         if (evidence == null || evidence.isEmpty()) {
-            return abstain("NO_EVIDENCE");
+            return abstain("NO_EVIDENCE", request);
         }
         int remaining = request.getTokenBudget();
+        Map<String, String> suppressReasons = new LinkedHashMap<>();
         StringBuilder context = new StringBuilder();
         List<Citation> citations = new ArrayList<>();
         List<String> evidenceIds = new ArrayList<>();
@@ -37,8 +40,14 @@ public final class ExtractiveAnswerConsumer {
             .reversed().thenComparing(Evidence::getEvidenceId,
                 Comparator.nullsFirst(String::compareTo)));
         for (Evidence item : ordered) {
-            if (item == null || item.getEvidenceId() == null || item.getText() == null
+            if (item == null) {
+                continue;
+            }
+            if (item.getEvidenceId() == null || item.getText() == null
                 || (item.getSources().isEmpty() && item.getPaths().isEmpty())) {
+                if (item.getEvidenceId() != null) {
+                    suppressReasons.put(item.getEvidenceId(), "INVALID_PROVENANCE");
+                }
                 continue;
             }
             SourceRef source = item.getSources().isEmpty() ? null : item.getSources().get(0);
@@ -51,6 +60,11 @@ public final class ExtractiveAnswerConsumer {
                 String identity = citationSourceId + "\u0000" + item.getEvidenceId();
                 int cost = Math.max(1, (item.getText().length() + 3) / 4);
                 if (cost > remaining) {
+                    suppressReasons.put(item.getEvidenceId(), "TOKEN_BUDGET_EXCEEDED");
+                    continue;
+                }
+                if (sources.contains(identity)) {
+                    suppressReasons.put(item.getEvidenceId(), "DUPLICATE_CHUNK");
                     continue;
                 }
                 if (sources.add(identity)) {
@@ -73,6 +87,7 @@ public final class ExtractiveAnswerConsumer {
                 for (org.apache.geaflow.ai.retrieval.model.document.TextChunk chunk : item.getChunks()) {
                     String identity = citationSourceId + "\u0000" + chunk.getChunkId();
                     if (sources.contains(identity) || !localChunks.add(identity)) {
+                        suppressReasons.put(item.getEvidenceId(), "DUPLICATE_CHUNK");
                         continue;
                     }
                     int estimate = estimator.estimate(chunk);
@@ -81,6 +96,7 @@ public final class ExtractiveAnswerConsumer {
                     }
                     if (selectedCost + estimate > remaining) {
                         localChunks.remove(identity);
+                        suppressReasons.put(item.getEvidenceId(), "TOKEN_BUDGET_EXCEEDED");
                         continue;
                     }
                     selectedText.append(chunk.getText()).append('\n');
@@ -100,15 +116,17 @@ public final class ExtractiveAnswerConsumer {
             }
         }
         if (citations.isEmpty()) {
-            return abstain("TOKEN_BUDGET_OR_INVALID_PROVENANCE");
+            return abstain("TOKEN_BUDGET_OR_INVALID_PROVENANCE", request, suppressReasons,
+                ordered.size());
         }
         String answer = context.toString().trim();
         if (answer.isEmpty()) {
-            return abstain("EMPTY_SUPPORTED_ANSWER");
+            return abstain("EMPTY_SUPPORTED_ANSWER", request, suppressReasons, ordered.size());
         }
         return new AnswerResponse(answer, null, context.toString().trim(),
             request.getTokenBudget() - remaining, citations, evidenceIds,
-            new ArrayList<>(traceIds), ordered.size());
+            new ArrayList<>(traceIds), ordered.size(), suppressReasons, request.getRequestId(),
+            request.getGraphVersion(), request.getIndexVersion());
     }
 
     private static double score(Evidence evidence) {
@@ -126,7 +144,16 @@ public final class ExtractiveAnswerConsumer {
             + ";edges=" + String.join(",", path.getEdgeIds());
     }
 
-    private static AnswerResponse abstain(String reason) {
-        return new AnswerResponse(null, reason, "", 0, java.util.Collections.emptyList());
+    private static AnswerResponse abstain(String reason, AnswerRequest request) {
+        return abstain(reason, request, java.util.Collections.emptyMap(), 0);
+    }
+
+    private static AnswerResponse abstain(String reason, AnswerRequest request,
+                                          Map<String, String> suppressReasons,
+                                          int consideredEvidenceCount) {
+        return new AnswerResponse(null, reason, "", 0, java.util.Collections.emptyList(),
+            java.util.Collections.emptyList(), java.util.Collections.emptyList(),
+            consideredEvidenceCount, suppressReasons, request.getRequestId(),
+            request.getGraphVersion(), request.getIndexVersion());
     }
 }
