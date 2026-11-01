@@ -1,0 +1,21 @@
+{
+  "dataset": "hotpotqa",
+  "dataset_release": "official-distractor",
+  "split": "distractor",
+  "source_uri": "https://hf-mirror.com/datasets/hotpotqa/hotpot_qa/resolve/1908d6afbbead072334abe2965f91bd2709910ab/distractor/validation-00000-of-00001.parquet",
+  "cache_path": "${GRAPH_RAG_CACHE}/hotpotqa-hf/distractor-validation.parquet",
+  "sha256": "c20b638ca82b21d04fe12e14ff417ad05153d4d215a65de54497fca4e972f7c6",
+  "parser_version": "hotpotqa-parquet-v1",
+  "preprocessing_version": "unicode-nfc-whitespace-v1",
+  "chunk_size": 1200,
+  "overlap": 120,
+  "entity_schema_version": "chunk-entity-cooccurrence-v2",
+  "entity_extractor_version": "text-cooccurrence-entity-v2",
+  "vector_source": "iic/nlp_gte_sentence-embedding_english-small",
+  "vector_version": "v1.0.0",
+  "random_seed": 0,
+  "license": {
+    "url": "https://hotpotqa.github.io/",
+    "status": "pending-review"
+  }
+}

@@ -52,6 +52,40 @@ class EntityGraphTest(unittest.TestCase):
         self.assertEqual(alpha["source_hash"], reversed_alpha["source_hash"])
         self.assertEqual(["chunk-a", "chunk-b"], alpha["source_chunk_ids"])
 
+    def test_cooccurrence_edges_are_text_derived_and_provenanced(self):
+        record = {
+            "dataset": "2wiki", "dataset_release": "r1", "split": "dev",
+            "source_hash": "doc-hash", "document_id": "doc1",
+            "paragraphs": [
+                {"title": "Alpha", "text": "Alpha text."},
+                {"title": "Beta", "text": "Beta text."},
+                {"title": "Gamma", "text": "Gamma text."},
+            ],
+        }
+        chunks = [{"chunk_id": "chunk1", "document_id": "doc1",
+                   "text": "Alpha text. Beta text. Gamma text.",
+                   "source_hash": "doc-hash"}]
+        _, edges = graph_records([record], chunks)
+        cooccurrence = [edge for edge in edges if edge["relation_type"] == "cooccurs"]
+        self.assertEqual(3, len(cooccurrence))
+        self.assertTrue(all(edge["source_chunk_ids"] == ["chunk1"] for edge in cooccurrence))
+        self.assertTrue(all(edge["source_document_ids"] == ["doc1"] for edge in cooccurrence))
+        _, repeat_edges = graph_records([record], chunks)
+        self.assertEqual(cooccurrence,
+                         [edge for edge in repeat_edges if edge["relation_type"] == "cooccurs"])
+
+    def test_supporting_facts_do_not_create_graph_relations(self):
+        record = {
+            "dataset": "2wiki", "dataset_release": "r1", "split": "dev",
+            "source_hash": "doc-hash", "document_id": "doc1",
+            "paragraphs": [{"title": "Alpha", "text": "Alpha text."}],
+            "supporting_facts": [["Alpha", 0]],
+        }
+        chunks = [{"chunk_id": "chunk1", "document_id": "doc1", "text": "Alpha text.",
+                   "source_hash": "doc-hash"}]
+        _, edges = graph_records([record], chunks)
+        self.assertEqual([], [edge for edge in edges if edge["relation_type"] != "mentions"])
+
 
 if __name__ == "__main__":
     unittest.main()

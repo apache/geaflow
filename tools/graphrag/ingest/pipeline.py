@@ -85,7 +85,10 @@ def _validate_ready_artifacts(root: Path, metadata: Dict[str, Any]) -> None:
     root = root.resolve()
     required = {"documents.jsonl", "chunks.jsonl", metadata.get("graph_manifest"),
                 metadata.get("quality_report"), metadata.get("source_manifest")}
-    for key in ("bm25_artifact", "vector_artifact"):
+    artifact_keys = [key for key in ("bm25_artifact", "vector_artifact") if key in metadata]
+    if len(artifact_keys) == 1:
+        raise ImportFailure("existing READY metadata has incomplete native index metadata")
+    for key in artifact_keys:
         artifact_path = metadata.get(key)
         if not isinstance(artifact_path, str) or not artifact_path:
             raise ImportFailure("existing READY metadata is missing %s" % key)
@@ -245,14 +248,16 @@ def _graph_values(connection: sqlite3.Connection, kind: str) -> Iterator[Dict[st
 
 def run_import(manifest: SourceManifest, output_directory: Path, loader: SourceLoader,
                chunking: ChunkingConfig,
-               bm25_builder: Callable[[Path, Iterable[Dict[str, Any]]], ArtifactBuildResult],
-               vector_builder: Callable[[Path, Iterable[Dict[str, Any]]], ArtifactBuildResult],
+               bm25_builder: Optional[Callable[[Path, Iterable[Dict[str, Any]]], ArtifactBuildResult]] = None,
+               vector_builder: Optional[Callable[[Path, Iterable[Dict[str, Any]]], ArtifactBuildResult]] = None,
                vector_source: str = "unknown", vector_version: str = "unknown",
                random_seed: int = 0, entity_schema_version: str = GRAPH_SCHEMA_VERSION,
                entity_extractor_version: Optional[str] = None) -> Dict[str, Any]:
     """Publish one immutable version only after all builders finish reading canonical spills."""
     output_directory.mkdir(parents=True, exist_ok=True)
     extractor_version = entity_extractor_version or EXTRACTOR_VERSION
+    if (bm25_builder is None) != (vector_builder is None):
+        raise ValueError("BM25 and vector builders must either both be configured or both be omitted")
     identity = {"dataset": manifest.dataset, "dataset_release": manifest.dataset_release,
                 "split": manifest.split, "sha256": manifest.sha256,
                 "parser_version": manifest.parser_version, "policy_version": chunking.policy_version(),
@@ -341,18 +346,23 @@ def run_import(manifest: SourceManifest, output_directory: Path, loader: SourceL
             graph_manifest = json.loads(graph_manifest_path.read_text(encoding="utf-8"))
             metadata["state"] = "INDEXING"
             canonical_chunks = JsonlRecords(staging / "chunks.jsonl", chunk_count)
-            bm25_result = _verified_build(
-                bm25_builder(staging, canonical_chunks), "bm25", connection, staging)
-            vector_result = _verified_build(
-                vector_builder(staging, canonical_chunks), "vector", connection, staging)
+            bm25_result = None
+            vector_result = None
+            if bm25_builder is not None:
+                bm25_result = _verified_build(
+                    bm25_builder(staging, canonical_chunks), "bm25", connection, staging)
+                vector_result = _verified_build(
+                    vector_builder(staging, canonical_chunks), "vector", connection, staging)
             quality = _graph_quality(staging, graph_manifest, document_count, chunk_count,
                                      connection, graph_stats["quarantined_records"])
-            quality["index_coverage"] = {
-                "bm25": {"covered_chunks": bm25_result.covered_chunk_count,
-                         "total_chunks": chunk_count, "ratio": 1.0 if chunk_count else 0.0},
-                "vector": {"covered_chunks": vector_result.covered_chunk_count,
-                           "total_chunks": chunk_count, "ratio": 1.0 if chunk_count else 0.0},
-            }
+            quality["index_coverage"] = {}
+            if bm25_result is not None and vector_result is not None:
+                quality["index_coverage"] = {
+                    "bm25": {"covered_chunks": bm25_result.covered_chunk_count,
+                             "total_chunks": chunk_count, "ratio": 1.0 if chunk_count else 0.0},
+                    "vector": {"covered_chunks": vector_result.covered_chunk_count,
+                               "total_chunks": chunk_count, "ratio": 1.0 if chunk_count else 0.0},
+                }
         finally:
             connection.close()
             database_path.unlink(missing_ok=True)
@@ -360,22 +370,28 @@ def run_import(manifest: SourceManifest, output_directory: Path, loader: SourceL
             "state": "READY", "documents": document_count, "chunks": chunk_count,
             "vertices": graph_manifest["vertex_count"], "edges": graph_manifest["edge_count"],
             "graph_manifest": str(graph_manifest_path.relative_to(staging)),
-            "bm25_artifact": str(bm25_result.path.relative_to(staging)),
-            "vector_artifact": str(vector_result.path.relative_to(staging)),
         })
+        if bm25_result is not None and vector_result is not None:
+            metadata["bm25_artifact"] = str(bm25_result.path.relative_to(staging))
+            metadata["vector_artifact"] = str(vector_result.path.relative_to(staging))
         (staging / metadata["source_manifest"]).write_text(
             json.dumps(metadata["source_provenance"], sort_keys=True, indent=2) + "\n",
             encoding="utf-8")
-        for relative in (metadata["graph_manifest"], metadata["bm25_artifact"], metadata["vector_artifact"]):
+        required_artifacts = [metadata["graph_manifest"]]
+        if bm25_result is not None and vector_result is not None:
+            required_artifacts.extend((metadata["bm25_artifact"], metadata["vector_artifact"]))
+        for relative in required_artifacts:
             candidate = staging / relative
             if not candidate.exists() or staging.resolve() not in candidate.resolve().parents:
                 raise ImportFailure("artifact is missing or outside staging: %s" % relative)
         metadata["quality_report"] = "quality-report.json"
         metadata["artifact_checksums"] = {}
         graph_root = staging / "graph" / version
-        for artifact in (staging / "documents.jsonl", staging / "chunks.jsonl",
-                         staging / metadata["source_manifest"], graph_root,
-                         bm25_result.path, vector_result.path):
+        artifacts = [staging / "documents.jsonl", staging / "chunks.jsonl",
+                     staging / metadata["source_manifest"], graph_root]
+        if bm25_result is not None and vector_result is not None:
+            artifacts.extend((bm25_result.path, vector_result.path))
+        for artifact in artifacts:
             metadata["artifact_checksums"].update(_artifact_checksums(staging, artifact))
         (staging / metadata["quality_report"]).write_text(
             json.dumps(quality, sort_keys=True, indent=2) + "\n", encoding="utf-8")

@@ -12,12 +12,17 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, Iterator, List, Tuple
 
 
-EXTRACTOR_VERSION = "dataset-evidence-entity-v1"
-GRAPH_SCHEMA_VERSION = "chunk-entity-evidence-v1"
+EXTRACTOR_VERSION = "text-cooccurrence-entity-v2"
+GRAPH_SCHEMA_VERSION = "chunk-entity-cooccurrence-v2"
 SUPPORTED_RELATIONS = frozenset({
     "supports", "related to", "relates to", "country", "country of origin",
-    "country of citizenship", "mentions",
+    "country of citizenship", "mentions", "cooccurs",
 })
+
+# A canonical chunk can contain many page titles.  Pairing every title in a
+# large chunk creates a quadratic graph and gives no additional retrieval
+# signal after the first few neighbors, so retain a deterministic prefix.
+MAX_COOCCURRENCE_ENTITIES = 32
 
 
 def canonical_name(value: str) -> str:
@@ -107,7 +112,30 @@ def graph_record_stream(records: Iterable[Dict[str, Any]],
                     "source_hash": chunk.get("source_hash", document_hash),
                     "source_hashes": [chunk.get("source_hash", document_hash)],
                 })
-        facts = record.get("evidences", []) or record.get("supporting_facts", [])
+            # Build an unsupervised entity graph from entities that occur in
+            # the same canonical text chunk.  This is deliberately derived
+            # from text co-occurrence rather than supporting-fact annotations
+            # so graph retrieval does not leak evaluation labels.
+            cooccurring = sorted(chunk_entities.get(chunk["chunk_id"], set()))
+            if len(cooccurring) > MAX_COOCCURRENCE_ENTITIES:
+                cooccurring = cooccurring[:MAX_COOCCURRENCE_ENTITIES]
+            for index, source_entity_id in enumerate(cooccurring):
+                for target_entity_id in cooccurring[index + 1:]:
+                    edge_id = stable_id("cooccurs", source_entity_id,
+                                       target_entity_id, chunk["chunk_id"])
+                    yield (None, {
+                        "edge_id": edge_id, "source_vertex_id": source_entity_id,
+                        "target_vertex_id": target_entity_id, "relation_type": "cooccurs",
+                        "source_chunk_ids": [chunk["chunk_id"]],
+                        "source_document_ids": [document_id], "dataset": dataset,
+                        "dataset_release": release, "split": split,
+                        "source_hash": chunk.get("source_hash", document_hash),
+                        "source_hashes": [chunk.get("source_hash", document_hash)],
+                    })
+        # Supporting facts are evaluation annotations, not extracted graph
+        # relations.  Only an explicit extractor output may add a relation;
+        # otherwise the text-derived cooccurrence graph above is used.
+        facts = record.get("evidences", []) or record.get("annotations", {}).get("evidences", [])
         for fact in facts:
             if not isinstance(fact, (list, tuple)) or len(fact) < 2:
                 continue

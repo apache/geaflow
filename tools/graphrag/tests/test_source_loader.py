@@ -1,16 +1,44 @@
 import hashlib
 import gzip
+import importlib.util
 import json
 import tempfile
 import unittest
 import zipfile
 from pathlib import Path
+from unittest import skipUnless
 
 from tools.graphrag.ingest.manifest_cli import dry_run_manifest, resolve_manifest
 from tools.graphrag.ingest.sources.source_loader import SourceError, SourceLoader, SourceManifest
 
 
 class SourceLoaderTest(unittest.TestCase):
+
+    @skipUnless(importlib.util.find_spec("pyarrow"), "pyarrow is optional")
+    def test_reads_hotpot_parquet_as_canonical_records(self):
+        import pyarrow as arrow
+        import pyarrow.parquet as parquet
+
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "hotpot.parquet"
+            table = arrow.Table.from_pylist([{
+                "id": "q1", "question": "Who?", "answer": "A", "type": "bridge",
+                "level": "easy",
+                "supporting_facts": {"title": ["Title"], "sent_id": [1]},
+                "context": {"title": ["Title"], "sentences": [["first", "answer"]]},
+            }])
+            parquet.write_table(table, source)
+            manifest = SourceManifest(
+                "hotpotqa", "official-distractor", "distractor", None, str(source),
+                hashlib.sha256(source.read_bytes()).hexdigest(), "hotpotqa-parquet-v1")
+
+            records = list(SourceLoader(batch_size=1).load(manifest))
+
+        self.assertEqual(1, len(records))
+        self.assertEqual("q1", records[0]["document_id"])
+        self.assertEqual("answer", records[0]["paragraphs"][0]["text"][-6:])
+        self.assertEqual([["Title", 1]], records[0]["supporting_facts"])
+        self.assertEqual("bridge", records[0]["question_type"])
 
     def test_hotpot_annotations_are_canonical_and_validated(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -29,7 +57,7 @@ class SourceLoaderTest(unittest.TestCase):
             self.assertEqual([["Title", 1]], record["supporting_facts"])
             self.assertEqual("bridge", record["question_type"])
 
-    def test_invalid_supporting_fact_is_rejected_with_dataset_location(self):
+    def test_annotation_shape_is_preserved_for_adapter_audit(self):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / "hotpot.json"
             source.write_text(json.dumps([{
@@ -38,8 +66,20 @@ class SourceLoaderTest(unittest.TestCase):
             }]), encoding="utf-8")
             manifest = SourceManifest("hotpotqa", "r", "distractor", None, str(source),
                                      hashlib.sha256(source.read_bytes()).hexdigest(), "p")
-            with self.assertRaisesRegex(SourceError, "hotpotqa/distractor record 1 supporting_facts"):
-                list(SourceLoader().load(manifest))
+            record = next(SourceLoader().load(manifest))
+            self.assertEqual([["Missing", 0]], record["annotations"]["supporting_facts"])
+
+    def test_hotpot_out_of_range_annotation_is_preserved_for_evaluation_audit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "hotpot.json"
+            source.write_text(json.dumps([{
+                "_id": "q1", "question": "Who?", "context": [["Title", ["only sentence"]]],
+                "supporting_facts": [["Title", 902]]
+            }]), encoding="utf-8")
+            manifest = SourceManifest("hotpotqa", "r", "distractor", None, str(source),
+                                     hashlib.sha256(source.read_bytes()).hexdigest(), "p")
+            record = next(SourceLoader().load(manifest))
+            self.assertEqual([["Title", 902]], record["supporting_facts"])
 
     def test_resolve_manifest_records_actual_cache_and_preserves_official_source(self):
         with tempfile.TemporaryDirectory() as directory:

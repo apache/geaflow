@@ -1,4 +1,4 @@
-"""Manifest-driven readers for the Week 2 public datasets.
+"""Manifest-driven readers for public GraphRAG datasets.
 
 The reader intentionally depends only on the Python standard library.  It accepts JSON arrays,
 JSONL files, and gzip-compressed variants, while yielding canonical records in bounded batches.
@@ -54,8 +54,6 @@ class SourceManifest:
         checksum = str(raw["sha256"]).lower()
         if len(checksum) != 64 or any(char not in "0123456789abcdef" for char in checksum):
             raise SourceError("manifest %s has invalid sha256" % path)
-        if raw.get("dataset") == "2wikimultihopqa" and raw.get("split") not in ("train", "dev", "test"):
-            raise SourceError("2wikimultihopqa manifest split must be train, dev or test")
         license_data = raw.get("license")
         if not isinstance(license_data, dict):
             raise SourceError("manifest %s requires license metadata" % path)
@@ -103,6 +101,8 @@ class SourceLoader:
             raise SourceError("source exceeds configured size limit: %s" % path)
         for number, raw in enumerate(self._records(path, self.max_uncompressed_bytes,
                                                    self.max_zip_entries, manifest.split), start=1):
+            if path.suffix == ".parquet":
+                raw = self._hotpot_parquet_record(raw, manifest, number)
             record = self._canonical_record(manifest, number, raw)
             record["source_uri"] = manifest.source_uri or path.resolve().as_uri()
             batch.append(record)
@@ -239,6 +239,19 @@ class SourceLoader:
             finally:
                 extracted.unlink(missing_ok=True)
             return
+        if path.suffix == ".parquet":
+            try:
+                import pyarrow.parquet as parquet
+            except ImportError as exc:
+                raise SourceError("reading Parquet sources requires pyarrow") from exc
+            try:
+                parquet_file = parquet.ParquetFile(path)
+                for batch in parquet_file.iter_batches(batch_size=256):
+                    for row in batch.to_pylist():
+                        yield row
+            except (OSError, ValueError) as exc:
+                raise SourceError("cannot parse Parquet source %s: %s" % (path, exc)) from exc
+            return
         try:
             if path.stat().st_size > max_uncompressed_bytes:
                 raise SourceError("source exceeds configured uncompressed size limit: %s" % path)
@@ -324,6 +337,37 @@ class SourceLoader:
                 raise SourceError("unterminated JSON array in %s" % path)
 
     @staticmethod
+    def _hotpot_parquet_record(raw: Dict[str, Any], manifest: SourceManifest,
+                               number: int) -> Dict[str, Any]:
+        if manifest.dataset != "hotpotqa":
+            raise SourceError("Parquet input is only supported for HotpotQA")
+        context = raw.get("context")
+        if not isinstance(context, dict):
+            raise SourceError("hotpotqa/%s record %d has invalid Parquet context" %
+                              (manifest.split, number))
+        titles = context.get("title") or []
+        sentences = context.get("sentences") or []
+        if len(titles) != len(sentences):
+            raise SourceError("hotpotqa/%s record %d has mismatched context columns" %
+                              (manifest.split, number))
+        supporting = raw.get("supporting_facts") or {}
+        supporting_titles = supporting.get("title", []) if isinstance(supporting, dict) else []
+        supporting_indices = supporting.get("sent_id", []) if isinstance(supporting, dict) else []
+        if len(supporting_titles) != len(supporting_indices):
+            raise SourceError("hotpotqa/%s record %d has mismatched supporting facts" %
+                              (manifest.split, number))
+        return {
+            "_id": raw.get("id"),
+            "question": raw.get("question"),
+            "answer": raw.get("answer"),
+            "type": raw.get("type"),
+            "level": raw.get("level"),
+            "context": [[title, values] for title, values in zip(titles, sentences)],
+            "supporting_facts": [[title, index] for title, index in
+                                 zip(supporting_titles, supporting_indices)],
+        }
+
+    @staticmethod
     def _canonical_record(manifest: SourceManifest, number: int, raw: Any) -> Dict[str, Any]:
         if not isinstance(raw, dict):
             raise SourceError("%s/%s record %d must be an object" % (
@@ -336,26 +380,20 @@ class SourceLoader:
         if not isinstance(question, str) or not question.strip():
             raise SourceError("%s/%s record %d field question is required" % (
                 manifest.dataset, manifest.split, number))
-        context = raw.get("context") or raw.get("passages")
+        context = raw.get("paragraphs") or raw.get("context") or raw.get("passages")
         if not isinstance(context, list) or not context:
             raise SourceError("%s/%s record %d field context must be a non-empty list" % (
                 manifest.dataset, manifest.split, number))
         paragraphs = []
-        paragraph_titles = set()
-        paragraph_sentence_counts = {}
         for index, item in enumerate(context):
-            if isinstance(item, list) and len(item) == 2 and isinstance(item[1], list):
+            if isinstance(item, (list, tuple)) and len(item) == 2 and isinstance(item[1], list):
                 title, sentences = item
                 text = " ".join(str(sentence) for sentence in sentences)
-                sentence_count = len(sentences)
             elif isinstance(item, dict):
                 title = item.get("title") or item.get("name") or ""
                 text = item.get("text") or item.get("paragraph") or ""
                 if isinstance(text, list):
-                    sentence_count = len(text)
                     text = " ".join(str(sentence) for sentence in text)
-                else:
-                    sentence_count = 1
             else:
                 raise SourceError("%s/%s record %d field context[%d] has unsupported shape" % (
                     manifest.dataset, manifest.split, number, index))
@@ -363,22 +401,6 @@ class SourceLoader:
                 raise SourceError("%s/%s record %d field context[%d] is empty" % (
                     manifest.dataset, manifest.split, number, index))
             paragraphs.append({"title": title.strip(), "text": text})
-            paragraph_titles.add(title.strip())
-            paragraph_sentence_counts[title.strip()] = sentence_count
-        supporting_facts = raw.get("supporting_facts") or raw.get("evidence") or []
-        if manifest.dataset in ("hotpotqa", "2wikimultihopqa"):
-            if not isinstance(supporting_facts, list):
-                raise SourceError("%s/%s record %d supporting_facts must be a list" %
-                                  (manifest.dataset, manifest.split, number))
-            for fact in supporting_facts:
-                if (not isinstance(fact, (list, tuple)) or len(fact) != 2
-                        or not isinstance(fact[0], str) or not isinstance(fact[1], int)
-                        or fact[0] not in paragraph_titles or fact[1] < 0):
-                    raise SourceError("%s/%s record %d supporting_facts contains an invalid fact" %
-                                      (manifest.dataset, manifest.split, number))
-                if fact[1] >= paragraph_sentence_counts[fact[0]]:
-                    raise SourceError("%s/%s record %d supporting_facts contains an invalid fact" %
-                                      (manifest.dataset, manifest.split, number))
         answers = raw.get("answer") or raw.get("answers")
         if isinstance(answers, str):
             answers = [answers]
@@ -395,11 +417,21 @@ class SourceLoader:
             "question": question,
             "answers": answers,
             "paragraphs": paragraphs,
-            "supporting_facts": supporting_facts,
-            "evidences": raw.get("evidences") or [],
+            "annotations": raw.get("annotations") or {},
         }
-        if isinstance(raw.get("type"), str) and raw["type"].strip():
-            canonical["question_type"] = raw["type"].strip()
+        if isinstance(raw.get("supporting_facts"), list):
+            canonical["annotations"]["supporting_facts"] = raw["supporting_facts"]
+            canonical["supporting_facts"] = raw["supporting_facts"]
+        if isinstance(raw.get("evidences"), list):
+            canonical["annotations"]["evidences"] = raw["evidences"]
+            canonical["evidences"] = raw["evidences"]
+        for field in ("type", "level", "question_type"):
+            if isinstance(raw.get(field), str) and raw[field].strip():
+                canonical["annotations"][field] = raw[field].strip()
+        if "question_type" in canonical["annotations"]:
+            canonical["question_type"] = canonical["annotations"]["question_type"]
+        elif "type" in canonical["annotations"]:
+            canonical["question_type"] = canonical["annotations"]["type"]
         canonical["source_hash"] = hashlib.sha256(
             json.dumps(canonical, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
         ).hexdigest()
