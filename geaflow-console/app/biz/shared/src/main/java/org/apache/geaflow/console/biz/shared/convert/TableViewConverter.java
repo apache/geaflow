@@ -45,7 +45,7 @@ public class TableViewConverter extends StructViewConverter<GeaflowTable, TableV
             // update pluginConfig info
             e.setId(view.getPluginConfig().getId());
             e.setCategory(GeaflowPluginCategory.TABLE);
-            view.setPluginConfig(e);
+            pluginConfigViewConverter.merge(view.getPluginConfig(), e);
         });
     }
 

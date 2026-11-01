@@ -19,8 +19,13 @@
 
 package org.apache.geaflow.console.biz.shared.convert;
 
+import java.util.Objects;
 import org.apache.geaflow.console.biz.shared.view.ReleaseUpdateView;
 import org.apache.geaflow.console.core.model.cluster.GeaflowCluster;
+import org.apache.geaflow.console.core.model.config.ConfigDescFactory;
+import org.apache.geaflow.console.core.model.config.ConfigRedactor;
+import org.apache.geaflow.console.core.model.job.config.ClusterConfigClass;
+import org.apache.geaflow.console.core.model.release.GeaflowRelease;
 import org.apache.geaflow.console.core.model.release.ReleaseUpdate;
 import org.apache.geaflow.console.core.model.version.GeaflowVersion;
 import org.springframework.stereotype.Component;
@@ -28,10 +33,19 @@ import org.springframework.stereotype.Component;
 @Component
 public class ReleaseUpdateViewConverter {
 
-    public ReleaseUpdate converter(ReleaseUpdateView view, GeaflowVersion version, GeaflowCluster cluster) {
+    public ReleaseUpdate converter(ReleaseUpdateView view, GeaflowVersion version, GeaflowCluster cluster,
+                                   GeaflowRelease previous) {
         ReleaseUpdate model = new ReleaseUpdate();
-        model.setNewJobConfig(view.getNewJobConfig());
-        model.setNewClusterConfig(view.getNewClusterConfig());
+        if (view.getNewJobConfig() != null) {
+            model.setNewJobConfig(ConfigRedactor.merge(view.getNewJobConfig(), previous.getJobConfig(),
+                ConfigRedactor.jobDesc(previous.getJob().getType())));
+        }
+        if (view.getNewClusterConfig() != null) {
+            boolean sameCluster = cluster == null || previous.getCluster() != null
+                && Objects.equals(cluster.getId(), previous.getCluster().getId());
+            model.setNewClusterConfig(ConfigRedactor.merge(view.getNewClusterConfig(),
+                sameCluster ? previous.getClusterConfig() : null, ConfigDescFactory.getOrRegister(ClusterConfigClass.class)));
+        }
         model.setNewParallelisms(view.getNewParallelisms());
         model.setNewVersion(version);
         model.setNewCluster(cluster);

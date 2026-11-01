@@ -19,9 +19,11 @@
 
 package org.apache.geaflow.console.web.controller.api;
 
+import java.util.stream.Collectors;
 import org.apache.geaflow.console.biz.shared.AuthorizationManager;
 import org.apache.geaflow.console.biz.shared.ClusterManager;
 import org.apache.geaflow.console.biz.shared.view.ClusterView;
+import org.apache.geaflow.console.biz.shared.view.ResourceOptionView;
 import org.apache.geaflow.console.common.dal.model.ClusterSearch;
 import org.apache.geaflow.console.common.dal.model.PageList;
 import org.apache.geaflow.console.common.util.exception.GeaflowException;
@@ -52,11 +54,21 @@ public class ClusterController {
 
     @GetMapping
     public GeaflowApiResponse<PageList<ClusterView>> searchClusters(ClusterSearch search) {
+        authorizationManager.hasRole(GeaflowRole.SYSTEM_ADMIN);
         return GeaflowApiResponse.success(clusterManager.search(search));
+    }
+
+    @GetMapping("/-/options")
+    public GeaflowApiResponse<PageList<ResourceOptionView>> getOptions(ClusterSearch search) {
+        return GeaflowApiResponse.success(clusterManager.search(search).transform(views -> views.stream()
+            .map(view -> new ResourceOptionView(view.getId(), view.getName(),
+                view.getType() == null ? null : view.getType().name()))
+            .collect(Collectors.toList())));
     }
 
     @GetMapping("/{clusterName}")
     public GeaflowApiResponse<ClusterView> queryCluster(@PathVariable String clusterName) {
+        authorizationManager.hasRole(GeaflowRole.SYSTEM_ADMIN);
         return GeaflowApiResponse.success(clusterManager.getByName(clusterName));
     }
 

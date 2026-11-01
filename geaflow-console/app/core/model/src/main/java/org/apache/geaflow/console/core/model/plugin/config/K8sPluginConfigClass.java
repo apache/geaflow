@@ -53,9 +53,11 @@ public class K8sPluginConfigClass extends PluginConfigClass {
     private String namespace;
 
     @GeaflowConfigKey(value = "kubernetes.cert.data", comment = "i18n.key.client.cert.data")
+    @GeaflowConfigValue(masked = true)
     private String certData;
 
     @GeaflowConfigKey(value = "kubernetes.cert.key", comment = "i18n.key.client.cert.key")
+    @GeaflowConfigValue(masked = true)
     private String certKey;
 
     @GeaflowConfigKey(value = "kubernetes.ca.data", comment = "i18n.key.cluster.ca.data")

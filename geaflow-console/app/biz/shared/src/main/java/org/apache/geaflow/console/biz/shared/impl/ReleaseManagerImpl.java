@@ -144,7 +144,7 @@ public class ReleaseManagerImpl extends IdManagerImpl<GeaflowRelease, ReleaseVie
 
         GeaflowVersion version = versionService.getByName(view.getVersionName());
         GeaflowCluster cluster = clusterService.getByName(view.getClusterName());
-        ReleaseUpdate releaseUpdate = releaseUpdateViewConverter.converter(view, version, cluster);
+        ReleaseUpdate releaseUpdate = releaseUpdateViewConverter.converter(view, version, cluster, task.getRelease());
 
         GeaflowRelease newRelease = GeaflowReleaseBuilder.update(task.getRelease(), releaseUpdate);
 

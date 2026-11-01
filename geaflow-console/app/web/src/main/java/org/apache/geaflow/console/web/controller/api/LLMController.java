@@ -20,9 +20,11 @@
 package org.apache.geaflow.console.web.controller.api;
 
 import java.util.List;
+import java.util.stream.Collectors;
 import org.apache.geaflow.console.biz.shared.AuthorizationManager;
 import org.apache.geaflow.console.biz.shared.LLMManager;
 import org.apache.geaflow.console.biz.shared.view.LLMView;
+import org.apache.geaflow.console.biz.shared.view.ResourceOptionView;
 import org.apache.geaflow.console.common.dal.model.LLMSearch;
 import org.apache.geaflow.console.common.dal.model.PageList;
 import org.apache.geaflow.console.common.util.type.GeaflowLLMType;
@@ -51,11 +53,21 @@ public class LLMController {
 
     @GetMapping
     public GeaflowApiResponse<PageList<LLMView>> searchLLMs(LLMSearch search) {
+        authorizationManager.hasRole(GeaflowRole.SYSTEM_ADMIN);
         return GeaflowApiResponse.success(llmManager.search(search));
+    }
+
+    @GetMapping("/-/options")
+    public GeaflowApiResponse<PageList<ResourceOptionView>> getOptions(LLMSearch search) {
+        return GeaflowApiResponse.success(llmManager.search(search).transform(views -> views.stream()
+            .map(view -> new ResourceOptionView(view.getId(), view.getName(),
+                view.getType() == null ? null : view.getType().name()))
+            .collect(Collectors.toList())));
     }
 
     @GetMapping("/{llmName}")
     public GeaflowApiResponse<LLMView> queryLLM(@PathVariable String llmName) {
+        authorizationManager.hasRole(GeaflowRole.SYSTEM_ADMIN);
         return GeaflowApiResponse.success(llmManager.getByName(llmName));
     }
 
