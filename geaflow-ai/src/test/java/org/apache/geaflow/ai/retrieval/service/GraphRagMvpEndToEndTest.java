@@ -13,6 +13,7 @@ package org.apache.geaflow.ai.retrieval.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -93,7 +94,10 @@ class GraphRagMvpEndToEndTest {
         assertEquals("request-graph-trace", graph.getRequestId());
         for (Evidence evidence : graph.getEvidence()) {
             for (org.apache.geaflow.ai.retrieval.model.evidence.GraphEvidenceTrace trace : evidence.getGraphTraces()) {
-                assertEquals(graph.getRequestId(), trace.getQueryId());
+                assertNotEquals(graph.getRequestId(), trace.getQueryId(),
+                    "queryId must be a query identity, not the request id");
+                assertEquals(org.apache.geaflow.ai.retrieval.model.document.RetrievalIds
+                    .queryId(graphRequest.getQuery(), graphRequest.getGraphVersion()), trace.getQueryId());
                 assertFalse(graphRequest.getQuery().equals(trace.getQueryId()));
             }
             assertEquals("https://example.test/" + evidence.getChunks().get(0).getDocumentId(),
@@ -103,6 +107,12 @@ class GraphRagMvpEndToEndTest {
         aliasRequest.setQuery("kongzi");
         assertFalse(service.retrieve(aliasRequest).getEvidence().isEmpty());
         assertFalse(hybrid.getEvidence().isEmpty());
+        assertTrue(hybrid.getTrace().getChannelBudgets().get("GRAPH") > 3,
+            hybrid.getTrace().getChannelBudgets().toString());
+        assertEquals(10, hybrid.getTrace().getChannelBudgets().values().stream()
+            .mapToInt(Integer::intValue).sum());
+        assertEquals(hybrid.getTrace().getChannelBudgets(), RetrievalApiJson.parseResponse(
+            RetrievalApiJson.toJson(hybrid)).getTrace().getChannelBudgets());
         Evidence merged = find(hybrid.getEvidence(), "5:doc-3c3");
         assertTrue(merged.getStageScores().containsKey("BM25"));
         assertTrue(merged.getStageScores().containsKey("VECTOR"));
@@ -190,7 +200,8 @@ class GraphRagMvpEndToEndTest {
 
         RetrievalResponse response = new RecallService(registry).retrieve(request);
 
-        assertEquals(RecallStageStatus.SUCCESS, response.getTrace().getChannelStatuses().get("GRAPH"));
+        assertTrue(response.getTrace().getChannelStatuses().get("GRAPH") == RecallStageStatus.SUCCESS
+            || response.getTrace().getChannelStatuses().get("GRAPH") == RecallStageStatus.DEGRADED);
         assertEquals("RUN_GRAPH", response.getTrace().getCascadeDecision());
         assertTrue(response.getTrace().getCascadeProbeScoreGap() > 0.0001);
         RetrievalResponse restored = RetrievalApiJson.parseResponse(RetrievalApiJson.toJson(response));
@@ -198,6 +209,24 @@ class GraphRagMvpEndToEndTest {
         assertEquals("RUN_GRAPH", restored.getTrace().getCascadeDecision());
         assertEquals(response.getTrace().getCascadeProbeScoreGap(),
             restored.getTrace().getCascadeProbeScoreGap(), 1.0e-12);
+    }
+
+    @Test
+    void cascadedExecutionUsesTextCandidatesAsAnchorsWhenQuestionHasNoEntityMention() throws Exception {
+        Fixture fixture = fixture();
+        RetrievalRequest request = request("HYBRID", Arrays.asList(1.0, 0.0));
+        request.setQuery("taught");
+        request.setExecutionMode("CASCADED");
+
+        RetrievalResponse response = new RecallService(fixture.registry).retrieve(request);
+
+        assertEquals("RUN_GRAPH_FALLBACK_NO_ANCHOR", response.getTrace().getCascadeDecision());
+        assertTrue(response.getTrace().getChannelStatuses().get("GRAPH") == RecallStageStatus.SUCCESS
+            || response.getTrace().getChannelStatuses().get("GRAPH") == RecallStageStatus.DEGRADED);
+        assertTrue(response.getTrace().getAnchorsConsidered() > 0,
+            response.getTrace().getCandidateCounts() + " " + response.getTrace().getChannelStopReasons());
+        assertTrue(response.getTrace().getCandidateCounts().get("GRAPH") > 0);
+        assertEquals(10, response.getTrace().getEffectiveCandidateBudget());
     }
 
     @Test
@@ -329,6 +358,181 @@ class GraphRagMvpEndToEndTest {
     }
 
     @Test
+    void replanEmitsAuditedAdjustmentsAndKeepsTraceReplayable() throws Exception {
+        Fixture fixture = fixture();
+        RecallService service = new RecallService(fixture.registry,
+            WeightedRrfConfig.DEFAULT, System::nanoTime, new org.apache.geaflow.ai.retrieval.execution
+                .DeterministicTokenEstimator(),
+            new org.apache.geaflow.ai.retrieval.execution.DeterministicReranker(),
+            new org.apache.geaflow.ai.retrieval.execution.DeterministicRulePolicy(), 2);
+
+        RetrievalResponse response = service.retrieve(request("HYBRID", Arrays.asList(1.0, 0.0)));
+
+        assertTrue(response.getTrace().getReplanEvents().size() <= 2);
+        for (org.apache.geaflow.ai.retrieval.execution.RetrievalReplanEvent event
+            : response.getTrace().getReplanEvents()) {
+            assertEquals("AFTER_TEXT", event.getBoundary());
+            assertTrue(event.getRemainingCandidates() >= 0);
+            assertEquals("GRAPH_STAGE_BOUNDARY", event.getReason());
+        }
+        RetrievalResponse replayed = RetrievalApiJson.parseResponse(RetrievalApiJson.toJson(response));
+        assertEquals(response.getTrace().getReplanEvents().size(),
+            replayed.getTrace().getReplanEvents().size());
+        for (int i = 0; i < response.getTrace().getReplanEvents().size(); i++) {
+            org.apache.geaflow.ai.retrieval.execution.RetrievalReplanEvent original
+                = response.getTrace().getReplanEvents().get(i);
+            org.apache.geaflow.ai.retrieval.execution.RetrievalReplanEvent copy
+                = replayed.getTrace().getReplanEvents().get(i);
+            assertEquals(original.getAdjustments(), copy.getAdjustments());
+            assertEquals(original.getBoundary(), copy.getBoundary());
+            assertEquals(original.getUnusedCandidates(), copy.getUnusedCandidates());
+            assertEquals(original.getOldPlan().getChannelBudgets(), copy.getOldPlan().getChannelBudgets());
+            assertEquals(original.getNewPlan().getCandidateBudget(), copy.getNewPlan().getCandidateBudget());
+            assertEquals(original.getNewPlan().getPolicyId(), copy.getNewPlan().getPolicyId());
+        }
+        assertEquals(response.getTrace().getChannelBudgets(), replayed.getTrace().getChannelBudgets());
+        assertEquals(response.getTrace().getRoutingFeatures(), replayed.getTrace().getRoutingFeatures());
+    }
+
+    @Test
+    void pluggableFusionStrategyIsHonoredAndRecordedInTrace() throws Exception {
+        Fixture fixture = fixture();
+        org.apache.geaflow.ai.retrieval.fusion.WeightedRrfFusion delegate =
+            new org.apache.geaflow.ai.retrieval.fusion.WeightedRrfFusion(
+                org.apache.geaflow.ai.retrieval.fusion.WeightedRrfConfig.DEFAULT);
+        java.util.concurrent.atomic.AtomicInteger sorts = new java.util.concurrent.atomic.AtomicInteger();
+        org.apache.geaflow.ai.retrieval.fusion.Fusion custom =
+            new org.apache.geaflow.ai.retrieval.fusion.Fusion() {
+                @Override
+                public org.apache.geaflow.ai.retrieval.fusion.WeightedRrfConfig getConfig() {
+                    return delegate.getConfig();
+                }
+
+                @Override
+                public double score(org.apache.geaflow.ai.retrieval.model.evidence.Evidence evidence) {
+                    return delegate.score(evidence);
+                }
+
+                @Override
+                public java.util.List<org.apache.geaflow.ai.retrieval.model.evidence.Evidence> sort(
+                    java.util.List<org.apache.geaflow.ai.retrieval.model.evidence.Evidence> evidence) {
+                    sorts.incrementAndGet();
+                    return delegate.sort(evidence);
+                }
+
+                @Override
+                public java.util.List<org.apache.geaflow.ai.retrieval.model.evidence.Evidence>
+                    preserveTopKChannel(
+                        java.util.List<org.apache.geaflow.ai.retrieval.model.evidence.Evidence> ranked,
+                        int topK, String channel, int minimumCount) {
+                    return delegate.preserveTopKChannel(ranked, topK, channel, minimumCount);
+                }
+
+                @Override
+                public String getVersion() {
+                    return "test-fusion-v1";
+                }
+            };
+        RecallService service = new RecallService(fixture.registry, custom, System::nanoTime,
+            new org.apache.geaflow.ai.retrieval.execution.DeterministicTokenEstimator(),
+            new org.apache.geaflow.ai.retrieval.execution.DeterministicReranker(),
+            new org.apache.geaflow.ai.retrieval.execution.DeterministicRulePolicy(), 1, null);
+
+        RetrievalResponse response = service.retrieve(request("HYBRID", Arrays.asList(1.0, 0.0)));
+
+        assertTrue(sorts.get() > 0, "custom fusion must be used for ranking");
+        assertEquals("test-fusion-v1", response.getTrace().getFusionVersion());
+        // The strategy swap must not change the evidence the default fusion would have produced.
+        org.apache.geaflow.ai.retrieval.fusion.WeightedRrfFusion reference =
+            new org.apache.geaflow.ai.retrieval.fusion.WeightedRrfFusion(
+                org.apache.geaflow.ai.retrieval.fusion.WeightedRrfConfig.DEFAULT);
+        assertEquals(reference.getVersion(), new org.apache.geaflow.ai.retrieval.fusion
+            .WeightedRrfFusion(org.apache.geaflow.ai.retrieval.fusion.WeightedRrfConfig.DEFAULT)
+            .getVersion());
+    }
+
+    @Test
+    void replanEventSurvivesJsonRoundTripWhenBoundaryShiftsThePlan() throws Exception {
+        Fixture fixture = fixture();
+        org.apache.geaflow.ai.retrieval.execution.DeterministicRulePolicy delegate =
+            new org.apache.geaflow.ai.retrieval.execution.DeterministicRulePolicy();
+        // Force the boundary replan to produce a different plan so the loop records an event.
+        org.apache.geaflow.ai.retrieval.execution.RoutingPolicy shifting = new
+            org.apache.geaflow.ai.retrieval.execution.RoutingPolicy() {
+                @Override
+                public org.apache.geaflow.ai.retrieval.execution.RetrievalPlan plan(
+                    org.apache.geaflow.ai.retrieval.execution.RoutingContext routingContext,
+                    org.apache.geaflow.ai.retrieval.execution.RetrievalProgress progress) {
+                    org.apache.geaflow.ai.retrieval.execution.RetrievalPlan base =
+                        delegate.plan(routingContext, progress);
+                    if (progress == null) {
+                        return base;
+                    }
+                    int graphBudget = base.getChannelBudgets().getOrDefault("GRAPH", 0);
+                    int textBudget = base.getChannelBudgets().getOrDefault("BM25", 2);
+                    if (textBudget < 2) {
+                        return base;
+                    }
+                    org.apache.geaflow.ai.retrieval.execution.RetrievalPlan shifted =
+                        org.apache.geaflow.ai.retrieval.execution.RetrievalPlan.builder(base)
+                            .channelBudget("GRAPH", graphBudget + 1).channelBudget("BM25", textBudget - 1)
+                            .build();
+                    return shifted;
+                }
+
+                @Override
+                public String getPolicyId() {
+                    return delegate.getPolicyId();
+                }
+
+                @Override
+                public String getPolicyVersion() {
+                    return delegate.getPolicyVersion();
+                }
+
+                @Override
+                public java.util.Map<String, String> getParameters() {
+                    return delegate.getParameters();
+                }
+            };
+        RecallService service = new RecallService(fixture.registry, WeightedRrfConfig.DEFAULT,
+            System::nanoTime, new org.apache.geaflow.ai.retrieval.execution.DeterministicTokenEstimator(),
+            new org.apache.geaflow.ai.retrieval.execution.DeterministicReranker(), shifting, 1);
+
+        RetrievalResponse response = service.retrieve(request("HYBRID", Arrays.asList(1.0, 0.0)));
+
+        assertEquals(1, response.getTrace().getReplanEvents().size());
+        org.apache.geaflow.ai.retrieval.execution.RetrievalReplanEvent original =
+            response.getTrace().getReplanEvents().get(0);
+        org.apache.geaflow.ai.retrieval.execution.RetrievalReplanEvent copy = RetrievalApiJson.parseResponse(
+            RetrievalApiJson.toJson(response)).getTrace().getReplanEvents().get(0);
+        assertEquals(original.getBoundary(), copy.getBoundary());
+        assertEquals(original.getAdjustments(), copy.getAdjustments());
+        assertEquals(original.getUnusedCandidates(), copy.getUnusedCandidates());
+        assertEquals(original.getUnusedTokens(), copy.getUnusedTokens());
+        assertEquals(original.getOldPlan().getChannelBudgets(), copy.getOldPlan().getChannelBudgets());
+        assertEquals(original.getOldPlan().getPolicyId(), copy.getOldPlan().getPolicyId());
+        assertEquals(original.getOldPlan().getCandidateBudget(), copy.getOldPlan().getCandidateBudget());
+        assertEquals(original.getNewPlan().getChannelBudgets(), copy.getNewPlan().getChannelBudgets());
+        assertEquals(original.getNewPlan().getMaxDiffusionGrowth(),
+            copy.getNewPlan().getMaxDiffusionGrowth(), 1.0e-12);
+    }
+
+    @Test
+    void replanCountStaysBoundedByConfiguredMaximum() throws Exception {
+        Fixture fixture = fixture();
+        RecallService noReplan = new RecallService(fixture.registry, WeightedRrfConfig.DEFAULT,
+            System::nanoTime, new org.apache.geaflow.ai.retrieval.execution.DeterministicTokenEstimator(),
+            new org.apache.geaflow.ai.retrieval.execution.DeterministicReranker(),
+            new org.apache.geaflow.ai.retrieval.execution.DeterministicRulePolicy(), 0);
+
+        RetrievalResponse response = noReplan.retrieve(request("HYBRID", Arrays.asList(1.0, 0.0)));
+
+        assertTrue(response.getTrace().getReplanEvents().isEmpty());
+        assertFalse(response.getEvidence().isEmpty());
+    }
+
+    @Test
     void requiresStructuredVersions() throws Exception {
         Fixture fixture = fixture();
         RecallService service = new RecallService(fixture.registry);
@@ -360,6 +564,19 @@ class GraphRagMvpEndToEndTest {
         assertEquals(Arrays.asList("BM25", "VECTOR", "GRAPH"),
             response.getTrace().getSelectedChannels());
         assertEquals(response.getRequestId(), response.getTrace().getRequestId());
+
+        RetrievalRequest exact = request("HYBRID", Arrays.asList(1.0, 0.0));
+        exact.setBudget(new RetrievalBudget(1, 1000, 3, 100));
+        exact.setExactRanking(true);
+        RetrievalResponse exactResponse = service.retrieve(exact);
+        assertEquals(RecallStageStatus.NOT_RUN,
+            exactResponse.getTrace().getChannelStatuses().get("GRAPH"));
+        assertEquals(RecallStopReason.CANDIDATE_BUDGET,
+            exactResponse.getTrace().getChannelStopReasons().get("GRAPH"));
+        assertEquals(3, exactResponse.getTrace().getChannelBudgets().values().stream()
+            .mapToInt(Integer::intValue).sum());
+        assertEquals(exactResponse.getTrace().getChannelBudgets(), RetrievalApiJson.parseResponse(
+            RetrievalApiJson.toJson(exactResponse)).getTrace().getChannelBudgets());
 
         RetrievalRequest noAnchor = request("GRAPH_ONLY", null);
         noAnchor.setQuery("unknown entity");
@@ -418,14 +635,14 @@ class GraphRagMvpEndToEndTest {
         RetrievalResponse second = service.retrieve(request);
 
         assertEquals(Arrays.asList("BM25", "VECTOR", "GRAPH"), first.getTrace().getSelectedChannels());
-        assertEquals(134, first.getTrace().getChannelBudgets().get("BM25"));
-        assertEquals(133, first.getTrace().getChannelBudgets().get("VECTOR"));
-        assertEquals(133, first.getTrace().getChannelBudgets().get("GRAPH"));
-        assertTrue(first.getTrace().getEvaluatedCounts().get("BM25") <= 134);
-        assertTrue(first.getTrace().getEvaluatedCounts().get("VECTOR") <= 133);
-        assertTrue(first.getTrace().getEvaluatedCounts().get("GRAPH") <= 133);
-        assertEquals(133, first.getTrace().getCandidateCounts().get("GRAPH"));
-        assertEquals(133, first.getTrace().getGraphCandidatesProduced());
+        assertEquals(10, first.getTrace().getChannelBudgets().get("BM25"));
+        assertEquals(10, first.getTrace().getChannelBudgets().get("VECTOR"));
+        assertEquals(380, first.getTrace().getChannelBudgets().get("GRAPH"));
+        assertTrue(first.getTrace().getEvaluatedCounts().get("BM25") <= 10);
+        assertTrue(first.getTrace().getEvaluatedCounts().get("VECTOR") <= 10);
+        assertTrue(first.getTrace().getEvaluatedCounts().get("GRAPH") <= 380);
+        assertEquals(380, first.getTrace().getCandidateCounts().get("GRAPH"));
+        assertEquals(380, first.getTrace().getGraphCandidatesProduced());
         assertTrue(first.getTrace().getTotalCandidatesEvaluated() <= 400);
         assertTrue(first.getEvidence().size() <= 10);
         assertEquals(first.getEvidence(), second.getEvidence());

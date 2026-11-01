@@ -19,6 +19,7 @@
 package org.apache.geaflow.ai.retrieval.service;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -56,7 +57,9 @@ import org.apache.geaflow.ai.retrieval.execution.BudgetConstraint;
 import org.apache.geaflow.ai.retrieval.execution.BudgetLedger;
 import org.apache.geaflow.ai.retrieval.execution.DeterministicReranker;
 import org.apache.geaflow.ai.retrieval.execution.DeterministicRulePolicy;
+import org.apache.geaflow.ai.retrieval.execution.DeterministicSeed;
 import org.apache.geaflow.ai.retrieval.execution.DeterministicTokenEstimator;
+import org.apache.geaflow.ai.retrieval.execution.PlanAdjustment;
 import org.apache.geaflow.ai.retrieval.execution.RecallPlan;
 import org.apache.geaflow.ai.retrieval.execution.RecallStageStatus;
 import org.apache.geaflow.ai.retrieval.execution.RecallStopReason;
@@ -73,6 +76,7 @@ import org.apache.geaflow.ai.retrieval.execution.StageExecutor.Stage;
 import org.apache.geaflow.ai.retrieval.execution.StageExecutor.StageResult;
 import org.apache.geaflow.ai.retrieval.execution.TokenContextTruncator;
 import org.apache.geaflow.ai.retrieval.execution.TokenEstimator;
+import org.apache.geaflow.ai.retrieval.fusion.Fusion;
 import org.apache.geaflow.ai.retrieval.fusion.WeightedRrfConfig;
 import org.apache.geaflow.ai.retrieval.fusion.WeightedRrfFusion;
 import org.apache.geaflow.ai.retrieval.index.ChannelSearchResult;
@@ -94,6 +98,9 @@ import org.apache.geaflow.ai.retrieval.model.graph.GraphPathRef;
 /** Session-free sequential recall; all execution state belongs to one request. */
 public final class RecallService {
     private static final double CASCADE_MIN_PROBE_SCORE_GAP = 0.0001D;
+    private static final String UNMEASURED_SCORE_GAP_REASON = "FIRST_STAGE_SCORE_GAP_UNMEASURED";
+    private static final String UNKNOWN_GROWTH_REASON = "GRAPH_GROWTH_UNKNOWN_INITIAL";
+    private static final long DEFAULT_CONFIG_SEED = 0L;
     private static final Pattern QUERY_TOKEN = Pattern.compile("[\\p{L}\\p{N}]+", Pattern.UNICODE_CHARACTER_CLASS);
 
     private final Bm25IndexReader bm25;
@@ -106,12 +113,14 @@ public final class RecallService {
     private final List<GraphEdgeRef> edges;
     private final GraphNeighborProvider graphProvider;
     private final RetrievalFixtureRegistry registry;
-    private final WeightedRrfFusion fusion;
+    private final Fusion fusion;
     private final LongSupplier clock;
     private final TokenEstimator tokenEstimator;
     private final Reranker reranker;
     private final RoutingPolicy routingPolicy;
     private final int maxReplanCount;
+    private final boolean strictPlanValidation;
+    private final RetrievalProperties properties;
 
     public RecallService(Bm25IndexReader bm25, VectorIndexReader vector, List<TextChunk> chunks,
                          List<EntityRef> entities, List<GraphEdgeRef> edges) {
@@ -122,7 +131,7 @@ public final class RecallService {
                          List<EntityRef> entities, List<GraphEdgeRef> edges, WeightedRrfConfig config) {
         this(bm25, vector, chunks, entities, edges, null, new InMemoryGraphNeighborProvider(edges), config,
             System::nanoTime, new DeterministicTokenEstimator(), new DeterministicReranker(),
-            new DeterministicRulePolicy(), 1);
+            new DeterministicRulePolicy(), 1, true, null, null);
     }
 
     public RecallService(RetrievalFixtureRegistry registry) {
@@ -147,19 +156,66 @@ public final class RecallService {
     public RecallService(RetrievalFixtureRegistry registry, WeightedRrfConfig config, LongSupplier clock,
                          TokenEstimator tokenEstimator, Reranker reranker,
                          RoutingPolicy routingPolicy, int maxReplanCount) {
+        this(registry, config, clock, tokenEstimator, reranker, routingPolicy, maxReplanCount, true);
+    }
+
+    /** Builds a service from configuration defaults, keeping request validation on the same values. */
+    public static RecallService fromProperties(RetrievalFixtureRegistry registry, WeightedRrfConfig config,
+                                               LongSupplier clock, RetrievalProperties properties) {
+        Objects.requireNonNull(properties, "properties");
+        DeterministicRulePolicy policy = new DeterministicRulePolicy(properties.getHighAverageIdf(),
+            properties.getHighScoreGap(), properties.getLongQueryLength(),
+            properties.getStrongAnchorConfidence(), properties.getMinimumAnchorCount(),
+            properties.getHighCandidateDegree(), properties.getHighGrowthRate(),
+            properties.getBaseNeighborCap());
+        RecallService service = new RecallService(registry, config, clock, new DeterministicTokenEstimator(),
+            new DeterministicReranker(), policy, properties.getMaxReplanCount(),
+            properties.isStrictPlanValidation(), properties);
+        return service;
+    }
+
+    public RecallService(RetrievalFixtureRegistry registry, WeightedRrfConfig config, LongSupplier clock,
+                         TokenEstimator tokenEstimator, Reranker reranker,
+                         RoutingPolicy routingPolicy, int maxReplanCount, boolean strictPlanValidation) {
+        this(registry, config, clock, tokenEstimator, reranker, routingPolicy, maxReplanCount,
+            strictPlanValidation, null);
+    }
+
+    public RecallService(RetrievalFixtureRegistry registry, WeightedRrfConfig config, LongSupplier clock,
+                         TokenEstimator tokenEstimator, Reranker reranker,
+                         RoutingPolicy routingPolicy, int maxReplanCount, boolean strictPlanValidation,
+                         RetrievalProperties properties) {
         this(null, null, Collections.emptyList(), Collections.emptyList(), Collections.emptyList(),
             Objects.requireNonNull(registry, "registry"), null, config, clock, tokenEstimator, reranker,
-            routingPolicy, maxReplanCount);
+            routingPolicy, maxReplanCount, strictPlanValidation, properties, null);
+    }
+
+    /**
+     * Builds a service around a pluggable {@link Fusion} strategy. The weighted RRF fusion stays
+     * the default; this overload lets a caller supply another implementation without changing the
+     * execution modes, budgets or trace shape.
+     */
+    public RecallService(RetrievalFixtureRegistry registry, Fusion fusion, LongSupplier clock,
+                         TokenEstimator tokenEstimator, Reranker reranker,
+                         RoutingPolicy routingPolicy, int maxReplanCount,
+                         RetrievalProperties properties) {
+        this(null, null, Collections.emptyList(), Collections.emptyList(), Collections.emptyList(),
+            Objects.requireNonNull(registry, "registry"), null,
+            Objects.requireNonNull(fusion, "fusion").getConfig(), clock, tokenEstimator, reranker,
+            routingPolicy, maxReplanCount, true, properties, Objects.requireNonNull(fusion, "fusion"));
     }
 
     private RecallService(Bm25IndexReader bm25, VectorIndexReader vector, List<TextChunk> chunks,
                           List<EntityRef> entities, List<GraphEdgeRef> edges, RetrievalFixtureRegistry registry,
                           GraphNeighborProvider graphProvider, WeightedRrfConfig config, LongSupplier clock,
                           TokenEstimator tokenEstimator, Reranker reranker, RoutingPolicy routingPolicy,
-                          int maxReplanCount) {
+                          int maxReplanCount, boolean strictPlanValidation, RetrievalProperties properties,
+                          Fusion fusionOverride) {
         if (maxReplanCount < 0) {
             throw new IllegalArgumentException("maxReplanCount must be non-negative");
         }
+        this.strictPlanValidation = strictPlanValidation;
+        this.properties = properties == null ? new RetrievalProperties() : properties;
         this.bm25 = bm25;
         this.vector = vector;
         this.chunks = immutable(chunks);
@@ -170,7 +226,7 @@ public final class RecallService {
         this.edges = immutable(edges);
         this.graphProvider = graphProvider;
         this.registry = registry;
-        this.fusion = new WeightedRrfFusion(config);
+        this.fusion = fusionOverride == null ? new WeightedRrfFusion(config) : fusionOverride;
         this.clock = Objects.requireNonNull(clock, "clock");
         this.tokenEstimator = Objects.requireNonNull(tokenEstimator, "tokenEstimator");
         this.reranker = Objects.requireNonNull(reranker, "reranker");
@@ -190,7 +246,7 @@ public final class RecallService {
         return Collections.unmodifiableMap(indexed);
     }
 
-    private RoutingContext routingContext(RetrievalCommand command, GraphNeighborProvider provider,
+    private InitialRouting routingContext(RetrievalCommand command, GraphNeighborProvider provider,
                                           RetrievalBudget budget, int candidateLimit) {
         int queryLength = queryLength(command.getQuery());
         double averageIdf = averageIdf(command.getQuery(), idfByToken);
@@ -207,6 +263,13 @@ public final class RecallService {
         final RoutingFeatures features = RoutingFeatures.builder().queryLength(queryLength)
             .averageIdf(averageIdf).anchorCount(anchors.size()).anchorConfidence(confidence)
             .candidateDegree(maxDegree).build();
+        List<String> notMeasured = new ArrayList<>();
+        if (anchors.isEmpty()) {
+            notMeasured.add(UNMEASURED_SCORE_GAP_REASON);
+        }
+        if (provider == null || provider.getStatistics() == null) {
+            notMeasured.add(UNKNOWN_GROWTH_REASON);
+        }
         List<String> available = new ArrayList<>();
         if (bm25 != null) {
             available.add("BM25");
@@ -220,10 +283,22 @@ public final class RecallService {
         int maxCandidates = candidateLimit;
         RetrievalBudget boundedBudget = new RetrievalBudget(budget.getTopK(), budget.getTimeoutMs(),
             maxCandidates, budget.getTokenBudget(), budget.getPrimaryConstraint());
-        return RoutingContext.builder().query(command.getQuery()).features(features)
+        RoutingContext context = RoutingContext.builder().query(command.getQuery()).features(features)
             .availableIndexes(available).budget(boundedBudget).requestedMode(command.getMode())
             .executionMode(command.getExecutionMode()).maxHop(2).maxReplanCount(maxReplanCount)
-            .configVersion("v1").seed(stableGraphSeed("routing", command.getQuery())).build();
+            .configVersion("v1").seed(DeterministicSeed.routingSeed(command.getQuery(), configSeed())).build();
+        return new InitialRouting(context, notMeasured);
+    }
+
+    /** Initial routing context plus the features that could not be measured before the first stage. */
+    private static final class InitialRouting {
+        private final RoutingContext context;
+        private final List<String> notMeasured;
+
+        private InitialRouting(RoutingContext context, List<String> notMeasured) {
+            this.context = context;
+            this.notMeasured = java.util.Collections.unmodifiableList(new ArrayList<>(notMeasured));
+        }
     }
 
     private static int queryLength(String query) {
@@ -278,13 +353,9 @@ public final class RecallService {
 
     private RetrievalProgress routingProgress(RetrievalTrace trace, RoutingContext context, long deadline,
                                                RecallPlan plan, BudgetLedger ledger,
-                                               Map<String, EvidenceBuilder> merged) {
-        int candidatesUsed = 0;
-        for (Integer count : trace.getEvaluatedCounts().values()) {
-            candidatesUsed += count;
-        }
-        int tokenUsed = ledger == null ? (int) Math.min(Integer.MAX_VALUE, trace.getTokensRetained())
-            : (int) Math.min(Integer.MAX_VALUE, ledger.getTokensRetained());
+                                               Map<String, EvidenceBuilder> merged, int replanCount) {
+        int candidatesUsed = candidatesUsed(trace);
+        int tokenUsed = tokensUsed(trace, ledger);
         long remainingLatency = deadline == 0L ? 0L : Math.max(0L, deadline - clock.getAsLong());
         int anchorCount = trace.getAnchorsConsidered() == 0
             ? context.getFeatures().getAnchorCount() : trace.getAnchorsConsidered();
@@ -303,7 +374,53 @@ public final class RecallService {
             .anchorCount(anchorCount).anchorConfidence(confidence)
             .candidateDegree(context.getFeatures().getCandidateDegree())
             .graphGrowthRate(trace.getGraphGrowthRate()).graphMarginalYield(trace.getGraphMarginalYield())
-            .replanCount(trace.getReplanEvents().size()).build();
+            .replanCount(replanCount).build();
+    }
+
+    private static int candidatesUsed(RetrievalTrace trace) {
+        int candidatesUsed = 0;
+        for (Integer count : trace.getEvaluatedCounts().values()) {
+            candidatesUsed += count;
+        }
+        return candidatesUsed;
+    }
+
+    private int tokensUsed(RetrievalTrace trace, BudgetLedger ledger) {
+        return ledger == null ? (int) Math.min(Integer.MAX_VALUE, trace.getTokensRetained())
+            : (int) Math.min(Integer.MAX_VALUE, ledger.getTokensRetained());
+    }
+
+    /** Candidates the previous plan allocated but the completed stages never evaluated. */
+    private static int unusedCandidates(RetrievalPlan previous, RetrievalTrace trace) {
+        int allocated = 0;
+        for (Integer budget : previous.getChannelBudgets().values()) {
+            allocated += budget;
+        }
+        return Math.max(0, Math.max(allocated, previous.getCandidateBudget()) - candidatesUsed(trace));
+    }
+
+    /** Tokens the previous plan reserved but the completed stages never retained. */
+    private int unusedTokens(RetrievalPlan previous, RetrievalTrace trace, BudgetLedger ledger) {
+        return Math.max(0, previous.getTokenBudget() - tokensUsed(trace, ledger));
+    }
+
+    /**
+     * True when two plans take the same routing decision, so replanning would not change execution.
+     * The replan loop stops on this to avoid spending {@code maxReplanCount} on no-op rounds.
+     */
+    private static boolean sameRoutingDecision(RetrievalPlan left, RetrievalPlan right) {
+        if (left == right) {
+            return true;
+        }
+        if (left == null || right == null || left.getSelectedMode() != right.getSelectedMode()
+            || left.getMaxHop() != right.getMaxHop() || left.getNeighborCap() != right.getNeighborCap()
+            || !left.getChannelBudgets().equals(right.getChannelBudgets())
+            || !left.getChannelOrder().equals(right.getChannelOrder())) {
+            return false;
+        }
+        return Double.compare(left.getBm25Weight(), right.getBm25Weight()) == 0
+            && Double.compare(left.getVectorWeight(), right.getVectorWeight()) == 0
+            && Double.compare(left.getGraphWeight(), right.getGraphWeight()) == 0;
     }
 
     private static Map<String, Integer> orderedBudgets(RetrievalPlan plan) {
@@ -317,15 +434,60 @@ public final class RecallService {
         return ordered;
     }
 
+    /**
+     * Merges the features measured after the first stages into the routing feature snapshot so the
+     * trace records what actually drove the final plan instead of the pre-measurement estimate.
+     */
+    private static Map<String, Double> measuredFeatures(RoutingFeatures initial, RetrievalProgress progress) {
+        RoutingFeatures measured = RoutingFeatures.builder().queryLength(initial.getQueryLength())
+            .averageIdf(initial.getAverageIdf()).anchorCount(progress.getAnchorCount())
+            .anchorConfidence(progress.getAnchorConfidence())
+            .candidateDegree(progress.getCandidateDegree())
+            .firstStageScoreGap(progress.getFirstStageScoreGap())
+            .graphGrowthRate(progress.getGraphGrowthRate()).build();
+        Map<String, Double> values = new LinkedHashMap<>();
+        for (Map.Entry<String, Number> feature : measured.asMap().entrySet()) {
+            values.put(feature.getKey(), feature.getValue().doubleValue());
+        }
+        return values;
+    }
+
+    private static List<String> candidateChunkIds(Map<String, EvidenceBuilder> candidates) {
+        List<String> result = new ArrayList<>();
+        for (EvidenceBuilder candidate : candidates.values()) {
+            result.add(candidate.chunk.getChunkId());
+        }
+        return result;
+    }
+
     private RecallService(RetrievalFixtureRegistry.Fixture fixture, WeightedRrfConfig config,
                           LongSupplier clock) {
         this(fixture, config, clock, new DeterministicTokenEstimator(), new DeterministicReranker(),
-            new DeterministicRulePolicy(), 1);
+            new DeterministicRulePolicy(), 1, true, null);
+    }
+
+    private RecallService(RetrievalFixtureRegistry.Fixture fixture, Fusion fusion,
+                          LongSupplier clock, TokenEstimator tokenEstimator, Reranker reranker,
+                          RoutingPolicy routingPolicy, int maxReplanCount, boolean strictPlanValidation,
+                          RetrievalProperties properties) {
+        this(fixture, fusion.getConfig(), clock, tokenEstimator, reranker, routingPolicy,
+            maxReplanCount, strictPlanValidation, properties, fusion);
     }
 
     private RecallService(RetrievalFixtureRegistry.Fixture fixture, WeightedRrfConfig config,
                           LongSupplier clock, TokenEstimator tokenEstimator, Reranker reranker,
-                          RoutingPolicy routingPolicy, int maxReplanCount) {
+                          RoutingPolicy routingPolicy, int maxReplanCount, boolean strictPlanValidation,
+                          RetrievalProperties properties) {
+        this(fixture, config, clock, tokenEstimator, reranker, routingPolicy, maxReplanCount,
+            strictPlanValidation, properties, null);
+    }
+
+    private RecallService(RetrievalFixtureRegistry.Fixture fixture, WeightedRrfConfig config,
+                          LongSupplier clock, TokenEstimator tokenEstimator, Reranker reranker,
+                          RoutingPolicy routingPolicy, int maxReplanCount, boolean strictPlanValidation,
+                          RetrievalProperties properties, Fusion fusionOverride) {
+        this.strictPlanValidation = strictPlanValidation;
+        this.properties = properties == null ? new RetrievalProperties() : properties;
         this.bm25 = fixture.getBm25();
         this.vector = fixture.getVector();
         this.chunks = fixture.getChunks();
@@ -336,7 +498,7 @@ public final class RecallService {
         this.edges = fixture.getEdges();
         this.graphProvider = fixture.getGraphProvider();
         this.registry = null;
-        this.fusion = new WeightedRrfFusion(config);
+        this.fusion = fusionOverride == null ? new WeightedRrfFusion(config) : fusionOverride;
         this.clock = Objects.requireNonNull(clock, "clock");
         this.tokenEstimator = Objects.requireNonNull(tokenEstimator, "tokenEstimator");
         this.reranker = Objects.requireNonNull(reranker, "reranker");
@@ -350,7 +512,7 @@ public final class RecallService {
 
     public RetrievalResponse retrieve(RetrievalRequest request, String requestIdOverride) {
         final long started = clock.getAsLong();
-        RetrievalCommand command = new RetrievalRequestValidator(new RetrievalProperties()).validate(request);
+        RetrievalCommand command = new RetrievalRequestValidator(properties).validate(request);
         requireStructuredVersions(request);
         if (registry == null) {
             throw notReady("fixture registry is required for structured retrieval");
@@ -368,8 +530,10 @@ public final class RecallService {
                     && !request.getVectorVersion().equals(fixture.getVector().getVectorVersion())))) {
                 throw notReady("vector source/version mismatch");
             }
-            RecallService delegate = new RecallService(fixture, fusion.getConfig(), clock,
-                tokenEstimator, reranker, routingPolicy, maxReplanCount);
+            // Carry the configured fusion strategy across the registry delegation; otherwise a
+            // caller-supplied strategy would silently fall back to the default weighted RRF.
+            RecallService delegate = new RecallService(fixture, fusion, clock, tokenEstimator,
+                reranker, routingPolicy, maxReplanCount, strictPlanValidation, properties);
             String requestId = requestIdOverride == null || requestIdOverride.trim().isEmpty()
                 ? request.getRequestId() == null || request.getRequestId().trim().isEmpty()
                     ? UUID.randomUUID().toString() : request.getRequestId()
@@ -423,7 +587,7 @@ public final class RecallService {
             }
         }
         request.setQueryVector(values);
-        RetrievalCommand command = new RetrievalRequestValidator(new RetrievalProperties()).validate(request);
+        RetrievalCommand command = new RetrievalRequestValidator(properties).validate(request);
         if (registry != null) {
             throw notReady("registry retrieval requires a structured request with graph/index versions");
         }
@@ -450,10 +614,15 @@ public final class RecallService {
             && command.getExecutionMode() != ExecutionMode.CASCADED && bm25 != null && vector != null
             && routingPolicy.supports(command.getMode());
         RoutingContext routingContext = null;
+        List<String> initialRoutingReasons = Collections.emptyList();
         if (adaptive) {
             RoutingPolicy policy = routingPolicy;
-            routingContext = routingContext(command, pinnedGraphProvider, budget, executionCandidateLimit);
-            routingPlan = RetrievalPlanValidator.validate(policy.plan(routingContext), routingContext);
+            InitialRouting initial = routingContext(command, pinnedGraphProvider, budget, executionCandidateLimit);
+            routingContext = initial.context;
+            initialRoutingReasons = initial.notMeasured;
+            routingPlan = strictPlanValidation
+                ? RetrievalPlanValidator.validate(policy.plan(routingContext), routingContext)
+                : RetrievalPlanValidator.validateAndAdjust(policy.plan(routingContext), routingContext).getPlan();
             if (!isDefaultFusionConfig()) {
                 routingPlan = RetrievalPlan.builder(routingPlan)
                     .bm25Weight(fusion.getConfig().getBm25Weight())
@@ -471,7 +640,7 @@ public final class RecallService {
                 fixture == null ? null : fixture.getGraphVersion(), fixture == null ? null : fixture.getIndexVersion(),
                 vector == null ? null : vector.getVectorVersion(), budget.getPrimaryConstraint(),
                 command.getExecutionMode(), orderedBudgets(routingPlan), routingPlan.getMaxHop(),
-                routingPlan.getNeighborCap());
+                routingPlan.getNeighborCap(), routingPlan.getMaxDiffusionGrowth());
         Map<String, RetrievalException> failures = fixture == null ? Collections.emptyMap() : fixture.getFailures();
         BudgetLedger tokenLedger = budget.getPrimaryConstraint() == BudgetConstraint.TOKENS
             ? new BudgetLedger(executionCandidateLimit, budget.getTokenBudget(), deadline, clock) : null;
@@ -502,6 +671,7 @@ public final class RecallService {
         trace.setExactRanking(command.isExactRanking());
         trace.setTokenEstimatorVersion(tokenEstimator.getVersion());
         trace.setRerankerVersion(reranker.getVersion());
+        trace.setFusionVersion(fusion.getVersion());
         trace.setPrimaryConstraint(budget.getPrimaryConstraint().name());
         if (routingPlan != null) {
             RoutingFeatures features = routingContext.getFeatures();
@@ -513,7 +683,9 @@ public final class RecallService {
                 featureValues.put(feature.getKey(), feature.getValue().doubleValue());
             }
             trace.setRoutingFeatures(featureValues);
-            trace.setRoutingReasons(routingPlan.getReasons());
+            List<String> reasons = new ArrayList<>(routingPlan.getReasons());
+            reasons.addAll(initialRoutingReasons);
+            trace.setRoutingReasons(reasons);
             trace.setPolicyParameters(new LinkedHashMap<>(routingPolicy.getParameters()));
         }
         trace.setSelectedChannels(new ArrayList<>(plan.getChannelBudgets().keySet()));
@@ -558,20 +730,21 @@ public final class RecallService {
                 && !anchorResolver.resolve(command.getQuery(), deadline, clock).isEmpty();
             double scoreGap = cascadeProbeScoreGap(merged);
             trace.setCascadeProbeScoreGap(scoreGap);
-            if (probeDeadline || !hasTextEvidence || !hasProbeEvidence || !hasAnchor
-                || scoreGap < CASCADE_MIN_PROBE_SCORE_GAP) {
+            boolean noAnchorFallback = hasTextEvidence && hasProbeEvidence && !hasAnchor
+                && scoreGap >= CASCADE_MIN_PROBE_SCORE_GAP;
+            if (probeDeadline || !hasTextEvidence || !hasProbeEvidence
+                || (scoreGap < CASCADE_MIN_PROBE_SCORE_GAP && !noAnchorFallback)) {
                 RecallStopReason reason = probeDeadline ? RecallStopReason.DEADLINE
                     : !hasTextEvidence ? RecallStopReason.NO_RESULT
                     : !hasProbeEvidence ? RecallStopReason.NO_RESULT
-                    : !hasAnchor ? RecallStopReason.NO_RELIABLE_ANCHOR : RecallStopReason.LOW_SCORE_GAP;
+                    : RecallStopReason.LOW_SCORE_GAP;
                 String decision = probeDeadline ? "SKIP_DEADLINE"
                     : !hasTextEvidence ? "SKIP_NO_EVIDENCE"
                     : !hasProbeEvidence ? "SKIP_INSUFFICIENT_EVIDENCE"
-                    : !hasAnchor ? "SKIP_NO_ANCHOR" : "SKIP_LOW_SCORE_GAP";
+                    : "SKIP_LOW_SCORE_GAP";
                 String message = probeDeadline ? "cascaded probe exhausted the latency budget"
                     : !hasTextEvidence ? "cascaded probe produced no text evidence"
                     : !hasProbeEvidence ? "cascaded probe produced fewer than two evidence candidates"
-                    : !hasAnchor ? "cascaded probe produced no reliable entity anchor"
                     : "cascaded probe score gap is below the graph-stage threshold";
                 trace.setCascadeDecision(decision);
                 if (probeDeadline) {
@@ -581,7 +754,7 @@ public final class RecallService {
                 channelElapsedNanos.put("GRAPH", 0L);
                 trace.getStageElapsedNanos().put("GRAPH", 0L);
             } else {
-                trace.setCascadeDecision("RUN_GRAPH");
+                trace.setCascadeDecision(hasAnchor ? "RUN_GRAPH" : "RUN_GRAPH_FALLBACK_NO_ANCHOR");
                 runChannels(Collections.singletonList(channels.stream()
                     .filter(value -> "GRAPH".equals(value.getKey())).findFirst().orElseThrow()),
                     ExecutionMode.SEQUENTIAL, command, queryVector, deadline, partial, requestId,
@@ -598,26 +771,68 @@ public final class RecallService {
             runChannels(textChannels, command.getExecutionMode(), command, queryVector, deadline, partial,
                 requestId, failures, byId, plan, merged, trace, channelElapsedNanos, fixture,
                 pinnedGraphProvider, tokenLedger);
-            RetrievalProgress progress = routingProgress(trace, routingContext, deadline, plan, tokenLedger, merged);
+            RetrievalProgress progress = routingProgress(trace, routingContext, deadline, plan, tokenLedger, merged,
+                trace.getReplanEvents().size());
             RetrievalPlan replanned = routingPlan;
-            if (maxReplanCount > 0 && !expired(deadline)) {
-                replanned = RetrievalPlanValidator.validate(routingPolicy.plan(routingContext, progress), routingContext);
+            int replanCount = 0;
+            while (replanCount < maxReplanCount && !expired(deadline)) {
+                RetrievalPlan previous = replanned;
+                RetrievalPlanValidator.Result candidate =
+                    RetrievalPlanValidator.validateAndAdjust(routingPolicy.plan(routingContext, progress), routingContext);
+                RetrievalPlan next = candidate.getPlan();
                 if (!isDefaultFusionConfig()) {
-                    replanned = RetrievalPlan.builder(replanned)
+                    next = RetrievalPlan.builder(next)
                         .bm25Weight(fusion.getConfig().getBm25Weight())
                         .vectorWeight(fusion.getConfig().getVectorWeight())
                         .graphWeight(fusion.getConfig().getGraphWeight()).build();
                 }
+                if (sameRoutingDecision(previous, next)) {
+                    break;
+                }
+                List<String> adjustments = new ArrayList<>();
+                for (PlanAdjustment adjustment : candidate.getAdjustments()) {
+                    adjustments.add(adjustment.toString());
+                }
                 trace.getReplanEvents().add(new RetrievalReplanEvent("AFTER_TEXT", "GRAPH_STAGE_BOUNDARY",
-                    routingPlan, replanned, progress, progress.getRemainingCandidates(),
-                    progress.getRemainingTokens(), replanned.getReasons(), null));
+                    previous, next, progress, unusedCandidates(previous, trace), unusedTokens(previous, trace, tokenLedger),
+                    adjustments, null));
+                replanned = next;
+                replanCount++;
+                progress = routingProgress(trace, routingContext, deadline, plan, tokenLedger, merged, replanCount);
             }
             effectiveRoutingPlan = replanned;
+            if (replanCount > 0) {
+                trace.setRoutingFeatures(measuredFeatures(routingContext.getFeatures(), progress));
+            }
+            int textBudget = 0;
+            for (String textChannel : Arrays.asList("BM25", "VECTOR")) {
+                if (plan.getChannelBudgets().containsKey(textChannel)) {
+                    textBudget += Math.max(1, trace.getEvaluatedCounts().get(textChannel));
+                }
+            }
+            int graphBudget = 0;
             if (replanned.getChannelBudgets().containsKey("GRAPH")) {
-                int replannedGraphBudget = replanned.getChannelBudgets().get("GRAPH");
-                Map<String, Integer> remainingGraphBudget = Collections.singletonMap("GRAPH",
-                    Math.min(replannedGraphBudget,
-                        Math.max(1, progress.getRemainingCandidates())));
+                int replannedBudget = replanned.getChannelBudgets().get("GRAPH");
+                int remainingAllocation = command.isExactRanking()
+                    ? plan.getChannelBudgets().get("GRAPH")
+                    : trace.getEffectiveCandidateBudget() - textBudget;
+                graphBudget = Math.min(replannedBudget,
+                    Math.min(remainingAllocation, progress.getRemainingCandidates()));
+            }
+            if (graphBudget > 0) {
+                if (!command.isExactRanking()) {
+                    for (String textChannel : Arrays.asList("BM25", "VECTOR")) {
+                        if (plan.getChannelBudgets().containsKey(textChannel)) {
+                            int evaluated = trace.getEvaluatedCounts().get(textChannel);
+                            int allocated = Math.max(1, evaluated);
+                            trace.getChannelBudgets().put(textChannel, allocated);
+                        }
+                    }
+                }
+                Map<String, Integer> remainingGraphBudget = Collections.singletonMap("GRAPH", graphBudget);
+                if (!command.isExactRanking()) {
+                    trace.getChannelBudgets().put("GRAPH", graphBudget);
+                }
                 RecallPlan graphPlan = new RecallPlan(plan.getMode(),
                     Math.min(plan.getTopK(), remainingGraphBudget.get("GRAPH")), plan.getDeadlineNanos(),
                     plan.getGraphVersion(), plan.getIndexVersion(), plan.getVectorVersion(),
@@ -629,10 +844,12 @@ public final class RecallService {
                     requestId, failures, byId, graphPlan, merged, trace, channelElapsedNanos, fixture,
                     pinnedGraphProvider, tokenLedger);
             } else {
-                RecallStopReason skipReason = progress.getGraphGrowthRate() > 2.0D
-                    ? RecallStopReason.DIFFUSION_GROWTH_LIMIT : RecallStopReason.NO_RELIABLE_ANCHOR;
+                RecallStopReason skipReason = progress.getRemainingCandidates() == 0 || graphBudget == 0
+                    ? RecallStopReason.CANDIDATE_BUDGET
+                    : progress.getGraphGrowthRate() > 2.0D
+                        ? RecallStopReason.DIFFUSION_GROWTH_LIMIT : RecallStopReason.NO_RELIABLE_ANCHOR;
                 record(trace, "GRAPH", RecallStageStatus.NOT_RUN, skipReason,
-                    "adaptive policy disabled the graph stage at the boundary");
+                    "adaptive policy did not schedule the graph stage at the boundary");
                 channelElapsedNanos.put("GRAPH", 0L);
                 trace.getStageElapsedNanos().put("GRAPH", 0L);
             }
@@ -645,8 +862,11 @@ public final class RecallService {
         for (EvidenceBuilder value : merged.values()) {
             evidence.add(value.build());
         }
-        WeightedRrfFusion activeFusion = fusion;
-        if (effectiveRoutingPlan != null && isDefaultFusionConfig()) {
+        Fusion activeFusion = fusion;
+        // Only the weighted RRF fusion derives its channel weights from the routing plan. A custom
+        // strategy keeps full control of its own weighting, so it must not be replaced here.
+        if (effectiveRoutingPlan != null && fusion instanceof WeightedRrfFusion
+            && isDefaultFusionConfig()) {
             activeFusion = new WeightedRrfFusion(new WeightedRrfConfig(effectiveRoutingPlan.getBm25Weight(),
                 effectiveRoutingPlan.getVectorWeight(), effectiveRoutingPlan.getGraphWeight(),
                 fusion.getConfig().getRankConstant()));
@@ -664,6 +884,10 @@ public final class RecallService {
         }
         evidence = reranker.rerank(evidence);
         trace.setUniqueEvidenceCandidates(evidence.size());
+        if (plan.getMode() == RetrievalMode.HYBRID) {
+            evidence = activeFusion.preserveTopKChannel(evidence, plan.getTopK(), "GRAPH",
+                plan.getTopK());
+        }
         boolean enforceTokenBudget = budget.getPrimaryConstraint() == BudgetConstraint.TOKENS
             && tokenLedger == null;
         TokenContextTruncator.Result context = new TokenContextTruncator(tokenEstimator)
@@ -766,7 +990,8 @@ public final class RecallService {
                     GraphNeighborProvider stageGraphProvider = graphLease == null
                         ? pinnedGraphProvider : graphLease;
                     ChannelOutput output = searchChannel(name, channel.getValue(), command,
-                        queryVector, deadline, requestId, failures, byId, plan, stageGraphProvider, tokenLedger);
+                        queryVector, deadline, requestId, failures, byId, plan, stageGraphProvider,
+                        tokenLedger, candidateChunkIds(merged));
                     output.elapsedNanos = Math.max(0L, clock.getAsLong() - started);
                     return output;
                 }
@@ -818,6 +1043,9 @@ public final class RecallService {
                 continue;
             }
             ChannelOutput output = stage.getValue();
+            if (tokenLedger != null) {
+                chargeEvaluatedCandidates(tokenLedger, output.evaluated);
+            }
             trace.getEvaluatedCounts().put(name, output.evaluated);
             trace.getRawCandidatesScored().put(name, output.rawCandidatesScored);
             trace.getCandidateCounts().put(name, output.candidates);
@@ -835,7 +1063,7 @@ public final class RecallService {
                 trace.setGraphMarginalYield(stats.getMarginalYield());
                 trace.getValidationErrors().addAll(stats.getValidationErrors());
             }
-            mergeChannel(name, output, requestId, byId, plan, merged, tokenLedger);
+            mergeChannel(name, output, requestId, command.getQuery(), byId, plan, merged, tokenLedger);
             if (tokenLedger != null && tokenLedger.getStopReason() == RecallStopReason.TOKEN_BUDGET
                 && output.reason == RecallStopReason.COMPLETED) {
                 output.reason = RecallStopReason.TOKEN_BUDGET;
@@ -855,12 +1083,20 @@ public final class RecallService {
         }
     }
 
+    /**
+     * Charges the candidates a channel actually scored against the ledger so
+     * {@link BudgetLedger#getCandidatesEvaluated()} reflects real work instead of staying at zero.
+     */
+    private static void chargeEvaluatedCandidates(BudgetLedger ledger, int evaluated) {
+        ledger.tryEvaluateCandidates(evaluated);
+    }
+
     private ChannelOutput searchChannel(String name, int candidateBudget, RetrievalCommand command,
                                         float[] queryVector, long deadline, String requestId,
                                         Map<String, RetrievalException> failures,
                                         Map<String, TextChunk> byId, RecallPlan plan,
                                         GraphNeighborProvider pinnedGraphProvider,
-                                        BudgetLedger tokenLedger) {
+                                        BudgetLedger tokenLedger, List<String> candidateChunkIds) {
         RetrievalException loadFailure = failures.get(name);
         if (loadFailure != null) {
             throw loadFailure;
@@ -900,10 +1136,11 @@ public final class RecallService {
                 .maxDiffusionGrowth(plan.getMaxDiffusionGrowth())
                 .tokenBudget(command.getBudget().getPrimaryConstraint() == BudgetConstraint.TOKENS
                     ? command.getBudget().getTokenBudget() : Integer.MAX_VALUE)
-                .samplingSeed(stableGraphSeed(requestId, command.getQuery()))
+                .samplingSeed(DeterministicSeed.graphSeed(command.getQuery(), plan.getGraphVersion(),
+                    configSeed()))
                 .build();
             output.graphHits = retriever.retrieve(command.getQuery(), entities, pinnedGraphProvider,
-                byId, graphConfig, deadline, clock, tokenLedger);
+                byId, graphConfig, deadline, clock, tokenLedger, candidateChunkIds);
             output.graphStats = retriever.getLastStats();
             output.evaluated = output.graphStats.getEdgesExamined();
             output.rawCandidatesScored = output.graphStats.getCandidatesProduced();
@@ -913,7 +1150,7 @@ public final class RecallService {
         return output;
     }
 
-    private void mergeChannel(String name, ChannelOutput output, String requestId,
+    private void mergeChannel(String name, ChannelOutput output, String requestId, String query,
                               Map<String, TextChunk> byId, RecallPlan plan,
                               Map<String, EvidenceBuilder> merged, BudgetLedger tokenLedger) {
         if (output.bm25Hits != null) {
@@ -956,7 +1193,9 @@ public final class RecallService {
                     if (!value.paths.contains(hit.getPath())) {
                         value.paths.add(hit.getPath());
                     }
-                    value.graphTraces.add(new GraphEvidenceTrace(requestId, plan.getMode(), hit.getSeed(),
+                    value.graphTraces.add(new GraphEvidenceTrace(
+                        RetrievalIds.queryId(query, plan.getGraphVersion()),
+                        plan.getMode(), hit.getSeed(),
                         hit.getAnchor().getMatchType(), hit.getAnchor().getConfidence(),
                         plan.getGraphVersion() == null ? "fixture" : plan.getGraphVersion(), hit.getPath(),
                         Collections.singletonList(id), hit.getPathVertices(), hit.getPathEdges()));
@@ -1016,19 +1255,20 @@ public final class RecallService {
         return deadline != 0L && clock.getAsLong() - deadline >= 0L;
     }
 
+    /**
+     * Base seed for reproducible sampling and routing draws.
+     *
+     * <p>Defaults to {@code 0} so that output is stable across processes. Operators may override
+     * it through configuration to draw a different but still reproducible sample.
+     */
+    private static long configSeed() {
+        return DEFAULT_CONFIG_SEED;
+    }
+
     private static void timedOut(boolean partial) {
         if (!partial) {
             throw new RetrievalException(RetrievalErrorCode.RETRIEVAL_TIMEOUT, "retrieval deadline exceeded");
         }
-    }
-
-    private static long stableGraphSeed(String requestId, String query) {
-        String value = requestId + "\u001f" + query;
-        long result = 1125899906842597L;
-        for (int index = 0; index < value.length(); index++) {
-            result = 31L * result + value.charAt(index);
-        }
-        return result;
     }
 
     private static void record(RetrievalTrace trace, String name, RecallStageStatus status, RecallStopReason reason, String message) {

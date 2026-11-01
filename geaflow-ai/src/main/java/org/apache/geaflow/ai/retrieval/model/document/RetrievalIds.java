@@ -60,6 +60,18 @@ public final class RetrievalIds {
             ModelValidation.required(text, "text")));
     }
 
+    /**
+     * Returns the deterministic query identity recorded in graph provenance traces.
+     *
+     * <p>The value is derived from the normalized query text and the graph version, never from a
+     * request-scoped audit id, so that identical queries against an identical artifact produce an
+     * identical provenance chain.
+     */
+    public static String queryId(String query, String graphVersion) {
+        return "query-" + digest(join(ModelValidation.required(query, "query"),
+            graphVersion == null ? "" : graphVersion));
+    }
+
     public static String chunkEvidenceId(String documentId, String chunkId) {
         String document = ModelValidation.required(documentId, "documentId");
         String chunk = ModelValidation.required(chunkId, "chunkId");
