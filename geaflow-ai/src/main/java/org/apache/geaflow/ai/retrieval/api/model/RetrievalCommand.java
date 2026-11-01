@@ -81,6 +81,11 @@ public final class RetrievalCommand {
         return mode;
     }
 
+    /** Returns the mode exactly as requested, before any channel-set canonicalisation. */
+    public RetrievalMode getRequestedMode() {
+        return mode;
+    }
+
     public ExecutionMode getExecutionMode() {
         return executionMode;
     }

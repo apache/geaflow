@@ -64,13 +64,13 @@ METHOD_CONFIG = {
                          'requiresVector': True, 'exactRanking': True},
     'GRAPH_ONLY': {'mode': 'GRAPH_ONLY', 'executionMode': 'SEQUENTIAL', 'candidateMultiplier': 1,
                    'requiresVector': False, 'exactRanking': False},
-    'FIXED_HYBRID': {'mode': 'HYBRID', 'executionMode': 'CASCADED', 'candidateMultiplier': 1,
+    'FIXED_HYBRID': {'mode': 'FIXED_HYBRID', 'executionMode': 'CASCADED', 'candidateMultiplier': 1,
                      'requiresVector': True, 'exactRanking': True},
-    # Adaptive Hybrid keeps SEQUENTIAL so the routing policy is actually consulted; the service
-    # only evaluates the policy outside CASCADED. FIXED_HYBRID stays CASCADED, which is what
-    # makes the two methods a meaningful comparison instead of duplicate request bodies.
-    'ADAPTIVE_HYBRID': {'mode': 'HYBRID', 'executionMode': 'SEQUENTIAL', 'candidateMultiplier': 1,
-                        'requiresVector': True, 'exactRanking': True},
+    # Adaptive Hybrid uses the explicit ADAPTIVE_HYBRID mode, which runs the routing policy under
+    # cascaded execution (the design's intended default). Both hybrid methods share CASCADED, so
+    # the comparison isolates the routing policy instead of conflating it with execution mode.
+    'ADAPTIVE_HYBRID': {'mode': 'ADAPTIVE_HYBRID', 'executionMode': 'CASCADED',
+                        'candidateMultiplier': 1, 'requiresVector': True, 'exactRanking': True},
 }
 
 

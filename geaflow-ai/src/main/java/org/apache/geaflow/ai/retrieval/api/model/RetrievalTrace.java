@@ -33,6 +33,7 @@ public class RetrievalTrace {
     private String requestId;
     private String originalQuery;
     private RetrievalMode selectedMode;
+    private RetrievalMode requestedMode;
     private ExecutionMode executionMode;
     private boolean exactRanking;
     private List<TraceStage> stages = new ArrayList<>();
@@ -122,6 +123,22 @@ public class RetrievalTrace {
 
     public void setSelectedMode(RetrievalMode selectedMode) {
         this.selectedMode = selectedMode;
+    }
+
+    /**
+     * Returns the mode the caller asked for.
+     *
+     * <p>Distinct from {@link #getSelectedMode()}: a fixed-hybrid request selects the hybrid channel
+     * set, while an adaptive-hybrid request additionally runs the routing policy. Recording the
+     * requested mode keeps an adaptive decision auditable even when the plan picks another channel
+     * set.
+     */
+    public RetrievalMode getRequestedMode() {
+        return requestedMode;
+    }
+
+    public void setRequestedMode(RetrievalMode requestedMode) {
+        this.requestedMode = requestedMode;
     }
 
     public ExecutionMode getExecutionMode() {

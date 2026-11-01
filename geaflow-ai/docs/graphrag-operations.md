@@ -47,10 +47,18 @@ curl -H 'Content-Type: application/json' -H 'X-Request-Id: answer-1' \
 
 ## 2. Retrieval modes
 
-Five modes are accepted by `mode`; `KEYWORD` remains a compatibility alias of
-`BM25_ONLY`. All five modes and all three execution modes are covered by
-`RetrievalModeContractTest` against a published bundle, and the answer layer is
-exercised over HTTP by `MemoryServerTest`.
+Five modes are accepted by `mode` as distinct values, matching the design
+document: `BM25_ONLY`, `VECTOR_ONLY`, `GRAPH_ONLY`, `FIXED_HYBRID` and
+`ADAPTIVE_HYBRID`. `KEYWORD` remains a compatibility alias of `BM25_ONLY`, and
+bare `HYBRID` remains accepted for older callers.
+
+`FIXED_HYBRID` and `ADAPTIVE_HYBRID` differ by **mode, not by execution mode**:
+both run the design's default cascaded execution, and only `ADAPTIVE_HYBRID`
+consults the routing policy. A bare `HYBRID` request does not run the policy, so
+call it adaptive behaviour explicitly.
+
+`trace.requestedMode` records the mode as requested and `trace.selectedMode` the
+channel set the plan executed; they differ when a plan re-targets a channel set.
 
 | Mode | Channels | Notes |
 |---|---|---|
@@ -58,6 +66,8 @@ exercised over HTTP by `MemoryServerTest`.
 | `BM25_ONLY` | BM25 | Lucene-backed lexical retrieval |
 | `VECTOR_ONLY` | vector | Requires a precomputed `queryVector` |
 | `GRAPH_ONLY` | graph | Requires entity anchors; returns structured empty results when none are found |
+| `FIXED_HYBRID` | BM25 + vector + graph | Cascaded by default; no routing policy |
+| `ADAPTIVE_HYBRID` | plan-dependent | Cascaded by default; runs the routing policy and replans at the probe boundary |
 | `HYBRID` | BM25 + vector + graph | Fused, reranked and truncated |
 
 ## 3. Execution modes

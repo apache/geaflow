@@ -86,7 +86,7 @@ class GraphRagMvpEndToEndTest {
         RetrievalRequest graphRequest = request("GRAPH_ONLY", null);
         graphRequest.setRequestId("request-graph-trace");
         RetrievalResponse graph = service.retrieve(graphRequest);
-        RetrievalResponse hybrid = service.retrieve(request("HYBRID", Arrays.asList(1.0, 0.0)));
+        RetrievalResponse hybrid = service.retrieve(request("ADAPTIVE_HYBRID", Arrays.asList(1.0, 0.0)));
 
         assertFalse(bm25.getEvidence().isEmpty());
         assertFalse(vector.getEvidence().isEmpty());
@@ -499,7 +499,7 @@ class GraphRagMvpEndToEndTest {
             System::nanoTime, new org.apache.geaflow.ai.retrieval.execution.DeterministicTokenEstimator(),
             new org.apache.geaflow.ai.retrieval.execution.DeterministicReranker(), shifting, 1);
 
-        RetrievalResponse response = service.retrieve(request("HYBRID", Arrays.asList(1.0, 0.0)));
+        RetrievalResponse response = service.retrieve(request("ADAPTIVE_HYBRID", Arrays.asList(1.0, 0.0)));
 
         assertEquals(1, response.getTrace().getReplanEvents().size());
         org.apache.geaflow.ai.retrieval.execution.RetrievalReplanEvent original =
@@ -551,7 +551,7 @@ class GraphRagMvpEndToEndTest {
     void enforcesCandidateBudgetAndNoAnchorScan() throws Exception {
         Fixture fixture = fixture();
         RecallService service = new RecallService(fixture.registry);
-        RetrievalRequest request = request("HYBRID", Arrays.asList(1.0, 0.0));
+        RetrievalRequest request = request("ADAPTIVE_HYBRID", Arrays.asList(1.0, 0.0));
         request.setBudget(new RetrievalBudget(1, 1000, 1, 100));
         assertCode(RetrievalErrorCode.INVALID_REQUEST, () -> service.retrieve(request));
         request.setBudget(new RetrievalBudget(1, 1000, 3, 100));
@@ -565,7 +565,7 @@ class GraphRagMvpEndToEndTest {
             response.getTrace().getSelectedChannels());
         assertEquals(response.getRequestId(), response.getTrace().getRequestId());
 
-        RetrievalRequest exact = request("HYBRID", Arrays.asList(1.0, 0.0));
+        RetrievalRequest exact = request("ADAPTIVE_HYBRID", Arrays.asList(1.0, 0.0));
         exact.setBudget(new RetrievalBudget(1, 1000, 3, 100));
         exact.setExactRanking(true);
         RetrievalResponse exactResponse = service.retrieve(exact);
@@ -627,7 +627,9 @@ class GraphRagMvpEndToEndTest {
         registry.register(GRAPH, VERSION, VERSION, bm25, vector, chunks,
             entities, edges, true);
 
-        RetrievalRequest request = request("HYBRID", Arrays.asList(1.0, 0.0));
+        // Channel budget allocation (10/10/380) is a routing decision, so this must ask for the
+        // adaptive mode explicitly rather than relying on hybrid plus execution-mode side effects.
+        RetrievalRequest request = request("ADAPTIVE_HYBRID", Arrays.asList(1.0, 0.0));
         request.setRequestId("stable-request");
         request.setBudget(new RetrievalBudget(10, 5000, 400, 2000));
         RecallService service = new RecallService(registry);

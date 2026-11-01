@@ -94,10 +94,12 @@ def test_invalid_wire_response_cannot_claim_evidence():
 def test_six_benchmark_methods_have_distinct_request_semantics():
     assert len(METHODS) == 6
     assert METHOD_CONFIG['FIXED_HYBRID']['executionMode'] == 'CASCADED'
-    # Adaptive Hybrid must not reuse the Fixed Hybrid execution mode: the routing policy is
-    # only consulted outside CASCADED, so a shared mode makes the two methods identical.
-    assert METHOD_CONFIG['ADAPTIVE_HYBRID']['executionMode'] != \
-        METHOD_CONFIG['FIXED_HYBRID']['executionMode']
+    assert METHOD_CONFIG['ADAPTIVE_HYBRID']['executionMode'] == 'CASCADED'
+    # The two hybrid methods differ by mode, not by execution mode: ADAPTIVE_HYBRID selects the
+    # routing policy, while both run the design's default cascaded execution.
+    assert METHOD_CONFIG['ADAPTIVE_HYBRID']['mode'] == 'ADAPTIVE_HYBRID'
+    assert METHOD_CONFIG['FIXED_HYBRID']['mode'] == 'FIXED_HYBRID'
+    assert METHOD_CONFIG['ADAPTIVE_HYBRID']['mode'] != METHOD_CONFIG['FIXED_HYBRID']['mode']
     assert METHOD_CONFIG['VECTOR_OVERFETCH']['mode'] == 'VECTOR_ONLY'
     assert METHOD_CONFIG['VECTOR_OVERFETCH']['candidateMultiplier'] == 1
     assert METHOD_CONFIG['VECTOR_OVERFETCH']['topKMultiplier'] > 1
@@ -109,7 +111,8 @@ def test_six_benchmark_methods_have_distinct_request_semantics():
     adaptive = request_body(args, query, 'ADAPTIVE_HYBRID', [1.0, 0.0])
     overfetch = request_body(args, query, 'VECTOR_OVERFETCH', [1.0, 0.0])
     assert fixed['executionMode'] == 'CASCADED'
-    assert adaptive['executionMode'] != fixed['executionMode']
+    assert adaptive['executionMode'] == fixed['executionMode']
+    assert adaptive['mode'] != fixed['mode']
     assert fixed['requestId'] == adaptive['requestId']
     assert fixed['exactRanking'] is True
     assert fixed['budget']['maxCandidates'] == overfetch['budget']['maxCandidates']
@@ -130,7 +133,7 @@ def test_ablation_shapes_only_the_wire_request():
         assert shaped['graphName'] == reference['graphName'], name
         assert shaped['budget']['topK'] == reference['budget']['topK'], name
         # The reference request itself must not be mutated by shaping.
-        assert reference['mode'] == 'HYBRID'
+        assert reference['mode'] == 'ADAPTIVE_HYBRID'
         assert reference['budget']['maxCandidates'] == 100
 
     no_anchor = request_body(SimpleNamespace(**{**vars(base), 'ablation': 'no-anchor'}),

@@ -612,8 +612,9 @@ public final class RecallService {
             ? budget.getMaxCandidates() : command.getExecutionCandidateLimit();
         budget.setMaxEdgeScans(resolveEdgeScanBudget(budget));
         RetrievalPlan routingPlan = null;
-        boolean adaptive = command.getMode().canonical() == RetrievalMode.HYBRID
-            && command.getExecutionMode() != ExecutionMode.CASCADED && bm25 != null && vector != null
+        // Adaptive routing is selected by the requested mode. The design says adaptive hybrid should
+        // default to cascaded execution, so cascaded must not be the one mode that skips routing.
+        boolean adaptive = command.getMode().isAdaptive() && bm25 != null && vector != null
             && routingPolicy.supports(command.getMode());
         RoutingContext routingContext = null;
         List<String> initialRoutingReasons = Collections.emptyList();
@@ -669,6 +670,7 @@ public final class RecallService {
         trace.setVectorVersion(plan.getVectorVersion());
         trace.setOriginalQuery(command.getQuery());
         trace.setSelectedMode(plan.getMode());
+        trace.setRequestedMode(command.getRequestedMode());
         trace.setExecutionMode(command.getExecutionMode());
         trace.setExactRanking(command.isExactRanking());
         trace.setTokenEstimatorVersion(tokenEstimator.getVersion());
@@ -757,6 +759,13 @@ public final class RecallService {
                 trace.getStageElapsedNanos().put("GRAPH", 0L);
             } else {
                 trace.setCascadeDecision(hasAnchor ? "RUN_GRAPH" : "RUN_GRAPH_FALLBACK_NO_ANCHOR");
+                // Adaptive cascaded runs still replan at this boundary: the probe produced real
+                // score-gap, yield and degree statistics, which is exactly what the design says
+                // the policy should consume before the graph stage is sized.
+                if (routingPlan != null) {
+                    replanAtStageBoundary(routingPlan, routingContext, trace, deadline, plan, tokenLedger,
+                        merged, "AFTER_TEXT_PROBE");
+                }
                 runChannels(Collections.singletonList(channels.stream()
                     .filter(value -> "GRAPH".equals(value.getKey())).findFirst().orElseThrow()),
                     ExecutionMode.SEQUENTIAL, command, queryVector, deadline, partial, requestId,
@@ -773,37 +782,12 @@ public final class RecallService {
             runChannels(textChannels, command.getExecutionMode(), command, queryVector, deadline, partial,
                 requestId, failures, byId, plan, merged, trace, channelElapsedNanos, fixture,
                 pinnedGraphProvider, tokenLedger);
-            RetrievalProgress progress = routingProgress(trace, routingContext, deadline, plan, tokenLedger, merged,
-                trace.getReplanEvents().size());
-            RetrievalPlan replanned = routingPlan;
-            int replanCount = 0;
-            while (replanCount < maxReplanCount && !expired(deadline)) {
-                RetrievalPlan previous = replanned;
-                RetrievalPlanValidator.Result candidate =
-                    RetrievalPlanValidator.validateAndAdjust(routingPolicy.plan(routingContext, progress), routingContext);
-                RetrievalPlan next = candidate.getPlan();
-                if (!isDefaultFusionConfig()) {
-                    next = RetrievalPlan.builder(next)
-                        .bm25Weight(fusion.getConfig().getBm25Weight())
-                        .vectorWeight(fusion.getConfig().getVectorWeight())
-                        .graphWeight(fusion.getConfig().getGraphWeight()).build();
-                }
-                if (sameRoutingDecision(previous, next)) {
-                    break;
-                }
-                List<String> adjustments = new ArrayList<>();
-                for (PlanAdjustment adjustment : candidate.getAdjustments()) {
-                    adjustments.add(adjustment.toString());
-                }
-                trace.getReplanEvents().add(new RetrievalReplanEvent("AFTER_TEXT", "GRAPH_STAGE_BOUNDARY",
-                    previous, next, progress, unusedCandidates(previous, trace), unusedTokens(previous, trace, tokenLedger),
-                    adjustments, null));
-                replanned = next;
-                replanCount++;
-                progress = routingProgress(trace, routingContext, deadline, plan, tokenLedger, merged, replanCount);
-            }
+            StageReplan replan = replanAtStageBoundary(routingPlan, routingContext, trace, deadline,
+                plan, tokenLedger, merged, "AFTER_TEXT");
+            RetrievalPlan replanned = replan.plan;
+            RetrievalProgress progress = replan.progress;
             effectiveRoutingPlan = replanned;
-            if (replanCount > 0) {
+            if (replan.count > 0) {
                 trace.setRoutingFeatures(measuredFeatures(routingContext.getFeatures(), progress));
             }
             int textBudget = 0;
@@ -1260,6 +1244,64 @@ public final class RecallService {
 
     private boolean expired(long deadline) {
         return deadline != 0L && clock.getAsLong() - deadline >= 0L;
+    }
+
+    /**
+     * Applies bounded replanning at a stage boundary.
+     *
+     * <p>Both execution paths share this so a cascaded adaptive run replans on the statistics its
+     * probe just measured, instead of the policy being consulted only once before execution.
+     *
+     * @return the final plan, the last observed progress, and how many replans were applied
+     */
+    private StageReplan replanAtStageBoundary(RetrievalPlan initialPlan, RoutingContext routingContext,
+                                              RetrievalTrace trace, long deadline, RecallPlan plan,
+                                              BudgetLedger tokenLedger,
+                                              Map<String, EvidenceBuilder> merged, String boundary) {
+        RetrievalProgress progress = routingProgress(trace, routingContext, deadline, plan, tokenLedger,
+            merged, trace.getReplanEvents().size());
+        RetrievalPlan replanned = initialPlan;
+        int replanCount = 0;
+        while (replanCount < maxReplanCount && !expired(deadline)) {
+            RetrievalPlan previous = replanned;
+            RetrievalPlanValidator.Result candidate = RetrievalPlanValidator.validateAndAdjust(
+                routingPolicy.plan(routingContext, progress), routingContext);
+            RetrievalPlan next = candidate.getPlan();
+            if (!isDefaultFusionConfig()) {
+                next = RetrievalPlan.builder(next)
+                    .bm25Weight(fusion.getConfig().getBm25Weight())
+                    .vectorWeight(fusion.getConfig().getVectorWeight())
+                    .graphWeight(fusion.getConfig().getGraphWeight()).build();
+            }
+            if (sameRoutingDecision(previous, next)) {
+                break;
+            }
+            List<String> adjustments = new ArrayList<>();
+            for (PlanAdjustment adjustment : candidate.getAdjustments()) {
+                adjustments.add(adjustment.toString());
+            }
+            trace.getReplanEvents().add(new RetrievalReplanEvent(boundary, "GRAPH_STAGE_BOUNDARY",
+                previous, next, progress, unusedCandidates(previous, trace),
+                unusedTokens(previous, trace, tokenLedger), adjustments, null));
+            replanned = next;
+            replanCount++;
+            progress = routingProgress(trace, routingContext, deadline, plan, tokenLedger, merged,
+                replanCount);
+        }
+        return new StageReplan(replanned, progress, replanCount);
+    }
+
+    /** Result of one stage-boundary replanning pass. */
+    private static final class StageReplan {
+        private final RetrievalPlan plan;
+        private final RetrievalProgress progress;
+        private final int count;
+
+        private StageReplan(RetrievalPlan plan, RetrievalProgress progress, int count) {
+            this.plan = plan;
+            this.progress = progress;
+            this.count = count;
+        }
     }
 
     /**
