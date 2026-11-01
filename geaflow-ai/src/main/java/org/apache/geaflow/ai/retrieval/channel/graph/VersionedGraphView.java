@@ -25,7 +25,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import org.apache.geaflow.ai.retrieval.model.graph.EntityRef;
 import org.apache.geaflow.ai.retrieval.model.graph.GraphEdgeRef;
@@ -41,7 +40,8 @@ public final class VersionedGraphView implements GraphNeighborProvider {
     private final String deltaDigest;
     private final GraphStatistics statistics;
     private final VersionedGraphView parent;
-    private final Map<String, List<GraphEdgeRef>> neighbors;
+    private final Map<String, int[]> neighborIndexes;
+    private final List<GraphEdgeRef> indexEdges;
     private final Map<String, GraphVertexRef> vertices;
     private final Set<String> removedVertexKeys;
     private final Map<String, GraphEdgeRef> edgesById;
@@ -59,7 +59,8 @@ public final class VersionedGraphView implements GraphNeighborProvider {
         this.deltaDigest = deltaCanonical.isEmpty() ? "" : GraphSnapshot.sha256(deltaCanonical);
         this.statistics = this.snapshot.getStatistics();
         this.parent = null;
-        this.neighbors = buildNeighbors(this.snapshot.getEdges());
+        this.indexEdges = this.snapshot.getEdges();
+        this.neighborIndexes = GraphNeighborIndex.indexes(this.indexEdges);
         this.vertices = new HashMap<>();
         this.edgesById = indexEdges(this.snapshot.getEdges());
         this.removedVertexKeys = Collections.emptySet();
@@ -78,7 +79,8 @@ public final class VersionedGraphView implements GraphNeighborProvider {
         this.deltaDigest = GraphSnapshot.sha256(deltaCanonical);
         this.statistics = overlayStatistics(parent, delta);
         this.parent = parent;
-        this.neighbors = overlayNeighbors(parent, delta);
+        this.indexEdges = snapshot.getEdges();
+        this.neighborIndexes = GraphNeighborIndex.overlay(parent, delta, this.indexEdges);
         this.vertices = overlayVertices(delta);
         this.removedVertexKeys = removedVertexKeys(parent, delta);
         this.edgesById = overlayEdges(delta);
@@ -115,69 +117,10 @@ public final class VersionedGraphView implements GraphNeighborProvider {
         return new VersionedGraphView(parent, delta);
     }
 
-    private static Map<String, List<GraphEdgeRef>> buildNeighbors(List<GraphEdgeRef> edges) {
-        Map<String, List<GraphEdgeRef>> result = new HashMap<>();
-        for (GraphEdgeRef edge : edges) {
-            result.computeIfAbsent(edge.getSourceEntityId(), ignored -> new ArrayList<>()).add(edge);
-            if (!Objects.equals(edge.getSourceEntityId(), edge.getTargetEntityId())) {
-                result.computeIfAbsent(edge.getTargetEntityId(), ignored -> new ArrayList<>()).add(edge);
-            }
-        }
-        for (List<GraphEdgeRef> value : result.values()) {
-            value.sort((left, right) -> left.getEdgeId().compareTo(right.getEdgeId()));
-        }
-        return result;
-    }
-
     private static Map<String, GraphEdgeRef> indexEdges(List<GraphEdgeRef> edges) {
         Map<String, GraphEdgeRef> result = new HashMap<>();
         for (GraphEdgeRef edge : edges) {
             result.put(edge.getEdgeId(), edge);
-        }
-        return result;
-    }
-
-    private static Map<String, List<GraphEdgeRef>> overlayNeighbors(VersionedGraphView parent,
-                                                                     GraphDelta delta) {
-        Map<String, List<GraphEdgeRef>> result = new HashMap<>();
-        Set<String> changedVertices = new HashSet<>();
-        Set<String> removedEdges = new HashSet<>(delta.getTombstones().getEdges());
-        for (String edgeId : delta.getTombstones().getEdges()) {
-            addEndpoints(parent.edgeById(edgeId), changedVertices);
-        }
-        for (String entityId : delta.getTombstones().getEntities()) {
-            changedVertices.add(entityId);
-            for (GraphEdgeRef edge : parent.neighbors(entityId)) {
-                removedEdges.add(edge.getEdgeId());
-                addEndpoints(edge, changedVertices);
-            }
-        }
-        for (GraphEdgeRef edge : delta.getEdges()) {
-            GraphEdgeRef previous = parent.edgeById(edge.getEdgeId());
-            addEndpoints(previous, changedVertices);
-            addEndpoints(edge, changedVertices);
-            removedEdges.add(edge.getEdgeId());
-        }
-        for (String entityId : changedVertices) {
-            List<GraphEdgeRef> updated = new ArrayList<>();
-            for (GraphEdgeRef edge : parent.neighbors(entityId)) {
-                if (!removedEdges.contains(edge.getEdgeId())
-                    && !delta.getTombstones().getEntities().contains(edge.getSourceEntityId())
-                    && !delta.getTombstones().getEntities().contains(edge.getTargetEntityId())) {
-                    updated.add(edge);
-                }
-            }
-            for (GraphEdgeRef edge : delta.getEdges()) {
-                if (edge.getSourceEntityId().equals(entityId) || edge.getTargetEntityId().equals(entityId)) {
-                    updated.add(edge);
-                }
-            }
-            updated.sort((left, right) -> left.getEdgeId().compareTo(right.getEdgeId()));
-            if (updated.isEmpty()) {
-                result.put(entityId, Collections.emptyList());
-            } else {
-                result.put(entityId, Collections.unmodifiableList(updated));
-            }
         }
         return result;
     }
@@ -260,22 +203,36 @@ public final class VersionedGraphView implements GraphNeighborProvider {
         return result;
     }
 
+    /** Returns the immutable edge array that adjacency positions index into. */
+    private List<GraphEdgeRef> indexedEdges() {
+        return indexEdges;
+    }
+
+    /** Returns the immutable edge array that this view's adjacency positions index into. */
+    List<GraphEdgeRef> edges() {
+        return indexEdges;
+    }
+
+    /** Returns this view's adjacency index, shared with derived overlay views. */
+    Map<String, int[]> neighborIndexes() {
+        return neighborIndexes;
+    }
+
     @Override
     public List<GraphEdgeRef> neighbors(String entityId) {
-        List<GraphEdgeRef> result = neighbors.get(entityId);
-        if (result == null && parent != null) {
-            return parent.neighbors(entityId);
+        int[] indexes = neighborIndexes.get(entityId);
+        if (indexes == null) {
+            return parent == null ? Collections.emptyList() : parent.neighbors(entityId);
         }
-        return result == null ? Collections.emptyList() : Collections.unmodifiableList(result);
+        return GraphNeighborIndex.view(indexes, indexEdges);
     }
 
     @Override
     public List<GraphEdgeRef> prioritizedNeighbors(String entityId,
                                                    java.util.Comparator<GraphEdgeRef> priority,
                                                    int limit) {
-        List<GraphEdgeRef> result = new ArrayList<>(neighbors(entityId));
-        result.sort(priority);
-        return limit < result.size() ? result.subList(0, limit) : result;
+        List<GraphEdgeRef> values = neighbors(entityId);
+        return NeighborBatch.select(values, priority, limit, values.size()).getEdges();
     }
 
     @Override
@@ -294,7 +251,7 @@ public final class VersionedGraphView implements GraphNeighborProvider {
         return vertex == null ? GraphNeighborProvider.super.vertex(entity) : vertex;
     }
 
-    private GraphEdgeRef edgeById(String edgeId) {
+    GraphEdgeRef edgeById(String edgeId) {
         GraphEdgeRef edge = edgesById.get(edgeId);
         if (edge != null || parent == null || removedEdgeKeys.contains(edgeId)) {
             return edge;
