@@ -68,6 +68,7 @@ import org.apache.geaflow.ai.retrieval.execution.RetrievalPlan;
 import org.apache.geaflow.ai.retrieval.execution.RetrievalPlanValidator;
 import org.apache.geaflow.ai.retrieval.execution.RetrievalProgress;
 import org.apache.geaflow.ai.retrieval.execution.RetrievalReplanEvent;
+import org.apache.geaflow.ai.retrieval.execution.RetrievalStrategyFactory;
 import org.apache.geaflow.ai.retrieval.execution.RoutingContext;
 import org.apache.geaflow.ai.retrieval.execution.RoutingFeatures;
 import org.apache.geaflow.ai.retrieval.execution.RoutingPolicy;
@@ -164,14 +165,13 @@ public final class RecallService {
     public static RecallService fromProperties(RetrievalFixtureRegistry registry, WeightedRrfConfig config,
                                                LongSupplier clock, RetrievalProperties properties) {
         Objects.requireNonNull(properties, "properties");
-        DeterministicRulePolicy policy = new DeterministicRulePolicy(properties.getHighAverageIdf(),
-            properties.getHighScoreGap(), properties.getLongQueryLength(),
-            properties.getStrongAnchorConfidence(), properties.getMinimumAnchorCount(),
-            properties.getHighCandidateDegree(), properties.getHighGrowthRate(),
-            properties.getBaseNeighborCap());
-        RecallService service = new RecallService(registry, config, clock, new DeterministicTokenEstimator(),
-            new DeterministicReranker(), policy, properties.getMaxReplanCount(),
-            properties.isStrictPlanValidation(), properties);
+        properties.validateConfiguration();
+        RoutingPolicy policy = RetrievalStrategyFactory.routingPolicy(
+            properties.getRoutingPolicyId(), properties);
+        RecallService service = new RecallService(registry, config, clock,
+            RetrievalStrategyFactory.tokenEstimator(properties.getTokenEstimatorId()),
+            RetrievalStrategyFactory.reranker(properties.getRerankerId()), policy,
+            properties.getMaxReplanCount(), properties.isStrictPlanValidation(), properties);
         return service;
     }
 
