@@ -32,6 +32,7 @@ import org.apache.geaflow.dsl.rel.logical.LogicalGraphMatch;
 import org.apache.geaflow.dsl.rel.match.*;
 import org.apache.geaflow.dsl.rex.PathInputRef;
 import org.apache.geaflow.dsl.rex.RexObjectConstruct;
+import org.apache.geaflow.dsl.util.GQLRelUtil;
 
 /**
  * Rule to prune unnecessary fields within GraphMatch operations by analyzing
@@ -113,9 +114,13 @@ public class GraphMatchFieldPruneRule extends RelOptRule {
         // Recursively process all child nodes
         if (matchNode.getInputs() != null && !matchNode.getInputs().isEmpty()) {
             for (RelNode input : matchNode.getInputs()) {
-                if (input instanceof IMatchNode) {
+                if (input == null) {
+                    continue;
+                }
+                RelNode candidateInput = GQLRelUtil.toRel(input);
+                if (candidateInput instanceof IMatchNode) {
                     // Conversion is handled at leaf nodes, so no need for convertToPathRefs here
-                    allFilteredFields.addAll(extractFromMatchNode((IMatchNode) input));
+                    allFilteredFields.addAll(extractFromMatchNode((IMatchNode) candidateInput));
                 }
             }
         }
@@ -226,9 +231,15 @@ public class GraphMatchFieldPruneRule extends RelOptRule {
             // Iterate through possible child nodes
             List<RelNode> inputs = currentPathPattern.getInputs();
             for (RelNode candidateInput : inputs) {
-                if (candidateInput != null && !visited.contains((IMatchNode) candidateInput)) {
-                    queue.offer((IMatchNode) candidateInput);
-                    visited.add((IMatchNode) candidateInput);
+                if (candidateInput == null) {
+                    continue;
+                }
+                RelNode input = GQLRelUtil.toRel(candidateInput);
+                if (input instanceof IMatchNode) {
+                    IMatchNode matchInput = (IMatchNode) input;
+                    if (visited.add(matchInput)) {
+                        queue.offer(matchInput);
+                    }
                 }
             }
         }

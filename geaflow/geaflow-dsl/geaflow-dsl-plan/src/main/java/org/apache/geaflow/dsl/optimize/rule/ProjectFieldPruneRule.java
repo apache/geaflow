@@ -34,6 +34,7 @@ import org.apache.geaflow.dsl.rel.logical.LogicalGraphMatch;
 import org.apache.geaflow.dsl.rel.match.*;
 import org.apache.geaflow.dsl.rex.PathInputRef;
 import org.apache.geaflow.dsl.rex.RexParameterRef;
+import org.apache.geaflow.dsl.util.GQLRelUtil;
 
 /**
  * Rule to prune unnecessary fields from LogicalProject and push down field requirements
@@ -87,7 +88,7 @@ public class ProjectFieldPruneRule extends RelOptRule {
         }
 
         // Convert index-based references to label-based path references
-        return convertToPathRefs(fieldAccesses, project.getInput(0));
+        return convertToPathRefs(fieldAccesses, GQLRelUtil.toRel(project.getInput(0)));
     }
 
     /**
@@ -252,9 +253,15 @@ public class ProjectFieldPruneRule extends RelOptRule {
             // Iterate through possible child nodes
             List<RelNode> inputs = currentPathPattern.getInputs();
             for (RelNode candidateInput : inputs) {
-                if (candidateInput != null && !visited.contains((IMatchNode) candidateInput)) {
-                    queue.offer((IMatchNode) candidateInput);
-                    visited.add((IMatchNode) candidateInput);
+                if (candidateInput == null) {
+                    continue;
+                }
+                RelNode input = GQLRelUtil.toRel(candidateInput);
+                if (input instanceof IMatchNode) {
+                    IMatchNode matchInput = (IMatchNode) input;
+                    if (visited.add(matchInput)) {
+                        queue.offer(matchInput);
+                    }
                 }
             }
         }
