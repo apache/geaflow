@@ -42,6 +42,11 @@ import org.apache.geaflow.ai.retrieval.model.graph.GraphVertexRef;
 
 /** Bounded deterministic one-hop graph expansion over fixture graph records. */
 public final class GraphRetriever {
+
+    /** Source relevance when an edge and its anchor share no source chunk. */
+    private static final double UNRELATED_SOURCE_RELEVANCE = 0.5D;
+    /** Floor for the one-hop anchor expansion score, which decays as more hits are produced. */
+    private static final double ANCHOR_HIT_BASE_SCORE = 1.0D;
     private final EntityAnchorResolver resolver;
     private final TokenEstimator tokenEstimator;
     private GraphStats lastStats = new GraphStats();
@@ -544,7 +549,8 @@ public final class GraphRetriever {
                 overlap++;
             }
         }
-        return overlap == 0 ? 0.5 : 1.0 + (double) overlap / anchorSources.size();
+        return overlap == 0 ? UNRELATED_SOURCE_RELEVANCE
+            : ANCHOR_HIT_BASE_SCORE + (double) overlap / anchorSources.size();
     }
 
     private static List<String> sourceIds(ExpansionState state, GraphEdgeRef edge,

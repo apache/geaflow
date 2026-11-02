@@ -25,6 +25,9 @@ import org.apache.geaflow.ai.retrieval.model.document.TextChunk;
 /** Reproducible estimator that honors artifact estimates and falls back to four characters per token. */
 public final class DeterministicTokenEstimator implements TokenEstimator {
     public static final String VERSION = "chars4-v1";
+    /** Characters per token assumed by this estimator; the version string encodes the same value. */
+    public static final int CHARACTERS_PER_TOKEN = 4;
+    private static final int ROUND_UP_OFFSET = CHARACTERS_PER_TOKEN - 1;
 
     @Override
     public int estimate(TextChunk chunk) {
@@ -32,7 +35,8 @@ public final class DeterministicTokenEstimator implements TokenEstimator {
         if (chunk.getTokenEstimate() > 0) {
             return chunk.getTokenEstimate();
         }
-        return (int) Math.max(1L, ((long) chunk.getText().length() + 3L) / 4L);
+        long characters = (long) chunk.getText().length();
+        return (int) Math.max(1L, (characters + ROUND_UP_OFFSET) / CHARACTERS_PER_TOKEN);
     }
 
     @Override

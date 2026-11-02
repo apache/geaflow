@@ -251,4 +251,6 @@ class RetrievalModeEnumTest {
             return delegate.getParameters();
         }
     }
+
+
 }

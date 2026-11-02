@@ -36,6 +36,14 @@ public final class RecallPlan {
      * floor and the marginal-yield stop can never take effect on the hop frontier.
      */
     private static final int DEFAULT_MAX_HOP = 2;
+    /** Channels that share one budget in non-cascaded hybrid execution. */
+    private static final int HYBRID_CHANNEL_COUNT = 3;
+    /** Below this many candidates a cascade splits the budget in half instead of using a probe. */
+    private static final int CASCADE_MIN_BUDGET = 5;
+    /** Probe channels receive at most this share of the budget, so the graph stage stays funded. */
+    private static final int CASCADE_PROBE_MAX = 10;
+    private static final int CASCADE_PROBE_MIN = 2;
+    private static final int CASCADE_PROBE_DIVISOR = 8;
     private final RetrievalMode mode;
     private final int topK;
     private final long deadlineNanos;
@@ -78,15 +86,16 @@ public final class RecallPlan {
         Map<String, Integer> budgets = new LinkedHashMap<>();
         if (this.mode == RetrievalMode.HYBRID) {
             if (executionMode == ExecutionMode.CASCADED) {
-                int probeBudget = allocatedCandidates >= 5
-                    ? Math.min(10, Math.max(2, allocatedCandidates / 8))
+                int probeBudget = allocatedCandidates >= CASCADE_MIN_BUDGET
+                    ? Math.min(CASCADE_PROBE_MAX,
+                        Math.max(CASCADE_PROBE_MIN, allocatedCandidates / CASCADE_PROBE_DIVISOR))
                     : Math.max(1, (allocatedCandidates - 1) / 2);
                 budgets.put("BM25", probeBudget);
                 budgets.put("VECTOR", probeBudget);
                 budgets.put("GRAPH", allocatedCandidates - (probeBudget * 2));
             } else {
-                int base = allocatedCandidates / 3;
-                int remainder = allocatedCandidates % 3;
+                int base = allocatedCandidates / HYBRID_CHANNEL_COUNT;
+                int remainder = allocatedCandidates % HYBRID_CHANNEL_COUNT;
                 budgets.put("BM25", base + (remainder >= 1 ? 1 : 0));
                 budgets.put("VECTOR", base + (remainder >= 2 ? 1 : 0));
                 budgets.put("GRAPH", base);

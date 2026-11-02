@@ -37,6 +37,21 @@ import org.apache.geaflow.ai.retrieval.model.graph.EntityRef;
 /** Deterministic canonical-name and alias resolver used as the graph expansion boundary. */
 public final class EntityAnchorResolver {
     private final List<NameEntry> names;
+    /** Confidence assigned when the query matches an entity's canonical name exactly. */
+    public static final double CANONICAL_CONFIDENCE = 1.0D;
+    /** Confidence assigned when the query matches a declared alias. */
+    public static final double ALIAS_CONFIDENCE = 0.9D;
+    /**
+     * Confidence assigned when no name matches and anchors are recovered from retrieved chunks.
+     *
+     * <p>Kept deliberately below {@code strongAnchorConfidence} defaults so a recovered anchor does
+     * not unlock a second hop on the strength of a text hit alone.
+     */
+    public static final double TEXT_CANDIDATE_CONFIDENCE = 0.35D;
+    static final String CANONICAL_TYPE = "CANONICAL";
+    static final String ALIAS_TYPE = "ALIAS";
+    static final String TEXT_CANDIDATE_TYPE = "TEXT_CANDIDATE";
+
     private final Map<String, List<NameEntry>> namesByToken;
     private final Map<String, List<EntityRef>> entitiesBySourceChunk;
 
@@ -55,9 +70,9 @@ public final class EntityAnchorResolver {
                 if (entity == null) {
                     continue;
                 }
-                add(indexed, entity.getCanonicalName(), entity, "CANONICAL", 1.0D);
+                add(indexed, entity.getCanonicalName(), entity, CANONICAL_TYPE, CANONICAL_CONFIDENCE);
                 for (String alias : entity.getAliases()) {
-                    add(indexed, alias, entity, "ALIAS", 0.9D);
+                    add(indexed, alias, entity, ALIAS_TYPE, ALIAS_CONFIDENCE);
                 }
                 for (String chunkId : entity.getSourceChunkIds()) {
                     sourceEntities.computeIfAbsent(chunkId, ignored -> new ArrayList<>()).add(entity);
@@ -157,7 +172,7 @@ public final class EntityAnchorResolver {
         }
         List<Anchor> result = new ArrayList<>();
         for (EntityRef entity : matches.values()) {
-            result.add(new Anchor(entity, "TEXT_CANDIDATE", 0.35D));
+            result.add(new Anchor(entity, TEXT_CANDIDATE_TYPE, TEXT_CANDIDATE_CONFIDENCE));
         }
         return result;
     }
@@ -200,11 +215,11 @@ public final class EntityAnchorResolver {
             }
             String canonical = normalize(entity.getCanonicalName());
             if (normalized.equals(canonical)) {
-                result.add(new Anchor(entity, "CANONICAL", 1.0));
+                result.add(new Anchor(entity, CANONICAL_TYPE, CANONICAL_CONFIDENCE));
             } else {
                 for (String alias : entity.getAliases()) {
                     if (normalized.equals(normalize(alias))) {
-                        result.add(new Anchor(entity, "ALIAS", 0.9));
+                        result.add(new Anchor(entity, ALIAS_TYPE, ALIAS_CONFIDENCE));
                         break;
                     }
                 }

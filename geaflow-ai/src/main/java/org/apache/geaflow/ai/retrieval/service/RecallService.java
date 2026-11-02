@@ -832,7 +832,7 @@ public final class RecallService {
             } else {
                 RecallStopReason skipReason = progress.getRemainingCandidates() == 0 || graphBudget == 0
                     ? RecallStopReason.CANDIDATE_BUDGET
-                    : progress.getGraphGrowthRate() > 2.0D
+                    : progress.getGraphGrowthRate() > replanned.getMaxDiffusionGrowth()
                         ? RecallStopReason.DIFFUSION_GROWTH_LIMIT : RecallStopReason.NO_RELIABLE_ANCHOR;
                 record(trace, "GRAPH", RecallStageStatus.NOT_RUN, skipReason,
                     "adaptive policy did not schedule the graph stage at the boundary");

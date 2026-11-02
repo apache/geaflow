@@ -29,6 +29,13 @@ public final class DeterministicRulePolicy implements RetrievalRoutingPolicy {
     public static final String POLICY_ID = "deterministic-rule";
     public static final String POLICY_VERSION = "v1";
 
+    /** Lexical-leaning fusion weights applied when BM25 looks confident for this query. */
+    static final double LEXICAL_BM25_WEIGHT = 1.25D;
+    static final double LEXICAL_VECTOR_WEIGHT = 0.85D;
+    /** Semantic-leaning fusion weights applied for long, lexically weak queries. */
+    static final double SEMANTIC_BM25_WEIGHT = 0.85D;
+    static final double SEMANTIC_VECTOR_WEIGHT = 1.25D;
+
     private final double highAverageIdf;
     private final double highScoreGap;
     private final int longQueryLength;
@@ -157,10 +164,10 @@ public final class DeterministicRulePolicy implements RetrievalRoutingPolicy {
         }
         if (features.getAverageIdf() >= highAverageIdf
             || features.getFirstStageScoreGap() >= highScoreGap) {
-            builder.bm25Weight(1.25D).vectorWeight(0.85D).graphWeight(1.0D)
+            builder.bm25Weight(LEXICAL_BM25_WEIGHT).vectorWeight(LEXICAL_VECTOR_WEIGHT)
                 .reason("LEXICAL_CONFIDENCE");
         } else if (features.getQueryLength() >= longQueryLength) {
-            builder.bm25Weight(0.85D).vectorWeight(1.25D).graphWeight(1.0D)
+            builder.bm25Weight(SEMANTIC_BM25_WEIGHT).vectorWeight(SEMANTIC_VECTOR_WEIGHT)
                 .reason("SEMANTIC_QUERY");
         } else {
             builder.reason("BALANCED_QUERY");
