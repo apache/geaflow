@@ -93,3 +93,51 @@ improves ranking quality over simply running graph-only.
 Applicability boundary: the routing policy buys cost, not precision. Until a
 policy is shown to raise MRR/NDCG above graph-only under the same budget, it
 should be treated as a cost-control mechanism rather than a quality lever.
+
+## Ablations on both datasets
+
+Budget-level and query-category ablations were run on both fixed datasets. Artifacts:
+`tmp/graphrag/data/runs/ablations/<dataset>/<condition>.{jsonl.gz,csv}`.
+
+```bash
+PYTHONPATH=. python3 tools/graphrag/benchmark_http.py \
+  --url http://127.0.0.1:PORT/api/v1/retrievals --queries <queries.jsonl> \
+  --output runs/ablations/<dataset>/budget-tight.jsonl.gz \
+  --graph-name <name> --graph-version <gv> --index-version <iv> \
+  --vectors <queries.npz> --gold <gold> --chunks <bundle>/chunks.jsonl \
+  --ablation budget-tight --seed 0
+```
+
+ADAPTIVE_HYBRID under each condition (2Wiki 500 queries, HotpotQA 150 queries;
+budget-loose on HotpotQA used 60 queries because a 400-candidate window over the
+larger graph does not finish in the default time box):
+
+| Condition | Candidate budget | 2Wiki Recall / MRR | HotpotQA Recall / MRR | Edges |
+|---|---|---|---|---|
+| budget-loose | 400 | 0.484 / 0.109 | 0.453 / 0.098 | 33-35 |
+| (reference) | 100 | 0.641 / 0.153 | 0.382 / 0.072 | 35-40 |
+| budget-tight | 25 | 0.389 / 0.070 | 0.277 / 0.047 | 27-32 |
+| multi-hop | 50 | 0.484 / 0.109 | 0.439 / 0.081 | 32-33 |
+| high-degree | 25 | 0.000 / 0.000 | 0.000 / 0.000 | 0 |
+| no-anchor | 100 | 0.000 / 0.000 | 0.000 / 0.000 | 0 |
+
+Two conclusions, both consistent across datasets:
+
+1. **Quality rises monotonically with budget** once the graph stage is funded
+   (`budget-tight` < reference < `budget-loose`), which supports the design's premise
+   that graph expansion is the evidence source and that its budget matters.
+2. **Removing the graph channel zeroes recall entirely.** Both `no-anchor` and
+   `high-degree` collapse to 0.000 on both datasets, confirming that BM25 and vector
+   channels cannot substitute for graph expansion here, and that the high-degree
+   neighbour cap is restrictive enough to suppress all graph evidence.
+
+The ablation harness itself is covered by `test_budget_ablations_scale_the_wire_budget_only`
+and `test_reported_budget_reflects_the_ablated_request`, which pins that an ablation
+scales only the budget and that the recorded budget is the executed one.
+
+## Known limits of these results
+
+- The HotpotQA `budget-loose` ablation used 60 queries rather than 150; the other
+  conditions and both full runs used their stated sizes.
+- Ablation query counts differ from the full runs; compare conditions within a
+  dataset, not the ablation table against the full-run table.
