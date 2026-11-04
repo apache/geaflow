@@ -44,25 +44,57 @@ curl http://127.0.0.1:8080/metrics/retrieval
 ```
 
 Record the exact dataset release, graph/index versions, configuration, JDK,
-commit, and benchmark seed. Dataset adapters (`tools/graphrag/eval/retrieval.py`),
-the six-method batch runner (`tools/graphrag/benchmark_http.py`) and cost
-accounting (`meanTokensRetained`, `meanEdgesExamined`, independent edge-scan
-budget) are implemented, and every benchmark row records `codeRevision`,
-`datasetRelease`, `randomSeed`, `configVersion`, `policyId`,
-`tokenEstimatorVersion` and `replanCount` so runs cannot be silently mixed.
+commit, and benchmark seed. Cost accounting (`meanTokensRetained`,
+`meanEdgesExamined`, independent edge-scan budget) is implemented in this module,
+and every benchmark row records `codeRevision`, `datasetRelease`, `randomSeed`,
+`configVersion`, `policyId`, `tokenEstimatorVersion` and `replanCount` so runs
+cannot be silently mixed.
 
-Reproduce the pipeline end to end with one command:
+> **Scope of this repository.** Only the retrieval engine and its unit tests are
+> shipped here. Dataset ingestion drivers, the benchmark runner, load testing and
+> report generation are operated locally and are not tracked in this repository,
+> so the commands below reference them by path on the operator's machine.
+
+This module exposes two local execution entry points, which a local pipeline can
+drive by main class name:
+
+| Entry point | Purpose |
+| --- | --- |
+| `org.apache.geaflow.ai.retrieval.ingest.CanonicalJsonlArtifactBridgeCli` | Publish a verified dataset release as graph / BM25 / vector artifacts plus `READY.json` |
+| `org.apache.geaflow.ai.retrieval.service.RetrievalBatchCli` | Drive retrieval over a JSONL query file and write JSONL results |
+
+`RetrievalBatchCli` reuses the same recall service as the server, so batch output
+and online responses cannot diverge. Build and run it with:
 
 ```bash
-export GEAFLOW_QUERIES=tmp/graphrag/data/queries/2wikimultihopqa-dev.jsonl
-export GEAFLOW_VECTORS=tmp/graphrag/data/runs/2wikimultihopqa-query-vectors-gte.npz
-export GEAFLOW_GOLD=tmp/graphrag/data/cache/2wikimultihopqa-dev.zip
-tools/graphrag/reproduce.sh --dataset 2wikimultihopqa
+mvn -pl geaflow-ai -o package -DskipTests -Drat.skip=true
+java -cp <classpath> org.apache.geaflow.ai.retrieval.service.RetrievalBatchCli \
+  --bundle <ready-bundle-dir> --queries <queries.jsonl> --output <results.jsonl> \
+  --graph-name <name> --graph-version <v> --index-version <v> \
+  --vector-source <src> --vector-version <v>
 ```
 
-See `tools/graphrag/REPRODUCE.md` for inputs and outputs. The generated
-`<dataset>-six-methods.csv` carries `evidenceRecallAtK`, `mrr`, `ndcgAtK`,
-`relationPathHit`, `answerExactMatch`, `answerF1` and P50/P95/P99 latency.
+A six-method benchmark row is expected to carry `evidenceRecallAtK`, `mrr`,
+`ndcgAtK`, `relationPathHit`, `answerExactMatch`, `answerF1`,
+`primaryConstraint` and P50/P95/P99 latency.
+
+Two of those columns depend on inputs that must be present, and a column is only
+meaningful when it is populated:
+
+- `answerExactMatch` and `answerF1` are computed from the extractive answer the
+  retrieval response now carries (`RetrievalResponse.answer`). They are populated
+  for every successful request. A column of empty values means the run used a
+  binary that predates the extractive answer field, not that the answers were
+  wrong.
+- `relationPathHit` requires relation targets. 2WikiMultiHopQA provides explicit
+  `evidences` triples; HotpotQA is not relation-annotated, so its target is
+  derived from the supporting-fact titles. A single-paragraph answer has no
+  inter-entity hop and therefore no relation path to hit; those queries score 0
+  by definition rather than being counted as failures.
+
+`primaryConstraint` records the ONE hard budget constraint the run spent, so an
+equal-budget comparison cannot silently mix constraint kinds. Do not compare rows
+whose `primaryConstraint` differs.
 
 Release blockers include missing READY artifacts, non-deterministic ordering,
 leaked readers or leases, untyped failures, and any command above failing in a

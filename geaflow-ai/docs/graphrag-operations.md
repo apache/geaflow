@@ -241,8 +241,13 @@ verified against the manifest checksum before use.
 
 | Dataset | Split | Manifest | Licence |
 |---|---|---|---|
-| HotpotQA (official distractor) | validation/dev | `tools/graphrag/manifests/hotpotqa-distractor-v2.json` | CC BY-SA 4.0 (declared) |
-| 2WikiMultiHopQA (official) | dev | `tools/graphrag/manifests/2wikimultihopqa-dev-v2.json` | Apache-2.0 (declared) |
+| HotpotQA (official distractor) | validation/dev | `hotpotqa-distractor-v2.json` (local manifest) | CC BY-SA 4.0 (declared) |
+| 2WikiMultiHopQA (official) | dev | `2wikimultihopqa-dev-v2.json` (local manifest) | Apache-2.0 (declared) |
+
+The manifests are kept with the local dataset pipeline rather than in this
+module, so ingestion is driven on the operator's machine. This module consumes
+their output: a published bundle whose `READY.json` records the identity and
+checksums the manifests describe.
 
 The `license` block in each manifest records the declared licence that the
 upstream project publishes, together with `status`. Both manifests currently
@@ -294,7 +299,9 @@ for HotpotQA; 2WikiMultiHopQA is read from its archive JSON.
 ```bash
 mvn -o -pl geaflow-ai -DskipTests validate
 mvn -o -pl geaflow-ai test -Djacoco.skip=true
-python3 -m pytest tools/graphrag/tests -q
 ```
+
+The dataset and benchmark test suites are operated locally alongside the
+pipeline and are not part of this repository, so no Python suite runs here.
 
 See `graphrag-release-checklist.md` for the full clean-checkout procedure.
