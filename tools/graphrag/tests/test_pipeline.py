@@ -278,3 +278,58 @@ def _artifact(output, name, chunks):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class JavaManifestTest(unittest.TestCase):
+    """The Java manifest must carry every build-metadata field the design requires."""
+
+    def test_carries_entity_extractor_and_budget_configuration(self):
+        from tools.graphrag.publish_bundle import _java_manifest
+
+        ready = {
+            "dataset": "d", "version": "v1", "dataset_release": "r", "split": "dev",
+            "sha256": "0" * 64, "policy_version": "chunk-v1",
+            "preprocessing_version": "p", "entity_schema_version": "schema-v2",
+            "entity_extractor_version": "extractor-v3",
+            "vector_source": "v", "vector_version": "v1", "random_seed": 0,
+            "source_uri": "uri",
+        }
+        config = {"chunk_size": 100, "overlap": 10,
+                  "budget_configuration": {"primary_constraint": "tokens",
+                                           "max_candidates": 50, "timeout_ms": 1500,
+                                           "token_budget": 2048, "max_edge_scans": 60}}
+
+        manifest = _java_manifest(ready, config)
+
+        # Distinct facts: the extractor decides entities, the schema decides their storage.
+        self.assertEqual("extractor-v3", manifest["entityExtractorVersion"])
+        self.assertEqual("schema-v2", manifest["graphSchemaVersion"])
+        self.assertEqual({
+            "primaryConstraint": "tokens", "maxCandidates": 50, "timeoutMs": 1500,
+            "tokenBudget": 2048, "maxEdgeScans": 60}, manifest["budgetConfiguration"])
+
+    def test_absent_budget_configuration_stays_absent(self):
+        from tools.graphrag.publish_bundle import _java_manifest
+
+        ready = {"dataset": "d", "version": "v1", "dataset_release": "r", "split": "dev",
+                 "sha256": "0" * 64, "policy_version": "p", "preprocessing_version": "p",
+                 "entity_schema_version": "s", "entity_extractor_version": "e",
+                 "vector_source": "v", "vector_version": "v1", "random_seed": 0}
+
+        manifest = _java_manifest(ready, {})
+
+        self.assertIsNone(manifest["budgetConfiguration"],
+                          "never recorded must not become a silent default")
+
+    def test_every_shipped_manifest_declares_a_budget_configuration(self):
+        for path in sorted(Path("tools/graphrag/manifests").glob("*.json")):
+            config = json.loads(path.read_text(encoding="utf-8"))
+            budget = config.get("budget_configuration")
+            self.assertIsNotNone(budget, "%s must declare budget_configuration" % path)
+            for key in ("primary_constraint", "max_candidates", "timeout_ms",
+                        "token_budget", "max_edge_scans"):
+                self.assertIn(key, budget, "%s is missing %s" % (path, key))
+            self.assertIn(budget["primary_constraint"],
+                          ("candidates", "latency", "tokens"))
+            self.assertIsNotNone(config.get("entity_extractor_version"),
+                                 "%s must record its entity extractor" % path)

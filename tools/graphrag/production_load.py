@@ -182,6 +182,49 @@ class HttpWorker:
         started = time.monotonic()
         row = {'requestId': body['requestId'], 'scheduledAtMonotonic': scheduled_at,
                'startedAtMonotonic': started, 'queueDelayMs': max(0.0, started - scheduled_at) * 1000.0}
+        try:
+            self._send(body, payload, row)
+        except socket.timeout as error:
+            row.update(status=0, response={}, error='%s: %s' % (type(error).__name__, error))
+            self._close()
+        except (OSError, http.client.HTTPException) as error:
+            # A pooled keep-alive socket can be closed by the server's idle timeout while this
+            # thread held it. Retrying once on a fresh connection keeps the measurement about
+            # retrieval latency instead of about socket liveness; the retry is recorded so it stays
+            # visible rather than being silently absorbed.
+            if not self._is_stale_connection(error):
+                raise
+            row['connectionReused'] = False
+            row['staleConnectionRetried'] = True
+            # _send records an error before raising; clear it so a successful retry is not
+            # reported as a request that also produced an error message.
+            row.pop('error', None)
+            self._close()
+            try:
+                self._send(body, payload, row)
+            except (OSError, http.client.HTTPException, socket.timeout) as retry_error:
+                # The retry also failed, so this is a genuine transport failure and must be
+                # reported as one rather than raised: an exception would abort the whole load run
+                # instead of counting one failed request.
+                row.update(status=0, response={},
+                           error='%s: %s (after reconnect)' % (type(retry_error).__name__,
+                                                               retry_error))
+                self._close()
+        row['finishedAtMonotonic'] = time.monotonic()
+        row['latencyMs'] = (row['finishedAtMonotonic'] - started) * 1000.0
+        row['completed'] = True
+        return row
+
+    @staticmethod
+    def _is_stale_connection(error: BaseException) -> bool:
+        """True when a pooled connection was closed before the request could be sent."""
+        if isinstance(error, http.client.RemoteDisconnected):
+            return True
+        if isinstance(error, (BrokenPipeError, ConnectionResetError)):
+            return True
+        return 'Remote end closed connection' in str(error)
+
+    def _send(self, body: Dict[str, Any], payload: bytes, row: Dict[str, Any]) -> None:
         connection = getattr(self.local, 'connection', None)
         if connection is None:
             connection = http.client.HTTPConnection(
@@ -208,10 +251,7 @@ class HttpWorker:
         except (OSError, http.client.HTTPException, socket.timeout) as error:
             row.update(status=0, response={}, error='%s: %s' % (type(error).__name__, error))
             self._close()
-        row['finishedAtMonotonic'] = time.monotonic()
-        row['latencyMs'] = (row['finishedAtMonotonic'] - started) * 1000.0
-        row['completed'] = True
-        return row
+            raise
 
     def _close(self) -> None:
         connection = getattr(self.local, 'connection', None)

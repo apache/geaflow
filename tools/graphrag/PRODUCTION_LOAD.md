@@ -96,7 +96,34 @@ Each phase is then compared against both ceilings, every breach is appended to `
 **P95 <= 200 ms and P99 <= 500 ms at 50 QPS**; treat them as a starting point to re-baseline on your
 own hardware, and always report the `codeRevision` alongside the result.
 
-The 2026-10-18 full profile (`production-load/20261018T132744Z`) was recorded before any SLO
-existed and its `acceptance.json` is `passed: false` with `latencySloConfigured: false`. It stays in
-the repository as a historical capacity baseline and is not evidence of SLO compliance; re-run the
-profile with the flags above before quoting latency guarantees.
+### Current SLO evidence
+
+`production-load/slo_v2/acceptance.json` is the run that supports a latency claim:
+
+```
+passed: true, latencySloConfigured: true, p95LimitMs: 200, p99LimitMs: 500
+93,300 / 93,300 requests succeeded, 0 transport failures, 0 unexpected 5xx,
+0 client rejects, 0 protocol violations, all three failure drills passed
+p95 max 58.7 ms, p99 max 115.1 ms
+```
+
+Per-phase at 50 QPS: `ADAPTIVE_HYBRID` p95 33.0 ms, soak (30,000 requests over 10 minutes)
+p95 32.5 ms; `GRAPH_ONLY` p95 35.1 ms; `BM25_ONLY` p95 5.1 ms; `VECTOR_ONLY` p95 4.3 ms.
+
+### Historic runs that are not SLO evidence
+
+- `production-load/20261018T132744Z` — recorded before any ceiling existed:
+  `passed: false`, `latencySloConfigured: false`. Historical capacity baseline only.
+- `production-load/smoke2` — `passed: true` but `latencySloConfigured: false`. A smoke profile
+  without ceilings; it proves the harness runs, not that latency is acceptable.
+- `production-load/slo_smoke` — first run that set ceilings; one-request-per-phase wiring check.
+- `production-load/20261104T092500Z` — **`passed: false` for a client-side reason, not latency.**
+  Its phase summaries show 0 SLO breaches (p95 max 57.3 ms, p99 max 67.4 ms) and 10
+  `transportFailure` rows out of 93,300. Those 10 were `RemoteDisconnected`: the load generator
+  reused a keep-alive socket that the server had already closed on idle timeout, then counted the
+  dead socket as a failed request. `HttpWorker` now reconnects once for exactly that case and
+  reports anything else unchanged; `test_stale_pooled_connection_is_retried_once` pins it. This run
+  stays in the repository as evidence of the harness bug and must not be read as a latency failure.
+
+A run only supports a latency claim when `latencySloConfigured` is `true` **and** `passed` is
+`true`.

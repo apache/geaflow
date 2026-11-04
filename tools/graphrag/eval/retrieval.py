@@ -104,8 +104,7 @@ def load_supporting_targets(gold_path, chunks_path=None):
                 values = contexts.get(title, [])
                 if isinstance(index, int) and 0 <= index < len(values):
                     sentences.append(str(values[index]))
-        relations = [str(item[1]) for item in record.get('evidences', [])
-                     if isinstance(item, (list, tuple)) and len(item) >= 3]
+        relations = _relation_targets(record)
         candidates = chunks_by_document.get(query_id, [])
         relevant = set()
         unresolved = 0 if chunks_path is not None else None
@@ -122,6 +121,31 @@ def load_supporting_targets(gold_path, chunks_path=None):
                             'unresolvedSupportingFacts': unresolved,
                             'relations': relations}
     return result
+
+
+def _relation_targets(record):
+    """Returns the ordered relation labels a gold answer is expected to traverse.
+
+    Datasets with explicit relation annotations (2WikiMultiHopQA ``evidences``) provide them
+    directly. HotpotQA is not relation-annotated, so its multi-hop structure is encoded only in the
+    supporting-fact titles: the gold reasoning steps from one entity paragraph to the next. Those
+    titles are the available relation signal, and reporting them keeps ``relationPathHit`` defined
+    on both fixed datasets instead of structurally null on one of them.
+    """
+    explicit = [str(item[1]) for item in record.get('evidences', [])
+                if isinstance(item, (list, tuple)) and len(item) >= 3]
+    if explicit:
+        return explicit
+    titles = []
+    for fact in record.get('supporting_facts', []):
+        if isinstance(fact, (list, tuple)) and len(fact) >= 2 and isinstance(fact[0], str):
+            if fact[0] not in titles:
+                titles.append(fact[0])
+    if len(titles) < 2:
+        # A single-paragraph answer has no inter-entity hop, so no relation path to score.
+        return []
+    return titles
+
 
 
 def _parquet_record(row):
@@ -300,7 +324,7 @@ def score_evidence(response, supporting_sentences=None, relevant_chunk_ids=None,
               'evidenceCount': len(evidence),
               'chunkCount': len(all_chunks),
               'evidenceRecallAtK': None, 'mrr': None, 'ndcgAtK': None,
-              'relationPathHit': None,
+              'relationPathHit': None, 'relationPathTargetCount': None,
               'supportingSentenceCount': None, 'supportingSentencesHit': None,
               'supportingSentenceRecall': None, 'allSupportingSentencesHit': None}
     if relevant_chunk_ids is not None:
@@ -311,6 +335,10 @@ def score_evidence(response, supporting_sentences=None, relevant_chunk_ids=None,
                       ndcgAtK=_ndcg_at_k(ranked_chunk_ids, relevant, recall_k))
     if relation_targets is not None:
         target = [normalized_content(value).lower() for value in relation_targets]
+        # Distinguish "this query has no gold relation path" from "the path was not matched".
+        # Reporting a bare 0 for both made an unscoreable query look like a retrieval miss, which
+        # is what made relationPathHit uninterpretable in the full runs.
+        result['relationPathTargetCount'] = len(target)
         result['relationPathHit'] = int(bool(target) and any(
             _contains_sequence(path, target) for path in returned_relation_paths))
     if supporting_sentences:

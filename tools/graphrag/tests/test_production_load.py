@@ -171,3 +171,80 @@ def test_slo_pass_reports_no_violations():
     slo = _evaluate_slo([summary], 200.0, 500.0)
     assert slo['latencySloConfigured'] is True
     assert slo['sloViolations'] == []
+
+
+def _worker_with_stub(monkeypatch, outcomes):
+    """Returns an HttpWorker whose transport plays back `outcomes` in order."""
+    import http.client
+    from tools.graphrag.production_load import HttpWorker
+
+    worker = HttpWorker('http://127.0.0.1:1')
+    calls = []
+
+    def fake_send(body, payload, row):
+        outcome = outcomes[len(calls)]
+        calls.append(outcome)
+        if isinstance(outcome, BaseException):
+            row['error'] = '%s: %s' % (type(outcome).__name__, outcome)
+            raise outcome
+        row.update(status=200, response={'ok': True})
+
+    monkeypatch.setattr(worker, '_send', fake_send)
+    monkeypatch.setattr(worker, '_close', lambda: None)
+    body = {'requestId': 'r1', 'budget': {'timeoutMs': 1000}}
+    return worker, body, calls
+
+
+def test_stale_pooled_connection_is_retried_once(monkeypatch):
+    """A keep-alive socket the server already closed must not be counted as a failed request.
+
+    The server's idle timeout closes pooled connections. Without a reconnect, the client reports
+    RemoteDisconnected and the run fails acceptance on transport failures even though every
+    request actually succeeded -- which is what happened on the first SLO run.
+    """
+    import http.client
+
+    worker, body, calls = _worker_with_stub(
+        monkeypatch, [http.client.RemoteDisconnected('Remote end closed connection'), None])
+
+    row = worker.post(body, 0.0)
+
+    assert len(calls) == 2, 'a stale connection must be retried exactly once'
+    assert row['status'] == 200
+    assert row.get('staleConnectionRetried') is True
+    assert 'error' not in row, 'a successful retry must not keep the transport error'
+    assert row['completed'] is True
+
+
+def test_retried_request_still_fails_when_the_reconnect_also_fails(monkeypatch):
+    """A genuine transport failure must be reported per request, never raised.
+
+    Raising would abort the entire load run instead of counting one failed request.
+    """
+    import http.client
+
+    worker, body, calls = _worker_with_stub(
+        monkeypatch, [http.client.RemoteDisconnected('closed'), http.client.RemoteDisconnected('closed')])
+
+    row = worker.post(body, 0.0)
+
+    assert len(calls) == 2
+    assert row['status'] == 0
+    assert 'after reconnect' in row['error']
+    assert row['completed'] is True
+
+
+def test_non_stale_transport_error_is_not_retried(monkeypatch):
+    """Only a stale pooled connection is retried; other transport errors surface immediately."""
+    import http.client
+
+    worker, body, calls = _worker_with_stub(
+        monkeypatch, [http.client.BadStatusLine('garbage')])
+
+    try:
+        worker.post(body, 0.0)
+    except http.client.BadStatusLine:
+        pass
+    else:
+        raise AssertionError('a non-stale transport error must propagate')
+    assert len(calls) == 1

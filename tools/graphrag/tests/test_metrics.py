@@ -53,3 +53,48 @@ def test_matches_java_shared_golden_fixture():
     for case in cases:
         assert exact_match(case['prediction'], case['answer']) == case['exactMatch'], case
         assert abs(f1(case['prediction'], case['answer']) - case['f1']) < 1e-9, case
+
+
+def test_relation_targets_fall_back_to_supporting_fact_titles():
+    """HotpotQA has no relation annotations; its multi-hop structure lives in the fact titles.
+
+    Without this fallback relationPathHit was structurally null on one of the two fixed
+    datasets, so the design's required metric could not be reported.
+    """
+    from tools.graphrag.eval.retrieval import _relation_targets
+
+    hotpot = {'supporting_facts': [['Confucius', 0], ['Ethics', 3]]}
+    assert _relation_targets(hotpot) == ['Confucius', 'Ethics']
+
+
+def test_relation_targets_prefer_explicit_annotations():
+    from tools.graphrag.eval.retrieval import _relation_targets
+
+    two_wiki = {'evidences': [['e1', 'directed_by', 'e2'], ['e2', 'written_by', 'e3']],
+                'supporting_facts': [['A', 0], ['B', 1]]}
+    assert _relation_targets(two_wiki) == ['directed_by', 'written_by']
+
+
+def test_relation_targets_are_empty_for_single_paragraph_answers():
+    from tools.graphrag.eval.retrieval import _relation_targets
+
+    assert _relation_targets({'supporting_facts': [['Only', 0]]}) == []
+
+
+def test_matches_java_shared_relation_path_fixture():
+    """The Java evaluator reads the same fixture; both must agree on relation path hit."""
+    import json
+    from pathlib import Path
+
+    from tools.graphrag.eval.retrieval import _contains_sequence
+
+    fixture = (Path(__file__).resolve().parents[3]
+               / 'geaflow-ai' / 'src' / 'test' / 'resources' / 'retrieval'
+               / 'evaluation' / 'relation-path-golden.json')
+    cases = json.loads(fixture.read_text(encoding='utf-8'))['cases']
+    assert len(cases) == 7
+    for case in cases:
+        targets = [value.lower() for value in case['targets']]
+        path = [value.lower() for value in case['predictedPath']]
+        hit = int(bool(targets) and _contains_sequence(path, targets))
+        assert hit == case['pythonRelationPathHit'], case

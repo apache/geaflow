@@ -72,6 +72,29 @@ def _java_manifest(ready, config):
         "vectorSource": ready["vector_source"],
         "vectorVersion": ready["vector_version"],
         "randomSeed": ready["random_seed"],
+        # The design lists the entity extraction configuration and the budget configuration among
+        # the values every build must store. Both were previously dropped here, so two builds
+        # differing only in extractor version or budget could not be told apart from metadata.
+        "entityExtractorVersion": ready.get("entity_extractor_version"),
+        "budgetConfiguration": _budget_configuration(config),
+    }
+
+
+def _budget_configuration(config):
+    """Returns the recorded budget, or None when the manifest declares none.
+
+    Absence must stay absent rather than defaulting: "never recorded" and "recorded as the
+    standard budget" are different facts about a build.
+    """
+    declared = config.get("budget_configuration")
+    if not declared:
+        return None
+    return {
+        "primaryConstraint": declared.get("primary_constraint", "candidates"),
+        "maxCandidates": int(declared["max_candidates"]),
+        "timeoutMs": int(declared["timeout_ms"]),
+        "tokenBudget": int(declared["token_budget"]),
+        "maxEdgeScans": int(declared["max_edge_scans"]),
     }
 
 
