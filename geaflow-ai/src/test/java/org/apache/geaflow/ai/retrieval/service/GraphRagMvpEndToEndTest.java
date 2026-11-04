@@ -117,9 +117,13 @@ class GraphRagMvpEndToEndTest {
         assertTrue(merged.getStageScores().containsKey("BM25"));
         assertTrue(merged.getStageScores().containsKey("VECTOR"));
         assertTrue(merged.getStageScores().containsKey("GRAPH"));
-        assertEquals(1.0 / (60 + merged.getStageScores().get("BM25").getRank())
-                + 1.0 / (60 + merged.getStageScores().get("VECTOR").getRank())
-                + 1.0 / (60 + merged.getStageScores().get("GRAPH").getRank()),
+        // Fused score uses the weights the routing plan selected, not a hardcoded 1.0/1.0/1.0.
+        assertEquals(hybrid.getTrace().getBm25Weight()
+                / (60 + merged.getStageScores().get("BM25").getRank())
+                + hybrid.getTrace().getVectorWeight()
+                / (60 + merged.getStageScores().get("VECTOR").getRank())
+                + hybrid.getTrace().getGraphWeight()
+                / (60 + merged.getStageScores().get("GRAPH").getRank()),
             merged.getFusedScore(), 1.0e-12);
         assertFalse(merged.getPaths().isEmpty());
         assertFalse(hybrid.getPaths().isEmpty());
@@ -142,7 +146,7 @@ class GraphRagMvpEndToEndTest {
         RetrievalRequest badVector = request("VECTOR_ONLY", Collections.singletonList(1.0));
         assertCode(RetrievalErrorCode.INVALID_REQUEST, () -> service.retrieve(badVector));
 
-        RetrievalFixtureRegistry notReady = new RetrievalFixtureRegistry();
+        RetrievalChannelRegistry notReady = new RetrievalChannelRegistry();
         notReady.register(GRAPH, VERSION, VERSION, fixture.bm25, fixture.vector,
             fixture.chunks, fixture.entities, fixture.edges, false);
         assertCode(RetrievalErrorCode.INDEX_NOT_READY,
@@ -171,7 +175,7 @@ class GraphRagMvpEndToEndTest {
     @Test
     void cascadedExecutionSkipsGraphWhenProbeHasNoTextEvidence() throws Exception {
         Fixture fixture = fixture();
-        RetrievalFixtureRegistry registry = new RetrievalFixtureRegistry();
+        RetrievalChannelRegistry registry = new RetrievalChannelRegistry();
         registry.register(GRAPH, VERSION, VERSION, fixture.bm25, null,
             fixture.chunks, fixture.entities, fixture.edges, true);
         RetrievalRequest request = request("HYBRID", Arrays.asList(1.0, 0.0));
@@ -192,7 +196,7 @@ class GraphRagMvpEndToEndTest {
     @Test
     void cascadedExecutionRunsGraphWhenProbeScoreGapIsConfident() throws Exception {
         Fixture fixture = fixture();
-        RetrievalFixtureRegistry registry = new RetrievalFixtureRegistry();
+        RetrievalChannelRegistry registry = new RetrievalChannelRegistry();
         registry.register(GRAPH, VERSION, VERSION, fixture.bm25, fixture.vector,
             fixture.chunks, fixture.entities, Collections.singletonList(fixture.edges.get(0)), true);
         RetrievalRequest request = request("HYBRID", Arrays.asList(1.0, 0.0));
@@ -275,7 +279,7 @@ class GraphRagMvpEndToEndTest {
     @Test
     void hybridTokenBudgetIsSharedAcrossChannels() throws Exception {
         Fixture fixture = fixture();
-        RetrievalFixtureRegistry registry = new RetrievalFixtureRegistry();
+        RetrievalChannelRegistry registry = new RetrievalChannelRegistry();
         registry.register(GRAPH, VERSION, VERSION, fixture.bm25, fixture.vector,
             fixture.chunks, fixture.entities, Collections.singletonList(fixture.edges.get(0)), true);
         RetrievalRequest request = request("HYBRID", Arrays.asList(1.0, 0.0));
@@ -623,12 +627,14 @@ class GraphRagMvpEndToEndTest {
             new EntityRef("scaled-e2", "Ethics", "topic"));
         List<GraphEdgeRef> edges = Collections.singletonList(new GraphEdgeRef(
             "scaled-edge-1", "supports", "scaled-e1", "scaled-e2", graphEvidenceChunkIds));
-        RetrievalFixtureRegistry registry = new RetrievalFixtureRegistry();
+        RetrievalChannelRegistry registry = new RetrievalChannelRegistry();
         registry.register(GRAPH, VERSION, VERSION, bm25, vector, chunks,
             entities, edges, true);
 
-        // Channel budget allocation (10/10/380) is a routing decision, so this must ask for the
-        // adaptive mode explicitly rather than relying on hybrid plus execution-mode side effects.
+        // Channel budget allocation is a routing decision, so this must ask for the adaptive mode
+        // explicitly rather than relying on hybrid plus execution-mode side effects. The text probe
+        // may consume at most GRAPH_PROBE_SHARE (0.4) of the 400-candidate budget, so the graph
+        // channel keeps 240 - the largest share - instead of the previous fixed 380/10/10 split.
         RetrievalRequest request = request("ADAPTIVE_HYBRID", Arrays.asList(1.0, 0.0));
         request.setRequestId("stable-request");
         request.setBudget(new RetrievalBudget(10, 5000, 400, 2000));
@@ -637,14 +643,14 @@ class GraphRagMvpEndToEndTest {
         RetrievalResponse second = service.retrieve(request);
 
         assertEquals(Arrays.asList("BM25", "VECTOR", "GRAPH"), first.getTrace().getSelectedChannels());
-        assertEquals(10, first.getTrace().getChannelBudgets().get("BM25"));
-        assertEquals(10, first.getTrace().getChannelBudgets().get("VECTOR"));
-        assertEquals(380, first.getTrace().getChannelBudgets().get("GRAPH"));
-        assertTrue(first.getTrace().getEvaluatedCounts().get("BM25") <= 10);
-        assertTrue(first.getTrace().getEvaluatedCounts().get("VECTOR") <= 10);
-        assertTrue(first.getTrace().getEvaluatedCounts().get("GRAPH") <= 380);
-        assertEquals(380, first.getTrace().getCandidateCounts().get("GRAPH"));
-        assertEquals(380, first.getTrace().getGraphCandidatesProduced());
+        assertEquals(80, first.getTrace().getChannelBudgets().get("BM25"));
+        assertEquals(80, first.getTrace().getChannelBudgets().get("VECTOR"));
+        assertEquals(240, first.getTrace().getChannelBudgets().get("GRAPH"));
+        assertTrue(first.getTrace().getEvaluatedCounts().get("BM25") <= 80);
+        assertTrue(first.getTrace().getEvaluatedCounts().get("VECTOR") <= 80);
+        assertTrue(first.getTrace().getEvaluatedCounts().get("GRAPH") <= 240);
+        assertEquals(240, first.getTrace().getCandidateCounts().get("GRAPH"));
+        assertEquals(240, first.getTrace().getGraphCandidatesProduced());
         assertTrue(first.getTrace().getTotalCandidatesEvaluated() <= 400);
         assertTrue(first.getEvidence().size() <= 10);
         assertEquals(first.getEvidence(), second.getEvidence());
@@ -671,7 +677,7 @@ class GraphRagMvpEndToEndTest {
     @Test
     void supportsExplicitPartialHybridWhenOneChannelIsUnavailable() throws Exception {
         Fixture fixture = fixture();
-        RetrievalFixtureRegistry partialRegistry = new RetrievalFixtureRegistry();
+        RetrievalChannelRegistry partialRegistry = new RetrievalChannelRegistry();
         partialRegistry.register(GRAPH, VERSION, VERSION, null, fixture.vector,
             fixture.chunks, fixture.entities, fixture.edges, true);
         RecallService service = new RecallService(partialRegistry);
@@ -689,17 +695,17 @@ class GraphRagMvpEndToEndTest {
     @Test
     void replacementDefersReaderCloseUntilActiveRetrievalLeaseEnds() throws Exception {
         Fixture fixture = fixture();
-        RetrievalFixtureRegistry registry = new RetrievalFixtureRegistry();
+        RetrievalChannelRegistry registry = new RetrievalChannelRegistry();
         Bm25IndexReader oldReader = new Bm25IndexReader(tempDir.resolve("bm25/bm25-v1"), VERSION, VERSION);
         Bm25IndexReader replacementReader = new Bm25IndexReader(
             tempDir.resolve("bm25/bm25-v1"), VERSION, VERSION);
         registry.register(GRAPH, VERSION, VERSION, oldReader, null,
             fixture.chunks, fixture.entities, fixture.edges, true);
 
-        try (RetrievalFixtureRegistry.Fixture.Lease lease = registry.acquire(GRAPH, VERSION, VERSION)) {
+        try (RetrievalChannelRegistry.Fixture.Lease lease = registry.acquire(GRAPH, VERSION, VERSION)) {
             registry.register(GRAPH, VERSION, VERSION, replacementReader, null,
                 fixture.chunks, fixture.entities, fixture.edges, true);
-            try (RetrievalFixtureRegistry.Fixture.Lease stageLease = lease.getFixture().acquireLease()) {
+            try (RetrievalChannelRegistry.Fixture.Lease stageLease = lease.getFixture().acquireLease()) {
                 assertFalse(stageLease.getFixture().getBm25().search("Confucius", 3, 3).isEmpty());
             }
         } finally {
@@ -712,12 +718,12 @@ class GraphRagMvpEndToEndTest {
     @Test
     void clearDefersReaderCloseUntilActiveRetrievalLeaseEnds() throws Exception {
         Fixture fixture = fixture();
-        RetrievalFixtureRegistry registry = new RetrievalFixtureRegistry();
+        RetrievalChannelRegistry registry = new RetrievalChannelRegistry();
         Bm25IndexReader reader = new Bm25IndexReader(tempDir.resolve("bm25/bm25-v1"), VERSION, VERSION);
         registry.register(GRAPH, VERSION, VERSION, reader, null,
             fixture.chunks, fixture.entities, fixture.edges, true);
 
-        try (RetrievalFixtureRegistry.Fixture.Lease lease = registry.acquire(GRAPH, VERSION, VERSION)) {
+        try (RetrievalChannelRegistry.Fixture.Lease lease = registry.acquire(GRAPH, VERSION, VERSION)) {
             registry.clear();
             assertFalse(lease.getFixture().getBm25().search("Confucius", 3, 3).isEmpty());
         }
@@ -823,7 +829,7 @@ class GraphRagMvpEndToEndTest {
         Fixture fixture = fixture();
         Path broken = tempDir.resolve("vector/vector-v1.bin");
         Files.write(broken, new byte[] {0, 1, 2});
-        RetrievalFixtureRegistry registry = new RetrievalFixtureRegistry();
+        RetrievalChannelRegistry registry = new RetrievalChannelRegistry();
         registry.load(GRAPH, VERSION, VERSION, tempDir.resolve("bm25/bm25-v1"), broken,
             fixture.chunks, fixture.entities, fixture.edges, "fixture", VERSION);
         readers.add(registry.get(GRAPH, VERSION, VERSION).getBm25());
@@ -842,7 +848,7 @@ class GraphRagMvpEndToEndTest {
     @Test
     void loaderPreservesBm25FailureAndRejectsBothFailedChannels() throws Exception {
         Fixture fixture = fixture();
-        RetrievalFixtureRegistry registry = new RetrievalFixtureRegistry();
+        RetrievalChannelRegistry registry = new RetrievalChannelRegistry();
         registry.load(GRAPH, VERSION, VERSION, tempDir.resolve("absent"), tempDir.resolve("vector/vector-v1.bin"),
             fixture.chunks, fixture.entities, fixture.edges, "fixture", VERSION);
         RetrievalRequest hybrid = request("HYBRID", Arrays.asList(1.0, 0.0));
@@ -858,7 +864,7 @@ class GraphRagMvpEndToEndTest {
     @Test
     void registryRejectsMislabelledReadersAndChangedChunks() throws Exception {
         Fixture fixture = fixture();
-        RetrievalFixtureRegistry registry = new RetrievalFixtureRegistry();
+        RetrievalChannelRegistry registry = new RetrievalChannelRegistry();
         assertCode(RetrievalErrorCode.INDEX_NOT_READY, () -> registry.register(GRAPH, "v2", "v2",
             fixture.bm25, fixture.vector, fixture.chunks, fixture.entities, fixture.edges, true));
         assertCode(RetrievalErrorCode.INDEX_NOT_READY, () -> registry.register("other-graph", VERSION, VERSION,
@@ -893,7 +899,7 @@ class GraphRagMvpEndToEndTest {
     @Test
     void graphSourcesCannotExceedEvidenceBudgetAndGraphTraceRoundTrips() throws Exception {
         Fixture fixture = fixture();
-        RetrievalFixtureRegistry registry = new RetrievalFixtureRegistry();
+        RetrievalChannelRegistry registry = new RetrievalChannelRegistry();
         List<GraphEdgeRef> edges = Collections.singletonList(new GraphEdgeRef("edge-1", "studies", "e1", "e2",
             Arrays.asList("c1", "c2", "c3")));
         registry.register(GRAPH, VERSION, VERSION, fixture.bm25, fixture.vector, fixture.chunks, fixture.entities, edges, true);
@@ -1021,7 +1027,7 @@ class GraphRagMvpEndToEndTest {
     void graphDeadlineAndEdgeCapAreObservableAndRepeatedPathsAreMerged() throws Exception {
         Fixture fixture = fixture();
         List<GraphEdgeRef> repeated = Arrays.asList(fixture.edges.get(0), fixture.edges.get(0), fixture.edges.get(1));
-        RetrievalFixtureRegistry registry = new RetrievalFixtureRegistry();
+        RetrievalChannelRegistry registry = new RetrievalChannelRegistry();
         registry.register(GRAPH, VERSION, VERSION, fixture.bm25, fixture.vector, fixture.chunks, fixture.entities, repeated, true);
         RecallService service = new RecallService(registry);
         RetrievalResponse response = service.retrieve(request("GRAPH_ONLY", null));
@@ -1076,7 +1082,7 @@ class GraphRagMvpEndToEndTest {
     @Test
     void missingVectorAndCorruptBm25LoaderPathsRetainSuccessfulChannel() throws Exception {
         Fixture fixture = fixture();
-        RetrievalFixtureRegistry registry = new RetrievalFixtureRegistry();
+        RetrievalChannelRegistry registry = new RetrievalChannelRegistry();
         registry.load(GRAPH, VERSION, VERSION, tempDir.resolve("bm25/bm25-v1"), tempDir.resolve("absent"),
             fixture.chunks, fixture.entities, fixture.edges, "fixture", VERSION);
         readers.add(registry.get(GRAPH, VERSION, VERSION).getBm25());
@@ -1159,7 +1165,7 @@ class GraphRagMvpEndToEndTest {
         List<GraphEdgeRef> edges = Arrays.asList(
             new GraphEdgeRef("edge-1", "studies", "e1", "e2", Collections.singletonList("c3")),
             new GraphEdgeRef("edge-invalid", "bad", "e1", "e2", Collections.singletonList("missing")));
-        RetrievalFixtureRegistry registry = new RetrievalFixtureRegistry();
+        RetrievalChannelRegistry registry = new RetrievalChannelRegistry();
         registry.register(GRAPH, VERSION, VERSION, bm25, vector, chunks, entities, edges, true);
         return new Fixture(registry, bm25, vector, chunks, entities, edges);
     }
@@ -1202,14 +1208,14 @@ class GraphRagMvpEndToEndTest {
     }
 
     private static final class Fixture {
-        private final RetrievalFixtureRegistry registry;
+        private final RetrievalChannelRegistry registry;
         private final Bm25IndexReader bm25;
         private final VectorIndexReader vector;
         private final List<TextChunk> chunks;
         private final List<EntityRef> entities;
         private final List<GraphEdgeRef> edges;
 
-        private Fixture(RetrievalFixtureRegistry registry, Bm25IndexReader bm25,
+        private Fixture(RetrievalChannelRegistry registry, Bm25IndexReader bm25,
                         VectorIndexReader vector, List<TextChunk> chunks,
                         List<EntityRef> entities, List<GraphEdgeRef> edges) {
             this.registry = registry;

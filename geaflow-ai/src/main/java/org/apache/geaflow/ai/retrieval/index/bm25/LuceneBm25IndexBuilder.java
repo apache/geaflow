@@ -26,6 +26,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import org.apache.geaflow.ai.retrieval.index.ArtifactIdentity;
@@ -52,7 +53,9 @@ import org.apache.lucene.store.FSDirectory;
 public final class LuceneBm25IndexBuilder implements Bm25IndexBuilder {
 
     private static final String INDEX_NAME = "bm25";
-    private static final String BUILDER_VERSION = "lucene-8.11.2-standard-v1";
+    private static final String BUILDER_VERSION = "lucene-8.11.2-standard-v2";
+    /** Indexed field for title and entity-alias surfaces, in addition to the chunk body. */
+    public static final String SURFACE_FIELD = "surface";
     private final Path outputDirectory;
 
     public LuceneBm25IndexBuilder(Path outputDirectory) {
@@ -61,8 +64,16 @@ public final class LuceneBm25IndexBuilder implements Bm25IndexBuilder {
 
     @Override
     public IndexArtifact build(IngestionContext context, List<TextChunk> chunks) throws IOException {
+        return build(context, chunks, Bm25IndexBuilder.noSurfaces());
+    }
+
+    @Override
+    public IndexArtifact build(IngestionContext context, List<TextChunk> chunks,
+                              Map<String, List<String>> chunkSurfaces) throws IOException {
         Objects.requireNonNull(context, "context");
         Objects.requireNonNull(chunks, "chunks");
+        Map<String, List<String>> surfaces = chunkSurfaces == null
+            ? Bm25IndexBuilder.noSurfaces() : chunkSurfaces;
         List<TextChunk> ordered = new ArrayList<>(chunks);
         ordered.sort(Comparator.comparing(TextChunk::getChunkId));
         Set<String> chunkIds = new HashSet<>();
@@ -88,6 +99,14 @@ public final class LuceneBm25IndexBuilder implements Bm25IndexBuilder {
                         document.add(new StringField("chunkId", chunk.getChunkId(), Field.Store.YES));
                         document.add(new StringField("documentId", chunk.getDocumentId(), Field.Store.YES));
                         document.add(new TextField("text", chunk.getText(), Field.Store.YES));
+                        // Title and entity aliases are separate indexed surfaces so a title-only or
+                        // alias-only query can still match, which a body-only index cannot do.
+                        for (String surface : surfaces.getOrDefault(chunk.getChunkId(),
+                            java.util.Collections.<String>emptyList())) {
+                            if (surface != null && !surface.trim().isEmpty()) {
+                                document.add(new TextField(SURFACE_FIELD, surface, Field.Store.NO));
+                            }
+                        }
                         document.add(new StoredField("startOffset", chunk.getStartOffset()));
                         document.add(new StoredField("endOffset", chunk.getEndOffset()));
                         if (chunk.getTextHash() != null) {

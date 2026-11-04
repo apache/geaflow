@@ -43,9 +43,16 @@ import org.apache.geaflow.ai.retrieval.model.graph.EntityRef;
 import org.apache.geaflow.ai.retrieval.model.graph.GraphEdgeRef;
 import org.noear.solon.annotation.Component;
 
-/** Session-free registry for an atomically published GraphRAG fixture. */
+/**
+ * Session-free registry of the channels published for one logical graph version.
+ *
+ * <p>Holds an atomically published bundle - BM25, vector, graph and the graph provider that backs
+ * bounded expansion - together with the leases that keep a graph version alive for the duration of
+ * a request. The name says "channel" rather than "fixture" because this is the production
+ * container the server injects; test fixtures only populate it.
+ */
 @Component
-public final class RetrievalFixtureRegistry implements AutoCloseable {
+public final class RetrievalChannelRegistry implements AutoCloseable {
     private final Map<String, Fixture> fixtures = new HashMap<>();
     private boolean closed;
 

@@ -35,6 +35,7 @@ import org.apache.geaflow.ai.retrieval.index.ArtifactIdentity;
 import org.apache.geaflow.ai.retrieval.index.ArtifactPublisher;
 import org.apache.geaflow.ai.retrieval.ingest.GraphArtifact;
 import org.apache.geaflow.ai.retrieval.ingest.IngestionContext;
+import org.apache.geaflow.ai.retrieval.metadata.AssociationScoreMetadata;
 import org.apache.geaflow.ai.retrieval.metadata.GraphBuildMetadata;
 import org.apache.geaflow.ai.retrieval.model.document.RetrievalIds;
 import org.apache.geaflow.ai.retrieval.model.document.TextChunk;
@@ -119,8 +120,12 @@ public final class OfflineGraphArtifactBuilder {
             ArtifactPublisher.publish(staging, published,
                 existing -> validateExisting(existing, context, orderedEntities, orderedEdges,
                     orderedVertices, chunks));
-            return new Artifact(new GraphBuildMetadata(context.getGraphVersion(), published.toString(),
-                "offline-graph", "offline-graph-v2", true), published);
+            // Record the association-score components so the published graph is scored
+            // identically on every replay; the design requires them in build metadata.
+            GraphBuildMetadata metadata = new GraphBuildMetadata(context.getGraphVersion(),
+                published.toString(), "offline-graph", "offline-graph-v2", true)
+                .withAssociationScoreMetadata(defaultAssociationScore());
+            return new Artifact(metadata, published);
         } finally {
             Files.deleteIfExists(staging);
         }
@@ -312,5 +317,10 @@ public final class OfflineGraphArtifactBuilder {
                 throw new IOException("graph artifact is not readable: " + path);
             }
         }
+    }
+
+    /** Association-score components used by the offline builder's default graph configuration. */
+    private static AssociationScoreMetadata defaultAssociationScore() {
+        return AssociationScoreMetadata.defaults();
     }
 }

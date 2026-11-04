@@ -66,6 +66,16 @@ public final class AnswerApiJson {
             addNullable(item, "sourceId", citation.getSourceId());
             addNullable(item, "chunkId", citation.getChunkId());
             addNullable(item, "path", citation.getPathId());
+            // Full provenance: an answer must be auditable back to the query, mode, anchor seed,
+            // source document and relation path that produced the cited evidence.
+            addNullable(item, "queryId", citation.getQueryId());
+            addNullable(item, "mode", citation.getMode());
+            addNullable(item, "seedEntityId", citation.getSeedEntityId());
+            addNullable(item, "documentId", citation.getDocumentId());
+            addNullable(item, "sourceUri", citation.getSourceUri());
+            item.addProperty("hop", citation.getHop());
+            item.add("relationPath", strings(citation.getRelationPath()));
+            item.addProperty("fullProvenance", citation.hasFullProvenance());
             citations.add(item);
         }
         object.add("citations", citations);

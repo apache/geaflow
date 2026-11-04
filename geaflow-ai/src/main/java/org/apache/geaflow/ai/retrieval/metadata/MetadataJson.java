@@ -26,7 +26,9 @@ import com.google.gson.JsonParseException;
 import com.google.gson.JsonParser;
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import org.apache.geaflow.ai.retrieval.codec.RetrievalModelJson;
 import org.apache.geaflow.ai.retrieval.model.version.GraphVersion;
 import org.apache.geaflow.ai.retrieval.model.version.IndexVersion;
@@ -97,9 +99,81 @@ public final class MetadataJson {
                 string(object, "graphSchemaVersion"),
                 string(object, "vectorSource"),
                 string(object, "vectorVersion"),
-                number(object, "randomSeed"));
+                number(object, "randomSeed"),
+                string(object, "entityExtractorVersion"),
+                budgetConfiguration(object));
         }
         if (type == GraphBuildMetadata.class) {
+            GraphBuildMetadata decoded = decodeGraphMetadata(object);
+            return applyAssociationScore(decoded, object);
+        }
+        if (type == IndexBuildMetadata.class) {
+            return new IndexBuildMetadata(
+                RetrievalModelJson.fromJson(object.get("graphVersion").toString(), GraphVersion.class),
+                RetrievalModelJson.fromJson(object.get("indexVersion").toString(), IndexVersion.class),
+                string(object, "indexType"),
+                string(object, "builderVersion"),
+                string(object, "artifactUri"),
+                bool(object, "ready"));
+        }
+        if (type == ImportMetadata.class) {
+            return new ImportMetadata(
+                (DatasetManifest) decode(object.getAsJsonObject("manifest"), DatasetManifest.class),
+                string(object, "importerVersion"),
+                (GraphBuildMetadata) decode(object.getAsJsonObject("graph"), GraphBuildMetadata.class),
+                indexes(object),
+                (QualityCounters) decode(object.getAsJsonObject("counters"), QualityCounters.class),
+                ImportState.valueOf(string(object, "state")),
+                string(object, "verifiedSha256"),
+                string(object, "failureCode") == null ? null : MetadataException.Code.valueOf(string(object, "failureCode")),
+                string(object, "failureReason"),
+                number(object, "startedAt"),
+                number(object, "updatedAt"));
+        }
+        throw new JsonParseException("unsupported metadata type: " + type);
+    }
+
+    /**
+     * Restores the association-score components recorded with a graph build.
+     *
+     * <p>Artifacts published before these components existed carry no field and stay null rather
+     * than silently defaulting, so a replay can tell "not recorded" from "recorded as default".
+     */
+    private static GraphBuildMetadata applyAssociationScore(GraphBuildMetadata metadata,
+                                                            JsonObject object) {
+        JsonElement element = object.get("associationScoreMetadata");
+        if (element == null || element.isJsonNull()) {
+            element = object.get("associationScore");
+        }
+        if (element == null || element.isJsonNull()) {
+            return metadata;
+        }
+        JsonObject value = element.getAsJsonObject();
+        Map<String, Double> priorities = new LinkedHashMap<>();
+        JsonElement priors = value.get("relationPriorities");
+        if (priors != null && priors.isJsonObject()) {
+            for (Map.Entry<String, JsonElement> entry : priors.getAsJsonObject().entrySet()) {
+                priorities.put(entry.getKey(), entry.getValue().getAsDouble());
+            }
+        }
+        return metadata.withAssociationScoreMetadata(new AssociationScoreMetadata(
+            value.get("hopDecay").getAsDouble(),
+            value.get("degreePenalty").getAsDouble(),
+            value.get("anchorScoreWeight").getAsDouble(),
+            value.get("edgeStrengthWeight").getAsDouble(),
+            value.get("sourceRelevanceWeight").getAsDouble(),
+            priorities,
+            stringOrDefault(value, "edgeStrengthVersion", "relation-prior-v1"),
+            stringOrDefault(value, "scoreVersion", "association-score-v1"),
+            optionalString(value, "timeDecayVersion"),
+            optionalNumber(value, "timeDecayWeight", 0.0D),
+            optionalNumber(value, "timeDecayHalfLifeMillis", 0.0D),
+            optionalNumber(value, "unrelatedSourceRelevance", 0.5D),
+            optionalNumber(value, "anchorHitBaseScore", 1.0D)));
+    }
+
+    private static GraphBuildMetadata decodeGraphMetadata(JsonObject object) {
+        {
             String snapshotUri = string(object, "snapshotUri");
             String deltaUri = string(object, "deltaUri");
             String artifactUri = string(object, "artifactUri");
@@ -128,30 +202,27 @@ public final class MetadataJson {
                 bool(object, "ready"),
                 strings(object, "requiredIndexes"));
         }
-        if (type == IndexBuildMetadata.class) {
-            return new IndexBuildMetadata(
-                RetrievalModelJson.fromJson(object.get("graphVersion").toString(), GraphVersion.class),
-                RetrievalModelJson.fromJson(object.get("indexVersion").toString(), IndexVersion.class),
-                string(object, "indexType"),
-                string(object, "builderVersion"),
-                string(object, "artifactUri"),
-                bool(object, "ready"));
+    }
+
+
+    /**
+     * Decodes the recorded budget configuration from a dataset manifest.
+     *
+     * <p>Absent means the manifest predates the field; it must stay null rather than defaulting, so
+     * "never recorded" cannot be mistaken for "recorded as standard".
+     */
+    private static BudgetConfiguration budgetConfiguration(JsonObject object) {
+        JsonElement element = object.get("budgetConfiguration");
+        if (element == null || element.isJsonNull() || !element.isJsonObject()) {
+            return null;
         }
-        if (type == ImportMetadata.class) {
-            return new ImportMetadata(
-                (DatasetManifest) decode(object.getAsJsonObject("manifest"), DatasetManifest.class),
-                string(object, "importerVersion"),
-                (GraphBuildMetadata) decode(object.getAsJsonObject("graph"), GraphBuildMetadata.class),
-                indexes(object),
-                (QualityCounters) decode(object.getAsJsonObject("counters"), QualityCounters.class),
-                ImportState.valueOf(string(object, "state")),
-                string(object, "verifiedSha256"),
-                string(object, "failureCode") == null ? null : MetadataException.Code.valueOf(string(object, "failureCode")),
-                string(object, "failureReason"),
-                number(object, "startedAt"),
-                number(object, "updatedAt"));
-        }
-        throw new JsonParseException("unsupported metadata type: " + type);
+        JsonObject value = element.getAsJsonObject();
+        return new BudgetConfiguration(
+            string(value, "primaryConstraint"),
+            (int) number(value, "maxCandidates"),
+            (int) number(value, "timeoutMs"),
+            (int) number(value, "tokenBudget"),
+            (int) number(value, "maxEdgeScans"));
     }
 
     private static String string(JsonObject object, String name) {
@@ -220,5 +291,14 @@ public final class MetadataJson {
     private static String stringOrDefault(JsonObject object, String name, String defaultValue) {
         String value = string(object, name);
         return value == null ? defaultValue : value;
+    }
+
+    private static String optionalString(JsonObject object, String name) {
+        return string(object, name);
+    }
+
+    private static double optionalNumber(JsonObject object, String name, double defaultValue) {
+        JsonElement element = object.get(name);
+        return element == null || element.isJsonNull() ? defaultValue : element.getAsDouble();
     }
 }

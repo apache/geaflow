@@ -41,6 +41,10 @@ public final class GraphRetrievalConfig {
     private final double sourceRelevanceWeight;
     private final long samplingSeed;
     private final double sampleRate;
+    private final double timeDecayWeight;
+    private final double timeDecayHalfLifeMillis;
+    private final double unrelatedSourceRelevance;
+    private final double anchorHitBaseScore;
     private final Map<String, Double> relationPriorities;
 
     private GraphRetrievalConfig(Builder builder) {
@@ -60,6 +64,10 @@ public final class GraphRetrievalConfig {
         this.sourceRelevanceWeight = builder.sourceRelevanceWeight;
         this.samplingSeed = builder.samplingSeed;
         this.sampleRate = builder.sampleRate;
+        this.timeDecayWeight = builder.timeDecayWeight;
+        this.timeDecayHalfLifeMillis = builder.timeDecayHalfLifeMillis;
+        this.unrelatedSourceRelevance = builder.unrelatedSourceRelevance;
+        this.anchorHitBaseScore = builder.anchorHitBaseScore;
         this.relationPriorities = Collections.unmodifiableMap(new LinkedHashMap<>(builder.relationPriorities));
     }
 
@@ -164,6 +172,30 @@ public final class GraphRetrievalConfig {
         return sampleRate;
     }
 
+    /**
+     * Returns how strongly the optional time decay is applied to edge strength, in {@code [0,1]}.
+     */
+    /** Returns the source-relevance multiplier applied when edge and anchor share no chunk. */
+    public double getUnrelatedSourceRelevance() {
+        return unrelatedSourceRelevance;
+    }
+
+    /** Returns the base source-relevance score when the edge and its anchor share a chunk. */
+    public double getAnchorHitBaseScore() {
+        return anchorHitBaseScore;
+    }
+
+    public double getTimeDecayWeight() {
+        return timeDecayWeight;
+    }
+
+    /**
+     * Returns the half-life of the optional edge time decay in milliseconds.
+     */
+    public double getTimeDecayHalfLifeMillis() {
+        return timeDecayHalfLifeMillis;
+    }
+
     public Map<String, Double> getRelationPriorities() {
         return relationPriorities;
     }
@@ -190,6 +222,10 @@ public final class GraphRetrievalConfig {
         private double sourceRelevanceWeight = 1.0;
         private long samplingSeed;
         private double sampleRate = 1.0;
+        private double timeDecayWeight = EdgeStrength.DEFAULT_TIME_DECAY_WEIGHT;
+        private double timeDecayHalfLifeMillis = EdgeStrength.DEFAULT_TIME_DECAY_HALF_LIFE_MILLIS;
+        private double unrelatedSourceRelevance = 0.5D;
+        private double anchorHitBaseScore = 1.0D;
         private final Map<String, Double> relationPriorities = new LinkedHashMap<>();
 
         public Builder maxHop(int value) {
@@ -301,6 +337,26 @@ public final class GraphRetrievalConfig {
             return this;
         }
 
+        public Builder timeDecayWeight(double value) {
+            timeDecayWeight = value;
+            return this;
+        }
+
+        public Builder timeDecayHalfLifeMillis(double value) {
+            timeDecayHalfLifeMillis = value;
+            return this;
+        }
+
+        public Builder unrelatedSourceRelevance(double value) {
+            unrelatedSourceRelevance = value;
+            return this;
+        }
+
+        public Builder anchorHitBaseScore(double value) {
+            anchorHitBaseScore = value;
+            return this;
+        }
+
         public Builder relationPriority(String label, double value) {
             if (label == null || label.trim().isEmpty()) {
                 throw new IllegalArgumentException("relation label is required");
@@ -337,6 +393,10 @@ public final class GraphRetrievalConfig {
             requireNonNegative(edgeStrengthWeight, "edgeStrengthWeight");
             requireNonNegative(sourceRelevanceWeight, "sourceRelevanceWeight");
             requireUnitInterval(sampleRate, "sampleRate");
+            requireUnitInterval(timeDecayWeight, "timeDecayWeight");
+            requireUnitInterval(unrelatedSourceRelevance, "unrelatedSourceRelevance");
+            requireNonNegative(anchorHitBaseScore, "anchorHitBaseScore");
+            requireNonNegative(timeDecayHalfLifeMillis, "timeDecayHalfLifeMillis", true);
             for (Map.Entry<String, Double> entry : relationPriorities.entrySet()) {
                 requireNonNegative(entry.getValue(), "relation priority");
             }

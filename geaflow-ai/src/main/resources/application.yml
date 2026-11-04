@@ -31,7 +31,8 @@ logging:
 
 retrieval:
   config-version: v1
-  ready-graph-name: Confucius
+  # Sample default; override per deployment. Validation rejects a blank value.
+  ready-graph-name: ${GEAFLOW_RETRIEVAL_READY_GRAPH_NAME:Confucius}
   default-mode: KEYWORD
   default-execution-mode: SEQUENTIAL
   default-top-k: 10
@@ -62,15 +63,38 @@ retrieval:
   token-estimator-id: ${GEAFLOW_RETRIEVAL_TOKEN_ESTIMATOR_ID:chars4-v1}
   graph:
     sample-rate: ${GEAFLOW_RETRIEVAL_GRAPH_SAMPLE_RATE:1.0}
-    min-marginal-yield: ${GEAFLOW_RETRIEVAL_GRAPH_MIN_MARGINAL_YIELD:0.0}
-    min-association-score: ${GEAFLOW_RETRIEVAL_GRAPH_MIN_ASSOCIATION_SCORE:0.0}
-    min-association-survival-rate: ${GEAFLOW_RETRIEVAL_GRAPH_MIN_ASSOCIATION_SURVIVAL_RATE:0.0}
+    min-marginal-yield: ${GEAFLOW_RETRIEVAL_GRAPH_MIN_MARGINAL_YIELD:0.05}
+    min-association-score: ${GEAFLOW_RETRIEVAL_GRAPH_MIN_ASSOCIATION_SCORE:0.01}
+    min-association-survival-rate: ${GEAFLOW_RETRIEVAL_GRAPH_MIN_ASSOCIATION_SURVIVAL_RATE:0.1}
+    relation-priorities: ${GEAFLOW_RETRIEVAL_GRAPH_RELATION_PRIORITIES:mentions:1.0,cooccurs:1.0}
   deterministic-rule:
     high-average-idf: ${GEAFLOW_RETRIEVAL_HIGH_AVERAGE_IDF:1.5}
-    high-score-gap: ${GEAFLOW_RETRIEVAL_HIGH_SCORE_GAP:0.20}
+    # Reciprocal-rank scores stay inside [0, 0.003]; a 0.20 threshold could never be met.
+    high-score-gap: ${GEAFLOW_RETRIEVAL_HIGH_SCORE_GAP:0.0005}
     long-query-length: ${GEAFLOW_RETRIEVAL_LONG_QUERY_LENGTH:12}
     strong-anchor-confidence: ${GEAFLOW_RETRIEVAL_STRONG_ANCHOR_CONFIDENCE:0.75}
     minimum-anchor-count: ${GEAFLOW_RETRIEVAL_MINIMUM_ANCHOR_COUNT:1}
     high-candidate-degree: ${GEAFLOW_RETRIEVAL_HIGH_CANDIDATE_DEGREE:32}
     high-growth-rate: ${GEAFLOW_RETRIEVAL_HIGH_GROWTH_RATE:2.0}
     base-neighbor-cap: ${GEAFLOW_RETRIEVAL_BASE_NEIGHBOR_CAP:16}
+  # Fusion weights and the probe share decide how much of the fused score and candidate budget the
+  # graph channel receives. They were constants in the routing policy before.
+  graph-fusion:
+    graph-weight: ${GEAFLOW_RETRIEVAL_GRAPH_FUSION_GRAPH_WEIGHT:2.0}
+    text-weight: ${GEAFLOW_RETRIEVAL_GRAPH_FUSION_TEXT_WEIGHT:0.25}
+    probe-share: ${GEAFLOW_RETRIEVAL_GRAPH_PROBE_SHARE:0.4}
+    lexical-bm25-weight: ${GEAFLOW_RETRIEVAL_LEXICAL_BM25_WEIGHT:1.25}
+    lexical-vector-weight: ${GEAFLOW_RETRIEVAL_LEXICAL_VECTOR_WEIGHT:0.85}
+    semantic-bm25-weight: ${GEAFLOW_RETRIEVAL_SEMANTIC_BM25_WEIGHT:0.85}
+    semantic-vector-weight: ${GEAFLOW_RETRIEVAL_SEMANTIC_VECTOR_WEIGHT:1.25}
+  # Sets the units of every fused score, and therefore the scale the routing thresholds compare to.
+  rrf-rank-constant: ${GEAFLOW_RETRIEVAL_RRF_RANK_CONSTANT:60}
+  # Gate that decides whether the cascaded graph stage runs at all.
+  cascade:
+    min-probe-score-gap: ${GEAFLOW_RETRIEVAL_CASCADE_MIN_PROBE_SCORE_GAP:0.0001}
+    min-probe-evidence: ${GEAFLOW_RETRIEVAL_CASCADE_MIN_PROBE_EVIDENCE:2}
+    min-budget: ${GEAFLOW_RETRIEVAL_CASCADE_MIN_BUDGET:5}
+    probe-max: ${GEAFLOW_RETRIEVAL_CASCADE_PROBE_MAX:10}
+    probe-min: ${GEAFLOW_RETRIEVAL_CASCADE_PROBE_MIN:2}
+    probe-divisor: ${GEAFLOW_RETRIEVAL_CASCADE_PROBE_DIVISOR:8}
+  reranker-graph-path-weight: ${GEAFLOW_RETRIEVAL_RERANKER_GRAPH_PATH_WEIGHT:0.0}

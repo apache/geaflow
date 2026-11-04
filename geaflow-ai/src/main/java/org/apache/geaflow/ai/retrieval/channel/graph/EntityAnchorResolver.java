@@ -46,6 +46,18 @@ public final class EntityAnchorResolver {
      *
      * <p>Kept deliberately below {@code strongAnchorConfidence} defaults so a recovered anchor does
      * not unlock a second hop on the strength of a text hit alone.
+     *
+     * <p>This value is coupled to two routing thresholds and the coupling is load bearing:
+     * <ul>
+     *   <li>{@code retrieval.deterministic-rule.strong-anchor-confidence} (default {@code 0.75}):
+     *       because {@code 0.35 < 0.75}, a text-recovered anchor never counts as confident, so it
+     *       cannot trigger the graph-dominant fusion or a second hop.</li>
+     *   <li>{@code retrieval.deterministic-rule.minimum-anchor-count}: irrelevant for a text-only
+     *       anchor, since the confidence test already fails.</li>
+     * </ul>
+     * Lowering {@code strong-anchor-confidence} to {@code 0.35} or below would silently promote
+     * every text-recovered anchor into a confident one and change routing for anchorless queries.
+     * </p>
      */
     public static final double TEXT_CANDIDATE_CONFIDENCE = 0.35D;
     static final String CANONICAL_TYPE = "CANONICAL";

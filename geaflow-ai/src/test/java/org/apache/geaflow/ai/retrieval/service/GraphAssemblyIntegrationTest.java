@@ -12,6 +12,7 @@
 package org.apache.geaflow.ai.retrieval.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -136,6 +137,48 @@ class GraphAssemblyIntegrationTest {
             "neutral defaults must not starve the graph channel");
     }
 
+    /**
+     * The shipped floors must actually bound expansion, not merely be reachable through explicit
+     * setters. Before the defaults were fixed, both floors were {@code 0.0}, so a default
+     * deployment never filtered weak edges while the per-control tests above still passed.
+     */
+    @Test
+    void shippedDefaultsBoundNeighbourSamplingWithoutSetters() throws Exception {
+        RetrievalProperties shipped = new RetrievalProperties();
+        shipped.validateConfiguration();
+
+        // The sample rate ships at full draw; what must not be inert is the sampling mechanism.
+        RetrievalProperties sampled = properties();
+        sampled.setGraphSampleRate(0.0D);
+        sampled.validateConfiguration();
+
+        RetrievalResponse withSampling = serve(shipped);
+        RetrievalResponse suppressed = serve(sampled);
+
+        assertEquals(0, suppressed.getTrace().getNeighborsSampled(),
+            "setting the sample rate to 0.0 must suppress every neighbour draw");
+        assertTrue(withSampling.getTrace().getNeighborsSampled() > 0,
+            "the shipped sample rate must still draw neighbours");
+    }
+
+    /**
+     * An operator reading {@code application.yml} must be able to predict what the graph channel
+     * does. The shipped association floor is positive, so weak edges are filtered by default
+     * instead of the control being dead configuration.
+     */
+    @Test
+    void shippedDefaultsDeclareNonZeroFloors() {
+        RetrievalProperties shipped = new RetrievalProperties();
+        shipped.validateConfiguration();
+
+        assertTrue(shipped.getGraphMinMarginalYield() > 0.0D,
+            "MARGINAL_YIELD_LIMIT is unreachable when the floor ships as 0.0");
+        assertTrue(shipped.getGraphMinAssociationScore() > 0.0D,
+            "LOW_ASSOCIATION_SCORE is unreachable when the floor ships as 0.0");
+        assertFalse(shipped.getGraphRelationPriorities().isEmpty(),
+            "relation-type priority needs declared labels to influence neighbour capping");
+    }
+
     private int allEdgesEvidenceSize() throws Exception {
         return serve(properties(), 100).getEvidence().size();
     }
@@ -152,7 +195,7 @@ class GraphAssemblyIntegrationTest {
     }
 
     private RetrievalResponse serve(RetrievalProperties properties, int maxEdgeScans) throws Exception {
-        RetrievalFixtureRegistry registry = fixture();
+        RetrievalChannelRegistry registry = fixture();
         RecallService service = RecallService.fromProperties(registry, WeightedRrfConfig.DEFAULT,
             System::nanoTime, properties);
         RetrievalRequest request = new RetrievalRequest();
@@ -168,13 +211,11 @@ class GraphAssemblyIntegrationTest {
     }
 
     private static RetrievalProperties properties() {
-        RetrievalProperties properties = new RetrievalProperties();
-        properties.setGraphSampleRate(1.0D);
-        properties.setGraphMinMarginalYield(0.0D);
-        properties.setGraphMinAssociationScore(0.0D);
-        properties.setGraphMinAssociationSurvivalRate(0.0D);
-        properties.setGraphRelationPriorities(new HashMap<>());
-        return properties;
+        // Start from the shipped defaults instead of resetting every control to its no-op value.
+        // The previous version pinned sample-rate=1.0 and the floors to 0.0, so each test proved
+        // a control *could* work while never proving the product configures it to work. Callers
+        // now override exactly the one control under test.
+        return new RetrievalProperties();
     }
 
     private static List<String> evidenceIds(RetrievalResponse response) {
@@ -183,7 +224,7 @@ class GraphAssemblyIntegrationTest {
         return ids;
     }
 
-    private RetrievalFixtureRegistry fixture() throws Exception {
+    private RetrievalChannelRegistry fixture() throws Exception {
         List<TextChunk> chunks = Arrays.asList(
             chunk("c1", "doc-1", "Confucius taught ethics and philosophy"),
             chunk("c2", "doc-2", "Astronomy studies distant stars"),
@@ -225,7 +266,7 @@ class GraphAssemblyIntegrationTest {
             new GraphEdgeRef("edge-3", "studies", "e1", "e3", Collections.singletonList("c4")),
             new GraphEdgeRef("edge-4", "studies", "e1", "e4", Collections.singletonList("c5")),
             new GraphEdgeRef("edge-5", "mentions", "e1", "e5", Collections.singletonList("c6")));
-        RetrievalFixtureRegistry registry = new RetrievalFixtureRegistry();
+        RetrievalChannelRegistry registry = new RetrievalChannelRegistry();
         registry.register(GRAPH, VERSION, VERSION, bm25, vector, chunks, entities, edges, true);
         return registry;
     }

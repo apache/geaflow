@@ -36,6 +36,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.LongSupplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.apache.geaflow.ai.retrieval.answer.AnswerRequest;
+import org.apache.geaflow.ai.retrieval.answer.AnswerResponse;
+import org.apache.geaflow.ai.retrieval.answer.ExtractiveAnswerConsumer;
 import org.apache.geaflow.ai.retrieval.api.model.ExecutionMode;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalBudget;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalCommand;
@@ -98,11 +101,32 @@ import org.apache.geaflow.ai.retrieval.model.graph.GraphPathRef;
 
 /** Session-free sequential recall; all execution state belongs to one request. */
 public final class RecallService {
+    /**
+     * Documented default probe gap; the effective value comes from {@link RetrievalProperties}.
+     */
     private static final double CASCADE_MIN_PROBE_SCORE_GAP = 0.0001D;
     private static final String UNMEASURED_SCORE_GAP_REASON = "FIRST_STAGE_SCORE_GAP_UNMEASURED";
     private static final String UNKNOWN_GROWTH_REASON = "GRAPH_GROWTH_UNKNOWN_INITIAL";
     private static final long DEFAULT_CONFIG_SEED = 0L;
     private static final int DEFAULT_MAX_EDGE_SCANS = 100;
+    /** Token ceiling for the extractive answer when the request does not set a token budget. */
+    private static final int DEFAULT_ANSWER_TOKEN_BUDGET = 4096;
+    /**
+     * Association-score floor applied when no property overrides it.
+     *
+     * <p>The design lists "all remaining paths are below the minimum association score" as a
+     * diffusion stop. Leaving the floor at zero made that stop unreachable in production, so a
+     * weakly-related neighbourhood could consume the whole edge-scan budget. The score is
+     * multiplicative and hop-decayed, so the floor is expressed relative to the strongest path in
+     * the hop rather than as an absolute constant.
+     */
+    private static final double DEFAULT_MIN_ASSOCIATION_SCORE = 0.01D;
+    /**
+     * Fraction of scored edges that must survive the association floor for a hop to keep running.
+     *
+     * <p>Zero disabled the early stop entirely: every rejected edge still consumed scan budget.
+     */
+    private static final double DEFAULT_MIN_ASSOCIATION_SURVIVAL_RATE = 0.05D;
     private static final Pattern QUERY_TOKEN = Pattern.compile("[\\p{L}\\p{N}]+", Pattern.UNICODE_CHARACTER_CLASS);
 
     private final Bm25IndexReader bm25;
@@ -114,7 +138,7 @@ public final class RecallService {
     private final Map<String, Double> idfByToken;
     private final List<GraphEdgeRef> edges;
     private final GraphNeighborProvider graphProvider;
-    private final RetrievalFixtureRegistry registry;
+    private final RetrievalChannelRegistry registry;
     private final Fusion fusion;
     private final LongSupplier clock;
     private final TokenEstimator tokenEstimator;
@@ -124,65 +148,85 @@ public final class RecallService {
     private final boolean strictPlanValidation;
     private final RetrievalProperties properties;
 
+    /**
+     * Builds an in-memory facade over channel readers and graph records without a registry.
+     *
+     * <p>Intended for tests and embedding, not for serving: it bypasses the registry's version
+     * checks, readiness reporting and lease tracking. Production code always goes through
+     * {@link #fromProperties}, which builds on a {@link RetrievalChannelRegistry}.
+     *
+     * @param bm25 BM25 reader, or null to omit the channel
+     * @param vector vector reader, or null to omit the channel
+     * @param chunks chunks the callers may query
+     * @param entities entities backing anchor resolution
+     * @param edges edges backing bounded expansion
+     */
     public RecallService(Bm25IndexReader bm25, VectorIndexReader vector, List<TextChunk> chunks,
                          List<EntityRef> entities, List<GraphEdgeRef> edges) {
-        this(bm25, vector, chunks, entities, edges, WeightedRrfConfig.DEFAULT);
+        this(bm25, vector, chunks, entities, edges, null, new InMemoryGraphNeighborProvider(edges),
+            WeightedRrfConfig.DEFAULT, System::nanoTime, new DeterministicTokenEstimator(),
+            new DeterministicReranker(), new DeterministicRulePolicy(), 1, true, null, null);
     }
 
-    public RecallService(Bm25IndexReader bm25, VectorIndexReader vector, List<TextChunk> chunks,
-                         List<EntityRef> entities, List<GraphEdgeRef> edges, WeightedRrfConfig config) {
-        this(bm25, vector, chunks, entities, edges, null, new InMemoryGraphNeighborProvider(edges), config,
-            System::nanoTime, new DeterministicTokenEstimator(), new DeterministicReranker(),
-            new DeterministicRulePolicy(), 1, true, null, null);
-    }
-
-    public RecallService(RetrievalFixtureRegistry registry) {
+    public RecallService(RetrievalChannelRegistry registry) {
         this(registry, WeightedRrfConfig.DEFAULT);
     }
 
-    public RecallService(RetrievalFixtureRegistry registry, WeightedRrfConfig config) {
+    public RecallService(RetrievalChannelRegistry registry, WeightedRrfConfig config) {
         this(registry, config, System::nanoTime);
     }
 
     /** Accepts a monotonic clock for reproducible deadline verification. */
-    public RecallService(RetrievalFixtureRegistry registry, WeightedRrfConfig config, LongSupplier clock) {
+    public RecallService(RetrievalChannelRegistry registry, WeightedRrfConfig config, LongSupplier clock) {
         this(registry, config, clock, new DeterministicTokenEstimator(), new DeterministicReranker());
     }
 
-    public RecallService(RetrievalFixtureRegistry registry, WeightedRrfConfig config, LongSupplier clock,
+    public RecallService(RetrievalChannelRegistry registry, WeightedRrfConfig config, LongSupplier clock,
                          TokenEstimator tokenEstimator, Reranker reranker) {
         this(registry, config, clock, tokenEstimator, reranker, new DeterministicRulePolicy(), 1);
     }
 
     /** Allows a routing policy and replan bound to be injected for replay and policy evaluation. */
-    public RecallService(RetrievalFixtureRegistry registry, WeightedRrfConfig config, LongSupplier clock,
+    public RecallService(RetrievalChannelRegistry registry, WeightedRrfConfig config, LongSupplier clock,
                          TokenEstimator tokenEstimator, Reranker reranker,
                          RoutingPolicy routingPolicy, int maxReplanCount) {
         this(registry, config, clock, tokenEstimator, reranker, routingPolicy, maxReplanCount, true);
     }
 
-    /** Builds a service from configuration defaults, keeping request validation on the same values. */
-    public static RecallService fromProperties(RetrievalFixtureRegistry registry, WeightedRrfConfig config,
+    /**
+     * Builds a service from configuration defaults, keeping request validation on the same values.
+     *
+     * <p>The supplied fusion config is re-based onto the configured rank constant so the score gap
+     * the routing thresholds compare against and the fusion that produces it stay in the same
+     * units. The rank constant sets the scale of every fused score, {@code w / (k + rank)}, and was
+     * a constant before; a threshold tuned against one scale silently misfires against another.
+     */
+    public static RecallService fromProperties(RetrievalChannelRegistry registry, WeightedRrfConfig config,
                                                LongSupplier clock, RetrievalProperties properties) {
         Objects.requireNonNull(properties, "properties");
         properties.validateConfiguration();
+        WeightedRrfConfig effectiveConfig = config.getRankConstant() == properties.getRrfRankConstant()
+            ? config
+            : new WeightedRrfConfig(config.getBm25Weight(), config.getVectorWeight(),
+                config.getGraphWeight(), properties.getRrfRankConstant());
         RoutingPolicy policy = RetrievalStrategyFactory.routingPolicy(
             properties.getRoutingPolicyId(), properties);
-        RecallService service = new RecallService(registry, config, clock,
+        RecallService service = new RecallService(registry, effectiveConfig, clock,
             RetrievalStrategyFactory.tokenEstimator(properties.getTokenEstimatorId()),
-            RetrievalStrategyFactory.reranker(properties.getRerankerId()), policy,
+            RetrievalStrategyFactory.reranker(properties.getRerankerId(),
+                properties.getRerankerGraphPathWeight()), policy,
             properties.getMaxReplanCount(), properties.isStrictPlanValidation(), properties);
         return service;
     }
 
-    public RecallService(RetrievalFixtureRegistry registry, WeightedRrfConfig config, LongSupplier clock,
+    public RecallService(RetrievalChannelRegistry registry, WeightedRrfConfig config, LongSupplier clock,
                          TokenEstimator tokenEstimator, Reranker reranker,
                          RoutingPolicy routingPolicy, int maxReplanCount, boolean strictPlanValidation) {
         this(registry, config, clock, tokenEstimator, reranker, routingPolicy, maxReplanCount,
             strictPlanValidation, null);
     }
 
-    public RecallService(RetrievalFixtureRegistry registry, WeightedRrfConfig config, LongSupplier clock,
+    public RecallService(RetrievalChannelRegistry registry, WeightedRrfConfig config, LongSupplier clock,
                          TokenEstimator tokenEstimator, Reranker reranker,
                          RoutingPolicy routingPolicy, int maxReplanCount, boolean strictPlanValidation,
                          RetrievalProperties properties) {
@@ -196,7 +240,7 @@ public final class RecallService {
      * the default; this overload lets a caller supply another implementation without changing the
      * execution modes, budgets or trace shape.
      */
-    public RecallService(RetrievalFixtureRegistry registry, Fusion fusion, LongSupplier clock,
+    public RecallService(RetrievalChannelRegistry registry, Fusion fusion, LongSupplier clock,
                          TokenEstimator tokenEstimator, Reranker reranker,
                          RoutingPolicy routingPolicy, int maxReplanCount,
                          RetrievalProperties properties) {
@@ -207,7 +251,7 @@ public final class RecallService {
     }
 
     private RecallService(Bm25IndexReader bm25, VectorIndexReader vector, List<TextChunk> chunks,
-                          List<EntityRef> entities, List<GraphEdgeRef> edges, RetrievalFixtureRegistry registry,
+                          List<EntityRef> entities, List<GraphEdgeRef> edges, RetrievalChannelRegistry registry,
                           GraphNeighborProvider graphProvider, WeightedRrfConfig config, LongSupplier clock,
                           TokenEstimator tokenEstimator, Reranker reranker, RoutingPolicy routingPolicy,
                           int maxReplanCount, boolean strictPlanValidation, RetrievalProperties properties,
@@ -311,10 +355,19 @@ public final class RecallService {
         return count;
     }
 
+    /**
+     * Returns whether the fusion config is the neutral default whose channel weights the routing
+     * plan is allowed to replace.
+     *
+     * <p>The rank constant is part of that check: this predicate gates code that rebuilds the whole
+     * config from the routing plan, so omitting the rank constant let a config that only differed in
+     * its rank constant be treated as neutral and then silently overwritten.
+     */
     private boolean isDefaultFusionConfig() {
         return fusion.getConfig().getBm25Weight() == 1.0D
             && fusion.getConfig().getVectorWeight() == 1.0D
-            && fusion.getConfig().getGraphWeight() == 1.0D;
+            && fusion.getConfig().getGraphWeight() == 1.0D
+            && fusion.getConfig().getRankConstant() == 60;
     }
 
     private static Map<String, Double> buildIdfIndex(List<TextChunk> chunks) {
@@ -461,13 +514,13 @@ public final class RecallService {
         return result;
     }
 
-    private RecallService(RetrievalFixtureRegistry.Fixture fixture, WeightedRrfConfig config,
+    private RecallService(RetrievalChannelRegistry.Fixture fixture, WeightedRrfConfig config,
                           LongSupplier clock) {
         this(fixture, config, clock, new DeterministicTokenEstimator(), new DeterministicReranker(),
             new DeterministicRulePolicy(), 1, true, null);
     }
 
-    private RecallService(RetrievalFixtureRegistry.Fixture fixture, Fusion fusion,
+    private RecallService(RetrievalChannelRegistry.Fixture fixture, Fusion fusion,
                           LongSupplier clock, TokenEstimator tokenEstimator, Reranker reranker,
                           RoutingPolicy routingPolicy, int maxReplanCount, boolean strictPlanValidation,
                           RetrievalProperties properties) {
@@ -475,7 +528,7 @@ public final class RecallService {
             maxReplanCount, strictPlanValidation, properties, fusion);
     }
 
-    private RecallService(RetrievalFixtureRegistry.Fixture fixture, WeightedRrfConfig config,
+    private RecallService(RetrievalChannelRegistry.Fixture fixture, WeightedRrfConfig config,
                           LongSupplier clock, TokenEstimator tokenEstimator, Reranker reranker,
                           RoutingPolicy routingPolicy, int maxReplanCount, boolean strictPlanValidation,
                           RetrievalProperties properties) {
@@ -483,7 +536,7 @@ public final class RecallService {
             strictPlanValidation, properties, null);
     }
 
-    private RecallService(RetrievalFixtureRegistry.Fixture fixture, WeightedRrfConfig config,
+    private RecallService(RetrievalChannelRegistry.Fixture fixture, WeightedRrfConfig config,
                           LongSupplier clock, TokenEstimator tokenEstimator, Reranker reranker,
                           RoutingPolicy routingPolicy, int maxReplanCount, boolean strictPlanValidation,
                           RetrievalProperties properties, Fusion fusionOverride) {
@@ -521,9 +574,9 @@ public final class RecallService {
         RetrievalBudget budget = command.getBudget();
         long deadline = budget.getPrimaryConstraint() == BudgetConstraint.LATENCY
             ? started + budget.getTimeoutMs() * 1_000_000L : 0L;
-        try (RetrievalFixtureRegistry.Fixture.Lease lease = registry.acquire(command.getGraphName(),
+        try (RetrievalChannelRegistry.Fixture.Lease lease = registry.acquire(command.getGraphName(),
             request.getGraphVersion(), request.getIndexVersion())) {
-            RetrievalFixtureRegistry.Fixture fixture = lease.getFixture();
+            RetrievalChannelRegistry.Fixture fixture = lease.getFixture();
             if (fixture.getVector() != null
                 && ((request.getVectorSource() != null
                     && !request.getVectorSource().equals(fixture.getVector().getVectorSource()))
@@ -597,7 +650,7 @@ public final class RecallService {
     }
 
     private RetrievalResponse execute(RetrievalCommand command, float[] queryVector, long deadline,
-                                       boolean partial, long started, RetrievalFixtureRegistry.Fixture fixture,
+                                       boolean partial, long started, RetrievalChannelRegistry.Fixture fixture,
                                        String requestId) {
         return executePinned(command, queryVector, deadline, partial, started, fixture, requestId,
             graphProvider);
@@ -605,7 +658,7 @@ public final class RecallService {
 
     private RetrievalResponse executePinned(RetrievalCommand command, float[] queryVector, long deadline,
                                              boolean partial, long started,
-                                             RetrievalFixtureRegistry.Fixture fixture, String requestId,
+                                             RetrievalChannelRegistry.Fixture fixture, String requestId,
                                              GraphNeighborProvider pinnedGraphProvider) {
         RetrievalBudget budget = command.getBudget();
         int executionCandidateLimit = budget.getPrimaryConstraint() == BudgetConstraint.CANDIDATES
@@ -638,7 +691,8 @@ public final class RecallService {
             ? new RecallPlan(command.getMode(), budget.getTopK(), executionCandidateLimit, deadline,
                 fixture == null ? null : fixture.getGraphVersion(), fixture == null ? null : fixture.getIndexVersion(),
                 vector == null ? null : vector.getVectorVersion(), budget.getPrimaryConstraint(),
-                command.getExecutionMode())
+                command.getExecutionMode(), cascadeMinBudget(), cascadeProbeMax(), cascadeProbeMin(),
+                cascadeProbeDivisor())
             : new RecallPlan(routingPlan.getSelectedMode(), routingPlan.getTopK(), deadline,
                 fixture == null ? null : fixture.getGraphVersion(), fixture == null ? null : fixture.getIndexVersion(),
                 vector == null ? null : vector.getVectorVersion(), budget.getPrimaryConstraint(),
@@ -728,16 +782,22 @@ public final class RecallService {
                 pinnedGraphProvider, tokenLedger);
             boolean probeDeadline = expired(deadline)
                 || trace.getChannelStopReasons().containsValue(RecallStopReason.DEADLINE);
+            double minProbeScoreGap = cascadeMinProbeScoreGap();
+            int minProbeEvidence = cascadeMinProbeEvidence();
             boolean hasTextEvidence = !merged.isEmpty();
-            boolean hasProbeEvidence = merged.size() >= 2;
+            boolean hasProbeEvidence = merged.size() >= minProbeEvidence;
             boolean hasAnchor = hasTextEvidence && !probeDeadline
                 && !anchorResolver.resolve(command.getQuery(), deadline, clock).isEmpty();
             double scoreGap = cascadeProbeScoreGap(merged);
             trace.setCascadeProbeScoreGap(scoreGap);
+            // The evaluated threshold is recorded alongside the measured gap so a skipped graph
+            // stage can be explained from the trace alone.
+            trace.setCascadeMinProbeScoreGap(minProbeScoreGap);
+            trace.setCascadeMinProbeEvidence(minProbeEvidence);
             boolean noAnchorFallback = hasTextEvidence && hasProbeEvidence && !hasAnchor
-                && scoreGap >= CASCADE_MIN_PROBE_SCORE_GAP;
+                && scoreGap >= minProbeScoreGap;
             if (probeDeadline || !hasTextEvidence || !hasProbeEvidence
-                || (scoreGap < CASCADE_MIN_PROBE_SCORE_GAP && !noAnchorFallback)) {
+                || (scoreGap < minProbeScoreGap && !noAnchorFallback)) {
                 RecallStopReason reason = probeDeadline ? RecallStopReason.DEADLINE
                     : !hasTextEvidence ? RecallStopReason.NO_RESULT
                     : !hasProbeEvidence ? RecallStopReason.NO_RESULT
@@ -944,7 +1004,35 @@ public final class RecallService {
         response.setTrace(trace);
         response.setEffectiveBudget(budget);
         response.setDegradedChannels(trace.getDegradedChannels());
+        attachExtractiveAnswer(response, command);
         return response;
+    }
+
+    /**
+     * Attaches the offline extractive answer to the response.
+     *
+     * <p>The design requires an extractive answer evaluation, which is only measurable if the
+     * retrieval response carries a predicted answer. The answer is a verbatim span of the returned
+     * evidence chosen by the deterministic consumer, never generated text, so retrieval stays
+     * reproducible and free of model APIs. A result that cannot produce an answer records why.
+     */
+    private void attachExtractiveAnswer(RetrievalResponse response, RetrievalCommand command) {
+        java.util.List<Evidence> ranked = response.getEvidence();
+        if (ranked == null || ranked.isEmpty()) {
+            response.setAnswer(null);
+            response.setAnswerAbstentionReason("NO_EVIDENCE");
+            return;
+        }
+        int answerTokenBudget = command.getBudget().getTokenBudget() == null
+            ? DEFAULT_ANSWER_TOKEN_BUDGET : command.getBudget().getTokenBudget();
+        AnswerRequest answerRequest = new AnswerRequest(command.getQuery(), answerTokenBudget,
+            response.getRequestId(), response.getGraphVersion(), response.getTrace() == null
+                ? null : response.getTrace().getIndexVersion(), command.getGraphName(),
+            command.getMode().name());
+        AnswerResponse answer = new ExtractiveAnswerConsumer(tokenEstimator)
+            .consume(answerRequest, ranked);
+        response.setAnswer(answer.getAnswer());
+        response.setAnswerAbstentionReason(answer.getAbstentionReason());
     }
 
     private void runChannels(List<Map.Entry<String, Integer>> channels, ExecutionMode executionMode,
@@ -953,7 +1041,7 @@ public final class RecallService {
                              Map<String, TextChunk> byId, RecallPlan plan,
                              Map<String, EvidenceBuilder> merged, RetrievalTrace trace,
                              Map<String, Long> channelElapsedNanos,
-                             RetrievalFixtureRegistry.Fixture fixture,
+                             RetrievalChannelRegistry.Fixture fixture,
                              GraphNeighborProvider pinnedGraphProvider, BudgetLedger tokenLedger) {
         AtomicBoolean anyStageStarted = new AtomicBoolean();
         boolean deadlineAlreadyRecorded = false;
@@ -961,7 +1049,7 @@ public final class RecallService {
         for (Map.Entry<String, Integer> channel : channels) {
             String name = channel.getKey();
             stages.add(new Stage<>(name, () -> {
-                try (RetrievalFixtureRegistry.Fixture.Lease stageLease = fixture == null
+                try (RetrievalChannelRegistry.Fixture.Lease stageLease = fixture == null
                     ? null : fixture.acquireLease();
                      GraphQueryLease graphLease = "GRAPH".equals(name) && pinnedGraphProvider != null
                          ? pinnedGraphProvider.openLease() : null) {
@@ -1208,6 +1296,30 @@ public final class RecallService {
         return tokenLedger.tryRetain(chunkId, chunk, tokenEstimator);
     }
 
+    private int cascadeMinBudget() {
+        return properties == null ? 5 : properties.getCascadeMinBudget();
+    }
+
+    private int cascadeProbeMax() {
+        return properties == null ? 10 : properties.getCascadeProbeMax();
+    }
+
+    private int cascadeProbeMin() {
+        return properties == null ? 2 : properties.getCascadeProbeMin();
+    }
+
+    private int cascadeProbeDivisor() {
+        return properties == null ? 8 : properties.getCascadeProbeDivisor();
+    }
+
+    private double cascadeMinProbeScoreGap() {
+        return properties == null ? CASCADE_MIN_PROBE_SCORE_GAP : properties.getCascadeMinProbeScoreGap();
+    }
+
+    private int cascadeMinProbeEvidence() {
+        return properties == null ? 2 : properties.getCascadeMinProbeEvidence();
+    }
+
     private double cascadeProbeScoreGap(Map<String, EvidenceBuilder> candidates) {
         if (candidates.size() < 2) {
             return 0.0D;
@@ -1334,11 +1446,13 @@ public final class RecallService {
     }
 
     private double graphMinAssociationScore() {
-        return properties == null ? 0.0D : properties.getGraphMinAssociationScore();
+        return properties == null ? DEFAULT_MIN_ASSOCIATION_SCORE
+            : properties.getGraphMinAssociationScore();
     }
 
     private double graphMinAssociationSurvivalRate() {
-        return properties == null ? 0.0D : properties.getGraphMinAssociationSurvivalRate();
+        return properties == null ? DEFAULT_MIN_ASSOCIATION_SURVIVAL_RATE
+            : properties.getGraphMinAssociationSurvivalRate();
     }
 
     private int resolveEdgeScanBudget(RetrievalBudget budget) {

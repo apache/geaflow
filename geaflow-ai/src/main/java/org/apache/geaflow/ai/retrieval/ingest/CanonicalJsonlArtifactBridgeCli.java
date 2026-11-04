@@ -41,7 +41,13 @@ import org.apache.geaflow.ai.retrieval.model.graph.GraphEdgeRef;
 import org.apache.geaflow.ai.retrieval.model.graph.GraphVertexRef;
 import org.apache.geaflow.ai.retrieval.model.version.GraphVersion;
 
-/** Generic command-line adapter for publishing native artifacts from a canonical release. */
+/**
+ * Local execution entry point: converts a verified Python release into native Java artifacts.
+ *
+ * <p>This is a command-line driver, not part of the serving path. No production class calls it; the
+ * bundle publisher outside this module launches it by main class name. Offline reproduction and
+ * load testing live outside this repository so only retrieval logic and its tests ship here.
+ */
 public final class CanonicalJsonlArtifactBridgeCli {
 
     private CanonicalJsonlArtifactBridgeCli() {

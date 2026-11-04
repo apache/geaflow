@@ -94,6 +94,15 @@ public final class RetrievalApiJson {
         response.setTrace(parseTrace(object.getAsJsonObject("trace")));
         response.setEffectiveBudget(parseBudget(object.getAsJsonObject("effectiveBudget"), true));
         response.setDegradedChannels(strings(object, "degradedChannels"));
+        // The extractive answer is optional: results produced before it existed, and abstaining
+        // results, carry no answer. Absence must stay distinguishable from an empty string.
+        if (object.has("answer") && !object.get("answer").isJsonNull()) {
+            response.setAnswer(object.get("answer").getAsString());
+        }
+        if (object.has("answerAbstentionReason")
+            && !object.get("answerAbstentionReason").isJsonNull()) {
+            response.setAnswerAbstentionReason(object.get("answerAbstentionReason").getAsString());
+        }
         return RetrievalResponseValidator.validate(response, properties);
     }
 

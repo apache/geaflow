@@ -102,7 +102,7 @@ class RetrievalModeContractTest {
         return request;
     }
 
-    private RetrievalFixtureRegistry fixture() throws Exception {
+    private RetrievalChannelRegistry fixture() throws Exception {
         List<TextChunk> chunks = Arrays.asList(
             chunk("c1", "doc-1", "Confucius taught ethics and philosophy"),
             chunk("c2", "doc-2", "Astronomy studies distant stars"),
@@ -131,7 +131,7 @@ class RetrievalModeContractTest {
             new EntityRef("e2", "Astronomy", "topic"));
         List<GraphEdgeRef> edges = Arrays.asList(
             new GraphEdgeRef("edge-1", "studies", "e1", "e2", Arrays.asList("c3")));
-        RetrievalFixtureRegistry registry = new RetrievalFixtureRegistry();
+        RetrievalChannelRegistry registry = new RetrievalChannelRegistry();
         registry.register(GRAPH, VERSION, VERSION, bm25, vector, chunks, entities, edges, true);
         return registry;
     }

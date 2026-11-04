@@ -57,22 +57,37 @@ class AdaptiveRoutingTest {
     void rulePolicyPrefersLexicalAndSemanticChannelsAtThresholds() {
         DeterministicRulePolicy policy = new DeterministicRulePolicy(1.5, 0.2, 8,
             0.75, 1, 32, 2.0, 16);
-        RoutingContext base = context(100, RoutingFeatures.builder().averageIdf(1.5)
+        // A confident anchor means the graph channel has a seed to expand, so it leads the fusion
+        // regardless of how rare the query terms are. Rare terms alone do not mean BM25 matched
+        // anything: on the measured runs the IDF median is 3.0 while BM25 recall stays at 0.002.
+        RoutingContext anchored = context(100, RoutingFeatures.builder().averageIdf(1.5)
             .anchorCount(1).anchorConfidence(0.8).build());
-        RetrievalPlan lexical = policy.plan(base);
-        assertEquals(Arrays.asList("BM25", "VECTOR", "GRAPH"), lexical.getChannelOrder());
-        assertEquals(10, lexical.getChannelBudgets().get("BM25"));
-        assertEquals(10, lexical.getChannelBudgets().get("VECTOR"));
-        assertEquals(80, lexical.getChannelBudgets().get("GRAPH"));
+        RetrievalPlan graphLed = policy.plan(anchored);
+        assertEquals(Arrays.asList("BM25", "VECTOR", "GRAPH"), graphLed.getChannelOrder());
+        // The text probe may take at most GRAPH_PROBE_SHARE of a 100-candidate budget, so the graph
+        // channel keeps 60 instead of the 80 an unconditional text reservation produced.
+        assertEquals(20, graphLed.getChannelBudgets().get("BM25"));
+        assertEquals(20, graphLed.getChannelBudgets().get("VECTOR"));
+        assertEquals(60, graphLed.getChannelBudgets().get("GRAPH"));
+        assertEquals(0.25, graphLed.getBm25Weight());
+        assertEquals(2.0, graphLed.getGraphWeight());
+        assertEquals("GRAPH_DOMINANT_FUSION", graphLed.getReasons().get(0));
+
+        // Without an anchor the text channels take over; the lexical branch needs rare terms.
+        RoutingContext unanchored = context(100, RoutingFeatures.builder().averageIdf(1.5)
+            .anchorCount(0).build());
+        RetrievalPlan lexical = policy.plan(unanchored);
+        assertTrue(lexical.getReasons().contains("LEXICAL_CONFIDENCE"), lexical.getReasons().toString());
         assertEquals(1.25, lexical.getBm25Weight());
-        assertEquals("LEXICAL_CONFIDENCE", lexical.getReasons().get(0));
+        assertEquals(1.0, lexical.getGraphWeight());
 
         RoutingContext semanticContext = context(100, RoutingFeatures.builder().queryLength(8)
-            .anchorCount(1).anchorConfidence(0.8).build());
+            .anchorCount(0).build());
         RetrievalPlan semantic = policy.plan(semanticContext);
         assertEquals("VECTOR", semantic.getChannelOrder().get(0));
         assertEquals(1.25, semantic.getVectorWeight());
-        assertEquals(2, semantic.getMaxHop());
+        // Without a confident anchor the planner keeps expansion to a single hop.
+        assertEquals(1, semantic.getMaxHop());
         assertEquals(100, sum(semantic.getChannelBudgets()));
         assertEquals(semantic.getChannelBudgets(), policy.plan(semanticContext).getChannelBudgets());
     }
@@ -215,6 +230,134 @@ class AdaptiveRoutingTest {
 
         assertThrows(RetrievalException.class,
             () -> RetrievalPlanValidator.validateAndAdjust(unavailable, context));
+    }
+
+    @Test
+    void graphChannelKeepsTheLargestShareOfEveryHybridBudget() {
+        // The measured end-to-end runs show text channels carry almost no gold signal while graph
+        // expansion supplies it. A routing plan that hands the graph channel less budget than a
+        // text channel therefore cannot reach graph-only quality, so this pins the invariant.
+        DeterministicRulePolicy policy = new DeterministicRulePolicy();
+        for (int candidates : new int[] {10, 50, 100, 400, 2000}) {
+            RetrievalPlan plan = policy.plan(context(candidates, RoutingFeatures.builder()
+                .averageIdf(0.5).queryLength(3).anchorCount(1).anchorConfidence(0.9)
+                .candidateDegree(4).build()));
+            Map<String, Integer> budgets = plan.getChannelBudgets();
+            int graph = budgets.get("GRAPH");
+            for (Map.Entry<String, Integer> channel : budgets.entrySet()) {
+                if ("GRAPH".equals(channel.getKey())) {
+                    continue;
+                }
+                assertTrue(graph >= channel.getValue(),
+                    "graph budget " + graph + " must not be below " + channel.getKey() + " "
+                        + channel.getValue() + " at total " + candidates);
+            }
+            assertEquals(candidates, sum(budgets), "budgets must sum to the candidate budget");
+        }
+    }
+
+    @Test
+    void textProbeShareIsBoundedAndLeavesTheRemainderToGraph() {
+        DeterministicRulePolicy policy = new DeterministicRulePolicy();
+        RetrievalPlan plan = policy.plan(context(100, RoutingFeatures.builder()
+            .averageIdf(0.5).queryLength(3).anchorCount(1).anchorConfidence(0.9)
+            .candidateDegree(4).build()));
+        int textTotal = 0;
+        for (Map.Entry<String, Integer> channel : plan.getChannelBudgets().entrySet()) {
+            if (!"GRAPH".equals(channel.getKey())) {
+                textTotal += channel.getValue();
+            }
+        }
+        assertTrue(textTotal <= (int) Math.floor(100 * DeterministicRulePolicy.GRAPH_PROBE_SHARE),
+            "text probe took " + textTotal + ", above the configured share");
+        assertEquals(100 - textTotal, plan.getChannelBudgets().get("GRAPH").intValue());
+    }
+
+    @Test
+    void weakTextSignalRoutesToGraphDominantFusion() {
+        // No lexical confidence and a short query is the case the measured runs expose: neither text
+        // channel has signal, so the graph channel must lead both the fusion weights and the order.
+        DeterministicRulePolicy policy = new DeterministicRulePolicy();
+        RetrievalPlan plan = policy.plan(context(100, RoutingFeatures.builder()
+            .averageIdf(0.5).queryLength(3).anchorCount(1).anchorConfidence(0.9)
+            .candidateDegree(4).build()));
+
+        assertEquals("GRAPH_DOMINANT_FUSION", plan.getReasons().get(0));
+        assertTrue(plan.getGraphWeight() > plan.getBm25Weight(),
+            "graph weight must exceed BM25 weight without lexical confidence");
+        assertTrue(plan.getGraphWeight() > plan.getVectorWeight(),
+            "graph weight must exceed vector weight without lexical confidence");
+        assertEquals(Arrays.asList("BM25", "VECTOR", "GRAPH"), plan.getChannelOrder());
+    }
+
+    @Test
+    void anchoredQueryLetsGraphLeadEvenWhenTheQueryHasRareTerms() {
+        // The measured failure mode: a rare-term query that also resolves a confident anchor used to
+        // be routed to BM25-first fusion, demoting the only channel that supplied evidence.
+        DeterministicRulePolicy policy = new DeterministicRulePolicy();
+        RetrievalPlan plan = policy.plan(context(100, RoutingFeatures.builder()
+            .averageIdf(2.0).anchorCount(1).anchorConfidence(0.9).candidateDegree(4).build()));
+
+        assertEquals("GRAPH_DOMINANT_FUSION", plan.getReasons().get(0));
+        assertTrue(plan.getGraphWeight() > plan.getBm25Weight(),
+            "an anchored query must not demote the graph channel");
+        // The graph channel also keeps the largest candidate budget.
+        assertTrue(plan.getChannelBudgets().get("GRAPH") > plan.getChannelBudgets().get("BM25"));
+    }
+
+    @Test
+    void weakAnchorFallsBackToTextChannels() {
+        // Without a confident anchor there is no seed to expand, so BM25 may lead again.
+        DeterministicRulePolicy policy = new DeterministicRulePolicy();
+        RetrievalPlan plan = policy.plan(context(100, RoutingFeatures.builder()
+            .averageIdf(2.0).anchorCount(1).anchorConfidence(0.2).candidateDegree(4).build()));
+
+        assertTrue(plan.getReasons().contains("LEXICAL_CONFIDENCE"), plan.getReasons().toString());
+        assertTrue(plan.getBm25Weight() > plan.getGraphWeight());
+    }
+
+    @Test
+    void configuredFusionWeightsReachThePlanAndTheTraceParameters() {
+        // The weights were constants on the policy class, so a benchmark could not pin or vary them.
+        DeterministicRulePolicy policy = new DeterministicRulePolicy(1.5D, 0.0005D, 12, 0.75D, 1, 32,
+            2.0D, 16, 3.5D, 0.1D, 0.5D, 1.1D, 1.2D, 1.3D, 1.4D);
+
+        RetrievalPlan plan = policy.plan(context(100, RoutingFeatures.builder()
+            .anchorCount(1).anchorConfidence(0.9).candidateDegree(4).build()));
+
+        assertEquals(3.5D, plan.getGraphWeight());
+        assertEquals(0.1D, plan.getBm25Weight());
+        assertEquals(0.1D, plan.getVectorWeight());
+        Map<String, String> parameters = policy.getParameters();
+        assertEquals("3.5", parameters.get("graphFusionGraphWeight"));
+        assertEquals("0.1", parameters.get("graphFusionTextWeight"));
+        assertEquals("0.5", parameters.get("graphProbeShare"));
+        assertEquals("1.1", parameters.get("lexicalBm25Weight"));
+        assertEquals("1.4", parameters.get("semanticVectorWeight"));
+    }
+
+    @Test
+    void configuredProbeShareDrivesTheGraphBudget() {
+        DeterministicRulePolicy policy = new DeterministicRulePolicy(1.5D, 0.0005D, 12, 0.75D, 1, 32,
+            2.0D, 16, 2.0D, 0.25D, 0.8D, 1.25D, 0.85D, 0.85D, 1.25D);
+
+        RetrievalPlan plan = policy.plan(context(100, RoutingFeatures.builder()
+            .anchorCount(1).anchorConfidence(0.9).candidateDegree(4).build()));
+
+        // An 80% probe share leaves the graph channel 20 candidates, and the text probe splits 80.
+        assertEquals(20, plan.getChannelBudgets().get("GRAPH"));
+        assertEquals(40, plan.getChannelBudgets().get("BM25"));
+        assertEquals(40, plan.getChannelBudgets().get("VECTOR"));
+    }
+
+    @Test
+    void rejectsInvalidFusionWeights() {
+        assertThrows(IllegalArgumentException.class, () -> new DeterministicRulePolicy(1.5D, 0.0005D,
+            12, 0.75D, 1, 32, 2.0D, 16, -1.0D, 0.25D, 0.4D, 1.25D, 0.85D, 0.85D, 1.25D));
+        assertThrows(IllegalArgumentException.class, () -> new DeterministicRulePolicy(1.5D, 0.0005D,
+            12, 0.75D, 1, 32, 2.0D, 16, 0.0D, 0.0D, 0.4D, 1.25D, 0.85D, 0.85D, 1.25D));
+        assertThrows(IllegalArgumentException.class, () -> new DeterministicRulePolicy(1.5D, 0.0005D,
+            12, 0.75D, 1, 32, 2.0D, 16, 2.0D, 0.25D, 1.0D, 1.25D, 0.85D, 0.85D, 1.25D));
     }
 
     private static RoutingContext context(int candidates, RoutingFeatures features) {

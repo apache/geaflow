@@ -43,9 +43,17 @@ import org.apache.geaflow.ai.retrieval.model.graph.GraphVertexRef;
 /** Bounded deterministic one-hop graph expansion over fixture graph records. */
 public final class GraphRetriever {
 
-    /** Source relevance when an edge and its anchor share no source chunk. */
+    /**
+     * Source relevance when an edge and its anchor share no source chunk.
+     *
+     * <p>Now supplied by {@link GraphRetrievalConfig} so the value is recorded in build metadata
+     * instead of being a constant that made a published association score impossible to reproduce.
+     * This constant remains only as the documented default.
+     */
     private static final double UNRELATED_SOURCE_RELEVANCE = 0.5D;
-    /** Floor for the one-hop anchor expansion score, which decays as more hits are produced. */
+    /**
+     * Documented default base source-relevance score; see {@link GraphRetrievalConfig}.
+     */
     private static final double ANCHOR_HIT_BASE_SCORE = 1.0D;
     private final EntityAnchorResolver resolver;
     private final TokenEstimator tokenEstimator;
@@ -526,19 +534,31 @@ public final class GraphRetriever {
 
     private static double associationScore(ExpansionState state, GraphEdgeRef edge, String targetId,
                                            GraphNeighborProvider provider, GraphRetrievalConfig config) {
-        double edgeStrength = config.relationPriority(edge.getLabel()) * config.getEdgeStrengthWeight();
-        double relevance = sourceRelevance(state.anchor.getEntity(), edge) * config.getSourceRelevanceWeight();
+        double edgeStrength = EdgeStrength.of(config.relationPriority(edge.getLabel()),
+            reinforcementCount(provider, edge), ageMillis(provider, edge),
+            config.getTimeDecayWeight(), config.getTimeDecayHalfLifeMillis())
+            * config.getEdgeStrengthWeight();
+        double relevance = sourceRelevance(state.anchor.getEntity(), edge, config)
+            * config.getSourceRelevanceWeight();
         GraphStatistics statistics = provider.getStatistics();
         int degree = statistics == null ? 0 : statistics.getDegree(targetId);
-        double degreePenalty = 1.0 / Math.log(2.0 + degree);
-        degreePenalty = Math.pow(degreePenalty, config.getDegreePenalty());
-        // The first edge is hop one and therefore has no decay. A state at hop n
-        // contributes the next edge at hop n + 1, whose decay exponent is n.
-        return state.score * Math.pow(config.getHopDecay(), state.hop)
-            * edgeStrength * degreePenalty * relevance;
+        // The first edge is hop one and therefore has no decay: the state at hop n enters hop n + 1.
+        return AssociationScore.score(state.score, state.hop + 1, edgeStrength, degree,
+            config.getDegreePenalty(), config.getHopDecay(), relevance);
     }
 
-    private static double sourceRelevance(EntityRef anchor, GraphEdgeRef edge) {
+    private static int reinforcementCount(GraphNeighborProvider provider, GraphEdgeRef edge) {
+        return provider instanceof EdgeReinforcementSource
+            ? ((EdgeReinforcementSource) provider).getReinforcementCount(edge) : 0;
+    }
+
+    private static long ageMillis(GraphNeighborProvider provider, GraphEdgeRef edge) {
+        return provider instanceof EdgeReinforcementSource
+            ? ((EdgeReinforcementSource) provider).getAgeMillis(edge) : 0L;
+    }
+
+    private static double sourceRelevance(EntityRef anchor, GraphEdgeRef edge,
+                                          GraphRetrievalConfig config) {
         if (anchor.getSourceChunkIds().isEmpty() || edge.getSourceChunkIds().isEmpty()) {
             return 1.0;
         }
@@ -549,8 +569,8 @@ public final class GraphRetriever {
                 overlap++;
             }
         }
-        return overlap == 0 ? UNRELATED_SOURCE_RELEVANCE
-            : ANCHOR_HIT_BASE_SCORE + (double) overlap / anchorSources.size();
+        return overlap == 0 ? config.getUnrelatedSourceRelevance()
+            : config.getAnchorHitBaseScore() + (double) overlap / anchorSources.size();
     }
 
     private static List<String> sourceIds(ExpansionState state, GraphEdgeRef edge,

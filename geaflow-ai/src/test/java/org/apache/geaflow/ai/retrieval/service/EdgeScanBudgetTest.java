@@ -126,7 +126,7 @@ class EdgeScanBudgetTest {
         return properties;
     }
 
-    private RetrievalFixtureRegistry fixture() throws Exception {
+    private RetrievalChannelRegistry fixture() throws Exception {
         List<TextChunk> chunks = Arrays.asList(
             new TextChunk("c1", "doc-1", 0, 0, 36, 6,
                 "Confucius taught ethics and philosophy", null, null, "https://example.test/doc-1"),
@@ -174,7 +174,7 @@ class EdgeScanBudgetTest {
             new GraphEdgeRef("edge-3", "studies", "e1", "e3", Collections.singletonList("c4")),
             new GraphEdgeRef("edge-4", "studies", "e1", "e4", Collections.singletonList("c5")),
             new GraphEdgeRef("edge-5", "studies", "e1", "e5", Collections.singletonList("c6")));
-        RetrievalFixtureRegistry registry = new RetrievalFixtureRegistry();
+        RetrievalChannelRegistry registry = new RetrievalChannelRegistry();
         registry.register(GRAPH, VERSION, VERSION, bm25, vector, chunks, entities, edges, true);
         return registry;
     }

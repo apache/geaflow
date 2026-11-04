@@ -27,7 +27,7 @@ class ArtifactBundleLoaderTest {
             field.set(loader, properties);
             java.lang.reflect.Field registry = ArtifactBundleLoader.class.getDeclaredField("registry");
             registry.setAccessible(true);
-            registry.set(loader, new RetrievalFixtureRegistry());
+            registry.set(loader, new RetrievalChannelRegistry());
             loader.initialize();
         });
     }
@@ -48,7 +48,7 @@ class ArtifactBundleLoaderTest {
         field.set(loader, properties);
         java.lang.reflect.Field registry = ArtifactBundleLoader.class.getDeclaredField("registry");
         registry.setAccessible(true);
-        registry.set(loader, new RetrievalFixtureRegistry());
+        registry.set(loader, new RetrievalChannelRegistry());
         assertThrows(RetrievalException.class, loader::initialize);
     }
 }

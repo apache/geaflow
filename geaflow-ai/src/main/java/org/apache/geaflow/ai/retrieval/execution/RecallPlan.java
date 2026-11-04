@@ -44,6 +44,10 @@ public final class RecallPlan {
     private static final int CASCADE_PROBE_MAX = 10;
     private static final int CASCADE_PROBE_MIN = 2;
     private static final int CASCADE_PROBE_DIVISOR = 8;
+    private final int cascadeMinBudget;
+    private final int cascadeProbeMax;
+    private final int cascadeProbeMin;
+    private final int cascadeProbeDivisor;
     private final RetrievalMode mode;
     private final int topK;
     private final long deadlineNanos;
@@ -68,6 +72,49 @@ public final class RecallPlan {
     public RecallPlan(RetrievalMode mode, int topK, int candidates, long deadlineNanos,
                       String graphVersion, String indexVersion, String vectorVersion,
                       BudgetConstraint primaryConstraint, ExecutionMode executionMode) {
+        this(mode, topK, candidates, deadlineNanos, graphVersion, indexVersion, vectorVersion,
+            primaryConstraint, executionMode, CASCADE_MIN_BUDGET, CASCADE_PROBE_MAX,
+            CASCADE_PROBE_MIN, CASCADE_PROBE_DIVISOR);
+    }
+
+    /**
+     * Creates a plan whose cascaded probe split comes from configuration.
+     *
+     * <p>The probe bounds were constants, so an operator could not rebalance the text probe against
+     * the graph stage without editing the class.
+     *
+     * <p><strong>Which split applies.</strong> There are two allocation paths and they must not be
+     * confused. When a routing plan exists (the adaptive modes), {@code RecallService} passes an
+     * explicit channel budget map and {@link DeterministicRulePolicy#addChannels} owns the split;
+     * the cascade bounds here are not consulted. This constructor's cascade logic therefore serves
+     * only the path with no routing plan, i.e. a hybrid request that did not select adaptive
+     * routing. Both allocate the graph channel the largest share, but they are not the same code.
+     * Unifying them would change non-adaptive hybrid allocation, so the split is documented here
+     * rather than merged.
+     *
+     * @param mode requested retrieval mode
+     * @param topK requested result count
+     * @param candidates total candidate budget
+     * @param deadlineNanos request deadline, or zero for none
+     * @param graphVersion observed graph version
+     * @param indexVersion observed index version
+     * @param vectorVersion observed vector version
+     * @param primaryConstraint the single hard constraint for this run
+     * @param executionMode execution mode requested by the client
+     * @param cascadeMinBudget below this the cascade splits the budget instead of probing
+     * @param cascadeProbeMax upper bound on the probe budget per text channel
+     * @param cascadeProbeMin lower bound on the probe budget per text channel
+     * @param cascadeProbeDivisor divisor applied to the budget to size the probe
+     */
+    public RecallPlan(RetrievalMode mode, int topK, int candidates, long deadlineNanos,
+                      String graphVersion, String indexVersion, String vectorVersion,
+                      BudgetConstraint primaryConstraint, ExecutionMode executionMode,
+                      int cascadeMinBudget, int cascadeProbeMax, int cascadeProbeMin,
+                      int cascadeProbeDivisor) {
+        this.cascadeMinBudget = cascadeMinBudget;
+        this.cascadeProbeMax = cascadeProbeMax;
+        this.cascadeProbeMin = cascadeProbeMin;
+        this.cascadeProbeDivisor = cascadeProbeDivisor;
         this.graphVersion = graphVersion;
         this.indexVersion = indexVersion;
         this.vectorVersion = vectorVersion;
@@ -86,9 +133,9 @@ public final class RecallPlan {
         Map<String, Integer> budgets = new LinkedHashMap<>();
         if (this.mode == RetrievalMode.HYBRID) {
             if (executionMode == ExecutionMode.CASCADED) {
-                int probeBudget = allocatedCandidates >= CASCADE_MIN_BUDGET
-                    ? Math.min(CASCADE_PROBE_MAX,
-                        Math.max(CASCADE_PROBE_MIN, allocatedCandidates / CASCADE_PROBE_DIVISOR))
+                int probeBudget = allocatedCandidates >= cascadeMinBudget
+                    ? Math.min(cascadeProbeMax,
+                        Math.max(cascadeProbeMin, allocatedCandidates / cascadeProbeDivisor))
                     : Math.max(1, (allocatedCandidates - 1) / 2);
                 budgets.put("BM25", probeBudget);
                 budgets.put("VECTOR", probeBudget);
@@ -152,6 +199,12 @@ public final class RecallPlan {
         this.maxHop = maxHop;
         this.neighborCap = neighborCap;
         this.maxDiffusionGrowth = maxDiffusionGrowth;
+        // This constructor receives an already validated allocation, so the cascade split is not
+        // consulted; the documented defaults keep the fields initialized for trace reporting.
+        this.cascadeMinBudget = CASCADE_MIN_BUDGET;
+        this.cascadeProbeMax = CASCADE_PROBE_MAX;
+        this.cascadeProbeMin = CASCADE_PROBE_MIN;
+        this.cascadeProbeDivisor = CASCADE_PROBE_DIVISOR;
     }
 
     public String getGraphVersion() {

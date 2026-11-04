@@ -72,10 +72,13 @@ public final class ExtractiveAnswerConsumer {
                     evidenceIds.add(item.getEvidenceId());
                     item.getGraphTraces().forEach(trace -> traceIds.add(trace.getQueryId()));
                     if (!item.getPaths().isEmpty()) {
-                        item.getPaths().forEach(path -> citations.add(new Citation(item.getEvidenceId(),
-                            citationSourceId, null, pathIdentity(path))));
+                        item.getPaths().forEach(path -> citations.add(
+                            new Citation(item.getEvidenceId(), citationSourceId, null,
+                                pathIdentity(path)).withProvenance(
+                                    provenance(request, item, source, path))));
                     } else {
-                        citations.add(new Citation(item.getEvidenceId(), citationSourceId));
+                        citations.add(new Citation(item.getEvidenceId(), citationSourceId)
+                            .withProvenance(provenance(request, item, source, null)));
                     }
                     remaining -= cost;
                 }
@@ -101,7 +104,8 @@ public final class ExtractiveAnswerConsumer {
                     }
                     selectedText.append(chunk.getText()).append('\n');
                     selectedCitations.add(new Citation(item.getEvidenceId(), citationSourceId,
-                        chunk.getChunkId()));
+                        chunk.getChunkId()).withProvenance(
+                            provenance(request, item, source, primaryPath(item))));
                     selectedCost = Math.addExact(selectedCost, estimate);
                 }
                 if (selectedCitations.isEmpty()) {
@@ -142,6 +146,64 @@ public final class ExtractiveAnswerConsumer {
     private static String pathIdentity(org.apache.geaflow.ai.retrieval.model.graph.GraphPathRef path) {
         return "hop=" + path.getHop() + ";vertices=" + String.join(",", path.getVertexIds())
             + ";edges=" + String.join(",", path.getEdgeIds());
+    }
+
+    private static org.apache.geaflow.ai.retrieval.model.graph.GraphPathRef primaryPath(
+        Evidence item) {
+        return item.getPaths().isEmpty() ? null : item.getPaths().get(0);
+    }
+
+    /**
+     * Builds the provenance bundle for one citation.
+     *
+     * <p>Gathers query identity, selected mode, anchor seed, source document, source URI and the
+     * ordered relation path so the design's traceability requirement holds for every citation, not
+     * only for graph hits. Text-only evidence still records query, mode and source document.
+     */
+    private static CitationProvenance provenance(AnswerRequest request, Evidence item,
+                                                 SourceRef source,
+                                                 org.apache.geaflow.ai.retrieval.model.graph.GraphPathRef pathRef) {
+        org.apache.geaflow.ai.retrieval.model.evidence.GraphEvidenceTrace trace =
+            item.getGraphTraces().isEmpty() ? null : item.getGraphTraces().get(0);
+        String queryId = null;
+        String mode = request.getMode();
+        String seedEntityId = null;
+        if (trace != null) {
+            queryId = trace.getQueryId();
+            if (trace.getSelectedMode() != null) {
+                mode = trace.getSelectedMode().name();
+            }
+            if (trace.getSeed() != null) {
+                seedEntityId = trace.getSeed().getEntityId();
+            }
+        }
+        if (queryId == null) {
+            queryId = request.getRequestId();
+        }
+        List<String> relationPath = new ArrayList<>();
+        int hop = 0;
+        if (pathRef != null) {
+            hop = pathRef.getHop();
+        }
+        if (trace != null) {
+            for (org.apache.geaflow.ai.retrieval.model.graph.GraphEdgeRef edge : trace.getPathEdges()) {
+                relationPath.add(edge.getLabel());
+            }
+            if (trace.getPath() != null) {
+                hop = Math.max(hop, trace.getPath().getHop());
+            }
+        }
+        if (relationPath.isEmpty() && pathRef != null) {
+            relationPath.addAll(pathRef.getEdgeIds());
+        }
+        String documentId = source == null ? null : source.getDocumentId();
+        String sourceUri = source == null ? null : source.getSourceUri();
+        if (documentId == null && !item.getChunks().isEmpty()) {
+            documentId = item.getChunks().get(0).getDocumentId();
+            sourceUri = item.getChunks().get(0).getSourceUri();
+        }
+        return new CitationProvenance(queryId, mode, seedEntityId, documentId, sourceUri,
+            relationPath, hop);
     }
 
     private static AnswerResponse abstain(String reason, AnswerRequest request) {

@@ -81,6 +81,10 @@ public class RetrievalTrace {
     private String fusionVersion;
     private String primaryConstraint;
     private double cascadeProbeScoreGap;
+    /** Threshold the measured probe score gap was compared against, in fusion units. */
+    private double cascadeMinProbeScoreGap;
+    /** Evidence count the probe had to reach before the graph stage was allowed to run. */
+    private int cascadeMinProbeEvidence;
     private String cascadeDecision;
     private String policyId;
     private String policyVersion;
@@ -524,6 +528,22 @@ public class RetrievalTrace {
 
     public void setCascadeProbeScoreGap(double value) {
         cascadeProbeScoreGap = value;
+    }
+
+    public double getCascadeMinProbeScoreGap() {
+        return cascadeMinProbeScoreGap;
+    }
+
+    public void setCascadeMinProbeScoreGap(double value) {
+        cascadeMinProbeScoreGap = value;
+    }
+
+    public int getCascadeMinProbeEvidence() {
+        return cascadeMinProbeEvidence;
+    }
+
+    public void setCascadeMinProbeEvidence(int value) {
+        cascadeMinProbeEvidence = value;
     }
 
     public String getCascadeDecision() {

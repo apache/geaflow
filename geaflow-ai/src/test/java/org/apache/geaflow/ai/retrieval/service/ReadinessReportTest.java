@@ -35,10 +35,10 @@ class ReadinessReportTest {
 
     @Test
     void reportsMissingBm25ArtifactInTheReason() {
-        RetrievalFixtureRegistry registry = new RetrievalFixtureRegistry();
+        RetrievalChannelRegistry registry = new RetrievalChannelRegistry();
         registry.register(GRAPH, VERSION, VERSION, null, null, chunks(), entities(), edges(), true);
 
-        RetrievalFixtureRegistry.ReadinessReport report = registry.readiness(GRAPH, VERSION, VERSION);
+        RetrievalChannelRegistry.ReadinessReport report = registry.readiness(GRAPH, VERSION, VERSION);
 
         assertEquals("BM25_NOT_READY", report.getComponents().get("bm25"),
             "an absent BM25 artifact must be visible as a component failure");
@@ -48,10 +48,10 @@ class ReadinessReportTest {
 
     @Test
     void componentsAreReportedIndividually() {
-        RetrievalFixtureRegistry registry = new RetrievalFixtureRegistry();
+        RetrievalChannelRegistry registry = new RetrievalChannelRegistry();
         registry.register(GRAPH, VERSION, VERSION, null, null, chunks(), entities(), edges(), true);
 
-        RetrievalFixtureRegistry.ReadinessReport report = registry.readiness(GRAPH, VERSION, VERSION);
+        RetrievalChannelRegistry.ReadinessReport report = registry.readiness(GRAPH, VERSION, VERSION);
 
         assertEquals("READY", report.getComponents().get("graph"));
         assertEquals("BM25_NOT_READY", report.getComponents().get("bm25"));
@@ -60,10 +60,10 @@ class ReadinessReportTest {
 
     @Test
     void unknownVersionIsNotReady() {
-        RetrievalFixtureRegistry registry = new RetrievalFixtureRegistry();
+        RetrievalChannelRegistry registry = new RetrievalChannelRegistry();
         registry.register(GRAPH, VERSION, VERSION, null, null, chunks(), entities(), edges(), true);
 
-        RetrievalFixtureRegistry.ReadinessReport report = registry.readiness(GRAPH, "v9", "v9");
+        RetrievalChannelRegistry.ReadinessReport report = registry.readiness(GRAPH, "v9", "v9");
 
         assertFalse(report.isReady());
         assertEquals("GRAPH_NOT_READY", report.getReason());
@@ -71,10 +71,10 @@ class ReadinessReportTest {
 
     @Test
     void unreadyFixtureIsNotReady() {
-        RetrievalFixtureRegistry registry = new RetrievalFixtureRegistry();
+        RetrievalChannelRegistry registry = new RetrievalChannelRegistry();
         registry.register(GRAPH, VERSION, VERSION, null, null, chunks(), entities(), edges(), false);
 
-        RetrievalFixtureRegistry.ReadinessReport report = registry.readiness(GRAPH, VERSION, VERSION);
+        RetrievalChannelRegistry.ReadinessReport report = registry.readiness(GRAPH, VERSION, VERSION);
 
         assertFalse(report.isReady(), "a staging fixture must not report ready");
     }

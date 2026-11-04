@@ -68,6 +68,7 @@ public final class RetrievalResponseValidator {
         if (trace.getExecutionMode() == null) {
             throw unsupported("unsupported execution mode in trace");
         }
+        validateAnswer(response);
         List<TraceStage> stages = trace.getStages();
         if (stages == null) {
             throw invalid("stages is required");
@@ -344,6 +345,31 @@ public final class RetrievalResponseValidator {
         if (value == null || value.trim().isEmpty()) {
             throw invalid(name + " is required");
         }
+    }
+
+
+    /**
+     * Enforces that a response either presents an answered result or an explicit abstention.
+     *
+     * <p>The extractive answer is what the EM/F1 metric reads, so an ambiguous response — an answer
+     * with no evidence, or a non-empty answer that also claims abstention — would silently corrupt
+     * an evaluation run rather than fail loudly.
+     */
+    private static void validateAnswer(RetrievalResponse response) {
+        String answer = response.getAnswer();
+        String abstention = response.getAnswerAbstentionReason();
+        boolean hasEvidence = response.getEvidence() != null && !response.getEvidence().isEmpty();
+        if (answer != null && answer.trim().isEmpty()) {
+            throw invalid("answer must be null or non-blank");
+        }
+        if (answer != null && abstention != null) {
+            throw invalid("a response must not both answer and abstain");
+        }
+        if (answer != null && !hasEvidence) {
+            throw invalid("an answered response must carry evidence to support it");
+        }
+        // A response that carries neither field is a legacy or hand-built response; absence is
+        // allowed so older clients keep working. Only contradictory combinations are rejected.
     }
 
     private static RetrievalException invalid(String message) {

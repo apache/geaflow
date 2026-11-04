@@ -40,7 +40,7 @@ import org.apache.geaflow.ai.retrieval.api.model.RetrievalResponse;
 import org.apache.geaflow.ai.retrieval.config.RetrievalProperties;
 import org.apache.geaflow.ai.retrieval.model.version.GraphVersion;
 import org.apache.geaflow.ai.retrieval.service.RecallService;
-import org.apache.geaflow.ai.retrieval.service.RetrievalFixtureRegistry;
+import org.apache.geaflow.ai.retrieval.service.RetrievalChannelRegistry;
 import org.junit.jupiter.api.Test;
 
 class CanonicalJsonlArtifactBridgeTest {
@@ -163,7 +163,7 @@ class CanonicalJsonlArtifactBridgeTest {
         properties.setArtifactVectorSource("fixture");
         properties.setArtifactVectorVersion("v1");
         properties.validateConfiguration();
-        RetrievalFixtureRegistry registry = new RetrievalFixtureRegistry();
+        RetrievalChannelRegistry registry = new RetrievalChannelRegistry();
         org.apache.geaflow.ai.retrieval.service.ArtifactBundleLoader loader =
             new org.apache.geaflow.ai.retrieval.service.ArtifactBundleLoader();
         setField(loader, "properties", properties);

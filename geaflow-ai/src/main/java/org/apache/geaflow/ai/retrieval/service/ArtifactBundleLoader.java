@@ -40,7 +40,7 @@ public final class ArtifactBundleLoader {
     @Inject
     private RetrievalProperties properties;
     @Inject
-    private RetrievalFixtureRegistry registry;
+    private RetrievalChannelRegistry registry;
 
     @Init
     public void initialize() {
@@ -54,6 +54,25 @@ public final class ArtifactBundleLoader {
             throw new RetrievalException(RetrievalErrorCode.INDEX_NOT_READY,
                 "unable to load retrieval artifact bundle", error);
         }
+    }
+
+    /**
+     * Loads one on-disk bundle without the dependency-injection container.
+     *
+     * <p>The design calls for a Java batch CLI that uses the same retrieval engine as the service,
+     * so batch runs and served runs cannot drift. This entry point lets that CLI reuse the exact
+     * bundle validation the service performs at startup.
+     *
+     * @param root bundle directory containing {@code READY.json}
+     * @param properties version pins and artifact paths for the bundle
+     * @param registry registry that receives the loaded fixture
+     */
+    public static void loadBundle(Path root, RetrievalProperties properties,
+                                  RetrievalChannelRegistry registry) throws IOException {
+        ArtifactBundleLoader loader = new ArtifactBundleLoader();
+        loader.properties = properties;
+        loader.registry = registry;
+        loader.load(root);
     }
 
     void load(Path root) throws IOException {

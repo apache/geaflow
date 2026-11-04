@@ -23,8 +23,10 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.function.LongSupplier;
@@ -37,7 +39,13 @@ import org.apache.lucene.analysis.standard.StandardAnalyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.LeafReaderContext;
+import org.apache.lucene.index.MultiTerms;
+import org.apache.lucene.index.Term;
+import org.apache.lucene.index.Terms;
+import org.apache.lucene.index.TermsEnum;
 import org.apache.lucene.queryparser.classic.QueryParser;
+import org.apache.lucene.search.BooleanClause;
+import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.Scorable;
@@ -45,6 +53,7 @@ import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.SimpleCollector;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
+import org.apache.lucene.util.BytesRef;
 
 /** Reusable bounded reader for a published Lucene BM25 artifact. */
 public final class Bm25IndexReader implements Closeable {
@@ -52,6 +61,8 @@ public final class Bm25IndexReader implements Closeable {
     private final DirectoryReader reader;
     private final IndexSearcher searcher;
     private final ArtifactIdentity identity;
+    /** Cached detection of the optional title/alias surface field; null means not yet probed. */
+    private Boolean hasSurfaceField;
 
     public Bm25IndexReader(Path artifact) {
         this(artifact, null, null);
@@ -139,8 +150,12 @@ public final class Bm25IndexReader implements Closeable {
         }
         BoundedCollector collector = new BoundedCollector(Integer.MAX_VALUE, deadlineNanos, clock);
         try (StandardAnalyzer analyzer = new StandardAnalyzer()) {
+            // Matched-term and IDF lookups touch the index, so they must run inside the same guard
+            // as the search: a closed reader has to surface as a typed retrieval error.
+            collector = new BoundedCollector(Integer.MAX_VALUE, deadlineNanos, clock,
+                matchedTerms(queryText));
             collector.checkDeadline();
-            Query query = new QueryParser("text", analyzer).parse(QueryParser.escape(queryText));
+            Query query = buildQuery(queryText, analyzer);
             collector.checkDeadline();
             searcher.search(query, collector);
             collector.checkDeadline();
@@ -157,7 +172,8 @@ public final class Bm25IndexReader implements Closeable {
         List<Bm25Hit> result = new ArrayList<>(resultSize);
         for (int index = 0; index < resultSize; index++) {
             Bm25Hit hit = collector.hits.get(index);
-            result.add(new Bm25Hit(hit.getChunkId(), hit.getDocumentId(), hit.getScore(), index + 1, hit.getText()));
+            result.add(new Bm25Hit(hit.getChunkId(), hit.getDocumentId(), hit.getScore(), index + 1,
+                hit.getText(), hit.getMatchedTerms(), hit.getAverageIdf()));
         }
         return new ChannelSearchResult<>(result, collector.evaluated, collector.reason);
     }
@@ -175,11 +191,15 @@ public final class Bm25IndexReader implements Closeable {
         }
         BoundedCollector collector = new BoundedCollector(candidateLimit, deadlineNanos, clock);
         try (StandardAnalyzer analyzer = new StandardAnalyzer()) {
+            // Matched-term and IDF lookups touch the index, so they must run inside the same guard
+            // as the search: a closed reader has to surface as a typed retrieval error.
+            collector = new BoundedCollector(candidateLimit, deadlineNanos, clock,
+                matchedTerms(queryText));
             collector.checkDeadline();
-            // Retrieval queries are natural language, not Lucene query syntax. Escaping here
-            // prevents punctuation in questions (for example "film (Film)?") from becoming
-            // parser operators and turning an otherwise valid request into HTTP 400.
-            Query query = new QueryParser("text", analyzer).parse(QueryParser.escape(queryText));
+            // Retrieval queries are natural language, not Lucene query syntax. buildQuery escapes
+            // them, so punctuation in questions (for example "film (Film)?") cannot become a parser
+            // operator and turn an otherwise valid request into HTTP 400.
+            Query query = buildQuery(queryText, analyzer);
             collector.checkDeadline();
             searcher.search(query, collector);
             collector.checkDeadline();
@@ -194,9 +214,113 @@ public final class Bm25IndexReader implements Closeable {
             .thenComparing(Bm25Hit::getDocumentId).thenComparing(Bm25Hit::getChunkId));
         List<Bm25Hit> result = new ArrayList<>();
         for (Bm25Hit hit : collector.hits) {
-            result.add(new Bm25Hit(hit.getChunkId(), hit.getDocumentId(), hit.getScore(), result.size() + 1, hit.getText()));
+            result.add(new Bm25Hit(hit.getChunkId(), hit.getDocumentId(), hit.getScore(),
+                result.size() + 1, hit.getText(), hit.getMatchedTerms(), hit.getAverageIdf()));
         }
         return new ChannelSearchResult<>(result, collector.evaluated, collector.reason);
+    }
+
+    /**
+     * Builds the retrieval query across the chunk body and the supplementary title/alias surface.
+     *
+     * <p>Both fields are searched with the same analyzer and an optional clause, so a query that
+     * matches only a document title or an entity alias still retrieves the chunk. Lexical surfaces
+     * produced before this field existed simply contribute nothing.
+     */
+    private Query buildQuery(String queryText, StandardAnalyzer analyzer)
+        throws org.apache.lucene.queryparser.classic.ParseException {
+        String escaped = QueryParser.escape(queryText);
+        Query body = new QueryParser("text", analyzer).parse(escaped);
+        BooleanQuery.Builder builder = new BooleanQuery.Builder();
+        builder.add(body, BooleanClause.Occur.SHOULD);
+        if (hasSurfaceField()) {
+            builder.add(new QueryParser(LuceneBm25IndexBuilder.SURFACE_FIELD, analyzer).parse(escaped),
+                BooleanClause.Occur.SHOULD);
+        }
+        return builder.build();
+    }
+
+    private boolean hasSurfaceField() {
+        if (hasSurfaceField == null) {
+            hasSurfaceField = Boolean.FALSE;
+            try {
+                for (LeafReaderContext context : reader.leaves()) {
+                    if (context.reader().getFieldInfos()
+                        .fieldInfo(LuceneBm25IndexBuilder.SURFACE_FIELD) != null) {
+                        hasSurfaceField = Boolean.TRUE;
+                        break;
+                    }
+                }
+            } catch (RuntimeException ignored) {
+                // An unreadable field map degrades to body-only search rather than failing.
+            }
+        }
+        return hasSurfaceField;
+    }
+
+    /**
+     * Returns the query terms that actually matched a chunk, plus their mean IDF.
+     *
+     * <p>The design requires matched terms and IDF statistics to be reported with every BM25 hit so
+     * lexical confidence is auditable. Terms are reported in query order.
+     */
+    private MatchedTerms matchedTerms(String queryText) {
+        Set<String> unique = new LinkedHashSet<>();
+        try (StandardAnalyzer analyzer = new StandardAnalyzer()) {
+            try (org.apache.lucene.analysis.TokenStream stream = analyzer.tokenStream("text", queryText)) {
+                org.apache.lucene.analysis.tokenattributes.CharTermAttribute attribute =
+                    stream.addAttribute(org.apache.lucene.analysis.tokenattributes.CharTermAttribute.class);
+                stream.reset();
+                while (stream.incrementToken()) {
+                    unique.add(attribute.toString());
+                }
+                stream.end();
+            }
+        } catch (IOException error) {
+            return new MatchedTerms(Collections.<String>emptyList(), 0.0D);
+        }
+        List<String> terms = new ArrayList<>();
+        double totalIdf = 0.0D;
+        for (String term : unique) {
+            double idf = inverseDocumentFrequency(new Term("text", term));
+            if (idf > 0.0D) {
+                terms.add(term);
+                totalIdf += idf;
+            }
+        }
+        return new MatchedTerms(terms, terms.isEmpty() ? 0.0D : totalIdf / terms.size());
+    }
+
+    private double inverseDocumentFrequency(Term term) {
+        try {
+            Terms terms = MultiTerms.getTerms(reader, term.field());
+            if (terms == null) {
+                return 0.0D;
+            }
+            TermsEnum iterator = terms.iterator();
+            if (!iterator.seekExact(new BytesRef(term.text()))) {
+                return 0.0D;
+            }
+            long docFreq = iterator.docFreq();
+            if (docFreq < 1L) {
+                return 0.0D;
+            }
+            int docCount = Math.max(1, reader.numDocs());
+            return Math.log(1.0D + (double) docCount / (double) docFreq);
+        } catch (IOException error) {
+            return 0.0D;
+        }
+    }
+
+    /** Query terms that survived matching, with their mean inverse document frequency. */
+    private static final class MatchedTerms {
+        private final List<String> terms;
+        private final double averageIdf;
+
+        private MatchedTerms(List<String> terms, double averageIdf) {
+            this.terms = Collections.unmodifiableList(new ArrayList<>(terms));
+            this.averageIdf = averageIdf;
+        }
     }
 
     @Override
@@ -214,15 +338,22 @@ public final class Bm25IndexReader implements Closeable {
         private final LongSupplier clock;
         private final List<Bm25Hit> hits = new ArrayList<>();
         private final Set<String> chunkIds = new HashSet<>();
+        private final MatchedTerms observedTerms;
         private Scorable scorer;
         private int docBase;
         private int evaluated;
         private RecallStopReason reason = RecallStopReason.COMPLETED;
 
         private BoundedCollector(int limit, long deadline, LongSupplier clock) {
+            this(limit, deadline, clock, new MatchedTerms(Collections.<String>emptyList(), 0.0D));
+        }
+
+        private BoundedCollector(int limit, long deadline, LongSupplier clock,
+                                 MatchedTerms observedTerms) {
             this.limit = limit;
             this.deadline = deadline;
             this.clock = clock;
+            this.observedTerms = observedTerms;
         }
 
         private void checkDeadline() {
@@ -260,7 +391,8 @@ public final class Bm25IndexReader implements Closeable {
                 || !chunkIds.add(chunkId)) {
                 throw new IOException("invalid or duplicate BM25 document");
             }
-            hits.add(new Bm25Hit(chunkId, documentId, score, 0, text));
+            hits.add(new Bm25Hit(chunkId, documentId, score, 0, text, observedTerms.terms,
+                observedTerms.averageIdf));
         }
 
         @Override

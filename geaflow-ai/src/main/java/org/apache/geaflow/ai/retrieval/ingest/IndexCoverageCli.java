@@ -29,15 +29,10 @@ import org.apache.geaflow.ai.retrieval.index.bm25.Bm25IndexReader;
 import org.apache.geaflow.ai.retrieval.index.vector.VectorIndexReader;
 
 /**
- * Computes BM25 and vector index coverage for a published bundle.
+ * Local execution entry point: reports how much of a published bundle is indexed.
  *
- * <p>The quality report records {@code index_coverage} so a release cannot claim READY while an
- * index silently covers only part of the corpus. Bundles published through the bridge do not run
- * the Python index builders, so their coverage stays empty; this tool fills it by opening the
- * artifact files and counting the chunks they actually contain.
- *
- * <p>Usage:
- * {@code IndexCoverageCli --bundle <dir> [--report <quality-report.json>]}.
+ * <p>This is a command-line driver, not part of the serving path. No production class calls it;
+ * operators run it against a bundle after publishing.
  */
 public final class IndexCoverageCli {
 

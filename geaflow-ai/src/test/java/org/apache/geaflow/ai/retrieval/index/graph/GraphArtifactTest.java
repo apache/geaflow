@@ -47,7 +47,7 @@ import org.apache.geaflow.ai.retrieval.model.graph.GraphEdgeRef;
 import org.apache.geaflow.ai.retrieval.model.graph.GraphVertexRef;
 import org.apache.geaflow.ai.retrieval.model.version.GraphVersion;
 import org.apache.geaflow.ai.retrieval.service.RecallService;
-import org.apache.geaflow.ai.retrieval.service.RetrievalFixtureRegistry;
+import org.apache.geaflow.ai.retrieval.service.RetrievalChannelRegistry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -101,7 +101,7 @@ class GraphArtifactTest {
                     new TextChunk("c1", "doc-1", 0, 0, 1, 1, "changed"))));
         }
 
-        RetrievalFixtureRegistry registry = new RetrievalFixtureRegistry();
+        RetrievalChannelRegistry registry = new RetrievalChannelRegistry();
         try {
             registry.loadGraph(GRAPH, VERSION, VERSION, firstArtifact, chunks);
             RecallService service = new RecallService(registry);
@@ -235,7 +235,7 @@ class GraphArtifactTest {
                  new OfflineGraphArtifactBuilder(tempDir).build(context(), chunks, entities, edges)) {
             artifact = tempDir.resolve("graph-v1.bin");
         }
-        RetrievalFixtureRegistry registry = new RetrievalFixtureRegistry();
+        RetrievalChannelRegistry registry = new RetrievalChannelRegistry();
         try {
             registry.loadGraph(GRAPH, VERSION, VERSION, artifact, chunks);
             org.apache.geaflow.ai.retrieval.api.model.RetrievalRequest request =
@@ -313,7 +313,7 @@ class GraphArtifactTest {
                 assertEquals(indexVersion, index.getMetadata().getIndexVersion().getVersion());
                 vectorPath = java.nio.file.Paths.get(index.getMetadata().getArtifactUri());
             }
-            try (RetrievalFixtureRegistry registry = new RetrievalFixtureRegistry()) {
+            try (RetrievalChannelRegistry registry = new RetrievalChannelRegistry()) {
                 registry.loadGraph(GRAPH, VERSION, indexVersion, graphPath, chunks);
                 assertTrue(registry.get(GRAPH, VERSION, indexVersion).isReady());
                 assertEquals(Arrays.asList("actual-v1", "actual-v2"),
@@ -327,7 +327,7 @@ class GraphArtifactTest {
         }
     }
 
-    private static List<String> retrieveGraphVertexIds(RetrievalFixtureRegistry registry,
+    private static List<String> retrieveGraphVertexIds(RetrievalChannelRegistry registry,
                                                          String indexVersion) {
         org.apache.geaflow.ai.retrieval.api.model.RetrievalRequest request =
             new org.apache.geaflow.ai.retrieval.api.model.RetrievalRequest();
@@ -398,7 +398,7 @@ class GraphArtifactTest {
         EntityRef incorrectHash = new EntityRef("e1", "Confucius", Collections.emptyList(),
             "person", Collections.singletonList("c1"), "dataset", "revision", "dev",
             "sha256:wrong");
-        try (RetrievalFixtureRegistry registry = new RetrievalFixtureRegistry()) {
+        try (RetrievalChannelRegistry registry = new RetrievalChannelRegistry()) {
             assertThrows(org.apache.geaflow.ai.retrieval.api.model.RetrievalException.class,
                 () -> registry.load(GRAPH, VERSION, VERSION, bm25Path,
                     tempDir.resolve("missing-vector"), chunks, Collections.singletonList(incorrectHash),

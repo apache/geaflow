@@ -35,7 +35,7 @@ import org.apache.geaflow.ai.retrieval.api.model.RetrievalError;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalException;
 import org.apache.geaflow.ai.retrieval.codec.RetrievalApiJson;
 import org.apache.geaflow.ai.retrieval.config.RetrievalProperties;
-import org.apache.geaflow.ai.retrieval.service.RetrievalFixtureRegistry;
+import org.apache.geaflow.ai.retrieval.service.RetrievalChannelRegistry;
 import org.apache.geaflow.ai.retrieval.service.RetrievalMetrics;
 import org.apache.geaflow.ai.retrieval.service.RetrievalService;
 import org.apache.geaflow.ai.search.VectorSearch;
@@ -72,7 +72,7 @@ public class GeaFlowMemoryServer {
     private RetrievalService retrievalService;
 
     @Inject
-    private RetrievalFixtureRegistry retrievalFixtureRegistry;
+    private RetrievalChannelRegistry retrievalFixtureRegistry;
 
     private static final RetrievalService FALLBACK_SERVICE = new RetrievalService(
         FALLBACK_CACHE, new RetrievalProperties(), FALLBACK_METRICS);
@@ -324,6 +324,7 @@ public class GeaFlowMemoryServer {
             return authenticationFailure;
         }
         ServerMemoryCache.ReadinessStatus status;
+        Map<String, String> readinessComponents = null;
         try {
             properties.validateConfiguration();
             String configuredGraph = properties.getArtifactBundleRoot() == null
@@ -336,7 +337,7 @@ public class GeaFlowMemoryServer {
                 // A published fixture is only usable when every artifact it needs is present.
                 // Checking the components individually keeps /ready honest instead of reporting
                 // green because some fixture happens to exist.
-                RetrievalFixtureRegistry.ReadinessReport report = bundleConfigured
+                RetrievalChannelRegistry.ReadinessReport report = bundleConfigured
                     ? retrievalFixtureRegistry.readiness(configuredGraph,
                         properties.getArtifactGraphVersion(), properties.getArtifactIndexVersion())
                     : retrievalFixtureRegistry.readiness(configuredGraph, null, null);
@@ -346,6 +347,7 @@ public class GeaFlowMemoryServer {
                 } else if (bundleConfigured) {
                     status = new ServerMemoryCache.ReadinessStatus(false, configuredGraph,
                         properties.getArtifactGraphVersion(), report.getReason());
+                    readinessComponents = report.getComponents();
                 }
             }
         } catch (RetrievalException exception) {
@@ -355,7 +357,7 @@ public class GeaFlowMemoryServer {
         ctx.status(status.isReady() ? 200 : 503);
         ctx.contentType("application/json; charset=utf-8");
         return readyBody(status.isReady(), status.getGraphName(), status.getGraphVersion(),
-            status.getReason());
+            status.getReason(), readinessComponents);
     }
 
     /**
@@ -367,6 +369,18 @@ public class GeaFlowMemoryServer {
      * re-serializes the map and would drop the explicit JSON null placeholders.
      */
     static String readyBody(boolean ready, String graphName, String graphVersion, String reason) {
+        return readyBody(ready, graphName, graphVersion, reason, null);
+    }
+
+    /**
+     * Serializes readiness with the per-artifact outcome that produced it.
+     *
+     * <p>A bare {@code reason} tells a caller that something is missing but not which artifact.
+     * Publishing the component map lets an operator (and a contract test) distinguish a broken
+     * graph from a missing BM25 or vector index without reading server logs.
+     */
+    static String readyBody(boolean ready, String graphName, String graphVersion, String reason,
+                            Map<String, String> components) {
         StringBuilder body = new StringBuilder("{\"status\":");
         appendJsonString(body, ready ? "READY" : "NOT_READY");
         body.append(",\"graphName\":");
@@ -375,6 +389,20 @@ public class GeaFlowMemoryServer {
         appendJsonString(body, graphVersion);
         body.append(",\"reason\":");
         appendJsonString(body, reason);
+        if (components != null) {
+            body.append(",\"components\":{");
+            boolean first = true;
+            for (Map.Entry<String, String> entry : components.entrySet()) {
+                if (!first) {
+                    body.append(',');
+                }
+                first = false;
+                appendJsonString(body, entry.getKey());
+                body.append(':');
+                appendJsonString(body, entry.getValue());
+            }
+            body.append('}');
+        }
         return body.append('}').toString();
     }
 

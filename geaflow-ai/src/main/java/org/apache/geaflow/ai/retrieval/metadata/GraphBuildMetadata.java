@@ -39,6 +39,8 @@ public final class GraphBuildMetadata {
     private final String tombstoneUri;
     private final String deltaDigest;
     private final String statisticsVersion;
+    /** Versioned association-score components; null for artifacts published before them. */
+    private AssociationScoreMetadata associationScoreMetadata;
 
     /** Creates graph metadata with the artifact details used by the current build. */
     public GraphBuildMetadata(
@@ -252,6 +254,22 @@ public final class GraphBuildMetadata {
 
     public String getStatisticsVersion() {
         return statisticsVersion;
+    }
+
+    /**
+     * Returns the versioned association-score components, or null when the artifact predates them.
+     *
+     * <p>The design requires the components and their versions in build metadata so a published
+     * graph is scored identically on every replay.
+     */
+    public AssociationScoreMetadata getAssociationScoreMetadata() {
+        return associationScoreMetadata;
+    }
+
+    /** Attaches the association-score components recorded by the graph builder. */
+    public GraphBuildMetadata withAssociationScoreMetadata(AssociationScoreMetadata value) {
+        this.associationScoreMetadata = value;
+        return this;
     }
 
     public boolean isDelta() {

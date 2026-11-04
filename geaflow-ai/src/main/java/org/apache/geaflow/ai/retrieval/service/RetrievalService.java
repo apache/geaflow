@@ -33,6 +33,7 @@ import org.apache.geaflow.ai.retrieval.api.model.RetrievalResponse;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalTrace;
 import org.apache.geaflow.ai.retrieval.api.model.TraceStage;
 import org.apache.geaflow.ai.retrieval.config.RetrievalProperties;
+import org.apache.geaflow.ai.retrieval.fusion.WeightedRrfConfig;
 import org.apache.geaflow.ai.service.ServerMemoryCache;
 import org.noear.solon.annotation.Component;
 import org.noear.solon.annotation.Init;
@@ -53,7 +54,7 @@ public class RetrievalService {
     @Inject
     private RetrievalMetrics metrics;
     @Inject
-    private RetrievalFixtureRegistry fixtureRegistry;
+    private RetrievalChannelRegistry fixtureRegistry;
     private RetrievalRequestValidator validator;
     private final EvidenceMapper evidenceMapper = new EvidenceMapper();
 
@@ -72,7 +73,7 @@ public class RetrievalService {
 
     /** Creates the HTTP-facing service with an optional versioned GraphRAG registry. */
     public RetrievalService(ServerMemoryCache cache, RetrievalProperties properties,
-                            RetrievalMetrics metrics, RetrievalFixtureRegistry fixtureRegistry) {
+                            RetrievalMetrics metrics, RetrievalChannelRegistry fixtureRegistry) {
         this.cache = cache;
         this.properties = properties;
         this.metrics = metrics;
@@ -85,6 +86,12 @@ public class RetrievalService {
     public void initialize() {
         properties.validateConfiguration();
         validator = new RetrievalRequestValidator(properties);
+    }
+
+    /** Builds a recall service that honours the configured routing policy and fusion weights. */
+    private RecallService recallService() {
+        return RecallService.fromProperties(fixtureRegistry, WeightedRrfConfig.DEFAULT,
+            System::nanoTime, properties);
     }
 
     public RetrievalResponse retrieve(RetrievalRequest request) {
@@ -100,7 +107,11 @@ public class RetrievalService {
                     throw new RetrievalException(RetrievalErrorCode.UNSUPPORTED_OPTION,
                         "structured retrieval registry is not configured");
                 }
-                RetrievalResponse response = new RecallService(fixtureRegistry).retrieve(request, requestId);
+                // Build the recall service from the injected properties. Constructing it with the
+                // bare registry silently ignored every retrieval.deterministic-rule.*,
+                // retrieval.graph.*, and retrieval.rrf-* setting, so the routing policy ran on
+                // hard-coded defaults and configuration changes had no effect on the wire.
+                RetrievalResponse response = recallService().retrieve(request, requestId);
                 metrics.recordResponse(response);
                 metrics.recordSuccess(elapsedMs(startedAt));
                 return response;

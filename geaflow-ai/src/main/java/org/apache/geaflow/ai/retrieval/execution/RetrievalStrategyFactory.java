@@ -36,8 +36,23 @@ public final class RetrievalStrategyFactory {
     }
 
     public static Reranker reranker(String id) {
+        return reranker(id, 0.0D);
+    }
+
+    /**
+     * Resolves the reranker with the configured graph path-quality weight.
+     *
+     * <p>{@code graphPathWeight} defaults to zero, which keeps the reranker's output identical to
+     * the pre-configuration behaviour while making the design's "path quality as a secondary
+     * feature" measurable.
+     *
+     * @param id configured reranker identifier
+     * @param graphPathWeight configured weight of the graph path-quality feature
+     * @return the resolved reranker
+     */
+    public static Reranker reranker(String id, double graphPathWeight) {
         if (DETERMINISTIC_RERANKER.equals(normalize(id))) {
-            return new DeterministicReranker();
+            return new DeterministicReranker(graphPathWeight);
         }
         throw unsupported("reranker", id);
     }
@@ -55,7 +70,11 @@ public final class RetrievalStrategyFactory {
                 properties.getHighScoreGap(), properties.getLongQueryLength(),
                 properties.getStrongAnchorConfidence(), properties.getMinimumAnchorCount(),
                 properties.getHighCandidateDegree(), properties.getHighGrowthRate(),
-                properties.getBaseNeighborCap());
+                properties.getBaseNeighborCap(),
+                properties.getGraphFusionGraphWeight(), properties.getGraphFusionTextWeight(),
+                properties.getGraphProbeShare(), properties.getLexicalBm25Weight(),
+                properties.getLexicalVectorWeight(), properties.getSemanticBm25Weight(),
+                properties.getSemanticVectorWeight());
         }
         throw unsupported("routing policy", id);
     }

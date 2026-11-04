@@ -23,6 +23,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -34,6 +35,7 @@ import org.apache.geaflow.ai.retrieval.metadata.QualityCounters;
 import org.apache.geaflow.ai.retrieval.model.document.RetrievalIds;
 import org.apache.geaflow.ai.retrieval.model.document.SourceDocument;
 import org.apache.geaflow.ai.retrieval.model.document.TextChunk;
+import org.apache.geaflow.ai.retrieval.model.graph.EntityRef;
 
 /** Deterministic orchestration boundary for source, graph, and index builders. */
 public final class IngestionPipeline {
@@ -76,7 +78,9 @@ public final class IngestionPipeline {
             GraphArtifact graph = Objects.requireNonNull(
                 graphWriter.write(context, documents, chunks, extraction), "graph artifact");
             graphArtifacts.add(graph);
-            IndexArtifact bm25 = Objects.requireNonNull(bm25Builder.build(context, chunks), "bm25 artifact");
+            IndexArtifact bm25 = Objects.requireNonNull(
+                bm25Builder.build(context, chunks, chunkSurfaces(documents, chunks, extraction)),
+                "bm25 artifact");
             indexArtifacts.add(bm25);
             IndexArtifact vector = Objects.requireNonNull(vectorBuilder.build(context, chunks), "vector artifact");
             indexArtifacts.add(vector);
@@ -106,6 +110,50 @@ public final class IngestionPipeline {
         } finally {
             closeAll(indexArtifacts, null);
             closeAll(graphArtifacts, null);
+        }
+    }
+
+    /**
+     * Builds the per-chunk supplementary lexical surface used by the BM25 index.
+     *
+     * <p>The design requires title and entity aliases to be indexed alongside the chunk body. The
+     * title comes from the owning source document; the aliases come from every entity extracted
+     * from the chunk, so a query naming an alias still retrieves the supporting text.
+     */
+    private static Map<String, List<String>> chunkSurfaces(List<SourceDocument> documents,
+                                                           List<TextChunk> chunks,
+                                                           ExtractionResult extraction) {
+        Map<String, String> titleByDocument = new HashMap<>();
+        for (SourceDocument document : documents) {
+            titleByDocument.put(document.getDocumentId(), document.getTitle());
+        }
+        Map<String, List<String>> aliasesByChunk = new HashMap<>();
+        for (EntityRef entity : extraction.getEntities()) {
+            for (String chunkId : entity.getSourceChunkIds()) {
+                List<String> surfaces = aliasesByChunk.computeIfAbsent(chunkId,
+                    key -> new ArrayList<>());
+                addSurface(surfaces, entity.getCanonicalName());
+                for (String alias : entity.getAliases()) {
+                    addSurface(surfaces, alias);
+                }
+            }
+        }
+        Map<String, List<String>> result = new LinkedHashMap<>();
+        for (TextChunk chunk : chunks) {
+            List<String> surfaces = new ArrayList<>();
+            addSurface(surfaces, titleByDocument.get(chunk.getDocumentId()));
+            surfaces.addAll(aliasesByChunk.getOrDefault(chunk.getChunkId(),
+                Collections.<String>emptyList()));
+            if (!surfaces.isEmpty()) {
+                result.put(chunk.getChunkId(), surfaces);
+            }
+        }
+        return result;
+    }
+
+    private static void addSurface(List<String> surfaces, String value) {
+        if (value != null && !value.trim().isEmpty() && !surfaces.contains(value)) {
+            surfaces.add(value);
         }
     }
 

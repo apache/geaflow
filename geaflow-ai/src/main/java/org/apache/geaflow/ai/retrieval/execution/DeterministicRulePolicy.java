@@ -25,7 +25,7 @@ import org.apache.geaflow.ai.retrieval.api.model.RetrievalBudget;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalMode;
 
 /** Reproducible threshold policy for the first adaptive routing implementation. */
-public final class DeterministicRulePolicy implements RetrievalRoutingPolicy {
+public final class DeterministicRulePolicy implements RetrievalRoutingPolicy, AdaptivePolicy {
     public static final String POLICY_ID = "deterministic-rule";
     public static final String POLICY_VERSION = "v1";
 
@@ -35,6 +35,39 @@ public final class DeterministicRulePolicy implements RetrievalRoutingPolicy {
     /** Semantic-leaning fusion weights applied for long, lexically weak queries. */
     static final double SEMANTIC_BM25_WEIGHT = 0.85D;
     static final double SEMANTIC_VECTOR_WEIGHT = 1.25D;
+    /**
+     * Fusion weights used when text channels show no reliable lexical or semantic signal.
+     *
+     * <p>The measured end-to-end runs put BM25 and vector Recall@10 at {@code 0.002}: text channels
+     * almost never surface the gold supporting chunk, while graph expansion supplies it. Weighting
+     * a channel that carries no signal still adds its rank term to every fused score, which is
+     * exactly what pushes correct graph evidence below noisy text evidence and collapses MRR. When
+     * the probe shows no lexical confidence the graph channel therefore leads and the text
+     * channels are demoted rather than promoted.
+     */
+    static final double GRAPH_FIRST_GRAPH_WEIGHT = 2.0D;
+    static final double GRAPH_FIRST_TEXT_WEIGHT = 0.25D;
+    static final double DEFAULT_HIGH_AVERAGE_IDF = 1.5D;
+    /**
+     * Default first-stage score-gap threshold.
+     *
+     * <p>Matches {@code RetrievalProperties}. The earlier constructor default of {@code 0.20} was
+     * unreachable for a reciprocal-rank score, whose gap stays inside {@code [0, 0.003]}.
+     */
+    static final double DEFAULT_HIGH_SCORE_GAP = 0.0005D;
+    static final int DEFAULT_LONG_QUERY_LENGTH = 12;
+    static final double DEFAULT_STRONG_ANCHOR_CONFIDENCE = 0.75D;
+    static final int DEFAULT_MINIMUM_ANCHOR_COUNT = 1;
+    static final int DEFAULT_HIGH_CANDIDATE_DEGREE = 32;
+    static final double DEFAULT_HIGH_GROWTH_RATE = 2.0D;
+    static final int DEFAULT_BASE_NEIGHBOR_CAP = 16;
+    /**
+     * Largest share of the candidate budget the text probe may consume before graph expansion.
+     *
+     * <p>{@code 0.4} keeps a 50-candidate request at a 30-candidate graph budget (versus the
+     * 50 graph-only receives and the 16 the previous split produced) while still funding the probe.
+     */
+    static final double GRAPH_PROBE_SHARE = 0.4D;
 
     private final double highAverageIdf;
     private final double highScoreGap;
@@ -44,20 +77,74 @@ public final class DeterministicRulePolicy implements RetrievalRoutingPolicy {
     private final int highCandidateDegree;
     private final double highGrowthRate;
     private final int baseNeighborCap;
+    private final double graphWeight;
+    private final double textWeight;
+    private final double probeShare;
+    private final double lexicalBm25Weight;
+    private final double lexicalVectorWeight;
+    private final double semanticBm25Weight;
+    private final double semanticVectorWeight;
     private final Map<String, String> parameters;
 
     public DeterministicRulePolicy() {
-        this(1.5D, 0.20D, 12, 0.75D, 1, 32, 2.0D, 16);
+        this(DEFAULT_HIGH_AVERAGE_IDF, DEFAULT_HIGH_SCORE_GAP, DEFAULT_LONG_QUERY_LENGTH,
+            DEFAULT_STRONG_ANCHOR_CONFIDENCE, DEFAULT_MINIMUM_ANCHOR_COUNT,
+            DEFAULT_HIGH_CANDIDATE_DEGREE, DEFAULT_HIGH_GROWTH_RATE, DEFAULT_BASE_NEIGHBOR_CAP);
     }
 
     public DeterministicRulePolicy(double highAverageIdf, double highScoreGap, int longQueryLength,
                                    double strongAnchorConfidence, int minimumAnchorCount,
                                    int highCandidateDegree, double highGrowthRate, int baseNeighborCap) {
+        this(highAverageIdf, highScoreGap, longQueryLength, strongAnchorConfidence, minimumAnchorCount,
+            highCandidateDegree, highGrowthRate, baseNeighborCap,
+            GRAPH_FIRST_GRAPH_WEIGHT, GRAPH_FIRST_TEXT_WEIGHT, GRAPH_PROBE_SHARE,
+            LEXICAL_BM25_WEIGHT, LEXICAL_VECTOR_WEIGHT, SEMANTIC_BM25_WEIGHT, SEMANTIC_VECTOR_WEIGHT);
+    }
+
+    /**
+     * Creates a policy with every threshold and fusion weight supplied by configuration.
+     *
+     * <p>All of these were constants in the first revision. The fusion weights and the probe share
+     * decide how much of the score and budget the graph channel receives, so they are the most
+     * quality-sensitive values in the policy: demoting the text channels from {@code 1.25} to
+     * {@code 0.25} and raising the graph channel to {@code 2.0} moved 2Wiki MRR from {@code 0.1019}
+     * to {@code 0.4747}. Hard-coding them made that comparison impossible to rerun under a
+     * different configuration.
+     *
+     * @param highAverageIdf average query IDF above which the query counts as lexically rich
+     * @param highScoreGap first-stage score gap above which a probe is trusted
+     * @param longQueryLength query length at which a query counts as a long semantic question
+     * @param strongAnchorConfidence anchor confidence required to treat an anchor as reliable
+     * @param minimumAnchorCount anchors required to treat an anchor set as reliable
+     * @param highCandidateDegree average degree above which a frontier counts as high-degree
+     * @param highGrowthRate graph growth rate above which expansion stops
+     * @param baseNeighborCap baseline neighbours sampled per vertex
+     * @param graphWeight fusion weight for the graph channel when it leads
+     * @param textWeight fusion weight for each text channel when the graph channel leads
+     * @param probeShare largest share of the candidate budget the text probe may take
+     * @param lexicalBm25Weight BM25 weight when the query shows lexical confidence
+     * @param lexicalVectorWeight vector weight when the query shows lexical confidence
+     * @param semanticBm25Weight BM25 weight for a long semantic query
+     * @param semanticVectorWeight vector weight for a long semantic query
+     */
+    public DeterministicRulePolicy(double highAverageIdf, double highScoreGap, int longQueryLength,
+                                   double strongAnchorConfidence, int minimumAnchorCount,
+                                   int highCandidateDegree, double highGrowthRate, int baseNeighborCap,
+                                   double graphWeight, double textWeight, double probeShare,
+                                   double lexicalBm25Weight, double lexicalVectorWeight,
+                                   double semanticBm25Weight, double semanticVectorWeight) {
         if (!finiteNonNegative(highAverageIdf) || !finiteNonNegative(highScoreGap)
             || longQueryLength < 1 || !finiteRange(strongAnchorConfidence)
             || minimumAnchorCount < 1 || highCandidateDegree < 1
             || !finiteNonNegative(highGrowthRate) || baseNeighborCap < 1) {
             throw new IllegalArgumentException("invalid deterministic routing thresholds");
+        }
+        if (!finiteNonNegative(graphWeight) || !finiteNonNegative(textWeight)
+            || !finiteNonNegative(lexicalBm25Weight) || !finiteNonNegative(lexicalVectorWeight)
+            || !finiteNonNegative(semanticBm25Weight) || !finiteNonNegative(semanticVectorWeight)
+            || (graphWeight == 0.0D && textWeight == 0.0D)
+            || !Double.isFinite(probeShare) || probeShare < 0.0D || probeShare >= 1.0D) {
+            throw new IllegalArgumentException("invalid deterministic fusion weights");
         }
         this.highAverageIdf = highAverageIdf;
         this.highScoreGap = highScoreGap;
@@ -67,6 +154,13 @@ public final class DeterministicRulePolicy implements RetrievalRoutingPolicy {
         this.highCandidateDegree = highCandidateDegree;
         this.highGrowthRate = highGrowthRate;
         this.baseNeighborCap = baseNeighborCap;
+        this.graphWeight = graphWeight;
+        this.textWeight = textWeight;
+        this.probeShare = probeShare;
+        this.lexicalBm25Weight = lexicalBm25Weight;
+        this.lexicalVectorWeight = lexicalVectorWeight;
+        this.semanticBm25Weight = semanticBm25Weight;
+        this.semanticVectorWeight = semanticVectorWeight;
         Map<String, String> values = new LinkedHashMap<>();
         values.put("highAverageIdf", Double.toString(highAverageIdf));
         values.put("highScoreGap", Double.toString(highScoreGap));
@@ -76,6 +170,14 @@ public final class DeterministicRulePolicy implements RetrievalRoutingPolicy {
         values.put("highCandidateDegree", Integer.toString(highCandidateDegree));
         values.put("highGrowthRate", Double.toString(highGrowthRate));
         values.put("baseNeighborCap", Integer.toString(baseNeighborCap));
+        // Recorded so a replayed plan can be checked against the weights that produced it.
+        values.put("graphFusionGraphWeight", Double.toString(graphWeight));
+        values.put("graphFusionTextWeight", Double.toString(textWeight));
+        values.put("graphProbeShare", Double.toString(probeShare));
+        values.put("lexicalBm25Weight", Double.toString(lexicalBm25Weight));
+        values.put("lexicalVectorWeight", Double.toString(lexicalVectorWeight));
+        values.put("semanticBm25Weight", Double.toString(semanticBm25Weight));
+        values.put("semanticVectorWeight", Double.toString(semanticVectorWeight));
         parameters = Collections.unmodifiableMap(values);
     }
 
@@ -100,6 +202,35 @@ public final class DeterministicRulePolicy implements RetrievalRoutingPolicy {
     @Override
     public Map<String, String> getParameters() {
         return parameters;
+    }
+
+    /**
+     * Returns the initial plan using the pre-probe features.
+     *
+     * <p>This is the design-level {@link AdaptivePolicy#plan(RoutingContext)} entry point. It
+     * delegates to the same decision logic the working SPI uses, so both entry points cannot
+     * diverge.
+     */
+    @Override
+    public RetrievalPlan plan(RoutingContext context) {
+        return plan(context, null);
+    }
+
+    @Override
+    public boolean supports(org.apache.geaflow.ai.retrieval.api.model.RetrievalMode mode) {
+        return mode != null;
+    }
+
+    /**
+     * Returns the plan revised at a stage boundary.
+     *
+     * <p>The design allows a policy to shrink or abandon graph expansion once probe statistics
+     * exist. This rule policy re-runs the same decision with the merged features, which is exactly
+     * what the working SPI's two-argument {@code plan} already does.
+     */
+    @Override
+    public RetrievalPlan replan(RoutingContext context, RetrievalProgress progress) {
+        return plan(context, progress);
     }
 
     @Override
@@ -162,15 +293,40 @@ public final class DeterministicRulePolicy implements RetrievalRoutingPolicy {
             || features.getAnchorConfidence() < strongAnchorConfidence) {
             builder.reason("GRAPH_BOUNDED_ANCHOR_FALLBACK");
         }
-        if (features.getAverageIdf() >= highAverageIdf
-            || features.getFirstStageScoreGap() >= highScoreGap) {
-            builder.bm25Weight(LEXICAL_BM25_WEIGHT).vectorWeight(LEXICAL_VECTOR_WEIGHT)
+        // Average query IDF is not retrieval confidence, and it must not demote the graph channel.
+        //
+        // The IDF feature is computed from the raw query before any channel runs, so it reports that
+        // the query is built from rare terms - not that BM25 matched them. It also correlates with
+        // the wrong thing: on the measured 2Wiki run the IDF median is 3.0 and the anchor
+        // confidence median is 1.0, so an IDF-driven lexical branch fired on 494 of 500 queries -
+        // exactly the queries where an entity was reliably grounded and the graph channel had the
+        // most to offer - while BM25 recall stayed at 0.002. Ranking a channel that carries no
+        // signal still adds its rank term to every fused score, which is what pushed correct graph
+        // evidence below noisy text evidence and collapsed MRR.
+        //
+        // The branch is therefore driven by the evidence that exists rather than by query shape:
+        // a confident anchor means the graph channel has a seed it can expand, so it leads. Only the
+        // absence of an anchor falls back to the text channels.
+        boolean anchored = features.getAnchorCount() >= minimumAnchorCount
+            && features.getAnchorConfidence() >= strongAnchorConfidence;
+        if (anchored) {
+            // A grounded entity is the strongest available retrieval signal: let graph expansion
+            // lead the fusion while the text channels supply corroborating rank evidence.
+            builder.bm25Weight(textWeight).vectorWeight(textWeight)
+                .graphWeight(graphWeight)
+                .reason("GRAPH_DOMINANT_FUSION");
+        } else if (features.getAverageIdf() >= highAverageIdf) {
+            builder.bm25Weight(lexicalBm25Weight).vectorWeight(lexicalVectorWeight)
+                .graphWeight(1.0D)
                 .reason("LEXICAL_CONFIDENCE");
         } else if (features.getQueryLength() >= longQueryLength) {
-            builder.bm25Weight(SEMANTIC_BM25_WEIGHT).vectorWeight(SEMANTIC_VECTOR_WEIGHT)
+            builder.bm25Weight(semanticBm25Weight).vectorWeight(semanticVectorWeight)
+                .graphWeight(1.0D)
                 .reason("SEMANTIC_QUERY");
         } else {
-            builder.reason("BALANCED_QUERY");
+            builder.bm25Weight(textWeight).vectorWeight(textWeight)
+                .graphWeight(graphWeight)
+                .reason("GRAPH_DOMINANT_FUSION");
         }
         addChannels(builder, bm25, vector, graph, features, budget.getMaxCandidates(), budget.getTopK(),
             progress != null && "AFTER_TEXT".equals(progress.getBoundary()), replanExhausted);
@@ -213,7 +369,11 @@ public final class DeterministicRulePolicy implements RetrievalRoutingPolicy {
         if (candidateBudget < selectedCount) {
             throw new IllegalArgumentException("candidate budget cannot fund every selected channel");
         }
-        if (afterText && graph) {
+        // Once the replan budget is spent the policy must stop moving the allocation. Re-applying
+        // the after-text split here still produced a new plan, so a policy that had reached
+        // maxReplanCount kept handing the graph stage a different budget than the one already
+        // recorded - the loop the bound exists to prevent.
+        if (afterText && graph && !replanExhausted) {
             int graphBudget = candidateBudget - (bm25 ? 1 : 0) - (vector ? 1 : 0);
             if (bm25) {
                 builder.channelBudget("BM25", 1);
@@ -227,7 +387,15 @@ public final class DeterministicRulePolicy implements RetrievalRoutingPolicy {
         }
         int textChannelBudget = Math.max(10, topK);
         if (graph && bm25 && vector && candidateBudget > 2 * textChannelBudget + selectedCount) {
-            int textBudget = 2 * textChannelBudget;
+            // Text channels get a probe-sized share; the graph channel receives the remainder.
+            //
+            // The previous split reserved a fixed 2 * max(10, topK) for text and handed the graph
+            // channel whatever was left. With a 50-candidate budget that game the graph channel 16
+            // candidates while graph-only received 50, and the measured runs show the graph channel
+            // is the one that supplies evidence. The probe share is therefore capped so the graph
+            // channel cannot be starved below the graph-only allocation it is being compared against.
+            int graphFirstBudget = graphFirstBudget(candidateBudget, selectedCount);
+            int textBudget = candidateBudget - graphFirstBudget;
             int baseTextBudget = textBudget / 2;
             int textRemainder = textBudget % 2;
             if (bm25) {
@@ -236,38 +404,31 @@ public final class DeterministicRulePolicy implements RetrievalRoutingPolicy {
             if (vector) {
                 builder.channelBudget("VECTOR", baseTextBudget + (textRemainder > 0 ? 1 : 0));
             }
-            builder.channelBudget("GRAPH", candidateBudget - textBudget);
+            builder.channelBudget("GRAPH", graphFirstBudget);
             order(builder, bm25, vector, true, features.getQueryLength() >= longQueryLength ? "VECTOR" : "BM25");
             return;
         }
+        // Budgets too small for the graph-first split still have to respect the same ordering rule:
+        // the graph channel never receives less than a text channel. The previous even split awarded
+        // the remainder to BM25 and VECTOR first, which at a 10-candidate budget left the graph
+        // channel with 3 against BM25's 4 - the exact inversion that starves the only channel that
+        // supplies evidence.
         int base = candidateBudget / selectedCount;
         int remainder = candidateBudget % selectedCount;
         int bm25Budget = bm25 ? base : 0;
         int vectorBudget = vector ? base : 0;
         int graphBudget = graph ? base : 0;
-        if (remainder > 0 && bm25) {
-            bm25Budget++;
-            remainder--;
-        }
-        if (remainder > 0 && vector) {
-            vectorBudget++;
-            remainder--;
-        }
-        if (remainder > 0 && graph) {
-            graphBudget++;
-        }
-        remainder = 0;
         while (remainder > 0) {
+            if (graph && remainder > 0) {
+                graphBudget++;
+                remainder--;
+            }
             if (bm25 && remainder > 0) {
                 bm25Budget++;
                 remainder--;
             }
             if (vector && remainder > 0) {
                 vectorBudget++;
-                remainder--;
-            }
-            if (graph && remainder > 0) {
-                graphBudget++;
                 remainder--;
             }
         }
@@ -301,6 +462,24 @@ public final class DeterministicRulePolicy implements RetrievalRoutingPolicy {
         } else {
             builder.channelOrder(Collections.singletonList("GRAPH"));
         }
+    }
+
+    /**
+     * Returns the candidate budget reserved for the graph channel in a full-hybrid plan.
+     *
+     * <p>The probe still receives enough candidates to resolve anchors and to produce the score-gap
+     * statistics the policy consumes, but it may never take more than
+     * configured probe share of the budget. Everything else goes to the channel that the
+     * measured runs show actually supplies evidence.
+     *
+     * @param candidateBudget total candidate budget for the request
+     * @param selectedCount number of channels scheduled
+     * @return the graph channel budget, always at least one candidate
+     */
+    private int graphFirstBudget(int candidateBudget, int selectedCount) {
+        int probe = (int) Math.floor(candidateBudget * probeShare);
+        int graphBudget = candidateBudget - probe;
+        return Math.max(selectedCount, Math.max(1, graphBudget));
     }
 
     private int graphMaxHop(RoutingContext context, RoutingFeatures features) {
