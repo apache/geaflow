@@ -60,7 +60,18 @@ public final class DeterministicRulePolicy implements AdaptivePolicy {
     static final int DEFAULT_MINIMUM_ANCHOR_COUNT = 1;
     static final int DEFAULT_HIGH_CANDIDATE_DEGREE = 32;
     static final double DEFAULT_HIGH_GROWTH_RATE = 2.0D;
+    /**
+     * Default marginal-yield stop threshold.
+     *
+     * <p>Zero disables the stop, matching the graph retriever's documented default. The value is
+     * kept as a named threshold so a benchmark can pin it in the policy parameters.
+     */
+    static final double DEFAULT_MIN_MARGINAL_YIELD = 0.0D;
     static final int DEFAULT_BASE_NEIGHBOR_CAP = 16;
+    /** Stage boundaries the policy distinguishes. */
+    static final String BOUNDARY_AFTER_TEXT = "AFTER_TEXT";
+    static final String BOUNDARY_AFTER_TEXT_PROBE = "AFTER_TEXT_PROBE";
+    static final String BOUNDARY_AFTER_GRAPH_HOP = "AFTER_GRAPH_HOP";
     /**
      * Largest share of the candidate budget the text probe may consume before graph expansion.
      *
@@ -76,6 +87,7 @@ public final class DeterministicRulePolicy implements AdaptivePolicy {
     private final int minimumAnchorCount;
     private final int highCandidateDegree;
     private final double highGrowthRate;
+    private final double minMarginalYield;
     private final int baseNeighborCap;
     private final double graphWeight;
     private final double textWeight;
@@ -89,27 +101,35 @@ public final class DeterministicRulePolicy implements AdaptivePolicy {
     public DeterministicRulePolicy() {
         this(DEFAULT_HIGH_AVERAGE_IDF, DEFAULT_HIGH_SCORE_GAP, DEFAULT_LONG_QUERY_LENGTH,
             DEFAULT_STRONG_ANCHOR_CONFIDENCE, DEFAULT_MINIMUM_ANCHOR_COUNT,
-            DEFAULT_HIGH_CANDIDATE_DEGREE, DEFAULT_HIGH_GROWTH_RATE, DEFAULT_BASE_NEIGHBOR_CAP);
+            DEFAULT_HIGH_CANDIDATE_DEGREE, DEFAULT_HIGH_GROWTH_RATE, DEFAULT_MIN_MARGINAL_YIELD,
+            DEFAULT_BASE_NEIGHBOR_CAP);
     }
 
     public DeterministicRulePolicy(double highAverageIdf, double highScoreGap, int longQueryLength,
                                    double strongAnchorConfidence, int minimumAnchorCount,
                                    int highCandidateDegree, double highGrowthRate, int baseNeighborCap) {
         this(highAverageIdf, highScoreGap, longQueryLength, strongAnchorConfidence, minimumAnchorCount,
-            highCandidateDegree, highGrowthRate, baseNeighborCap,
+            highCandidateDegree, highGrowthRate, DEFAULT_MIN_MARGINAL_YIELD, baseNeighborCap);
+    }
+
+    /**
+     * Creates a policy whose marginal-yield stop threshold can be tuned independently.
+     *
+     * @param minMarginalYield new evidence per scanned edge below which expansion stops
+     */
+    public DeterministicRulePolicy(double highAverageIdf, double highScoreGap, int longQueryLength,
+                                   double strongAnchorConfidence, int minimumAnchorCount,
+                                   int highCandidateDegree, double highGrowthRate, double minMarginalYield,
+                                   int baseNeighborCap) {
+        this(highAverageIdf, highScoreGap, longQueryLength, strongAnchorConfidence, minimumAnchorCount,
+            highCandidateDegree, highGrowthRate, minMarginalYield, baseNeighborCap,
             GRAPH_FIRST_GRAPH_WEIGHT, GRAPH_FIRST_TEXT_WEIGHT, GRAPH_PROBE_SHARE,
             LEXICAL_BM25_WEIGHT, LEXICAL_VECTOR_WEIGHT, SEMANTIC_BM25_WEIGHT, SEMANTIC_VECTOR_WEIGHT);
     }
 
     /**
-     * Creates a policy with every threshold and fusion weight supplied by configuration.
-     *
-     * <p>All of these were constants in the first revision. The fusion weights and the probe share
-     * decide how much of the score and budget the graph channel receives, so they are the most
-     * quality-sensitive values in the policy: demoting the text channels from {@code 1.25} to
-     * {@code 0.25} and raising the graph channel to {@code 2.0} moved 2Wiki MRR from {@code 0.1019}
-     * to {@code 0.4747}. Hard-coding them made that comparison impossible to rerun under a
-     * different configuration.
+     * Creates a policy with every threshold and fusion weight supplied by configuration, keeping the
+     * marginal-yield stop at its documented default.
      *
      * @param highAverageIdf average query IDF above which the query counts as lexically rich
      * @param highScoreGap first-stage score gap above which a probe is trusted
@@ -133,10 +153,51 @@ public final class DeterministicRulePolicy implements AdaptivePolicy {
                                    double graphWeight, double textWeight, double probeShare,
                                    double lexicalBm25Weight, double lexicalVectorWeight,
                                    double semanticBm25Weight, double semanticVectorWeight) {
+        this(highAverageIdf, highScoreGap, longQueryLength, strongAnchorConfidence, minimumAnchorCount,
+            highCandidateDegree, highGrowthRate, DEFAULT_MIN_MARGINAL_YIELD, baseNeighborCap,
+            graphWeight, textWeight, probeShare, lexicalBm25Weight, lexicalVectorWeight,
+            semanticBm25Weight, semanticVectorWeight);
+    }
+
+    /**
+     * Creates a policy with every threshold and fusion weight supplied by configuration.
+     *
+     * <p>All of these were constants in the first revision. The fusion weights and the probe share
+     * decide how much of the score and budget the graph channel receives, so they are the most
+     * quality-sensitive values in the policy: demoting the text channels from {@code 1.25} to
+     * {@code 0.25} and raising the graph channel to {@code 2.0} moved 2Wiki MRR from {@code 0.1019}
+     * to {@code 0.4747}. Hard-coding them made that comparison impossible to rerun under a
+     * different configuration.
+     *
+     * @param highAverageIdf average query IDF above which the query counts as lexically rich
+     * @param highScoreGap first-stage score gap above which a probe is trusted
+     * @param longQueryLength query length at which a query counts as a long semantic question
+     * @param strongAnchorConfidence anchor confidence required to treat an anchor as reliable
+     * @param minimumAnchorCount anchors required to treat an anchor set as reliable
+     * @param highCandidateDegree average degree above which a frontier counts as high-degree
+     * @param highGrowthRate graph growth rate above which expansion stops
+     * @param minMarginalYield new evidence per scanned edge below which expansion stops
+     * @param baseNeighborCap baseline neighbours sampled per vertex
+     * @param graphWeight fusion weight for the graph channel when it leads
+     * @param textWeight fusion weight for each text channel when the graph channel leads
+     * @param probeShare largest share of the candidate budget the text probe may take
+     * @param lexicalBm25Weight BM25 weight when the query shows lexical confidence
+     * @param lexicalVectorWeight vector weight when the query shows lexical confidence
+     * @param semanticBm25Weight BM25 weight for a long semantic query
+     * @param semanticVectorWeight vector weight for a long semantic query
+     */
+    public DeterministicRulePolicy(double highAverageIdf, double highScoreGap, int longQueryLength,
+                                   double strongAnchorConfidence, int minimumAnchorCount,
+                                   int highCandidateDegree, double highGrowthRate, double minMarginalYield,
+                                   int baseNeighborCap,
+                                   double graphWeight, double textWeight, double probeShare,
+                                   double lexicalBm25Weight, double lexicalVectorWeight,
+                                   double semanticBm25Weight, double semanticVectorWeight) {
         if (!finiteNonNegative(highAverageIdf) || !finiteNonNegative(highScoreGap)
             || longQueryLength < 1 || !finiteRange(strongAnchorConfidence)
             || minimumAnchorCount < 1 || highCandidateDegree < 1
-            || !finiteNonNegative(highGrowthRate) || baseNeighborCap < 1) {
+            || !finiteNonNegative(highGrowthRate) || !finiteNonNegative(minMarginalYield)
+            || baseNeighborCap < 1) {
             throw new IllegalArgumentException("invalid deterministic routing thresholds");
         }
         if (!finiteNonNegative(graphWeight) || !finiteNonNegative(textWeight)
@@ -153,6 +214,7 @@ public final class DeterministicRulePolicy implements AdaptivePolicy {
         this.minimumAnchorCount = minimumAnchorCount;
         this.highCandidateDegree = highCandidateDegree;
         this.highGrowthRate = highGrowthRate;
+        this.minMarginalYield = minMarginalYield;
         this.baseNeighborCap = baseNeighborCap;
         this.graphWeight = graphWeight;
         this.textWeight = textWeight;
@@ -169,6 +231,7 @@ public final class DeterministicRulePolicy implements AdaptivePolicy {
         values.put("minimumAnchorCount", Integer.toString(minimumAnchorCount));
         values.put("highCandidateDegree", Integer.toString(highCandidateDegree));
         values.put("highGrowthRate", Double.toString(highGrowthRate));
+        values.put("minMarginalYield", Double.toString(minMarginalYield));
         values.put("baseNeighborCap", Integer.toString(baseNeighborCap));
         // Recorded so a replayed plan can be checked against the weights that produced it.
         values.put("graphFusionGraphWeight", Double.toString(graphWeight));
@@ -242,8 +305,11 @@ public final class DeterministicRulePolicy implements AdaptivePolicy {
         boolean vector = context.hasIndex("VECTOR");
         // A graph index remains useful as a bounded fallback even when entity
         // linking is weak.  Anchor confidence controls hop/neighbor limits;
-        // growth remains the hard stop that can disable the channel.
-        boolean graph = context.hasIndex("GRAPH") && features.getGraphGrowthRate() <= highGrowthRate;
+        // growth remains the hard stop that can disable the channel. Growth is only meaningful once
+        // a hop has actually been expanded, which is why the initial plan cannot use it and the
+        // post-hop replan can.
+        boolean growthStopped = progress != null && features.getGraphGrowthRate() > highGrowthRate;
+        boolean graph = context.hasIndex("GRAPH") && !growthStopped;
         if (!bm25 && !vector && !graph) {
             throw new IllegalArgumentException("no retrieval index is available");
         }
@@ -268,7 +334,7 @@ public final class DeterministicRulePolicy implements AdaptivePolicy {
             .topK(budget.getTopK()).candidateBudget(budget.getMaxCandidates())
             .tokenBudget(budget.getTokenBudget())
             .latencyBudgetNanos(budget.getTimeoutMs().longValue() * 1_000_000L)
-            .maxHop(graph ? graphMaxHop(context, features) : 0)
+            .maxHop(graph ? graphMaxHop(context, features, progress) : 0)
             .neighborCap(neighborCap(budget.getMaxCandidates(), features.getCandidateDegree()))
             .maxDiffusionGrowth(highGrowthRate)
             .policyId(POLICY_ID).policyVersion(POLICY_VERSION)
@@ -280,6 +346,11 @@ public final class DeterministicRulePolicy implements AdaptivePolicy {
         if (!graph) {
             builder.reason(features.getGraphGrowthRate() > highGrowthRate
                 ? "GRAPH_STOPPED_GROWTH" : "GRAPH_ANCHOR_OR_INDEX_UNAVAILABLE");
+        } else if (yieldBelowThreshold(progress)) {
+            // The hop that just ran produced too little new evidence per scanned edge. Spending the
+            // next hop would grow the frontier without growing the answer, so expansion stops here
+            // and the already-produced evidence is kept.
+            builder.reason("MARGINAL_YIELD_BELOW_THRESHOLD");
         } else if (features.getAnchorCount() < minimumAnchorCount
             || features.getAnchorConfidence() < strongAnchorConfidence) {
             builder.reason("GRAPH_BOUNDED_ANCHOR_FALLBACK");
@@ -320,8 +391,44 @@ public final class DeterministicRulePolicy implements AdaptivePolicy {
                 .reason("GRAPH_DOMINANT_FUSION");
         }
         addChannels(builder, bm25, vector, graph, features, budget.getMaxCandidates(), budget.getTopK(),
-            progress != null && "AFTER_TEXT".equals(progress.getBoundary()), replanExhausted);
+            textStageComplete(progress), replanExhausted);
+        // Persist the stop rules the policy evaluated so the executor can apply exactly this plan
+        // instead of re-reading global configuration the policy might have overridden.
+        if (yieldBelowThreshold(progress)) {
+            builder.minMarginalYield(Double.MAX_VALUE);
+        }
         return builder.build();
+    }
+
+    /**
+     * True when the hop that just ran yielded too little new evidence for its edge scans.
+     *
+     * <p>A zero or negative {@code minMarginalYield} disables the stop, matching the graph
+     * retriever's own default. An unmeasured yield is zero and must not be mistaken for a measured
+     * failure, so a request that never expanded a hop is exempt.
+     */
+    private boolean yieldBelowThreshold(RetrievalProgress progress) {
+        return progress != null && minMarginalYield > 0.0D
+            && BOUNDARY_AFTER_GRAPH_HOP.equals(progress.getBoundary())
+            && progress.getGraphMarginalYield() < minMarginalYield;
+    }
+
+    /**
+     * True when every text channel has already completed for this request.
+     *
+     * <p>The after-text budget split reserves a probe-sized share for BM25 and the vector channel and
+     * hands the remainder to graph expansion. It must apply at the probe boundary and at the
+     * post-hop boundary - both happen after the text stage - but not to the initial plan, which is
+     * produced before any channel ran.
+     */
+    private static boolean textStageComplete(RetrievalProgress progress) {
+        if (progress == null) {
+            return false;
+        }
+        String boundary = progress.getBoundary();
+        return BOUNDARY_AFTER_TEXT.equals(boundary)
+            || BOUNDARY_AFTER_TEXT_PROBE.equals(boundary)
+            || BOUNDARY_AFTER_GRAPH_HOP.equals(boundary);
     }
 
     private RetrievalPlan singleChannelPlan(RoutingContext context, RetrievalMode requested) {
@@ -473,11 +580,18 @@ public final class DeterministicRulePolicy implements AdaptivePolicy {
         return Math.max(selectedCount, Math.max(1, graphBudget));
     }
 
-    private int graphMaxHop(RoutingContext context, RoutingFeatures features) {
+    private int graphMaxHop(RoutingContext context, RoutingFeatures features, RetrievalProgress progress) {
+        int ceiling = context.getMaxHop();
         boolean strong = features.getAnchorCount() >= minimumAnchorCount
             && features.getAnchorConfidence() >= strongAnchorConfidence
             && features.getCandidateDegree() <= highCandidateDegree;
-        return strong ? Math.min(2, context.getMaxHop()) : Math.min(1, context.getMaxHop());
+        // A second hop is only funded when the first one looked healthy. Growth and yield are
+        // measured by that first hop, so this is the only point where a two-hop decision can be
+        // based on real expansion cost rather than on pre-execution estimates.
+        if (!strong || features.getGraphGrowthRate() > highGrowthRate || yieldBelowThreshold(progress)) {
+            return Math.min(1, ceiling);
+        }
+        return Math.min(2, ceiling);
     }
 
     private int neighborCap(int candidateBudget, int candidateDegree) {

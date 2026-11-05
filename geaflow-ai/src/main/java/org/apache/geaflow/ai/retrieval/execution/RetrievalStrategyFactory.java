@@ -77,7 +77,7 @@ public final class RetrievalStrategyFactory {
                 properties.getHighScoreGap(), properties.getLongQueryLength(),
                 properties.getStrongAnchorConfidence(), properties.getMinimumAnchorCount(),
                 properties.getHighCandidateDegree(), properties.getHighGrowthRate(),
-                properties.getBaseNeighborCap(),
+                properties.getGraphMinMarginalYield(), properties.getBaseNeighborCap(),
                 properties.getGraphFusionGraphWeight(), properties.getGraphFusionTextWeight(),
                 properties.getGraphProbeShare(), properties.getLexicalBm25Weight(),
                 properties.getLexicalVectorWeight(), properties.getSemanticBm25Weight(),

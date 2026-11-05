@@ -40,6 +40,22 @@ public final class RetrievalPlan {
     private final int maxHop;
     private final int neighborCap;
     private final double maxDiffusionGrowth;
+    /**
+     * Per-request edge-scan allowance, or {@code 0} to keep the budget-resolved default.
+     *
+     * <p>The design lists sampling limits as part of the plan so a hard query can buy a wider scan
+     * than an easy one. Leaving this out of the plan forced every query onto one configured value.
+     */
+    private final int edgeScanCap;
+    /**
+     * Marginal evidence yield below which expansion stops, or a negative value to use the default.
+     */
+    private final double minMarginalYield;
+    /**
+     * Association-score floor below which a path is not worth expanding, or a negative value to
+     * use the default.
+     */
+    private final double minAssociationScore;
     private final double bm25Weight;
     private final double vectorWeight;
     private final double graphWeight;
@@ -61,6 +77,9 @@ public final class RetrievalPlan {
         maxHop = builder.maxHop;
         neighborCap = builder.neighborCap;
         maxDiffusionGrowth = builder.maxDiffusionGrowth;
+        edgeScanCap = builder.edgeScanCap;
+        minMarginalYield = builder.minMarginalYield;
+        minAssociationScore = builder.minAssociationScore;
         bm25Weight = builder.bm25Weight;
         vectorWeight = builder.vectorWeight;
         graphWeight = builder.graphWeight;
@@ -80,6 +99,8 @@ public final class RetrievalPlan {
             .topK(source.topK).candidateBudget(source.candidateBudget).tokenBudget(source.tokenBudget)
             .latencyBudgetNanos(source.latencyBudgetNanos).maxHop(source.maxHop)
             .neighborCap(source.neighborCap).maxDiffusionGrowth(source.maxDiffusionGrowth)
+            .edgeScanCap(source.edgeScanCap).minMarginalYield(source.minMarginalYield)
+            .minAssociationScore(source.minAssociationScore)
             .bm25Weight(source.bm25Weight)
             .vectorWeight(source.vectorWeight).graphWeight(source.graphWeight)
             .fallbackMode(source.fallbackMode).policyId(source.policyId)
@@ -137,6 +158,27 @@ public final class RetrievalPlan {
         return maxDiffusionGrowth;
     }
 
+    /**
+     * Per-request edge-scan allowance, or {@code 0} when the budget-resolved default applies.
+     */
+    public int getEdgeScanCap() {
+        return edgeScanCap;
+    }
+
+    /**
+     * Marginal evidence yield below which expansion stops; negative means use the default.
+     */
+    public double getMinMarginalYield() {
+        return minMarginalYield;
+    }
+
+    /**
+     * Association-score floor below which expansion stops; negative means use the default.
+     */
+    public double getMinAssociationScore() {
+        return minAssociationScore;
+    }
+
     public double getBm25Weight() {
         return bm25Weight;
     }
@@ -182,6 +224,9 @@ public final class RetrievalPlan {
         private int maxHop = 1;
         private int neighborCap = 1;
         private double maxDiffusionGrowth = Double.POSITIVE_INFINITY;
+        private int edgeScanCap;
+        private double minMarginalYield = -1.0D;
+        private double minAssociationScore = -1.0D;
         private double bm25Weight = 1.0D;
         private double vectorWeight = 1.0D;
         private double graphWeight = 1.0D;
@@ -262,6 +307,36 @@ public final class RetrievalPlan {
 
         public Builder maxDiffusionGrowth(double value) {
             maxDiffusionGrowth = value;
+            return this;
+        }
+
+        /**
+         * Sets the per-request edge-scan allowance.
+         *
+         * @param value positive edge count, or zero to keep the budget-resolved default
+         */
+        public Builder edgeScanCap(int value) {
+            edgeScanCap = value;
+            return this;
+        }
+
+        /**
+         * Sets the marginal-yield stop threshold.
+         *
+         * @param value non-negative threshold, or a negative value to keep the configured default
+         */
+        public Builder minMarginalYield(double value) {
+            minMarginalYield = value;
+            return this;
+        }
+
+        /**
+         * Sets the association-score floor.
+         *
+         * @param value non-negative floor, or a negative value to keep the configured default
+         */
+        public Builder minAssociationScore(double value) {
+            minAssociationScore = value;
             return this;
         }
 

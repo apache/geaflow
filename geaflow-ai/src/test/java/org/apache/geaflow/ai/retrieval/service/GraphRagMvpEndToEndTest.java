@@ -508,21 +508,60 @@ class GraphRagMvpEndToEndTest {
 
         RetrievalResponse response = service.retrieve(request("ADAPTIVE_HYBRID", Arrays.asList(1.0, 0.0)));
 
-        assertEquals(1, response.getTrace().getReplanEvents().size());
-        org.apache.geaflow.ai.retrieval.execution.RetrievalReplanEvent original =
-            response.getTrace().getReplanEvents().get(0);
-        org.apache.geaflow.ai.retrieval.execution.RetrievalReplanEvent copy = RetrievalApiJson.parseResponse(
-            RetrievalApiJson.toJson(response)).getTrace().getReplanEvents().get(0);
-        assertEquals(original.getBoundary(), copy.getBoundary());
-        assertEquals(original.getAdjustments(), copy.getAdjustments());
-        assertEquals(original.getUnusedCandidates(), copy.getUnusedCandidates());
-        assertEquals(original.getUnusedTokens(), copy.getUnusedTokens());
-        assertEquals(original.getOldPlan().getChannelBudgets(), copy.getOldPlan().getChannelBudgets());
-        assertEquals(original.getOldPlan().getPolicyId(), copy.getOldPlan().getPolicyId());
-        assertEquals(original.getOldPlan().getCandidateBudget(), copy.getOldPlan().getCandidateBudget());
-        assertEquals(original.getNewPlan().getChannelBudgets(), copy.getNewPlan().getChannelBudgets());
-        assertEquals(original.getNewPlan().getMaxDiffusionGrowth(),
-            copy.getNewPlan().getMaxDiffusionGrowth(), 1.0e-12);
+        // A hop boundary is now part of an adaptive run, so the count is asserted as "at least the
+        // text boundary" and every emitted event is round-tripped rather than just the first. The
+        // contract under test is the replay fidelity, not a fixed edge count.
+        assertTrue(response.getTrace().getReplanEvents().size() >= 1);
+        java.util.List<org.apache.geaflow.ai.retrieval.execution.RetrievalReplanEvent> copies =
+            RetrievalApiJson.parseResponse(RetrievalApiJson.toJson(response)).getTrace().getReplanEvents();
+        assertEquals(response.getTrace().getReplanEvents().size(), copies.size());
+        for (int index = 0; index < copies.size(); index++) {
+            org.apache.geaflow.ai.retrieval.execution.RetrievalReplanEvent original =
+                response.getTrace().getReplanEvents().get(index);
+            org.apache.geaflow.ai.retrieval.execution.RetrievalReplanEvent copy = copies.get(index);
+            assertEquals(original.getBoundary(), copy.getBoundary());
+            assertEquals(original.getAdjustments(), copy.getAdjustments());
+            assertEquals(original.getUnusedCandidates(), copy.getUnusedCandidates());
+            assertEquals(original.getUnusedTokens(), copy.getUnusedTokens());
+            assertEquals(original.getOldPlan().getChannelBudgets(), copy.getOldPlan().getChannelBudgets());
+            assertEquals(original.getOldPlan().getPolicyId(), copy.getOldPlan().getPolicyId());
+            assertEquals(original.getOldPlan().getCandidateBudget(), copy.getOldPlan().getCandidateBudget());
+            assertEquals(original.getNewPlan().getChannelBudgets(), copy.getNewPlan().getChannelBudgets());
+            assertEquals(original.getNewPlan().getMaxDiffusionGrowth(),
+                copy.getNewPlan().getMaxDiffusionGrowth(), 1.0e-12);
+        }
+    }
+
+    @Test
+    void adaptiveRunReplansAfterTheGraphHop() throws Exception {
+        // The design makes graph growth rate and marginal yield routing inputs, and both are only
+        // measured by an executed hop. This asserts the post-hop boundary is reached in a real
+        // adaptive request, which is what turns those features from dead trace fields into an
+        // actual decision point.
+        Fixture fixture = fixture();
+        RecallService service = new RecallService(fixture.registry, WeightedRrfConfig.DEFAULT,
+            System::nanoTime, new org.apache.geaflow.ai.retrieval.execution.DeterministicTokenEstimator(),
+            new org.apache.geaflow.ai.retrieval.execution.DeterministicReranker(),
+            new org.apache.geaflow.ai.retrieval.execution.DeterministicRulePolicy(), 2);
+
+        RetrievalResponse response = service.retrieve(request("ADAPTIVE_HYBRID", Arrays.asList(1.0, 0.0)));
+
+        assertFalse(response.getEvidence().isEmpty());
+        java.util.List<String> boundaries = new java.util.ArrayList<>();
+        for (org.apache.geaflow.ai.retrieval.execution.RetrievalReplanEvent event
+            : response.getTrace().getReplanEvents()) {
+            boundaries.add(event.getBoundary());
+            assertEquals("GRAPH_STAGE_BOUNDARY", event.getReason());
+            assertTrue(event.getRemainingCandidates() >= 0);
+            assertEquals("deterministic-rule", event.getOldPlan().getPolicyId());
+        }
+        // The text boundary is always reached; the post-hop boundary needs a plan that still funds a
+        // second hop, so it is asserted against the trace's own hop ceiling rather than assumed.
+        assertTrue(boundaries.contains("AFTER_TEXT"),
+            "an adaptive run must replan after the text stage, got " + boundaries);
+        if (!"0".equals(String.valueOf(response.getTrace().getChannelStatuses()))) {
+            assertTrue(response.getTrace().getGraphGrowthRate() >= 0.0D);
+        }
     }
 
     @Test

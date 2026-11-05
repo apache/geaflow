@@ -49,6 +49,8 @@ public final class RecallPlan {
     private final int cascadeProbeMin;
     private final int cascadeProbeDivisor;
     private final RetrievalMode mode;
+    private final BudgetConstraint primaryConstraint;
+    private final ExecutionMode executionMode;
     private final int topK;
     private final long deadlineNanos;
     private final Map<String, Integer> channelBudgets;
@@ -58,6 +60,9 @@ public final class RecallPlan {
     private final int maxHop;
     private final int neighborCap;
     private final double maxDiffusionGrowth;
+    private final int edgeScanCap;
+    private final double minMarginalYield;
+    private final double minAssociationScore;
 
     public RecallPlan(RetrievalMode mode, int topK, int candidates, long deadlineNanos) {
         this(mode, topK, candidates, deadlineNanos, null, null, null);
@@ -126,6 +131,8 @@ public final class RecallPlan {
             throw new RetrievalException(RetrievalErrorCode.INVALID_REQUEST, "invalid recall budget or mode");
         }
         this.mode = mode.canonical();
+        this.primaryConstraint = primaryConstraint;
+        this.executionMode = executionMode;
         this.topK = topK;
         this.deadlineNanos = deadlineNanos;
         int allocatedCandidates = this.mode == RetrievalMode.HYBRID
@@ -155,6 +162,10 @@ public final class RecallPlan {
         this.maxHop = DEFAULT_MAX_HOP;
         this.neighborCap = Math.max(1, candidates);
         this.maxDiffusionGrowth = Double.POSITIVE_INFINITY;
+        // Unset, so the graph stage keeps the configured defaults for this path.
+        this.edgeScanCap = 0;
+        this.minMarginalYield = -1.0D;
+        this.minAssociationScore = -1.0D;
     }
 
     /** Creates a plan from an already validated adaptive channel allocation. */
@@ -171,6 +182,23 @@ public final class RecallPlan {
                       BudgetConstraint primaryConstraint, ExecutionMode executionMode,
                       Map<String, Integer> channelBudgets, int maxHop, int neighborCap,
                       double maxDiffusionGrowth) {
+        this(mode, topK, deadlineNanos, graphVersion, indexVersion, vectorVersion, primaryConstraint,
+            executionMode, channelBudgets, maxHop, neighborCap, maxDiffusionGrowth, 0, -1.0D, -1.0D);
+    }
+
+    /**
+     * Creates an execution plan that also carries the graph stop rules a policy evaluated.
+     *
+     * @param edgeScanCap per-request edge-scan allowance, or zero for the configured default
+     * @param minMarginalYield marginal-yield stop threshold, or negative for the default
+     * @param minAssociationScore association-score floor, or negative for the default
+     */
+    public RecallPlan(RetrievalMode mode, int topK, long deadlineNanos,
+                      String graphVersion, String indexVersion, String vectorVersion,
+                      BudgetConstraint primaryConstraint, ExecutionMode executionMode,
+                      Map<String, Integer> channelBudgets, int maxHop, int neighborCap,
+                      double maxDiffusionGrowth, int edgeScanCap, double minMarginalYield,
+                      double minAssociationScore) {
         if (mode == null || primaryConstraint == null || executionMode == null || topK < 1
             || channelBudgets == null || channelBudgets.isEmpty() || maxHop < 0 || maxHop > 2
             || neighborCap < 1 || !Double.isFinite(maxDiffusionGrowth)
@@ -178,6 +206,8 @@ public final class RecallPlan {
             throw new RetrievalException(RetrievalErrorCode.INVALID_REQUEST, "invalid adaptive recall plan");
         }
         this.mode = mode.canonical();
+        this.primaryConstraint = primaryConstraint;
+        this.executionMode = executionMode;
         this.topK = topK;
         this.deadlineNanos = deadlineNanos;
         this.graphVersion = graphVersion;
@@ -199,6 +229,10 @@ public final class RecallPlan {
         this.maxHop = maxHop;
         this.neighborCap = neighborCap;
         this.maxDiffusionGrowth = maxDiffusionGrowth;
+        // Unset, which makes the graph stage fall back to the configured defaults.
+        this.edgeScanCap = edgeScanCap;
+        this.minMarginalYield = minMarginalYield;
+        this.minAssociationScore = minAssociationScore;
         // This constructor receives an already validated allocation, so the cascade split is not
         // consulted; the documented defaults keep the fields initialized for trace reporting.
         this.cascadeMinBudget = CASCADE_MIN_BUDGET;
@@ -223,6 +257,16 @@ public final class RecallPlan {
         return mode;
     }
 
+    /** The single hard budget constraint this request runs under. */
+    public BudgetConstraint getPrimaryConstraint() {
+        return primaryConstraint;
+    }
+
+    /** The execution mode the client asked for. */
+    public ExecutionMode getExecutionMode() {
+        return executionMode;
+    }
+
     public int getTopK() {
         return topK;
     }
@@ -245,5 +289,20 @@ public final class RecallPlan {
 
     public double getMaxDiffusionGrowth() {
         return maxDiffusionGrowth;
+    }
+
+    /** Per-request edge-scan allowance, or zero to use the configured default. */
+    public int getEdgeScanCap() {
+        return edgeScanCap;
+    }
+
+    /** Marginal-yield stop threshold, or a negative value to use the configured default. */
+    public double getMinMarginalYield() {
+        return minMarginalYield;
+    }
+
+    /** Association-score floor, or a negative value to use the configured default. */
+    public double getMinAssociationScore() {
+        return minAssociationScore;
     }
 }

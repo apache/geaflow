@@ -289,7 +289,8 @@ public final class RetrievalExecutor {
 
     private RetrievalProgress routingProgress(RetrievalTrace trace, RoutingContext context, long deadline,
                                                RecallPlan plan, BudgetLedger ledger,
-                                               Map<String, EvidenceBuilder> merged, int replanCount) {
+                                               Map<String, EvidenceBuilder> merged, int replanCount,
+                                               String boundary) {
         int candidatesUsed = candidatesUsed(trace);
         int tokenUsed = tokensUsed(trace, ledger);
         long remainingLatency = deadline == 0L ? 0L : Math.max(0L, deadline - clock.getAsLong());
@@ -301,7 +302,7 @@ public final class RetrievalExecutor {
                 confidence = Math.max(confidence, anchor.getConfidence());
             }
         }
-        return RetrievalProgress.builder().boundary("AFTER_TEXT")
+        return RetrievalProgress.builder().boundary(boundary)
             .completedChannels(trace.getChannelStatuses().keySet())
             .candidateCounts(trace.getCandidateCounts())
             .remainingCandidates(Math.max(0, context.getBudget().getMaxCandidates() - candidatesUsed))
@@ -350,6 +351,9 @@ public final class RetrievalExecutor {
         }
         if (left == null || right == null || left.getSelectedMode() != right.getSelectedMode()
             || left.getMaxHop() != right.getMaxHop() || left.getNeighborCap() != right.getNeighborCap()
+            || left.getEdgeScanCap() != right.getEdgeScanCap()
+            || Double.compare(left.getMinMarginalYield(), right.getMinMarginalYield()) != 0
+            || Double.compare(left.getMinAssociationScore(), right.getMinAssociationScore()) != 0
             || !left.getChannelBudgets().equals(right.getChannelBudgets())
             || !left.getChannelOrder().equals(right.getChannelOrder())) {
             return false;
@@ -437,7 +441,9 @@ public final class RetrievalExecutor {
                 resources.getGraphVersion(), resources.getIndexVersion(),
                 vector == null ? null : vector.getVectorVersion(), budget.getPrimaryConstraint(),
                 command.getExecutionMode(), orderedBudgets(routingPlan), routingPlan.getMaxHop(),
-                routingPlan.getNeighborCap(), routingPlan.getMaxDiffusionGrowth());
+                routingPlan.getNeighborCap(), routingPlan.getMaxDiffusionGrowth(),
+                routingPlan.getEdgeScanCap(), routingPlan.getMinMarginalYield(),
+                routingPlan.getMinAssociationScore());
         Map<String, RetrievalException> failures = resources.getFailures();
         BudgetLedger tokenLedger = budget.getPrimaryConstraint() == BudgetConstraint.TOKENS
             ? new BudgetLedger(executionCandidateLimit, budget.getTokenBudget(), deadline, clock) : null;
@@ -562,15 +568,16 @@ public final class RetrievalExecutor {
                 // Adaptive cascaded runs still replan at this boundary: the probe produced real
                 // score-gap, yield and degree statistics, which is exactly what the design says
                 // the policy should consume before the graph stage is sized.
+                RecallPlan graphPlan = plan;
                 if (routingPlan != null) {
-                    replanAtStageBoundary(routingPlan, routingContext, trace, deadline, plan, tokenLedger,
-                        merged, "AFTER_TEXT_PROBE");
+                    StageReplan probeReplan = replanAtStageBoundary(routingPlan, routingContext, trace,
+                        deadline, plan, tokenLedger, merged, "AFTER_TEXT_PROBE");
+                    effectiveRoutingPlan = probeReplan.plan;
+                    graphPlan = withPlan(plan, probeReplan.plan);
                 }
-                runChannels(Collections.singletonList(channels.stream()
-                    .filter(value -> "GRAPH".equals(value.getKey())).findFirst().orElseThrow()),
-                    ExecutionMode.SEQUENTIAL, command, queryVector, deadline, partial, requestId,
-                    failures, byId, plan, merged, trace, channelElapsedNanos, resources, pinnedGraphProvider,
-                    tokenLedger);
+                runGraphInHops(graphPlan, routingPlan == null ? null : effectiveRoutingPlan, routingContext,
+                    command, queryVector, deadline, partial, requestId, failures, byId, merged, trace,
+                    channelElapsedNanos, resources, pinnedGraphProvider, tokenLedger);
             }
         } else if (routingPlan != null && plan.getChannelBudgets().containsKey("GRAPH")) {
             List<Map.Entry<String, Integer>> textChannels = new ArrayList<>();
@@ -623,11 +630,13 @@ public final class RetrievalExecutor {
                     Math.min(plan.getTopK(), remainingGraphBudget.get("GRAPH")), plan.getDeadlineNanos(),
                     plan.getGraphVersion(), plan.getIndexVersion(), plan.getVectorVersion(),
                     budget.getPrimaryConstraint(), command.getExecutionMode(), remainingGraphBudget,
-                    replanned.getMaxHop(), replanned.getNeighborCap(), replanned.getMaxDiffusionGrowth());
-                List<Map.Entry<String, Integer>> scheduledGraph = Collections.singletonList(
-                    new java.util.AbstractMap.SimpleImmutableEntry<>("GRAPH", remainingGraphBudget.get("GRAPH")));
-                runChannels(scheduledGraph, ExecutionMode.SEQUENTIAL, command, queryVector, deadline, partial,
-                    requestId, failures, byId, graphPlan, merged, trace, channelElapsedNanos, resources,
+                    replanned.getMaxHop(), replanned.getNeighborCap(), replanned.getMaxDiffusionGrowth(),
+                    replanned.getEdgeScanCap(), replanned.getMinMarginalYield(),
+                    replanned.getMinAssociationScore());
+                // The non-cascaded adaptive path gets the same hop boundary: whichever execution mode
+                // runs, a measured hop must be able to stop the next one.
+                runGraphInHops(graphPlan, replanned, routingContext, command, queryVector, deadline,
+                    partial, requestId, failures, byId, merged, trace, channelElapsedNanos, resources,
                     pinnedGraphProvider, tokenLedger);
             } else {
                 RecallStopReason skipReason = progress.getRemainingCandidates() == 0 || graphBudget == 0
@@ -765,6 +774,179 @@ public final class RetrievalExecutor {
         AnswerResponse answer = answerSynthesizer.synthesize(answerRequest, ranked);
         response.setAnswer(answer.getAnswer());
         response.setAnswerAbstentionReason(answer.getAbstentionReason());
+    }
+
+    /**
+     * Builds the graph retrieval configuration for one plan.
+     *
+     * <p>Plan-level stop rules win over global configuration so a policy that lowered the marginal
+     * yield threshold for a hard query is not silently overridden by the default.
+     */
+    private GraphRetrievalConfig graphConfig(int candidateBudget, RetrievalCommand command,
+                                             RecallPlan plan) {
+        int edgeScanCap = plan.getEdgeScanCap() > 0 ? plan.getEdgeScanCap()
+            : resolveEdgeScanBudget(command.getBudget());
+        double minMarginalYield = plan.getMinMarginalYield() >= 0.0D ? plan.getMinMarginalYield()
+            : graphMinMarginalYield();
+        double minAssociationScore = plan.getMinAssociationScore() >= 0.0D
+            ? plan.getMinAssociationScore() : graphMinAssociationScore();
+        return GraphRetrievalConfig.builder()
+            .maxHop(plan.getMaxHop())
+            .candidateBudget(candidateBudget)
+            .edgeScanBudget(edgeScanCap)
+            .neighborCap(Math.min(candidateBudget, plan.getNeighborCap()))
+            .maxDiffusionGrowth(plan.getMaxDiffusionGrowth())
+            .sampleRate(graphSampleRate())
+            .relationPriorities(graphRelationPriorities())
+            .minMarginalYield(minMarginalYield)
+            .minAssociationScore(minAssociationScore)
+            .minAssociationSurvivalRate(graphMinAssociationSurvivalRate())
+            .tokenBudget(command.getBudget().getPrimaryConstraint() == BudgetConstraint.TOKENS
+                ? command.getBudget().getTokenBudget() : Integer.MAX_VALUE)
+            .samplingSeed(DeterministicSeed.graphSeed(command.getQuery(), plan.getGraphVersion(),
+                configSeed()))
+            .build();
+    }
+
+    /** Re-bases an execution plan onto a routing plan the policy returned at a boundary. */
+    private static RecallPlan withPlan(RecallPlan base, RetrievalPlan routing) {
+        if (routing == null) {
+            return base;
+        }
+        return new RecallPlan(routing.getSelectedMode(), Math.min(base.getTopK(), routing.getTopK()),
+            base.getDeadlineNanos(), base.getGraphVersion(), base.getIndexVersion(), base.getVectorVersion(),
+            base.getPrimaryConstraint(), base.getExecutionMode(), orderedBudgets(routing),
+            routing.getMaxHop(), routing.getNeighborCap(), routing.getMaxDiffusionGrowth(),
+            routing.getEdgeScanCap(), routing.getMinMarginalYield(), routing.getMinAssociationScore());
+    }
+
+    /**
+     * Runs the graph channel one hop at a time and replans between hops.
+     *
+     * <p>This is the adaptive closed loop the design asks for. Expansion is split because
+     * {@code graphGrowthRate} and {@code graphMarginalYield} only exist after a hop has run:
+     *
+     * <ol>
+     *   <li>expand hop 1 with the plan the probe produced,</li>
+     *   <li>replan at {@code AFTER_GRAPH_HOP} on the now-measured statistics,</li>
+     *   <li>fund hop 2 only if the revised plan still allows it.</li>
+     * </ol>
+     *
+     * <p>When the policy does not replan (or there is no routing plan) this collapses into the
+     * original single call, so fixed-hybrid behaviour is unchanged.
+     */
+    private void runGraphInHops(RecallPlan plan, RetrievalPlan routingPlan, RoutingContext routingContext,
+                                RetrievalCommand command, float[] queryVector, long deadline, boolean partial,
+                                String requestId, Map<String, RetrievalException> failures,
+                                Map<String, TextChunk> byId, Map<String, EvidenceBuilder> merged,
+                                RetrievalTrace trace, Map<String, Long> channelElapsedNanos,
+                                RequestResources resources, GraphNeighborProvider pinnedGraphProvider,
+                                BudgetLedger tokenLedger) {
+        Integer graphBudget = plan.getChannelBudgets().get("GRAPH");
+        if (graphBudget == null) {
+            return;
+        }
+        if (!adaptiveHopsApplicable(routingPlan, plan)) {
+            runChannels(Collections.singletonList(new java.util.AbstractMap.SimpleImmutableEntry<>("GRAPH",
+                graphBudget)), ExecutionMode.SEQUENTIAL, command, queryVector, deadline, partial, requestId,
+                failures, byId, plan, merged, trace, channelElapsedNanos, resources, pinnedGraphProvider,
+                tokenLedger);
+            return;
+        }
+        long hopStarted = clock.getAsLong();
+        GraphRetriever retriever = new GraphRetriever(anchorResolver, tokenEstimator);
+        try (AutoCloseable stageLease = resources.acquireLease();
+             GraphQueryLease graphLease = pinnedGraphProvider == null ? null
+                 : pinnedGraphProvider.openLease()) {
+            GraphNeighborProvider provider = graphLease == null ? pinnedGraphProvider : graphLease;
+            GraphRetrievalConfig hopConfig = graphConfig(graphBudget, command,
+                withPlan(plan, routingPlan));
+            GraphRetriever.ExpansionSession session = retriever.beginRetrieval(command.getQuery(),
+                entities, provider, byId, hopConfig, deadline, clock, tokenLedger,
+                candidateChunkIds(merged));
+            trace.setGraphGrowthRate(session.getStats().getGrowthRate());
+            trace.setGraphMarginalYield(session.getStats().getMarginalYield());
+            while (!session.isExhausted() && !expired(deadline)) {
+                int hop = session.getCurrentHop();
+                if (hop >= routingPlan.getMaxHop()) {
+                    break;
+                }
+                retriever.expandOneHop(session, hopConfig, deadline, clock);
+                if (session.isStopped()) {
+                    break;
+                }
+                retrieveGraphStats(trace, session.getStats());
+                if (hop + 1 >= routingPlan.getMaxHop()) {
+                    break;
+                }
+                // The hop that just completed is the first real evidence about diffusion cost.
+                StageReplan hopReplan = replanAtStageBoundary(routingPlan, routingContext, trace, deadline,
+                    plan, tokenLedger, merged, "AFTER_GRAPH_HOP");
+                if (hopReplan.count > 0) {
+                    trace.setRoutingFeatures(
+                        measuredFeatures(routingContext.getFeatures(), hopReplan.progress));
+                }
+                RecallPlan replanned = withPlan(plan, hopReplan.plan);
+                if (!replanned.getChannelBudgets().containsKey("GRAPH")
+                    || replanned.getMaxHop() <= hop + 1) {
+                    break;
+                }
+                hopConfig = graphConfig(graphBudget, command, replanned);
+            }
+            List<GraphRetriever.GraphHit> hits = session.finish();
+            ChannelOutput output = new ChannelOutput();
+            output.graphHits = hits;
+            output.graphStats = session.getStats();
+            output.evaluated = session.getStats().getCandidatesProduced();
+            output.rawCandidatesScored = session.getStats().getCandidatesProduced();
+            output.candidates = session.getStats().getCandidatesProduced();
+            output.reason = session.getStats().getStopReason();
+            output.elapsedNanos = Math.max(0L, clock.getAsLong() - hopStarted);
+            channelElapsedNanos.put("GRAPH", output.elapsedNanos);
+            trace.getStageElapsedNanos().put("GRAPH", output.elapsedNanos);
+            retrieveGraphStats(trace, session.getStats());
+            if (tokenLedger != null) {
+                chargeEvaluatedCandidates(tokenLedger, output.evaluated);
+            }
+            trace.getEvaluatedCounts().put("GRAPH", output.evaluated);
+            trace.getRawCandidatesScored().put("GRAPH", output.rawCandidatesScored);
+            trace.getCandidateCounts().put("GRAPH", output.candidates);
+            mergeChannel("GRAPH", output, requestId, command.getQuery(), byId, plan, merged, tokenLedger);
+            if (output.reason == RecallStopReason.DEADLINE) {
+                timedOut(partial);
+            }
+            record(trace, "GRAPH", output.reason == RecallStopReason.TRACE_VALIDATION_ERROR
+                ? RecallStageStatus.DEGRADED : RecallStageStatus.SUCCESS, output.reason, null);
+        } catch (RetrievalException error) {
+            throw error;
+        } catch (Exception error) {
+            throw notReady("retrieval stage failed: " + error.getMessage());
+        }
+    }
+
+    /**
+     * True when the graph stage can be split into individually funded hops.
+     *
+     * <p>Splitting only pays off when a policy can react to the first hop. Without a routing plan the
+     * single call is the correct and simpler path, and a plan limited to one hop has nothing to
+     * decide after hop one.
+     */
+    private static boolean adaptiveHopsApplicable(RetrievalPlan routingPlan, RecallPlan plan) {
+        return routingPlan != null && plan.getMaxHop() > 1 && routingPlan.getMaxHop() > 1;
+    }
+
+    /** Copies the graph work counters into the trace. */
+    private static void retrieveGraphStats(RetrievalTrace trace, GraphRetriever.GraphStats stats) {
+        trace.setAnchorsConsidered(stats.getAnchorsConsidered());
+        trace.setEdgesExamined(stats.getEdgesExamined());
+        trace.setNeighborsSampled(stats.getNeighborsSampled());
+        trace.setVerticesReached(stats.getVerticesReached());
+        trace.setUniqueVertices(stats.getUniqueVertices());
+        trace.setGraphCandidatesProduced(stats.getCandidatesProduced());
+        trace.setGraphTokensEstimated(stats.getTokensEstimated());
+        trace.setGraphEvidenceYield(stats.getEvidenceYield());
+        trace.setGraphGrowthRate(stats.getGrowthRate());
+        trace.setGraphMarginalYield(stats.getMarginalYield());
     }
 
     private void runChannels(List<Map.Entry<String, Integer>> channels, ExecutionMode executionMode,
@@ -933,22 +1115,7 @@ public final class RetrievalExecutor {
             output.reason = search.getStopReason();
         } else {
             GraphRetriever retriever = new GraphRetriever(anchorResolver, tokenEstimator);
-            GraphRetrievalConfig graphConfig = GraphRetrievalConfig.builder()
-                .maxHop(plan.getMaxHop())
-                .candidateBudget(candidateBudget)
-                .edgeScanBudget(resolveEdgeScanBudget(command.getBudget()))
-                .neighborCap(Math.min(candidateBudget, plan.getNeighborCap()))
-                .maxDiffusionGrowth(plan.getMaxDiffusionGrowth())
-                .sampleRate(graphSampleRate())
-                .relationPriorities(graphRelationPriorities())
-                .minMarginalYield(graphMinMarginalYield())
-                .minAssociationScore(graphMinAssociationScore())
-                .minAssociationSurvivalRate(graphMinAssociationSurvivalRate())
-                .tokenBudget(command.getBudget().getPrimaryConstraint() == BudgetConstraint.TOKENS
-                    ? command.getBudget().getTokenBudget() : Integer.MAX_VALUE)
-                .samplingSeed(DeterministicSeed.graphSeed(command.getQuery(), plan.getGraphVersion(),
-                    configSeed()))
-                .build();
+            GraphRetrievalConfig graphConfig = graphConfig(candidateBudget, command, plan);
             output.graphHits = retriever.retrieve(command.getQuery(), entities, pinnedGraphProvider,
                 byId, graphConfig, deadline, clock, tokenLedger, candidateChunkIds);
             output.graphStats = retriever.getLastStats();
@@ -1064,6 +1231,7 @@ public final class RetrievalExecutor {
         private List<VectorHit> vectorHits;
         private List<GraphRetriever.GraphHit> graphHits;
         private GraphRetriever.GraphStats graphStats;
+        private GraphRetriever.ExpansionSession graphSession;
         private int evaluated;
         private int rawCandidatesScored;
         private int candidates;
@@ -1089,7 +1257,7 @@ public final class RetrievalExecutor {
                                               BudgetLedger tokenLedger,
                                               Map<String, EvidenceBuilder> merged, String boundary) {
         RetrievalProgress progress = routingProgress(trace, routingContext, deadline, plan, tokenLedger,
-            merged, trace.getReplanEvents().size());
+            merged, trace.getReplanEvents().size(), boundary);
         RetrievalPlan replanned = initialPlan;
         int replanCount = 0;
         while (replanCount < maxReplanCount && !expired(deadline)) {
@@ -1116,7 +1284,7 @@ public final class RetrievalExecutor {
             replanned = next;
             replanCount++;
             progress = routingProgress(trace, routingContext, deadline, plan, tokenLedger, merged,
-                replanCount);
+                replanCount, boundary);
         }
         return new StageReplan(replanned, progress, replanCount);
     }
