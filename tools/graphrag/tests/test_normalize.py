@@ -22,6 +22,7 @@ class NormalizeTest(unittest.TestCase):
         self.assertLessEqual(first[1]["start_offset"], first[0]["end_offset"])
         for chunk in first:
             self.assertEqual(document["document_id"], chunk["document_id"])
+            self.assertEqual(document["normalization_version"], chunk["normalization_version"])
             self.assertEqual(chunk["text"], document["text"][chunk["start_offset"]:chunk["end_offset"]])
 
     def test_offsets_use_utf16_units_for_non_bmp_text(self):
