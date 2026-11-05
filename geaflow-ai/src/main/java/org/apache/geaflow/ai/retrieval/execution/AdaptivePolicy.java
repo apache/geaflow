@@ -11,18 +11,15 @@
  */
 package org.apache.geaflow.ai.retrieval.execution;
 
+import java.util.Collections;
 import java.util.Map;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalMode;
 
 /**
  * Design-level name for the pluggable routing policy.
  *
- * <p>The design document specifies an {@code AdaptivePolicy} extension point exposing
- * {@code plan(RoutingContext)}, {@code replan(RoutingContext, RetrievalProgress)},
- * {@code getPolicyId()} and {@code getPolicyVersion()}. The implementation shipped under the name
- * {@link RoutingPolicy} with {@code plan(context, progress)} serving both purposes. Renaming the
- * working interface would break every existing policy, so this interface pins the documented shape
- * and adapts to the working one.
+ * <p>A policy exposes initial planning and optional stage-boundary replanning. It stays independent
+ * from retrieval execution, budget consumption and trace writing.
  *
  * <p>A policy stays a pure decision component: it must not call retrievers, mutate indexes, consume
  * budget or write traces. The executor validates whatever plan it returns against hard budgets,
@@ -55,54 +52,11 @@ public interface AdaptivePolicy {
 
     /** Policy parameters, recorded so a historical decision can be reproduced exactly. */
     default Map<String, String> getParameters() {
-        return java.util.Collections.emptyMap();
+        return Collections.emptyMap();
     }
 
-    /**
-     * Returns true when this policy can route the requested mode.
-     *
-     * <p>Declared without a default so an implementation that also implements the working
-     * {@link RoutingPolicy} SPI does not inherit two unrelated defaults for the same method.
-     */
-    boolean supports(RetrievalMode mode);
-
-    /**
-     * Adapts this design-level interface to the working {@link RoutingPolicy} SPI.
-     *
-     * <p>The executor works in terms of {@code RoutingPolicy}, so an {@code AdaptivePolicy} must be
-     * convertible rather than requiring the executor to know both. Initial planning and stage-boundary
-     * replanning map onto the working interface's two-argument {@code plan} method.
-     */
-    default RoutingPolicy toRoutingPolicy() {
-        AdaptivePolicy policy = this;
-        return new RoutingPolicy() {
-            @Override
-            public String getPolicyId() {
-                return policy.getPolicyId();
-            }
-
-            @Override
-            public String getPolicyVersion() {
-                return policy.getPolicyVersion();
-            }
-
-            @Override
-            public Map<String, String> getParameters() {
-                return policy.getParameters();
-            }
-
-            @Override
-            public RetrievalPlan plan(RoutingContext context, RetrievalProgress progress) {
-                if (progress == null || "INITIAL".equals(progress.getBoundary())) {
-                    return policy.plan(context);
-                }
-                return policy.replan(context, progress);
-            }
-
-            @Override
-            public boolean supports(RetrievalMode mode) {
-                return policy.supports(mode);
-            }
-        };
+    /** Returns true when this policy can route the requested mode. */
+    default boolean supports(RetrievalMode mode) {
+        return mode != null;
     }
 }

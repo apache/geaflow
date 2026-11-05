@@ -189,7 +189,7 @@ class GraphRetrieverTest {
         assertEquals(hits.get(0).getSeed().getVertexId(),
             hits.get(0).getPath().getVertexIds().get(0));
         assertTrue(new GraphEvidenceTrace("request-1", RetrievalMode.GRAPH_ONLY,
-            hits.get(0).getSeed(), "CANONICAL", 1.0, "v1", hits.get(0).getPath(),
+            "CANONICAL", 1.0, "v1", hits.get(0).getPath(),
             hits.get(0).getSourceChunkIds()).getSeed().equals(hits.get(0).getSeed()));
     }
 
@@ -328,7 +328,7 @@ class GraphRetrieverTest {
             new InMemoryGraphNeighborProvider(edges), chunks, config, 0L, System::nanoTime);
 
         assertEquals(Collections.singletonList("edge-2"),
-            Collections.singletonList(hits.get(0).getEdge().getEdgeId()));
+            hits.get(0).getPath().getEdgeIds());
         assertEquals(2, retriever.getLastStats().getEdgesExamined());
     }
 
@@ -441,7 +441,7 @@ class GraphRetrieverTest {
             new InMemoryGraphNeighborProvider(edges), chunks, config, 0L, System::nanoTime);
 
         assertEquals(1, hits.size());
-        assertEquals("z-high", hits.get(0).getEdge().getEdgeId());
+        assertEquals("z-high", hits.get(0).getPath().getEdgeIds().get(0));
     }
 
     @Test

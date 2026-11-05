@@ -13,6 +13,7 @@ from typing import Any, Callable, Dict, Iterable, Iterator, Optional
 
 from .entity_graph import (EXTRACTOR_VERSION, GRAPH_SCHEMA_VERSION, aggregate_source_hash,
                            graph_record_stream, write_graph_artifact)
+from .digests import sha256_file
 from .normalize import NORMALIZATION_VERSION, ChunkingConfig, chunk_document, documents
 from .sources.source_loader import SourceLoader, SourceManifest
 
@@ -59,14 +60,6 @@ def _write_record(output: Any, record: Dict[str, Any]) -> None:
     output.write(json.dumps(record, sort_keys=True, ensure_ascii=False, separators=(",", ":")) + "\n")
 
 
-def _sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as source:
-        for block in iter(lambda: source.read(1024 * 1024), b""):
-            digest.update(block)
-    return digest.hexdigest()
-
-
 def _artifact_checksums(root: Path, artifact: Path) -> Dict[str, str]:
     paths = sorted(path for path in ([artifact] if artifact.is_file() else artifact.rglob("*"))
                    if path.is_file())
@@ -75,7 +68,7 @@ def _artifact_checksums(root: Path, artifact: Path) -> Dict[str, str]:
     for path in paths:
         if root.resolve() not in path.resolve().parents:
             raise ImportFailure("artifact contains a file outside release: %s" % path)
-    return {str(path.relative_to(root)): _sha256_file(path) for path in paths}
+    return {str(path.relative_to(root)): sha256_file(path) for path in paths}
 
 
 def _validate_ready_artifacts(root: Path, metadata: Dict[str, Any]) -> None:
@@ -111,7 +104,7 @@ def _validate_ready_artifacts(root: Path, metadata: Dict[str, Any]) -> None:
         candidate = (root / relative).resolve()
         if root not in candidate.parents or not candidate.is_file():
             raise ImportFailure("existing READY artifact is missing or outside release: %s" % relative)
-        if _sha256_file(candidate) != expected:
+        if sha256_file(candidate) != expected:
             raise ImportFailure("existing READY artifact checksum mismatch: %s" % relative)
 
 

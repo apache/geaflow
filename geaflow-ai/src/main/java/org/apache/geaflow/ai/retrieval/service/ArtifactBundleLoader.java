@@ -14,10 +14,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalErrorCode;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalException;
 import org.apache.geaflow.ai.retrieval.channel.graph.GraphDelta;
@@ -27,6 +24,7 @@ import org.apache.geaflow.ai.retrieval.channel.graph.VersionedGraphView;
 import org.apache.geaflow.ai.retrieval.codec.GraphDeltaJson;
 import org.apache.geaflow.ai.retrieval.config.RetrievalProperties;
 import org.apache.geaflow.ai.retrieval.index.graph.GraphArtifactReader;
+import org.apache.geaflow.ai.retrieval.metadata.ArtifactIntegrity;
 import org.apache.geaflow.ai.retrieval.model.document.TextChunk;
 import org.apache.geaflow.ai.retrieval.model.version.GraphVersion;
 import org.noear.solon.annotation.Component;
@@ -79,7 +77,7 @@ public final class ArtifactBundleLoader {
         if (root == null || !Files.isDirectory(root)) {
             throw new IOException("artifact bundle directory is missing: " + root);
         }
-        JsonObject ready = readObject(root.resolve("READY.json"));
+        JsonObject ready = readObject(ArtifactIntegrity.resolveInside(root, "READY.json"));
         require(ready, "READY".equals(text(ready, "state")), "bundle is not READY");
         String graphName = properties.getArtifactGraphName();
         String graphVersion = properties.getArtifactGraphVersion();
@@ -99,13 +97,10 @@ public final class ArtifactBundleLoader {
         require(ready, properties.getArtifactVectorVersion().equals(vectorVersion),
             "configured vector version does not match bundle");
         validateChecksums(root, ready);
-        final List<TextChunk> chunks = readChunks(root.resolve("chunks.jsonl"));
-        Path graph = root.resolve(properties.getArtifactGraphPath()).normalize();
-        Path bm25 = root.resolve(properties.getArtifactBm25Path()).normalize();
-        Path vector = root.resolve(properties.getArtifactVectorPath()).normalize();
-        requireInside(root, graph);
-        requireInside(root, bm25);
-        requireInside(root, vector);
+        final List<TextChunk> chunks = readChunks(ArtifactIntegrity.resolveInside(root, "chunks.jsonl"));
+        Path graph = ArtifactIntegrity.resolveInside(root, properties.getArtifactGraphPath());
+        Path bm25 = ArtifactIntegrity.resolveInside(root, properties.getArtifactBm25Path());
+        Path vector = ArtifactIntegrity.resolveInside(root, properties.getArtifactVectorPath());
         if (ready.has("graph_delta_chain")) {
             GraphViewBundle view = readGraphView(root, ready, graphName, graphVersion);
             registry.loadBundle(graphName, graphVersion, indexVersion, bm25, vector, chunks,
@@ -124,8 +119,10 @@ public final class ArtifactBundleLoader {
             throw new IOException("graph delta bundle is missing graph_snapshot metadata");
         }
         String snapshotVersion = text(snapshotMetadata, "version");
-        Path snapshotArtifact = resolveInside(root, text(snapshotMetadata, "artifact"));
-        Path snapshotChunksArtifact = resolveInside(root, text(snapshotMetadata, "chunks"));
+        Path snapshotArtifact = ArtifactIntegrity.resolveInside(root,
+            text(snapshotMetadata, "artifact"));
+        Path snapshotChunksArtifact = ArtifactIntegrity.resolveInside(root,
+            text(snapshotMetadata, "chunks"));
         List<TextChunk> snapshotChunks = readChunks(snapshotChunksArtifact);
         GraphSnapshot snapshot;
         try (GraphArtifactReader reader = new GraphArtifactReader(snapshotArtifact,
@@ -148,7 +145,7 @@ public final class ArtifactBundleLoader {
             if (!expectedParent.equals(parent)) {
                 throw new IOException("graph delta chain has a missing or out-of-order parent");
             }
-            Path deltaPath = resolveInside(root, text(item, "artifact"));
+            Path deltaPath = ArtifactIntegrity.resolveInside(root, text(item, "artifact"));
             GraphDelta delta;
             try (BufferedReader input = Files.newBufferedReader(deltaPath, StandardCharsets.UTF_8)) {
                 delta = GraphDeltaJson.read(input, version, parent, text(item, "digest"));
@@ -178,12 +175,6 @@ public final class ArtifactBundleLoader {
             throw new IOException("graph delta version metadata is missing");
         }
         return new GraphVersion(text(value, "graphName"), text(value, "version"));
-    }
-
-    private static Path resolveInside(Path root, String relative) throws IOException {
-        Path candidate = root.resolve(relative).normalize();
-        requireInside(root, candidate);
-        return candidate;
     }
 
     private static final class GraphViewBundle {
@@ -247,63 +238,14 @@ public final class ArtifactBundleLoader {
         }
     }
 
-    private static void requireInside(Path root, Path candidate) throws IOException {
-        Path realRoot = root.toRealPath();
-        Path normalized = candidate.toAbsolutePath().normalize();
-        if (!Files.exists(normalized) || !normalized.toRealPath().startsWith(realRoot)) {
-            throw new IOException("bundle artifact is missing or outside root: " + candidate);
-        }
-    }
-
     private static void validateChecksums(Path root, JsonObject ready) throws IOException {
         if (!ready.has("artifact_checksums") || !ready.get("artifact_checksums").isJsonObject()) {
             throw new IOException("bundle artifact checksums are missing");
         }
-        Set<String> expectedPaths = new HashSet<>();
-        for (Map.Entry<String, com.google.gson.JsonElement> entry
-            : ready.getAsJsonObject("artifact_checksums").entrySet()) {
-            String relative = entry.getKey().replace('\\', '/');
-            Path file = root.resolve(relative).normalize();
-            requireInside(root, file);
-            if (!Files.isRegularFile(file)) {
-                throw new IOException("bundle checksum target is not a file: " + entry.getKey());
-            }
-            String expected = entry.getValue().getAsString();
-            if (!expected.matches("[0-9a-fA-F]{64}")) {
-                throw new IOException("bundle checksum is not SHA-256: " + entry.getKey());
-            }
-            java.security.MessageDigest digest;
-            try {
-                digest = java.security.MessageDigest.getInstance("SHA-256");
-            } catch (java.security.NoSuchAlgorithmException error) {
-                throw new IOException("SHA-256 is unavailable", error);
-            }
-            try (java.io.InputStream input = Files.newInputStream(file)) {
-                byte[] buffer = new byte[1024 * 1024];
-                int count;
-                while ((count = input.read(buffer)) >= 0) {
-                    digest.update(buffer, 0, count);
-                }
-            }
-            StringBuilder actual = new StringBuilder();
-            for (byte value : digest.digest()) {
-                actual.append(String.format(java.util.Locale.ROOT, "%02x", value & 255));
-            }
-            if (!actual.toString().equalsIgnoreCase(expected)) {
-                throw new IOException("bundle checksum mismatch: " + entry.getKey());
-            }
-            expectedPaths.add(relative);
-        }
-        Set<String> actualPaths = new HashSet<>();
-        try (java.util.stream.Stream<Path> paths = Files.walk(root)) {
-            paths.filter(Files::isRegularFile).forEach(path -> {
-                if (!path.equals(root.resolve("READY.json"))) {
-                    actualPaths.add(root.relativize(path).toString().replace('\\', '/'));
-                }
-            });
-        }
-        if (!actualPaths.equals(expectedPaths)) {
-            throw new IOException("bundle checksum manifest does not cover bundle files");
+        try {
+            ArtifactIntegrity.validateChecksums(root, ready.getAsJsonObject("artifact_checksums"));
+        } catch (IOException error) {
+            throw new IOException("bundle checksum validation failed: " + error.getMessage(), error);
         }
     }
 }

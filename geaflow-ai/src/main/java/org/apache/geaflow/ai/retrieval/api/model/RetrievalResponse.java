@@ -22,7 +22,6 @@ import java.util.ArrayList;
 import java.util.List;
 import org.apache.geaflow.ai.retrieval.model.document.SourceRef;
 import org.apache.geaflow.ai.retrieval.model.evidence.Evidence;
-import org.apache.geaflow.ai.retrieval.model.graph.GraphPathRef;
 
 /** Wire success response DTO. */
 public class RetrievalResponse {
@@ -31,7 +30,6 @@ public class RetrievalResponse {
     private String graphName;
     private String graphVersion;
     private List<Evidence> evidence = new ArrayList<>();
-    private List<GraphPathRef> paths = new ArrayList<>();
     private List<SourceRef> sources = new ArrayList<>();
     private RetrievalTrace trace;
     private RetrievalBudget effectiveBudget;
@@ -82,14 +80,6 @@ public class RetrievalResponse {
 
     public void setEvidence(List<Evidence> evidence) {
         this.evidence = evidence == null ? new ArrayList<Evidence>() : new ArrayList<>(evidence);
-    }
-
-    public List<GraphPathRef> getPaths() {
-        return paths;
-    }
-
-    public void setPaths(List<GraphPathRef> paths) {
-        this.paths = paths == null ? new ArrayList<GraphPathRef>() : new ArrayList<>(paths);
     }
 
     public List<SourceRef> getSources() {

@@ -126,7 +126,7 @@ class GraphRagMvpEndToEndTest {
                 / (60 + merged.getStageScores().get("GRAPH").getRank()),
             merged.getFusedScore(), 1.0e-12);
         assertFalse(merged.getPaths().isEmpty());
-        assertFalse(hybrid.getPaths().isEmpty());
+        assertTrue(hybrid.getEvidence().stream().anyMatch(value -> !value.getPaths().isEmpty()));
         assertFalse(hybrid.getSources().isEmpty());
     }
 
@@ -405,8 +405,8 @@ class GraphRagMvpEndToEndTest {
             new org.apache.geaflow.ai.retrieval.fusion.WeightedRrfFusion(
                 org.apache.geaflow.ai.retrieval.fusion.WeightedRrfConfig.DEFAULT);
         java.util.concurrent.atomic.AtomicInteger sorts = new java.util.concurrent.atomic.AtomicInteger();
-        org.apache.geaflow.ai.retrieval.fusion.Fusion custom =
-            new org.apache.geaflow.ai.retrieval.fusion.Fusion() {
+        org.apache.geaflow.ai.retrieval.fusion.CandidateFusion custom =
+            new org.apache.geaflow.ai.retrieval.fusion.CandidateFusion() {
                 @Override
                 public org.apache.geaflow.ai.retrieval.fusion.WeightedRrfConfig getConfig() {
                     return delegate.getConfig();
@@ -461,17 +461,20 @@ class GraphRagMvpEndToEndTest {
         org.apache.geaflow.ai.retrieval.execution.DeterministicRulePolicy delegate =
             new org.apache.geaflow.ai.retrieval.execution.DeterministicRulePolicy();
         // Force the boundary replan to produce a different plan so the loop records an event.
-        org.apache.geaflow.ai.retrieval.execution.RoutingPolicy shifting = new
-            org.apache.geaflow.ai.retrieval.execution.RoutingPolicy() {
+        org.apache.geaflow.ai.retrieval.execution.AdaptivePolicy shifting = new
+            org.apache.geaflow.ai.retrieval.execution.AdaptivePolicy() {
                 @Override
                 public org.apache.geaflow.ai.retrieval.execution.RetrievalPlan plan(
+                    org.apache.geaflow.ai.retrieval.execution.RoutingContext routingContext) {
+                    return delegate.plan(routingContext);
+                }
+
+                @Override
+                public org.apache.geaflow.ai.retrieval.execution.RetrievalPlan replan(
                     org.apache.geaflow.ai.retrieval.execution.RoutingContext routingContext,
                     org.apache.geaflow.ai.retrieval.execution.RetrievalProgress progress) {
                     org.apache.geaflow.ai.retrieval.execution.RetrievalPlan base =
-                        delegate.plan(routingContext, progress);
-                    if (progress == null) {
-                        return base;
-                    }
+                        delegate.replan(routingContext, progress);
                     int graphBudget = base.getChannelBudgets().getOrDefault("GRAPH", 0);
                     int textBudget = base.getChannelBudgets().getOrDefault("BM25", 2);
                     if (textBudget < 2) {
@@ -913,7 +916,7 @@ class GraphRagMvpEndToEndTest {
         assertEquals("CANDIDATE_LIMIT", response.getTrace().getStopReason());
         RetrievalResponse restored = RetrievalApiJson.parseResponse(RetrievalApiJson.toJson(response));
         assertEquals(2, restored.getTrace().getGraphCandidatesProduced());
-        assertFalse(restored.getPaths().isEmpty());
+        assertFalse(restored.getEvidence().get(0).getPaths().isEmpty());
     }
 
     @Test

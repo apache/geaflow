@@ -27,13 +27,12 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalErrorCode;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalException;
 import org.apache.geaflow.ai.retrieval.channel.graph.EntityAnchorResolver;
 import org.apache.geaflow.ai.retrieval.channel.graph.GraphNeighborProvider;
 import org.apache.geaflow.ai.retrieval.channel.graph.InMemoryGraphNeighborProvider;
+import org.apache.geaflow.ai.retrieval.execution.LexicalStatistics;
 import org.apache.geaflow.ai.retrieval.index.bm25.Bm25IndexReader;
 import org.apache.geaflow.ai.retrieval.index.graph.GraphArtifactReader;
 import org.apache.geaflow.ai.retrieval.index.vector.VectorIndexReader;
@@ -525,7 +524,7 @@ public final class RetrievalChannelRegistry implements AutoCloseable {
             this.edges = immutableEdges ? Collections.unmodifiableList(edges) : immutable(edges);
             this.graphProvider = graphProvider;
             this.anchorResolver = new EntityAnchorResolver(this.entities);
-            this.idfByToken = buildIdfIndex(this.chunks);
+            this.idfByToken = LexicalStatistics.buildIdfIndex(this.chunks);
             this.ready = ready;
             this.failures = Collections.unmodifiableMap(new LinkedHashMap<>(failures));
         }
@@ -580,27 +579,6 @@ public final class RetrievalChannelRegistry implements AutoCloseable {
 
         public Map<String, Double> getIdfByToken() {
             return idfByToken;
-        }
-
-        private static Map<String, Double> buildIdfIndex(List<TextChunk> chunks) {
-            Map<String, Integer> frequencies = new HashMap<>();
-            Pattern tokens = Pattern.compile("[\\p{L}\\p{N}]+", Pattern.UNICODE_CHARACTER_CLASS);
-            for (TextChunk chunk : chunks) {
-                Matcher matcher = tokens.matcher(EntityAnchorResolver.normalize(chunk.getText()));
-                java.util.Set<String> present = new java.util.HashSet<>();
-                while (matcher.find()) {
-                    present.add(matcher.group());
-                }
-                for (String token : present) {
-                    frequencies.put(token, frequencies.getOrDefault(token, 0) + 1);
-                }
-            }
-            Map<String, Double> index = new HashMap<>();
-            for (Map.Entry<String, Integer> entry : frequencies.entrySet()) {
-                index.put(entry.getKey(), Math.log(1.0D + (chunks.size() + 1.0D)
-                    / (entry.getValue() + 1.0D)));
-            }
-            return Collections.unmodifiableMap(index);
         }
 
         public Map<String, RetrievalException> getFailures() {

@@ -65,25 +65,24 @@ class RetrievalProvenanceContractTest {
     }
 
     @Test
-    void evidenceSchemaAndVersionsRoundTripAndLegacyJsonDefaultsToCurrentSchema() {
+    void evidenceSchemaAndVersionsRoundTripAndRequireExplicitSchema() {
         TextChunk chunk = scopedChunk("chunk-1", "doc-1", "release-3");
         SourceRef source = scopedSource("doc-1", "release-3");
         Evidence evidence = new Evidence("e-1", EvidenceKind.CHUNK, "Alice",
-            Collections.singletonList(chunk), Collections.emptyList(), Collections.emptyList(),
-            Collections.singletonList(source), Collections.emptyMap(), 0.5, 1,
+            Collections.singletonList(chunk), Collections.emptyList(),
+            Collections.singletonList(source), Collections.emptyMap(), 0.5, null, 1,
             Collections.emptyList(), Evidence.CURRENT_SCHEMA_VERSION, "hotpotqa", "release-3",
             "dev", "graph-7", "index-19");
 
         Evidence restored = RetrievalModelJson.fromJson(RetrievalModelJson.toJson(evidence),
             Evidence.class);
-        Evidence legacy = RetrievalModelJson.fromJson("{\"kind\":\"CHUNK\"}", Evidence.class);
-
         assertEquals(evidence, restored);
         assertEquals(Evidence.CURRENT_SCHEMA_VERSION, restored.getSchemaVersion());
         assertEquals("release-3", restored.getDatasetVersion());
         assertEquals("graph-7", restored.getGraphVersion());
         assertEquals("index-19", restored.getIndexVersion());
-        assertEquals(Evidence.LEGACY_SCHEMA_VERSION, legacy.getSchemaVersion());
+        assertThrows(com.google.gson.JsonParseException.class,
+            () -> RetrievalModelJson.fromJson("{\"kind\":\"CHUNK\"}", Evidence.class));
     }
 
     @Test
@@ -102,8 +101,8 @@ class RetrievalProvenanceContractTest {
             null, "index-v19").getIndexVersion());
         assertThrows(RetrievalModelValidationException.class,
             () -> new Evidence("e-1", EvidenceKind.CHUNK, "Alice", Collections.emptyList(),
-                Collections.emptyList(), Collections.emptyList(), Collections.emptyList(),
-                Collections.emptyMap(), 0.5, 1, Collections.emptyList(), 99,
+                Collections.emptyList(), Collections.emptyList(),
+                Collections.emptyMap(), 0.5, null, 1, Collections.emptyList(), 99,
                 null, null, null, null, null));
     }
 
@@ -158,19 +157,19 @@ class RetrievalProvenanceContractTest {
         assertThrows(RetrievalModelValidationException.class, () -> currentEvidence(
             EvidenceKind.ENTITY, Collections.singletonList(chunk),
             Collections.singletonList(missingScope), Collections.singletonList(source),
-            Collections.emptyList(), Collections.emptyList()));
+            Collections.emptyList()));
         assertThrows(RetrievalModelValidationException.class, () -> currentEvidence(
             EvidenceKind.ENTITY, Collections.singletonList(chunk),
             Collections.singletonList(missingSources), Collections.singletonList(source),
-            Collections.emptyList(), Collections.emptyList()));
+            Collections.emptyList()));
         assertThrows(RetrievalModelValidationException.class, () -> currentEvidence(
             EvidenceKind.CHUNK, Collections.singletonList(chunk),
             Collections.singletonList(wrongHash), Collections.singletonList(source),
-            Collections.emptyList(), Collections.emptyList()));
+            Collections.emptyList()));
 
         assertEquals(Collections.singletonList(validEntity), currentEvidence(EvidenceKind.ENTITY,
             Collections.singletonList(chunk), Collections.singletonList(validEntity),
-            Collections.singletonList(source), Collections.emptyList(), Collections.emptyList())
+            Collections.singletonList(source), Collections.emptyList())
             .getEntities());
     }
 
@@ -190,28 +189,28 @@ class RetrievalProvenanceContractTest {
             "release-3", "dev", "sha256:document-1");
         GraphVertexRef endpoint = new GraphVertexRef("PERSON", "vertex-2", "entity-2", "hotpotqa",
             "release-3", "dev", "sha256:document-2");
-        GraphPathRef path = new GraphPathRef(Arrays.asList("vertex-1", "vertex-2"),
-            Collections.singletonList("edge-1"), 1, false);
         String aggregateHash = RetrievalIds.aggregateSourceHash(
             Arrays.asList("sha256:document-1", "sha256:document-2"));
         GraphEdgeRef validEdge = new GraphEdgeRef("edge-1", "knows", "entity-1", "entity-2",
             Arrays.asList("chunk-1", "chunk-2"), "hotpotqa", "release-3", "dev", aggregateHash);
-        GraphEvidenceTrace trace = new GraphEvidenceTrace("q-1", RetrievalMode.GRAPH_ONLY, seed,
-            "CANONICAL", 1.0, "v7", path, Collections.singletonList("chunk-1"),
-            Arrays.asList(seed, endpoint), Collections.singletonList(validEdge));
+        GraphPathRef path = new GraphPathRef(Arrays.asList(seed, endpoint),
+            Collections.singletonList(validEdge), false);
+        GraphEvidenceTrace trace = new GraphEvidenceTrace("q-1", RetrievalMode.GRAPH_ONLY,
+            "CANONICAL", 1.0, "v7", path, Collections.singletonList("chunk-1"));
         GraphEdgeRef wrongHashEdge = new GraphEdgeRef("edge-1", "knows", "entity-1", "entity-2",
             Arrays.asList("chunk-1", "chunk-2"), "hotpotqa", "release-3", "dev", "sha256:wrong");
+        GraphPathRef wrongHashPath = new GraphPathRef(Arrays.asList(seed, endpoint),
+            Collections.singletonList(wrongHashEdge), false);
         GraphEvidenceTrace wrongHashTrace = new GraphEvidenceTrace("q-1", RetrievalMode.GRAPH_ONLY,
-            seed, "CANONICAL", 1.0, "v7", path, Collections.singletonList("chunk-1"),
-            Arrays.asList(seed, endpoint), Collections.singletonList(wrongHashEdge));
+            "CANONICAL", 1.0, "v7", wrongHashPath, Collections.singletonList("chunk-1"));
 
         assertThrows(RetrievalModelValidationException.class, () -> currentEvidence(
             EvidenceKind.GRAPH_PATH, Arrays.asList(first, second), Collections.singletonList(anchor),
-            Arrays.asList(firstSource, secondSource), Collections.singletonList(path),
+            Arrays.asList(firstSource, secondSource),
             Collections.singletonList(wrongHashTrace)));
         Evidence partial = currentEvidence(EvidenceKind.GRAPH_PATH, Collections.singletonList(first),
             Collections.singletonList(anchor), Collections.singletonList(firstSource),
-            Collections.singletonList(path), Collections.singletonList(trace));
+            Collections.singletonList(trace));
         assertEquals("v7", partial.getGraphVersion());
     }
 
@@ -224,27 +223,25 @@ class RetrievalProvenanceContractTest {
             "sha256:document-1");
         GraphVertexRef seed = new GraphVertexRef("PERSON", "vertex-1", "entity-1", "hotpotqa",
             "release-3", "dev", "sha256:document-1");
-        GraphPathRef path = new GraphPathRef(Collections.singletonList("vertex-1"),
-            Collections.emptyList(), 0, false);
+        GraphPathRef path = new GraphPathRef(Collections.singletonList(seed),
+            Collections.emptyList(), false);
         GraphEvidenceTrace trace = new GraphEvidenceTrace("q-1", RetrievalMode.GRAPH_ONLY,
-            seed, "CANONICAL", 1.0, "v7", path, Collections.singletonList("chunk-2"),
-            Collections.singletonList(seed), Collections.emptyList());
+            "CANONICAL", 1.0, "v7", path, Collections.singletonList("chunk-2"));
 
         assertThrows(RetrievalModelValidationException.class, () -> new Evidence("e-1",
             EvidenceKind.CHUNK, "Alice", Collections.singletonList(chunk),
-            Collections.singletonList(anchor), Collections.singletonList(path),
-            Collections.singletonList(source), Collections.emptyMap(), 0.5, 1,
+            Collections.singletonList(anchor), Collections.singletonList(source),
+            Collections.emptyMap(), 0.5, null, 1,
             Collections.singletonList(trace), Evidence.CURRENT_SCHEMA_VERSION, "hotpotqa", "release-3",
             "dev", "v8", "v8"));
 
         GraphEvidenceTrace validVersionWrongChunk = new GraphEvidenceTrace("q-1",
-            RetrievalMode.GRAPH_ONLY, seed, "CANONICAL", 1.0, "v7", path,
-            Collections.singletonList("chunk-2"), Collections.singletonList(seed),
-            Collections.emptyList());
+            RetrievalMode.GRAPH_ONLY, "CANONICAL", 1.0, "v7", path,
+            Collections.singletonList("chunk-2"));
         assertThrows(RetrievalModelValidationException.class, () -> new Evidence("e-1",
             EvidenceKind.CHUNK, "Alice", Collections.singletonList(chunk),
-            Collections.singletonList(anchor), Collections.singletonList(path),
-            Collections.singletonList(source), Collections.emptyMap(), 0.5, 1,
+            Collections.singletonList(anchor), Collections.singletonList(source),
+            Collections.emptyMap(), 0.5, null, 1,
             Collections.singletonList(validVersionWrongChunk), Evidence.CURRENT_SCHEMA_VERSION,
             "hotpotqa", "release-3", "dev", "v7", "index-19"));
     }
@@ -255,27 +252,26 @@ class RetrievalProvenanceContractTest {
 
         assertThrows(RetrievalModelValidationException.class, () -> new Evidence("e-1",
             EvidenceKind.CHUNK, "Alice", Collections.singletonList(legacyChunk),
-            Collections.emptyList(), Collections.emptyList(), Collections.emptyList(),
-            Collections.emptyMap(), 0.5, 1, Collections.emptyList(),
+            Collections.emptyList(), Collections.emptyList(),
+            Collections.emptyMap(), 0.5, null, 1, Collections.emptyList(),
             Evidence.CURRENT_SCHEMA_VERSION, "hotpotqa", "release-3", "dev", null, null));
 
-        Evidence legacy = new Evidence("e-1", EvidenceKind.CHUNK, "Alice",
-            Collections.singletonList(legacyChunk), Collections.emptyList(), Collections.emptyList(),
-            Collections.emptyList(), Collections.emptyMap(), 0.5, 1);
-        assertEquals(Evidence.LEGACY_SCHEMA_VERSION, legacy.getSchemaVersion());
+        assertThrows(RetrievalModelValidationException.class, () -> new Evidence("e-1",
+            EvidenceKind.CHUNK, "Alice", Collections.singletonList(legacyChunk),
+            Collections.emptyList(), Collections.emptyList(), Collections.emptyMap(), 0.5, null, 1,
+            Collections.emptyList(), 1, null, null, null, null, null));
     }
 
     @Test
     void currentSchemaRejectsGraphSeedFromAnotherDatasetScope() {
         TextChunk chunk = scopedChunk("chunk-1", "doc-1", "release-3");
         SourceRef source = scopedSource("doc-1", "release-3");
+        GraphVertexRef foreignSeed = new GraphVertexRef("PERSON", "vertex-1", "entity-1",
+            "other", "release-3", "dev", "sha256:other");
         GraphEvidenceTrace trace = new GraphEvidenceTrace("q-1", RetrievalMode.GRAPH_ONLY,
-            new GraphVertexRef("PERSON", "vertex-1", "entity-1", "other", "release-3", "dev",
-                "sha256:other"), "CANONICAL", 1.0, "v7",
-            new GraphPathRef(Collections.singletonList("vertex-1"), Collections.emptyList(), 0,
-                false), Collections.singletonList("chunk-1"),
-            Collections.singletonList(new GraphVertexRef("PERSON", "vertex-1", "entity-1",
-                "other", "release-3", "dev", "sha256:other")), Collections.emptyList());
+            "CANONICAL", 1.0, "v7", new GraphPathRef(
+                Collections.singletonList(foreignSeed), Collections.emptyList(), false),
+            Collections.singletonList("chunk-1"));
         EntityRef anchor = new EntityRef("entity-1", "Alice", Collections.emptyList(), "PERSON",
             Collections.singletonList("chunk-1"), "hotpotqa", "release-3", "dev",
             "sha256:document-1");
@@ -283,7 +279,7 @@ class RetrievalProvenanceContractTest {
         assertThrows(RetrievalModelValidationException.class, () -> new Evidence("e-1",
             EvidenceKind.CHUNK, "Alice", Collections.singletonList(chunk),
             Collections.singletonList(anchor),
-            Collections.emptyList(), Collections.singletonList(source), Collections.emptyMap(), 0.5,
+            Collections.singletonList(source), Collections.emptyMap(), 0.5, null,
             1, Collections.singletonList(trace), Evidence.CURRENT_SCHEMA_VERSION, "hotpotqa",
             "release-3", "dev", "v7", "index-19"));
     }
@@ -307,32 +303,33 @@ class RetrievalProvenanceContractTest {
             "release-3", "dev", "sha256:document-1");
         GraphVertexRef endpoint = new GraphVertexRef("PERSON", "vertex-2", "entity-2", "hotpotqa",
             "release-3", "dev", "sha256:document-2");
-        GraphPathRef path = new GraphPathRef(Arrays.asList("vertex-1", "vertex-2"),
-            Collections.singletonList("edge-1"), 1, false);
         GraphEdgeRef edge = new GraphEdgeRef("edge-1", "knows", "entity-1", "entity-2",
             Collections.singletonList("chunk-1"), "hotpotqa", "release-3", "dev",
             "sha256:document-1");
+        GraphPathRef path = new GraphPathRef(Arrays.asList(seed, endpoint),
+            Collections.singletonList(edge), false);
         GraphEvidenceTrace unsupported = new GraphEvidenceTrace("q-1", RetrievalMode.GRAPH_ONLY,
-            seed, "CANONICAL", 1.0, "v7", path, Collections.singletonList("chunk-2"),
-            Arrays.asList(seed, endpoint), Collections.singletonList(edge));
+            "CANONICAL", 1.0, "v7", path, Collections.singletonList("chunk-2"));
 
         assertThrows(RetrievalModelValidationException.class, () -> new Evidence("e-1",
             EvidenceKind.GRAPH_PATH, "Alice and Bob", Arrays.asList(firstChunk, secondChunk),
-            Collections.singletonList(seedEntity), Collections.singletonList(path),
-            Arrays.asList(firstSource, secondSource), Collections.emptyMap(), 0.5, 1,
+            Collections.singletonList(seedEntity),
+            Arrays.asList(firstSource, secondSource), Collections.emptyMap(), 0.5, null, 1,
             Collections.singletonList(unsupported), Evidence.CURRENT_SCHEMA_VERSION, "hotpotqa",
             "release-3", "dev", "v7", "index-19"));
 
         GraphEdgeRef edgeWithoutSources = new GraphEdgeRef("edge-1", "knows", "entity-1",
             "entity-2", Collections.emptyList(), "hotpotqa", "release-3", "dev",
             "sha256:document-1");
+        GraphPathRef pathWithoutEdgeSources = new GraphPathRef(Arrays.asList(seed, endpoint),
+            Collections.singletonList(edgeWithoutSources), false);
         GraphEvidenceTrace entityFallback = new GraphEvidenceTrace("q-1", RetrievalMode.GRAPH_ONLY,
-            seed, "CANONICAL", 1.0, "v7", path, Collections.singletonList("chunk-1"),
-            Arrays.asList(seed, endpoint), Collections.singletonList(edgeWithoutSources));
+            "CANONICAL", 1.0, "v7", pathWithoutEdgeSources,
+            Collections.singletonList("chunk-1"));
         Evidence valid = new Evidence("e-1", EvidenceKind.GRAPH_PATH, "Alice and Bob",
             Arrays.asList(firstChunk, secondChunk), Collections.singletonList(seedEntity),
-            Collections.singletonList(path), Arrays.asList(firstSource, secondSource),
-            Collections.emptyMap(), 0.5, 1, Collections.singletonList(entityFallback),
+            Arrays.asList(firstSource, secondSource),
+            Collections.emptyMap(), 0.5, null, 1, Collections.singletonList(entityFallback),
             Evidence.CURRENT_SCHEMA_VERSION, "hotpotqa", "release-3", "dev", "v7", "index-19");
 
         assertEquals(Collections.singletonList("chunk-1"),
@@ -437,35 +434,29 @@ class RetrievalProvenanceContractTest {
     void currentEvidenceRequiresCompleteTraceAndConnectedPathReferences() {
         TextChunk chunk = scopedChunk("chunk-1", "doc-1", "release-3");
         SourceRef source = scopedSource("doc-1", "release-3");
-        GraphPathRef path = new GraphPathRef(java.util.Arrays.asList("entity-1", "entity-2"),
-            Collections.singletonList("edge-1"), 1, false);
-        GraphEvidenceTrace missingSeed = new GraphEvidenceTrace("q-1", "v7", "entity-1",
-            "CANONICAL", 1.0, path, Collections.singletonList("chunk-1"));
+        GraphPathRef path = new GraphPathRef(Collections.singletonList(
+            new GraphVertexRef("PERSON", "vertex-1", "entity-1", "hotpotqa", "release-3",
+                "dev", "sha256:document-1")), Collections.emptyList(), false);
 
         assertThrows(RetrievalModelValidationException.class, () -> new Evidence("e-1",
             EvidenceKind.GRAPH_PATH, "Alice", Collections.singletonList(chunk), Collections.emptyList(),
-            Collections.singletonList(path), Collections.singletonList(source), Collections.emptyMap(),
-            0.5, 1, Collections.singletonList(missingSeed), Evidence.CURRENT_SCHEMA_VERSION,
+            Collections.singletonList(source), Collections.emptyMap(),
+            0.5, null, 1, Collections.emptyList(), Evidence.CURRENT_SCHEMA_VERSION,
             "hotpotqa", "release-3", "dev", "v7", "index-19"));
 
         GraphVertexRef seed = new GraphVertexRef("PERSON", "vertex-1", "entity-1", "hotpotqa",
             "release-3", "dev", "sha256:document-1");
         GraphVertexRef endpoint = new GraphVertexRef("PERSON", "unrelated", "entity-2", "hotpotqa",
             "release-3", "dev", "sha256:document-1");
-        GraphPathRef vertexPath = new GraphPathRef(Arrays.asList("vertex-1", "unrelated"),
-            Collections.singletonList("edge-1"), 1, false);
-        assertThrows(IllegalArgumentException.class, () -> new GraphEvidenceTrace("q-1",
-            RetrievalMode.GRAPH_ONLY, seed, "CANONICAL", 1.0, "v7", vertexPath,
-            Collections.singletonList("chunk-1"), Arrays.asList(seed, endpoint),
-            Collections.singletonList(new GraphEdgeRef("edge-1", "knows", "entity-1", "entity-3"))));
+        assertThrows(RetrievalModelValidationException.class, () -> new GraphPathRef(
+            Arrays.asList(seed, endpoint), Collections.singletonList(
+                new GraphEdgeRef("edge-1", "knows", "entity-1", "entity-3")), false));
     }
 
     private static Evidence evidence(TextChunk[] chunks, SourceRef[] sources, String graphVersion,
                                      String indexVersion) {
         return new Evidence("e-1", EvidenceKind.CHUNK, "Alice", java.util.Arrays.asList(chunks),
-            Collections.emptyList(), Collections.singletonList(new GraphPathRef(
-                Collections.singletonList("vertex-1"), Collections.emptyList(), 0, false)),
-            java.util.Arrays.asList(sources), Collections.emptyMap(), 0.5, 1,
+            Collections.emptyList(), java.util.Arrays.asList(sources), Collections.emptyMap(), 0.5, null, 1,
             Collections.emptyList(), Evidence.CURRENT_SCHEMA_VERSION, "hotpotqa", "release-3",
             "dev", graphVersion, indexVersion);
     }
@@ -473,10 +464,9 @@ class RetrievalProvenanceContractTest {
     private static Evidence currentEvidence(EvidenceKind kind, java.util.List<TextChunk> chunks,
                                             java.util.List<EntityRef> entities,
                                             java.util.List<SourceRef> sources,
-                                            java.util.List<GraphPathRef> paths,
                                             java.util.List<GraphEvidenceTrace> traces) {
-        return new Evidence("e-1", kind, "Alice", chunks, entities, paths, sources,
-            Collections.emptyMap(), 0.5, 1, traces, Evidence.CURRENT_SCHEMA_VERSION, "hotpotqa",
+        return new Evidence("e-1", kind, "Alice", chunks, entities, sources,
+            Collections.emptyMap(), 0.5, null, 1, traces, Evidence.CURRENT_SCHEMA_VERSION, "hotpotqa",
             "release-3", "dev", "v7", "index-19");
     }
 

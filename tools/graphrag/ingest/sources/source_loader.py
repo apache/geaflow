@@ -18,6 +18,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, Iterator, List, Optional
 
+from ..digests import sha256_file
+
 
 class SourceError(ValueError):
     """Raised when a source cannot be verified or parsed into canonical records."""
@@ -159,15 +161,11 @@ class SourceLoader:
 
     @staticmethod
     def _verify_checksum(path: Path, manifest: SourceManifest) -> None:
-        digest = hashlib.sha256()
         try:
-            with path.open("rb") as stream:
-                for block in iter(lambda: stream.read(1024 * 1024), b""):
-                    digest.update(block)
+            actual = sha256_file(path)
         except OSError as exc:
             raise SourceError("cannot read %s/%s source %s: %s" % (
                 manifest.dataset, manifest.split, path, exc)) from exc
-        actual = digest.hexdigest()
         if actual != manifest.sha256:
             raise SourceError(
                 "%s/%s checksum mismatch for %s: expected %s, got %s"

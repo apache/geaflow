@@ -167,7 +167,8 @@ public class RetrievalApiJsonTest {
         response.setGraphName("graph");
         response.setGraphVersion("v1");
         response.setEvidence(Collections.singletonList(new Evidence("e-1", EvidenceKind.CHUNK,
-            "text", null, null, null, null, null, null, 1)));
+            "text", null, null, null, null, null, null, 1, null,
+            Evidence.CURRENT_SCHEMA_VERSION, null, null, null, null, null)));
         RetrievalTrace trace = new RetrievalTrace();
         trace.setTraceVersion("v1");
         trace.setRequestId("req-1");
@@ -230,7 +231,6 @@ public class RetrievalApiJsonTest {
 
         Assertions.assertEquals("req-1", restored.getRequestId());
         Assertions.assertEquals(1, restored.getEvidence().size());
-        Assertions.assertNotNull(restored.getPaths());
         Assertions.assertNotNull(restored.getSources());
         Assertions.assertNotNull(restored.getDegradedChannels());
         Assertions.assertEquals("v1", restored.getTrace().getTraceVersion());
@@ -304,7 +304,7 @@ public class RetrievalApiJsonTest {
     @Test
     public void emptyResponseUsesArraysInsteadOfNullCollections() {
         String json = "{\"requestId\":\"req-2\",\"graphName\":\"graph\","
-            + "\"graphVersion\":\"v1\",\"evidence\":[],\"paths\":[],"
+            + "\"graphVersion\":\"v1\",\"evidence\":[],"
             + "\"sources\":[],\"degradedChannels\":[],"
             + "\"trace\":{\"traceVersion\":\"v1\","
             + "\"requestId\":\"req-2\","
@@ -316,7 +316,6 @@ public class RetrievalApiJsonTest {
         RetrievalResponse response = RetrievalApiJson.parseResponse(json);
 
         Assertions.assertNotNull(response.getEvidence());
-        Assertions.assertNotNull(response.getPaths());
         Assertions.assertNotNull(response.getSources());
         Assertions.assertNotNull(response.getDegradedChannels());
         Assertions.assertTrue(response.getEvidence().isEmpty());

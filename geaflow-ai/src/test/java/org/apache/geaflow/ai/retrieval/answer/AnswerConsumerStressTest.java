@@ -83,8 +83,8 @@ class AnswerConsumerStressTest {
         ThreadPoolExecutor executor = new ThreadPoolExecutor(workers, workers, 0L,
             TimeUnit.MILLISECONDS, new ArrayBlockingQueue<>(workers * 4),
             new ThreadPoolExecutor.AbortPolicy());
-        DefaultAnswerSynthesizer synthesizer =
-            new DefaultAnswerSynthesizer(new DeterministicTokenEstimator());
+        ExtractiveAnswerConsumer synthesizer =
+            new ExtractiveAnswerConsumer(new DeterministicTokenEstimator());
         long started = System.nanoTime();
 
         for (int index = 0; index < scheduled; index++) {

@@ -20,6 +20,7 @@
 package org.apache.geaflow.ai.retrieval.model.evidence;
 
 import com.google.gson.annotations.SerializedName;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -45,8 +46,7 @@ import org.apache.geaflow.ai.retrieval.validation.RetrievalModelValidationExcept
  */
 public final class Evidence {
 
-    public static final int LEGACY_SCHEMA_VERSION = 0;
-    public static final int CURRENT_SCHEMA_VERSION = 1;
+    public static final int CURRENT_SCHEMA_VERSION = 2;
 
     @SerializedName("evidenceId")
     private final String evidenceId;
@@ -58,8 +58,6 @@ public final class Evidence {
     private final List<TextChunk> chunks;
     @SerializedName("entities")
     private final List<EntityRef> entities;
-    @SerializedName("paths")
-    private final List<GraphPathRef> paths;
     @SerializedName("graphTraces")
     private final List<GraphEvidenceTrace> graphTraces;
     @SerializedName("sources")
@@ -91,14 +89,13 @@ public final class Evidence {
         this.text = null;
         this.chunks = Collections.emptyList();
         this.entities = Collections.emptyList();
-        this.paths = Collections.emptyList();
         this.graphTraces = Collections.emptyList();
         this.sources = Collections.emptyList();
         this.stageScores = Collections.emptyMap();
         this.fusedScore = null;
         this.finalScore = null;
         this.rank = null;
-        this.schemaVersion = LEGACY_SCHEMA_VERSION;
+        this.schemaVersion = CURRENT_SCHEMA_VERSION;
         this.dataset = null;
         this.datasetVersion = null;
         this.split = null;
@@ -107,40 +104,7 @@ public final class Evidence {
     }
 
     public Evidence(String evidenceId, EvidenceKind kind, String text, List<TextChunk> chunks,
-                    List<EntityRef> entities, List<GraphPathRef> paths, List<SourceRef> sources,
-                    Map<String, ChannelScore> stageScores, Double fusedScore, Integer rank) {
-        this(evidenceId, kind, text, chunks, entities, paths, sources, stageScores, fusedScore,
-            null, rank, Collections.emptyList());
-    }
-
-    public Evidence(String evidenceId, EvidenceKind kind, String text, List<TextChunk> chunks,
-                    List<EntityRef> entities, List<GraphPathRef> paths, List<SourceRef> sources,
-                    Map<String, ChannelScore> stageScores, Double fusedScore, Double finalScore,
-                    Integer rank) {
-        this(evidenceId, kind, text, chunks, entities, paths, sources, stageScores, fusedScore,
-            finalScore, rank, Collections.emptyList());
-    }
-
-    public Evidence(String evidenceId, EvidenceKind kind, String text, List<TextChunk> chunks,
-                    List<EntityRef> entities, List<GraphPathRef> paths, List<SourceRef> sources,
-                    Map<String, ChannelScore> stageScores, Double fusedScore, Double finalScore,
-                    Integer rank, List<GraphEvidenceTrace> graphTraces) {
-        this(evidenceId, kind, text, chunks, entities, paths, sources, stageScores, fusedScore,
-            finalScore, rank, graphTraces, LEGACY_SCHEMA_VERSION, null, null, null, null, null);
-    }
-
-    public Evidence(String evidenceId, EvidenceKind kind, String text, List<TextChunk> chunks,
-                    List<EntityRef> entities, List<GraphPathRef> paths, List<SourceRef> sources,
-                    Map<String, ChannelScore> stageScores, Double fusedScore, Integer rank,
-                    List<GraphEvidenceTrace> graphTraces, int schemaVersion, String dataset,
-                    String datasetVersion, String split, String graphVersion, String indexVersion) {
-        this(evidenceId, kind, text, chunks, entities, paths, sources, stageScores, fusedScore,
-            null, rank, graphTraces, schemaVersion, dataset, datasetVersion, split, graphVersion,
-            indexVersion);
-    }
-
-    public Evidence(String evidenceId, EvidenceKind kind, String text, List<TextChunk> chunks,
-                    List<EntityRef> entities, List<GraphPathRef> paths, List<SourceRef> sources,
+                    List<EntityRef> entities, List<SourceRef> sources,
                     Map<String, ChannelScore> stageScores, Double fusedScore, Double finalScore,
                     Integer rank, List<GraphEvidenceTrace> graphTraces, int schemaVersion,
                     String dataset, String datasetVersion, String split, String graphVersion,
@@ -150,7 +114,6 @@ public final class Evidence {
         this.text = ModelValidation.optional(text);
         this.chunks = ModelValidation.immutableList(chunks, "chunks");
         this.entities = ModelValidation.immutableList(entities, "entities");
-        this.paths = ModelValidation.immutableList(paths, "paths");
         this.graphTraces = ModelValidation.immutableList(graphTraces, "graphTraces");
         this.sources = ModelValidation.immutableList(sources, "sources");
         this.stageScores = ModelValidation.sortedMap(stageScores);
@@ -165,7 +128,7 @@ public final class Evidence {
         this.fusedScore = ModelValidation.optionalScore(fusedScore, "fusedScore");
         this.finalScore = finalScore == null ? null : ModelValidation.finite(finalScore, "finalScore");
         this.rank = ModelValidation.optionalRank(rank, "rank");
-        if (schemaVersion != CURRENT_SCHEMA_VERSION && schemaVersion != LEGACY_SCHEMA_VERSION) {
+        if (schemaVersion != CURRENT_SCHEMA_VERSION) {
             throw new RetrievalModelValidationException("unsupported evidence schemaVersion: "
                 + schemaVersion);
         }
@@ -204,7 +167,14 @@ public final class Evidence {
     }
 
     public List<GraphPathRef> getPaths() {
-        return Collections.unmodifiableList(paths == null ? Collections.emptyList() : paths);
+        List<GraphPathRef> unique = new ArrayList<>();
+        for (GraphEvidenceTrace trace : getGraphTraces()) {
+            GraphPathRef path = trace.getPath();
+            if (unique.stream().noneMatch(existing -> existing.sameIdentityAs(path))) {
+                unique.add(path);
+            }
+        }
+        return Collections.unmodifiableList(unique);
     }
 
     public List<GraphEvidenceTrace> getGraphTraces() {
@@ -305,7 +275,8 @@ public final class Evidence {
         for (TextChunk chunk : getChunks()) {
             chunkIds.add(chunk.getChunkId());
             chunksById.put(chunk.getChunkId(), chunk);
-            if (schemaVersion == CURRENT_SCHEMA_VERSION && chunk.getDataset() == null) {
+            if (schemaVersion == CURRENT_SCHEMA_VERSION && dataset != null
+                && chunk.getDataset() == null) {
                 throw new RetrievalModelValidationException(
                     "current evidence schema requires chunk source provenance");
             }
@@ -324,7 +295,7 @@ public final class Evidence {
                     "chunk must have a matching source provenance reference");
             }
         }
-        if (schemaVersion == CURRENT_SCHEMA_VERSION && !getChunks().isEmpty()
+        if (schemaVersion == CURRENT_SCHEMA_VERSION && dataset != null && !getChunks().isEmpty()
             && getSources().isEmpty()) {
             throw new RetrievalModelValidationException(
                 "current evidence schema requires source references");
@@ -349,15 +320,17 @@ public final class Evidence {
         for (EntityRef entity : getEntities()) {
             validateReferenceScope(entity.getDataset(), entity.getDatasetVersion(), entity.getSplit(),
                 "entity");
-            if (schemaVersion == CURRENT_SCHEMA_VERSION && entity.getDataset() == null) {
+            if (schemaVersion == CURRENT_SCHEMA_VERSION && dataset != null
+                && entity.getDataset() == null) {
                 throw new RetrievalModelValidationException(
                     "current evidence requires entity dataset provenance");
             }
-            if (schemaVersion == CURRENT_SCHEMA_VERSION && entity.getSourceChunkIds().isEmpty()) {
+            if (schemaVersion == CURRENT_SCHEMA_VERSION && dataset != null
+                && entity.getSourceChunkIds().isEmpty()) {
                 throw new RetrievalModelValidationException(
                     "current evidence entity requires source chunks");
             }
-            if (schemaVersion == CURRENT_SCHEMA_VERSION) {
+            if (schemaVersion == CURRENT_SCHEMA_VERSION && dataset != null) {
                 validateSourceHash(entity.getSourceHash(), entity.getSourceChunkIds(), chunksById,
                     "entity");
             }
@@ -399,7 +372,7 @@ public final class Evidence {
 
     private void validateTraceSupportingChunks(GraphEvidenceTrace trace) {
         java.util.Set<String> pathSourceChunkIds = new java.util.HashSet<>();
-        for (GraphEdgeRef edge : trace.getPathEdges()) {
+        for (GraphEdgeRef edge : trace.getPath().getEdges()) {
             pathSourceChunkIds.addAll(edge.getSourceChunkIds());
         }
         if (pathSourceChunkIds.isEmpty()) {
@@ -419,18 +392,9 @@ public final class Evidence {
         if (schemaVersion != CURRENT_SCHEMA_VERSION) {
             return;
         }
-        if (trace.getSelectedMode() == null || trace.getSeed() == null) {
-            throw new RetrievalModelValidationException(
-                "current evidence schema requires graph trace selectedMode and seed");
-        }
         if (graphVersion == null || !graphVersion.equals(trace.getGraphVersion())) {
             throw new RetrievalModelValidationException(
                 "current graph trace requires matching evidence graphVersion");
-        }
-        if (trace.getPathVertices().size() != trace.getPath().getHop() + 1
-            || trace.getPathEdges().size() != trace.getPath().getHop()) {
-            throw new RetrievalModelValidationException(
-                "current evidence schema requires graph path vertex and edge references");
         }
         EntityRef anchor = getEntities().stream()
             .filter(entity -> trace.getAnchorEntityId().equals(entity.getEntityId()))
@@ -441,9 +405,9 @@ public final class Evidence {
             throw new RetrievalModelValidationException(
                 "graph seed provenance does not match its anchor entity");
         }
-        if (trace.getSupportingChunkIds().isEmpty() || !getPaths().contains(trace.getPath())) {
+        if (trace.getSupportingChunkIds().isEmpty()) {
             throw new RetrievalModelValidationException(
-                "current graph trace must reference evidence path and supporting chunks");
+                "current graph trace must reference supporting chunks");
         }
     }
 
@@ -458,7 +422,7 @@ public final class Evidence {
         if (trace.getSeed().getDataset() != null) {
             validateVertexScope(trace.getSeed());
         }
-        for (GraphVertexRef vertex : trace.getPathVertices()) {
+        for (GraphVertexRef vertex : trace.getPath().getVertices()) {
             if (dataset != null && schemaVersion == CURRENT_SCHEMA_VERSION && vertex.getDataset() == null) {
                 throw new RetrievalModelValidationException(
                     "current graph path requires vertex dataset provenance");
@@ -467,13 +431,13 @@ public final class Evidence {
                 validateVertexScope(vertex);
             }
         }
-        for (GraphEdgeRef edge : trace.getPathEdges()) {
+        for (GraphEdgeRef edge : trace.getPath().getEdges()) {
             if (dataset != null && schemaVersion == CURRENT_SCHEMA_VERSION && edge.getDataset() == null) {
                 throw new RetrievalModelValidationException(
                     "current graph path requires edge dataset provenance");
             }
             validateReferenceScope(edge.getDataset(), edge.getDatasetVersion(), edge.getSplit(), "edge");
-            if (schemaVersion == CURRENT_SCHEMA_VERSION) {
+            if (schemaVersion == CURRENT_SCHEMA_VERSION && dataset != null) {
                 validateSourceHash(edge.getSourceHash(), edge.getSourceChunkIds(),
                     chunksById, "edge");
             }
@@ -597,7 +561,7 @@ public final class Evidence {
         Evidence that = (Evidence) object;
         return Objects.equals(evidenceId, that.evidenceId) && kind == that.kind
             && Objects.equals(text, that.text) && Objects.equals(chunks, that.chunks)
-            && Objects.equals(entities, that.entities) && Objects.equals(paths, that.paths)
+            && Objects.equals(entities, that.entities)
             && Objects.equals(sources, that.sources) && Objects.equals(graphTraces, that.graphTraces)
             && Objects.equals(stageScores, that.stageScores)
             && Objects.equals(fusedScore, that.fusedScore)
@@ -613,7 +577,7 @@ public final class Evidence {
 
     @Override
     public int hashCode() {
-        return Objects.hash(evidenceId, kind, text, chunks, entities, paths, sources, graphTraces,
+        return Objects.hash(evidenceId, kind, text, chunks, entities, sources, graphTraces,
             stageScores, fusedScore, finalScore, rank, schemaVersion, dataset, datasetVersion, split,
             graphVersion, indexVersion);
     }

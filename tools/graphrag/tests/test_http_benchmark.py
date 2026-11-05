@@ -60,7 +60,11 @@ def test_hotpot_json_materializes_queries_and_audits_bad_fact_without_hiding_it(
 def test_sentence_coverage_deduplicates_chunks_and_requires_full_sentence():
     response = {'evidence': [{'chunks': [{'chunkId': 'a', 'text': 'First sentence. Partial'},
                                          {'chunkId': 'a', 'text': 'First sentence. Partial'}],
-                              'paths': [{'edges': ['e']}], 'sources': [{'sourceUri': 'source'}]}]}
+                              'graphTraces': [{'path': {
+                                  'vertices': [{'vertexId': 'v1'}, {'vertexId': 'v2'}],
+                                  'edges': [{'edgeId': 'e', 'label': 'mentions'}],
+                                  'sampled': False}}],
+                              'sources': [{'sourceUri': 'source'}]}]}
     metrics = score_evidence(response, ['First sentence.', 'Partial sentence.'])
     assert metrics['supportingSentenceRecall'] == .5
     assert metrics['allSupportingSentencesHit'] == 0
@@ -74,14 +78,17 @@ def test_item_level_chunk_is_counted():
     assert score_evidence(response, ['First sentence.'])['supportingSentenceRecall'] == 1
 
 
-def test_top_level_paths_trace_and_provenance_are_counted():
+def test_canonical_trace_paths_and_provenance_are_counted():
+    path = {'vertices': [{'vertexId': 'a'}, {'vertexId': 'b'}],
+            'edges': [{'edgeId': 'edge-1', 'label': 'related'}], 'sampled': False}
     response = {'evidence': [{'chunks': [{'chunkId': 'a', 'text': 'Fact.',
-                                          'sources': [{'documentId': 'd'}]}]}],
-                'paths': [{'path': ['a', 'b']}],
+                                          'sources': [{'documentId': 'd'}]}],
+                              'graphTraces': [{'path': path}, {'path': path}]}],
                 'trace': {'traceVersion': 'v1', 'selectedMode': 'GRAPH_ONLY'}}
     metrics = score_evidence(response, ['Fact.'])
     assert metrics['pathCount'] == 1
-    assert metrics['topLevelPathCount'] == 1
+    assert metrics['nestedPathCount'] == 1
+    assert metrics['topLevelPathCount'] == 0
     assert metrics['provenanceRefCount'] == 1
     assert metrics['traceValid'] == 1
 
@@ -220,8 +227,8 @@ def test_relation_path_labels_are_scored_against_two_wiki_gold(tmp_path):
                                  ['Person', 'mother', 'Parent']],
     }]), encoding='utf-8')
     targets = load_supporting_targets(gold_path)['q']['relations']
-    response = {'evidence': [{'graphTraces': [{'pathEdges': [
-        {'label': 'director'}, {'label': 'mother'}]}]}]}
+    response = {'evidence': [{'graphTraces': [{'path': {'edges': [
+        {'label': 'director'}, {'label': 'mother'}]}}]}]}
 
     assert targets == ['director', 'mother']
     assert score_evidence(response, relation_targets=targets)['relationPathHit'] == 1
@@ -608,11 +615,12 @@ def test_relation_path_target_count_separates_unscoreable_from_missed():
     """A query with no gold relation path must not look like a missed path."""
     from tools.graphrag.eval.retrieval import score_evidence
 
-    # Relation labels are read from per-evidence graph traces, not from the top-level path list.
+    # Relation labels are read from each canonical path in the graph trace.
     def response_with(labels):
         return {'evidence': [{'chunks': [{'chunkId': 'c1'}],
-                              'graphTraces': [{'pathEdges': [{'label': label} for label in labels]}]}],
-                'paths': [], 'trace': {}}
+                              'graphTraces': [{'path': {'edges': [
+                                  {'label': label} for label in labels]}}]}],
+                'trace': {}}
 
     response = response_with(['mentions'])
     no_target = score_evidence(response, ['Fact.'], ['c1'], relation_targets=[])

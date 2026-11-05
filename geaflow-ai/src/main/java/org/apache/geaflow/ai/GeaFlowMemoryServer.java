@@ -214,10 +214,10 @@ public class GeaFlowMemoryServer {
             org.apache.geaflow.ai.retrieval.api.model.RetrievalResponse retrieval =
                 runtimeRetrievalService().retrieve(retrievalRequest, requestId);
             org.apache.geaflow.ai.retrieval.answer.AnswerResponse response =
-                new org.apache.geaflow.ai.retrieval.answer.ExtractiveAnswerConsumer(
+                org.apache.geaflow.ai.retrieval.execution.RetrievalStrategyFactory.answerSynthesizer(
                     org.apache.geaflow.ai.retrieval.execution.RetrievalStrategyFactory.tokenEstimator(
                         properties.getTokenEstimatorId()))
-                    .consume(new org.apache.geaflow.ai.retrieval.answer.AnswerRequest(
+                    .synthesize(new org.apache.geaflow.ai.retrieval.answer.AnswerRequest(
                             answerRequest.getQuestion(), answerRequest.getTokenBudget(), requestId,
                             retrieval.getGraphVersion(), answerRequest.getIndexVersion(),
                             retrievalRequest.getGraphName()),

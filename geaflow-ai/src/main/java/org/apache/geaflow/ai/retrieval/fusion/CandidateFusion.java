@@ -11,15 +11,31 @@
  */
 package org.apache.geaflow.ai.retrieval.fusion;
 
+import java.util.List;
+import org.apache.geaflow.ai.retrieval.model.evidence.Evidence;
+
 /**
- * Design-level name for the candidate fusion strategy.
+ * Pluggable strategy that turns per-channel scored evidence into one deterministic ordering.
  *
- * <p>The design document lists {@code CandidateFusion} among the internal extension interfaces. The
- * implementation ships as {@link Fusion}; this interface pins the documented name so the seam is
- * discoverable, and it extends the working contract rather than duplicating it.
- *
- * <p>Fusion is a pure function of the evidence it receives: replacing it must not change the
- * execution mode, the budget accounting or the trace shape.
+ * <p>Weighted reciprocal rank fusion is the mandatory default implementation. Replacing it must
+ * not change execution mode, budget accounting or trace shape; implementations are pure functions
+ * of the evidence they receive.
  */
-public interface CandidateFusion extends Fusion {
+public interface CandidateFusion {
+
+    /** Configures channel weights and rank behaviour; also used to snapshot the trace. */
+    WeightedRrfConfig getConfig();
+
+    /** Returns the contribution of one evidence item before channel rank aggregation. */
+    double score(Evidence evidence);
+
+    /** Orders evidence deterministically; equal scores must fall back to a stable tie-break. */
+    List<Evidence> sort(List<Evidence> evidence);
+
+    /** Pins strong evidence from one channel into the head of the ranking. */
+    List<Evidence> preserveTopKChannel(List<Evidence> ranked, int topK, String channel,
+                                       int minimumCount);
+
+    /** Stable identifier recorded in the trace so a ranking can be replayed. */
+    String getVersion();
 }

@@ -295,17 +295,28 @@ def score_evidence(response, supporting_sentences=None, relevant_chunk_ids=None,
             ranked_chunk_ids.append(key)
     texts = [normalized_content(chunk.get('text', ''))
              for values in chunks.values() for chunk in values if chunk.get('text')]
-    nested_paths = sum(len(item.get('paths') or []) for item in evidence if isinstance(item, dict))
+    path_count = 0
     returned_relation_paths = []
     for item in evidence:
         if not isinstance(item, dict):
             continue
+        unique_paths = set()
         for trace in item.get('graphTraces') or []:
-            labels = [edge.get('label') for edge in trace.get('pathEdges') or []
+            path = trace.get('path') or {}
+            vertices = path.get('vertices') or []
+            edges = path.get('edges') or []
+            identity = (tuple(vertex.get('vertexId') for vertex in vertices
+                              if isinstance(vertex, dict)),
+                        tuple(edge.get('edgeId') for edge in edges
+                              if isinstance(edge, dict)), bool(path.get('sampled')))
+            if identity[0] and len(identity[0]) == len(vertices) \
+                    and len(identity[1]) == len(edges):
+                unique_paths.add(identity)
+            labels = [edge.get('label') for edge in edges
                       if isinstance(edge, dict) and isinstance(edge.get('label'), str)]
             if labels:
                 returned_relation_paths.append([normalized_content(label).lower() for label in labels])
-    top_level_paths = response.get('paths') or []
+        path_count += len(unique_paths)
     graph_traces = sum(len(item.get('graphTraces') or []) for item in evidence if isinstance(item, dict))
     source_refs = sum(len(item.get('sources') or []) for item in evidence if isinstance(item, dict))
     source_refs += sum(len(chunk.get('sources') or []) for chunk in all_chunks)
@@ -314,9 +325,9 @@ def score_evidence(response, supporting_sentences=None, relevant_chunk_ids=None,
     trace_ok = int(isinstance(trace, dict) and bool(trace.get('traceVersion'))
                   and bool(trace.get('selectedMode')))
     result = {'nonemptyEvidence': int(bool(texts)),
-              'pathCount': nested_paths + len(top_level_paths),
-              'nestedPathCount': nested_paths,
-              'topLevelPathCount': len(top_level_paths),
+              'pathCount': path_count,
+              'nestedPathCount': path_count,
+              'topLevelPathCount': 0,
               'graphTraceCount': graph_traces,
               'provenanceRefCount': source_refs,
               'tracePresent': int(isinstance(trace, dict)),

@@ -5,26 +5,28 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
+import java.util.List;
 import org.apache.geaflow.ai.retrieval.execution.DeterministicTokenEstimator;
 import org.apache.geaflow.ai.retrieval.model.document.SourceRef;
 import org.apache.geaflow.ai.retrieval.model.document.TextChunk;
 import org.apache.geaflow.ai.retrieval.model.evidence.Evidence;
 import org.apache.geaflow.ai.retrieval.model.evidence.EvidenceKind;
+import org.apache.geaflow.ai.retrieval.model.evidence.GraphEvidenceTrace;
+import org.apache.geaflow.ai.retrieval.model.graph.EntityRef;
 import org.apache.geaflow.ai.retrieval.model.graph.GraphPathRef;
+import org.apache.geaflow.ai.retrieval.model.graph.GraphVertexRef;
 import org.junit.jupiter.api.Test;
 
 class AnswerConsumerTest {
     @Test
     void ordersByScoreAndCitesChunk() {
-        TextChunk chunk = new TextChunk("c1", "d1", 0, 0, 5, 2, "Paris");
-        Evidence evidence = new Evidence("e1", EvidenceKind.CHUNK, "Paris",
-            Collections.singletonList(chunk), Collections.emptyList(), Collections.emptyList(),
-            Collections.singletonList(new SourceRef("d1", "file:///d1")), new HashMap<>(), null, 1);
-        AnswerResponse response = new ExtractiveAnswerConsumer(new DeterministicTokenEstimator())
-            .consume(new AnswerRequest("where", 2), Collections.singletonList(evidence));
+        Evidence evidence = chunkEvidence("e1", "Paris", 1,
+            new TextChunk("c1", "d1", 0, 0, 5, 2, "Paris"));
+        AnswerResponse response = consumer().synthesize(new AnswerRequest("where", 2),
+            Collections.singletonList(evidence));
         assertEquals("e1", response.getCitations().get(0).getEvidenceId());
         assertEquals("c1", response.getCitations().get(0).getChunkId());
         assertEquals(2, response.getTokens());
@@ -32,55 +34,38 @@ class AnswerConsumerTest {
 
     @Test
     void reportsCitationCoverageOverTheOfferedEvidence() {
-        TextChunk first = new TextChunk("c1", "d1", 0, 0, 5, 4, "Paris");
-        TextChunk second = new TextChunk("c2", "d2", 0, 0, 5, 4, "Lyon");
-        Evidence firstEvidence = new Evidence("e1", EvidenceKind.CHUNK, "Paris",
-            Collections.singletonList(first), Collections.emptyList(), Collections.emptyList(),
-            Collections.singletonList(new SourceRef("d1", "file:///d1")), new HashMap<>(), null, 2);
-        Evidence secondEvidence = new Evidence("e2", EvidenceKind.CHUNK, "Lyon",
-            Collections.singletonList(second), Collections.emptyList(), Collections.emptyList(),
-            Collections.singletonList(new SourceRef("d2", "file:///d2")), new HashMap<>(), null, 1);
-        ExtractiveAnswerConsumer consumer =
-            new ExtractiveAnswerConsumer(new DeterministicTokenEstimator());
-
-        // Only the highest-scored evidence fits the budget: 1 of 2 offered items is cited.
-        AnswerResponse partial = consumer.consume(new AnswerRequest("where", 4),
-            java.util.Arrays.asList(firstEvidence, secondEvidence));
+        Evidence first = chunkEvidence("e1", "Paris", 2,
+            new TextChunk("c1", "d1", 0, 0, 5, 4, "Paris"));
+        Evidence second = chunkEvidence("e2", "Lyon", 1,
+            new TextChunk("c2", "d2", 0, 0, 5, 4, "Lyon"));
+        AnswerResponse partial = consumer().synthesize(new AnswerRequest("where", 4),
+            Arrays.asList(first, second));
         assertEquals(2, partial.getConsideredEvidenceCount());
         assertEquals(1, partial.getEvidenceIds().size());
         assertEquals(0.5D, partial.getCitationCoverage(), 1.0e-12);
-
-        // An abstained response never reports NaN.
-        AnswerResponse abstained = consumer.consume(new AnswerRequest("where", 1),
-            java.util.Arrays.asList(firstEvidence, secondEvidence));
-        assertEquals(0.0D, abstained.getCitationCoverage(), 1.0e-12);
-
-        // No evidence at all also reports 0.0 rather than dividing by zero.
-        assertEquals(0.0D, consumer.consume(new AnswerRequest("where", 10),
+        assertEquals(0.0D, consumer().synthesize(new AnswerRequest("where", 1),
+            Arrays.asList(first, second)).getCitationCoverage(), 1.0e-12);
+        assertEquals(0.0D, consumer().synthesize(new AnswerRequest("where", 10),
             Collections.emptyList()).getCitationCoverage(), 1.0e-12);
     }
 
     @Test
     void abstainsWhenBudgetCannotFitEvidence() {
-        TextChunk chunk = new TextChunk("c1", "d1", 0, 0, 5, 2, "Paris");
-        Evidence evidence = new Evidence("e1", EvidenceKind.CHUNK, "Paris",
-            Collections.singletonList(chunk), Collections.emptyList(), Collections.emptyList(),
-            Collections.singletonList(new SourceRef("d1", "file:///d1")), new HashMap<>(), null, 1);
-        AnswerResponse response = new ExtractiveAnswerConsumer(new DeterministicTokenEstimator())
-            .consume(new AnswerRequest("where", 1), Collections.singletonList(evidence));
+        Evidence evidence = chunkEvidence("e1", "Paris", 1,
+            new TextChunk("c1", "d1", 0, 0, 5, 2, "Paris"));
+        AnswerResponse response = consumer().synthesize(new AnswerRequest("where", 1),
+            Collections.singletonList(evidence));
         assertTrue(response.isAbstained());
         assertEquals("TOKEN_BUDGET_OR_INVALID_PROVENANCE", response.getAbstentionReason());
     }
 
     @Test
     void citesEverySelectedChunkAndKeepsScoreOrder() {
-        TextChunk first = new TextChunk("c1", "d1", 0, 0, 5, 1, "Paris");
-        TextChunk second = new TextChunk("c2", "d1", 1, 5, 10, 1, "France");
-        Evidence evidence = new Evidence("e1", EvidenceKind.CHUNK, "Paris France",
-            Arrays.asList(first, second), Collections.emptyList(), Collections.emptyList(),
-            Collections.singletonList(new SourceRef("d1", "file:///d1")), new HashMap<>(), null, 1);
-        AnswerResponse response = new ExtractiveAnswerConsumer(new DeterministicTokenEstimator())
-            .consume(new AnswerRequest("where", 4), Collections.singletonList(evidence));
+        Evidence evidence = chunkEvidence("e1", "Paris France", 1,
+            new TextChunk("c1", "d1", 0, 0, 5, 1, "Paris"),
+            new TextChunk("c2", "d1", 1, 5, 10, 1, "France"));
+        AnswerResponse response = consumer().synthesize(new AnswerRequest("where", 4),
+            Collections.singletonList(evidence));
         assertEquals(2, response.getCitations().size());
         assertEquals("c2", response.getCitations().get(1).getChunkId());
     }
@@ -95,46 +80,50 @@ class AnswerConsumerTest {
 
     @Test
     void citesGraphPathEvidenceWithoutDocumentSource() {
-        GraphPathRef path = new GraphPathRef(Collections.singletonList("v1"),
-            Collections.emptyList(), 0, false);
-        Evidence evidence = new Evidence("path-evidence", EvidenceKind.GRAPH_PATH, "entity context",
-            Collections.emptyList(), Collections.emptyList(), Collections.singletonList(path),
-            Collections.emptyList(), new HashMap<>(), null, 1);
-        AnswerResponse response = new ExtractiveAnswerConsumer(new DeterministicTokenEstimator())
-            .consume(new AnswerRequest("entity?", 10), Collections.singletonList(evidence));
+        TextChunk chunk = new TextChunk("c1", "d1", 0, 0, 6, 1, "Entity",
+            null, null, "file:///d1", "dataset", "v1", "test", "hash-d1");
+        SourceRef source = new SourceRef("d1", "file:///d1", null, null,
+            "dataset", "v1", "test", "hash-d1");
+        GraphVertexRef vertex = new GraphVertexRef("THING", "v1", "e1",
+            "dataset", "v1", "test", "hash-d1");
+        GraphPathRef path = new GraphPathRef(Collections.singletonList(vertex),
+            Collections.emptyList(), false);
+        GraphEvidenceTrace trace = new GraphEvidenceTrace("q1",
+            org.apache.geaflow.ai.retrieval.api.model.RetrievalMode.GRAPH_ONLY,
+            "CANONICAL", 1.0D, "graph-v1", path, Collections.singletonList("c1"));
+        EntityRef entity = new EntityRef("e1", "Entity", Collections.emptyList(), "THING",
+            Collections.singletonList("c1"), "dataset", "v1", "test", "hash-d1");
+        Evidence evidence = new Evidence("path-evidence", EvidenceKind.GRAPH_PATH,
+            "entity context", Collections.singletonList(chunk), Collections.singletonList(entity),
+            Collections.singletonList(source), Collections.emptyMap(), null, 1.0D, 1,
+            Collections.singletonList(trace), Evidence.CURRENT_SCHEMA_VERSION,
+            "dataset", "v1", "test", "graph-v1", "index-v1");
+        AnswerResponse response = consumer().synthesize(new AnswerRequest("entity?", 10),
+            Collections.singletonList(evidence));
         assertEquals("path-evidence", response.getCitations().get(0).getEvidenceId());
-        assertEquals("graph", response.getCitations().get(0).getSourceId());
-        assertTrue(response.getCitations().get(0).getPathId().contains("v1"));
+        assertEquals("d1", response.getCitations().get(0).getSourceId());
+        assertEquals("e1", response.getCitations().get(0).getSeedEntityId());
     }
 
     @Test
     void chargesAndReturnsChunkTextInsteadOfMismatchedEvidenceText() {
-        TextChunk chunk = new TextChunk("c1", "d1", 0, 0, 5, 1, "Paris");
-        Evidence evidence = new Evidence("e1", EvidenceKind.CHUNK, "A much longer unrelated payload",
-            Collections.singletonList(chunk), Collections.emptyList(), Collections.emptyList(),
-            Collections.singletonList(new SourceRef("d1", "file:///d1")), new HashMap<>(), null, 1);
-        AnswerResponse response = new ExtractiveAnswerConsumer(new DeterministicTokenEstimator())
-            .consume(new AnswerRequest("where", 2), Collections.singletonList(evidence));
+        Evidence evidence = chunkEvidence("e1", "A much longer unrelated payload", 1,
+            new TextChunk("c1", "d1", 0, 0, 5, 1, "Paris"));
+        AnswerResponse response = consumer().synthesize(new AnswerRequest("where", 2),
+            Collections.singletonList(evidence));
         assertEquals("Paris", response.getContext());
         assertEquals(1, response.getTokens());
     }
 
     @Test
     void recordsWhyEachEvidenceItemWasSuppressed() {
-        TextChunk first = new TextChunk("c1", "d1", 0, 0, 5, 4, "Paris");
-        TextChunk tooLarge = new TextChunk("c2", "d2", 0, 0, 40, 8, "A very long Lyon passage indeed");
-        Evidence kept = new Evidence("e1", EvidenceKind.CHUNK, "Paris",
-            Collections.singletonList(first), Collections.emptyList(), Collections.emptyList(),
-            Collections.singletonList(new SourceRef("d1", "file:///d1")), new HashMap<>(), null, 2);
-        Evidence overBudget = new Evidence("e2", EvidenceKind.CHUNK, "Lyon",
-            Collections.singletonList(tooLarge), Collections.emptyList(), Collections.emptyList(),
-            Collections.singletonList(new SourceRef("d2", "file:///d2")), new HashMap<>(), null, 1);
-
-        AnswerResponse response = new ExtractiveAnswerConsumer(new DeterministicTokenEstimator())
-            .consume(new AnswerRequest("where", 4), Arrays.asList(kept, overBudget));
-
-        assertEquals("TOKEN_BUDGET_EXCEEDED", response.getSuppressReasons().get("e2"),
-            "each suppressed item needs an explicit reason: " + response.getSuppressReasons());
+        Evidence kept = chunkEvidence("e1", "Paris", 2,
+            new TextChunk("c1", "d1", 0, 0, 5, 4, "Paris"));
+        Evidence overBudget = chunkEvidence("e2", "Lyon", 1,
+            new TextChunk("c2", "d2", 0, 0, 40, 8, "A very long Lyon passage indeed"));
+        AnswerResponse response = consumer().synthesize(new AnswerRequest("where", 4),
+            Arrays.asList(kept, overBudget));
+        assertEquals("TOKEN_BUDGET_EXCEEDED", response.getSuppressReasons().get("e2"));
         assertTrue(!response.getSuppressReasons().containsKey("e1"));
     }
 
@@ -142,31 +131,51 @@ class AnswerConsumerTest {
     void recordsInvalidProvenanceAsASuppressReason() {
         Evidence broken = new Evidence("e9", EvidenceKind.CHUNK, "text",
             Collections.emptyList(), Collections.emptyList(), Collections.emptyList(),
-            Collections.emptyList(), new HashMap<>(), null, 1);
-
-        AnswerResponse response = new ExtractiveAnswerConsumer(new DeterministicTokenEstimator())
-            .consume(new AnswerRequest("where", 10), Collections.singletonList(broken));
-
+            Collections.emptyMap(), null, null, 1, Collections.emptyList(),
+            Evidence.CURRENT_SCHEMA_VERSION, null, null, null, null, null);
+        AnswerResponse response = consumer().synthesize(new AnswerRequest("where", 10),
+            Collections.singletonList(broken));
         assertEquals("TOKEN_BUDGET_OR_INVALID_PROVENANCE", response.getAbstentionReason());
-        assertEquals("INVALID_PROVENANCE", response.getSuppressReasons().get("e9"),
-            "an unusable evidence item must be reported: " + response.getSuppressReasons());
-        assertTrue(response.getSuppressReasons().containsKey("e9"),
-            "an unusable evidence item must be reported: " + response.getSuppressReasons());
+        assertEquals("INVALID_PROVENANCE", response.getSuppressReasons().get("e9"));
     }
 
     @Test
     void carriesRetrievalVersionsForTraceability() {
-        TextChunk chunk = new TextChunk("c1", "d1", 0, 0, 5, 2, "Paris");
-        Evidence evidence = new Evidence("e1", EvidenceKind.CHUNK, "Paris",
-            Collections.singletonList(chunk), Collections.emptyList(), Collections.emptyList(),
-            Collections.singletonList(new SourceRef("d1", "file:///d1")), new HashMap<>(), null, 1);
-
-        AnswerResponse response = new ExtractiveAnswerConsumer(new DeterministicTokenEstimator())
-            .consume(new AnswerRequest("where", 4, "req-1", "gv-1", "iv-1"),
-                Collections.singletonList(evidence));
-
+        Evidence evidence = chunkEvidence("e1", "Paris", 1,
+            new TextChunk("c1", "d1", 0, 0, 5, 2, "Paris"));
+        AnswerResponse response = consumer().synthesize(
+            new AnswerRequest("where", 4, "req-1", "gv-1", "iv-1"),
+            Collections.singletonList(evidence));
         assertEquals("req-1", response.getRequestId());
         assertEquals("gv-1", response.getGraphVersion());
         assertEquals("iv-1", response.getIndexVersion());
+    }
+
+    private static ExtractiveAnswerConsumer consumer() {
+        return new ExtractiveAnswerConsumer(new DeterministicTokenEstimator());
+    }
+
+    private static Evidence chunkEvidence(String id, String text, int rank, TextChunk... raw) {
+        List<TextChunk> chunks = new ArrayList<>();
+        List<SourceRef> sources = new ArrayList<>();
+        for (TextChunk chunk : raw) {
+            String uri = "file:///" + chunk.getDocumentId();
+            String hash = "hash-" + chunk.getDocumentId();
+            chunks.add(new TextChunk(chunk.getChunkId(), chunk.getDocumentId(), chunk.getChunkIndex(),
+                chunk.getStartOffset(), chunk.getEndOffset(), chunk.getTokenEstimate(), chunk.getText(),
+                null, null, uri, "dataset", "v1", "test", hash));
+            if (sources.stream().noneMatch(source -> source.getDocumentId()
+                .equals(chunk.getDocumentId()))) {
+                sources.add(new SourceRef(chunk.getDocumentId(), uri, null, null,
+                    "dataset", "v1", "test", hash));
+            }
+        }
+        return new Evidence(id, EvidenceKind.CHUNK, text, chunks, Collections.emptyList(), sources,
+            Collections.emptyMap(), null, null, rank, Collections.emptyList(),
+            Evidence.CURRENT_SCHEMA_VERSION, "dataset", "v1", "test", null, "index-v1");
+    }
+
+    private static GraphVertexRef vertex(String vertexId, String entityId) {
+        return new GraphVertexRef("THING", vertexId, entityId);
     }
 }

@@ -6,16 +6,11 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from transformers import AutoModel, AutoTokenizer
 
-
-def _load_encoder(model_path, device):
-    dtype = torch.float16 if device.type == "cuda" else torch.float32
-    tokenizer = AutoTokenizer.from_pretrained(model_path, local_files_only=True)
-    model = AutoModel.from_pretrained(model_path, local_files_only=True, torch_dtype=dtype)
-    model.to(device)
-    model.eval()
-    return tokenizer, model
+if __package__:
+    from .embedding import encode_batch, load_encoder
+else:
+    from embedding import encode_batch, load_encoder
 
 
 def _validate_rows(rows):
@@ -34,22 +29,11 @@ def embed(queries, model_path, batch_size, max_length, device_name="cuda"):
     device = torch.device(device_name)
     if device.type == "cuda" and not torch.cuda.is_available():
         raise RuntimeError("CUDA device requested but CUDA is unavailable")
-    tokenizer, model = _load_encoder(model_path, device)
+    tokenizer, model = load_encoder(model_path, device)
     vectors = []
     for start in range(0, len(queries), batch_size):
-        batch = tokenizer(queries[start:start + batch_size], padding=True, truncation=True,
-                          max_length=max_length, return_tensors="pt")
-        batch = {key: value.to(device) for key, value in batch.items()}
-        with torch.inference_mode():
-            hidden = model(**batch).last_hidden_state
-            mask = batch["attention_mask"].unsqueeze(-1)
-            output = (hidden * mask).sum(dim=1) / mask.sum(dim=1).clamp_min(1)
-            output = torch.nn.functional.normalize(output.float(), p=2, dim=1)
-        if not torch.isfinite(output).all().item():
-            raise ValueError("encoder produced non-finite values")
-        norms = torch.linalg.vector_norm(output, dim=1)
-        if not torch.allclose(norms, torch.ones_like(norms), atol=1e-3, rtol=1e-3):
-            raise ValueError("encoder produced non-normalized vectors")
+        output = encode_batch(queries[start:start + batch_size], tokenizer, model,
+                              device, max_length)
         vectors.append(output.cpu().numpy())
         print(f"embedded {min(start + batch_size, len(queries))}/{len(queries)}", flush=True)
     if not vectors:

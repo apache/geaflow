@@ -23,7 +23,7 @@ import org.apache.geaflow.ai.retrieval.execution.DeterministicRulePolicy;
 import org.apache.geaflow.ai.retrieval.execution.DeterministicTokenEstimator;
 import org.apache.geaflow.ai.retrieval.execution.Reranker;
 import org.apache.geaflow.ai.retrieval.execution.RetrievalStrategyFactory;
-import org.apache.geaflow.ai.retrieval.execution.RoutingPolicy;
+import org.apache.geaflow.ai.retrieval.execution.AdaptivePolicy;
 import org.apache.geaflow.ai.retrieval.execution.TokenEstimator;
 import org.junit.jupiter.api.Test;
 
@@ -42,7 +42,7 @@ class StrategySelectionTest {
             instanceof DeterministicReranker);
         assertTrue(RetrievalStrategyFactory.tokenEstimator("chars4-v1")
             instanceof DeterministicTokenEstimator);
-        assertTrue(RetrievalStrategyFactory.routingPolicy("deterministic-rule", new RetrievalProperties())
+        assertTrue(RetrievalStrategyFactory.adaptivePolicy("deterministic-rule", new RetrievalProperties())
             instanceof DeterministicRulePolicy);
         assertEquals("chars4-v1", RetrievalStrategyFactory.tokenEstimator(" chars4-v1 ").getVersion(),
             "surrounding whitespace must not defeat selection");
@@ -55,7 +55,7 @@ class StrategySelectionTest {
         assertCode(RetrievalErrorCode.INVALID_REQUEST,
             () -> RetrievalStrategyFactory.tokenEstimator("unknown-estimator"));
         assertCode(RetrievalErrorCode.INVALID_REQUEST,
-            () -> RetrievalStrategyFactory.routingPolicy("unknown-policy", new RetrievalProperties()));
+            () -> RetrievalStrategyFactory.adaptivePolicy("unknown-policy", new RetrievalProperties()));
         assertCode(RetrievalErrorCode.INVALID_REQUEST, () -> RetrievalStrategyFactory.reranker(null));
     }
 
@@ -63,7 +63,7 @@ class StrategySelectionTest {
     void factoryResolvedStrategiesExposeTheirVersions() {
         Reranker reranker = RetrievalStrategyFactory.reranker("deterministic-reranker-v1");
         TokenEstimator estimator = RetrievalStrategyFactory.tokenEstimator("chars4-v1");
-        RoutingPolicy policy = RetrievalStrategyFactory.routingPolicy("deterministic-rule",
+        AdaptivePolicy policy = RetrievalStrategyFactory.adaptivePolicy("deterministic-rule",
             new RetrievalProperties());
 
         assertEquals("deterministic-reranker-v1", reranker.getVersion());

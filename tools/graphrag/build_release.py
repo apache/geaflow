@@ -1,10 +1,10 @@
 """Build a checksummed canonical GraphRAG release from generic JSON/JSONL records."""
 
 import argparse
-import hashlib
 import json
 from pathlib import Path
 
+from tools.graphrag.ingest.digests import sha256_file
 from tools.graphrag.ingest.normalize import ChunkingConfig
 from tools.graphrag.ingest.pipeline import run_import
 from tools.graphrag.ingest.sources.source_loader import SourceLoader, SourceManifest
@@ -18,7 +18,7 @@ def build(manifest_path, output_root, canonical_input=None, chunk_size=None, ove
         source = Path(canonical_input)
         manifest = SourceManifest(manifest.dataset, manifest.dataset_release, manifest.split,
                                   manifest.source_uri, str(source),
-                                  _sha256(source),
+                                  sha256_file(source),
                                   manifest.parser_version, manifest.license_url,
                                   manifest.license_status)
     chunking = ChunkingConfig(chunk_size or raw.get('chunk_size', 1200),
@@ -32,14 +32,6 @@ def build(manifest_path, output_root, canonical_input=None, chunk_size=None, ove
         entity_schema_version=raw.get('entity_schema_version', 'chunk-entity-cooccurrence-v2'),
         entity_extractor_version=raw.get('entity_extractor_version', 'text-cooccurrence-entity-v2'))
     return result
-
-
-def _sha256(path):
-    digest = hashlib.sha256()
-    with Path(path).open('rb') as stream:
-        for block in iter(lambda: stream.read(1024 * 1024), b''):
-            digest.update(block)
-    return digest.hexdigest()
 
 
 def main():

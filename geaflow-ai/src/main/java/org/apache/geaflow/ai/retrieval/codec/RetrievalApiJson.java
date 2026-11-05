@@ -43,7 +43,6 @@ import org.apache.geaflow.ai.retrieval.execution.BudgetConstraint;
 import org.apache.geaflow.ai.retrieval.execution.RetrievalReplanEvent;
 import org.apache.geaflow.ai.retrieval.model.document.SourceRef;
 import org.apache.geaflow.ai.retrieval.model.evidence.Evidence;
-import org.apache.geaflow.ai.retrieval.model.graph.GraphPathRef;
 import org.apache.geaflow.ai.retrieval.service.RetrievalErrorValidator;
 import org.apache.geaflow.ai.retrieval.service.RetrievalResponseValidator;
 
@@ -76,20 +75,17 @@ public final class RetrievalApiJson {
         requireString(object, "graphName");
         requireString(object, "graphVersion");
         requireArray(object, "evidence");
-        requireArray(object, "paths");
         requireArray(object, "sources");
         requireArray(object, "degradedChannels");
         requireObject(object, "trace");
         requireObject(object, "effectiveBudget");
         List<Evidence> evidence = models(object, "evidence", Evidence.class);
-        List<GraphPathRef> paths = models(object, "paths", GraphPathRef.class);
         List<SourceRef> sources = models(object, "sources", SourceRef.class);
         RetrievalResponse response = new RetrievalResponse();
         response.setRequestId(object.get("requestId").getAsString());
         response.setGraphName(object.get("graphName").getAsString());
         response.setGraphVersion(object.get("graphVersion").getAsString());
         response.setEvidence(evidence);
-        response.setPaths(paths);
         response.setSources(sources);
         response.setTrace(parseTrace(object.getAsJsonObject("trace")));
         response.setEffectiveBudget(parseBudget(object.getAsJsonObject("effectiveBudget"), true));
@@ -480,8 +476,6 @@ public final class RetrievalApiJson {
             String itemJson = item.toString();
             if (type == Evidence.class) {
                 result.add(type.cast(RetrievalModelJson.fromJson(itemJson, Evidence.class)));
-            } else if (type == GraphPathRef.class) {
-                result.add(type.cast(RetrievalModelJson.fromJson(itemJson, GraphPathRef.class)));
             } else if (type == SourceRef.class) {
                 result.add(type.cast(RetrievalModelJson.fromJson(itemJson, SourceRef.class)));
             } else {

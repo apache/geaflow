@@ -21,14 +21,7 @@ import org.apache.geaflow.ai.retrieval.api.model.RetrievalBudget;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalMode;
 import org.junit.jupiter.api.Test;
 
-/**
- * Pins the design's documented extension-point names and their purity contract.
- *
- * <p>The design names {@code AdaptivePolicy} with {@code plan}/{@code replan}/{@code getPolicyId}/
- * {@code getPolicyVersion}. The working implementation ships as {@code RoutingPolicy}, so these
- * tests guarantee the documented shape stays available and behaves identically to the SPI the
- * executor actually uses.
- */
+/** Pins the routing policy extension contract used by the retrieval executor. */
 class AdaptivePolicyContractTest {
 
     @Test
@@ -59,51 +52,24 @@ class AdaptivePolicyContractTest {
     }
 
     @Test
-    void adapterMapsInitialAndBoundaryCallsOntoTheWorkingSpi() {
-        CountingPolicy policy = new CountingPolicy();
-        RoutingPolicy working = policy.toRoutingPolicy();
-
-        assertEquals("test-policy", working.getPolicyId());
-        assertEquals("v-test", working.getPolicyVersion());
-        assertTrue(working.supports(RetrievalMode.ADAPTIVE_HYBRID));
-
-        working.plan(context(), RetrievalProgress.builder().boundary("INITIAL").build());
-        assertEquals(1, policy.planned);
-        assertEquals(0, policy.replanned);
-
-        working.plan(context(), RetrievalProgress.builder().boundary("GRAPH_PROBE").build());
-        assertEquals(1, policy.planned);
-        assertEquals(1, policy.replanned);
-    }
-
-    @Test
-    void productionPolicyImplementsBothTheDesignAndWorkingInterfaces() {
+    void productionPolicyImplementsTheDesignContractDirectly() {
         DeterministicRulePolicy policy = new DeterministicRulePolicy();
-
-        // The shipped policy is the design-level AdaptivePolicy *and* the working RoutingPolicy.
-        // Implementing both directly is what stops the documented contract from being a
-        // documentation-only alias that production never exercises.
-        assertTrue(policy instanceof AdaptivePolicy,
-            "the production policy must implement the documented AdaptivePolicy contract");
-        assertTrue(policy instanceof RoutingPolicy,
-            "the production policy must keep exposing the executor SPI");
-
         RoutingContext context = context();
-        RetrievalPlan viaDesign = ((AdaptivePolicy) policy).plan(context);
-        RetrievalPlan viaWorking = ((RoutingPolicy) policy).plan(context,
-            RetrievalProgress.builder().boundary("INITIAL").build());
-        assertEquals(viaWorking.getSelectedMode(), viaDesign.getSelectedMode());
-        assertEquals(viaWorking.getTopK(), viaDesign.getTopK());
+        RetrievalPlan initial = policy.plan(context);
+        RetrievalPlan revised = policy.replan(context, RetrievalProgress.builder()
+            .boundary("GRAPH_PROBE").anchorCount(2).anchorConfidence(0.9D).build());
+        assertNotNull(initial);
+        assertNotNull(revised);
+        assertTrue(policy.supports(RetrievalMode.ADAPTIVE_HYBRID));
     }
 
     @Test
     void factoryReturnsAPolicyThatSatisfiesTheDesignContract() {
-        RoutingPolicy fromFactory = RetrievalStrategyFactory.routingPolicy(
+        AdaptivePolicy fromFactory = RetrievalStrategyFactory.adaptivePolicy(
             RetrievalStrategyFactory.DETERMINISTIC_RULE_POLICY,
             new org.apache.geaflow.ai.retrieval.config.RetrievalProperties());
 
-        assertTrue(fromFactory instanceof AdaptivePolicy,
-            "the configured policy must satisfy the documented contract");
+        assertNotNull(fromFactory);
     }
 
     @Test
@@ -111,7 +77,7 @@ class AdaptivePolicyContractTest {
         DeterministicRulePolicy supplied = new DeterministicRulePolicy();
 
         RoutingContext context = context();
-        RetrievalPlan viaSpi = supplied.plan(context,
+        RetrievalPlan viaSpi = supplied.replan(context,
             RetrievalProgress.builder().boundary("INITIAL").build());
         RetrievalPlan viaDesign = supplied.plan(context);
 

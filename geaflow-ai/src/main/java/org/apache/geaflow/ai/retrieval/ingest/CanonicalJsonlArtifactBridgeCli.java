@@ -22,9 +22,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.security.MessageDigest;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -33,6 +31,7 @@ import org.apache.geaflow.ai.retrieval.channel.graph.GraphDelta;
 import org.apache.geaflow.ai.retrieval.channel.graph.GraphSnapshot;
 import org.apache.geaflow.ai.retrieval.codec.GraphDeltaJson;
 import org.apache.geaflow.ai.retrieval.index.graph.GraphArtifactReader;
+import org.apache.geaflow.ai.retrieval.metadata.ArtifactIntegrity;
 import org.apache.geaflow.ai.retrieval.metadata.DatasetManifest;
 import org.apache.geaflow.ai.retrieval.metadata.MetadataJson;
 import org.apache.geaflow.ai.retrieval.model.document.TextChunk;
@@ -77,8 +76,8 @@ public final class CanonicalJsonlArtifactBridgeCli {
                 parentBundle == null ? null : Path.of(parentBundle).toAbsolutePath().normalize());
             publish(staging, output);
         } finally {
-            deleteTree(work);
-            deleteTree(staging);
+            ArtifactIntegrity.deleteTree(work);
+            ArtifactIntegrity.deleteTree(staging);
         }
     }
 
@@ -112,14 +111,16 @@ public final class CanonicalJsonlArtifactBridgeCli {
         copy(find(work, "graph-", graphVersion), staging.resolve("graph.bin"));
         copy(find(work, "vector-", indexVersion), staging.resolve("vector.bin"));
         copyTree(findDirectory(work, "bm25-", indexVersion), staging.resolve("bm25"));
-        JsonObject ready = new JsonParser().parse(Files.readString(release.resolve("READY.json"),
+        JsonObject ready = new JsonParser().parse(Files.readString(
+            ArtifactIntegrity.resolveInside(release, "READY.json"),
             StandardCharsets.UTF_8)).getAsJsonObject();
         ready.addProperty("graph_name", graphName);
         ready.addProperty("index_version", indexVersion);
         ready.addProperty("graph_artifact", "graph.bin");
         ready.addProperty("vector_artifact", "vector.bin");
         ready.addProperty("bm25_artifact", "bm25");
-        Path qualityPath = staging.resolve(ready.get("quality_report").getAsString());
+        Path qualityPath = ArtifactIntegrity.resolveInside(staging,
+            ready.get("quality_report").getAsString());
         JsonObject quality = new JsonParser().parse(Files.readString(qualityPath,
             StandardCharsets.UTF_8)).getAsJsonObject();
         int chunks = ready.get("chunks").getAsInt();
@@ -132,10 +133,15 @@ public final class CanonicalJsonlArtifactBridgeCli {
             addDeltaBundle(parentBundle, staging, work, ready, graphName, graphVersion, indexVersion);
         }
         JsonObject checksums = new JsonObject();
+        List<Path> files = new ArrayList<>();
         try (Stream<Path> paths = Files.walk(staging)) {
-            paths.filter(Files::isRegularFile).filter(path -> !path.getFileName().toString().equals("READY.json"))
-                .forEach(path -> checksums.addProperty(staging.relativize(path).toString().replace('\\', '/'),
-                    sha256(path)));
+            paths.filter(Files::isRegularFile)
+                .filter(path -> !path.getFileName().toString().equals("READY.json"))
+                .forEach(files::add);
+        }
+        for (Path path : files) {
+            checksums.addProperty(staging.relativize(path).toString().replace('\\', '/'),
+                ArtifactIntegrity.sha256(path));
         }
         ready.add("artifact_checksums", checksums);
         Files.writeString(staging.resolve("READY.json"), ready.toString() + "\n", StandardCharsets.UTF_8);
@@ -145,7 +151,8 @@ public final class CanonicalJsonlArtifactBridgeCli {
                                        String graphName, String graphVersion, String indexVersion)
         throws IOException {
         JsonObject parentReady = new JsonParser().parse(Files.readString(
-            parentBundle.resolve("READY.json"), StandardCharsets.UTF_8)).getAsJsonObject();
+            ArtifactIntegrity.resolveInside(parentBundle, "READY.json"), StandardCharsets.UTF_8))
+            .getAsJsonObject();
         if (!"READY".equals(parentReady.get("state").getAsString())
             || !graphName.equals(parentReady.has("graph_name")
             ? parentReady.get("graph_name").getAsString() : parentReady.get("dataset").getAsString())) {
@@ -157,11 +164,12 @@ public final class CanonicalJsonlArtifactBridgeCli {
         String parentVersion = parentReady.get("version").getAsString();
         String parentIndexVersion = parentReady.has("index_version")
             ? parentReady.get("index_version").getAsString() : parentReady.get("version").getAsString();
-        Path parentGraph = parentBundle.resolve(parentReady.has("graph_artifact")
+        String parentGraphArtifact = parentReady.has("graph_artifact")
             ? parentReady.get("graph_artifact").getAsString()
-            : "graph-" + parentVersion + ".bin").normalize();
-        Path parentChunks = parentBundle.resolve("chunks.jsonl").normalize();
-        if (!parentGraph.startsWith(parentBundle) || !Files.isRegularFile(parentGraph)
+            : "graph-" + parentVersion + ".bin";
+        Path parentGraph = ArtifactIntegrity.resolveInside(parentBundle, parentGraphArtifact);
+        Path parentChunks = ArtifactIntegrity.resolveInside(parentBundle, "chunks.jsonl");
+        if (!Files.isRegularFile(parentGraph)
             || !Files.isRegularFile(parentChunks)) {
             throw new IOException("parent bundle is missing graph or chunk artifacts");
         }
@@ -286,10 +294,12 @@ public final class CanonicalJsonlArtifactBridgeCli {
         if (Files.exists(output)) {
             Path ready = output.resolve("READY.json");
             if (Files.isRegularFile(ready)) {
-                JsonObject existing = new JsonParser().parse(
-                    Files.readString(ready, StandardCharsets.UTF_8)).getAsJsonObject();
+                JsonObject existing = new JsonParser().parse(Files.readString(
+                    ArtifactIntegrity.resolveInside(output, "READY.json"), StandardCharsets.UTF_8))
+                    .getAsJsonObject();
                 JsonObject candidate = new JsonParser().parse(Files.readString(
-                    staging.resolve("READY.json"), StandardCharsets.UTF_8)).getAsJsonObject();
+                    ArtifactIntegrity.resolveInside(staging, "READY.json"), StandardCharsets.UTF_8))
+                    .getAsJsonObject();
                 if (sameRelease(existing, candidate) && validateBundle(output, existing)) {
                     return;
                 }
@@ -329,17 +339,11 @@ public final class CanonicalJsonlArtifactBridgeCli {
         if (checksums == null) {
             return false;
         }
-        for (Map.Entry<String, com.google.gson.JsonElement> entry : checksums.entrySet()) {
-            Path artifact = root.resolve(entry.getKey()).normalize();
-            if (!artifact.startsWith(root.normalize()) || !Files.isRegularFile(artifact)
-                || !entry.getValue().getAsString().equals(sha256(artifact))) {
-                return false;
-            }
-        }
-        try (Stream<Path> paths = Files.walk(root)) {
-            long actual = paths.filter(Files::isRegularFile)
-                .filter(path -> !path.equals(root.resolve("READY.json"))).count();
-            return actual == checksums.entrySet().size();
+        try {
+            ArtifactIntegrity.validateChecksums(root, checksums);
+            return true;
+        } catch (IOException invalidBundle) {
+            return false;
         }
     }
 
@@ -362,39 +366,6 @@ public final class CanonicalJsonlArtifactBridgeCli {
                     Files.copy(path, destination, StandardCopyOption.REPLACE_EXISTING);
                 }
             }
-        }
-    }
-
-    private static void deleteTree(Path root) throws IOException {
-        if (!Files.exists(root)) {
-            return;
-        }
-        try (Stream<Path> paths = Files.walk(root)) {
-            List<Path> entries = new ArrayList<>();
-            paths.sorted(Comparator.reverseOrder()).forEach(entries::add);
-            for (Path entry : entries) {
-                Files.deleteIfExists(entry);
-            }
-        }
-    }
-
-    private static String sha256(Path path) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            try (java.io.InputStream input = Files.newInputStream(path)) {
-                byte[] buffer = new byte[8192];
-                int count;
-                while ((count = input.read(buffer)) >= 0) {
-                    digest.update(buffer, 0, count);
-                }
-            }
-            StringBuilder result = new StringBuilder();
-            for (byte value : digest.digest()) {
-                result.append(String.format("%02x", value));
-            }
-            return result.toString();
-        } catch (Exception error) {
-            throw new IllegalStateException("cannot hash artifact", error);
         }
     }
 

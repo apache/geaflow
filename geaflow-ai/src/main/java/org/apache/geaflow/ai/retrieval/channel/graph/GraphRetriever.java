@@ -201,11 +201,9 @@ public final class GraphRetriever {
                 GraphVertexRef sourceVertex = provider.vertex(anchor.getEntity());
                 GraphVertexRef targetVertex = provider.vertex(entityMap.get(target));
                 List<GraphVertexRef> pathVertices = java.util.Arrays.asList(sourceVertex, targetVertex);
-                GraphPathRef path = new GraphPathRef(
-                    java.util.Arrays.asList(sourceVertex.getVertexId(), targetVertex.getVertexId()),
-                    Collections.singletonList(edge.getEdgeId()), 1, false);
-                result.add(new GraphHit(anchor, sourceVertex, edge, path, pathVertices,
-                    Collections.singletonList(edge), boundedSources,
+                GraphPathRef path = new GraphPathRef(pathVertices,
+                    Collections.singletonList(edge), false);
+                result.add(new GraphHit(anchor, path, boundedSources,
                     1.0 / (1.0 + result.size())));
                 lastStats.verticesReached++;
                 lastStats.candidatesProduced = producedChunks.size();
@@ -401,20 +399,17 @@ public final class GraphRetriever {
                 }
                 sourceIds = boundedSourceIds;
                 GraphVertexRef targetVertex = provider.vertex(entityMap.get(targetId));
-                List<GraphVertexRef> pathVertices = new ArrayList<>(state.pathVertices);
-                pathVertices.add(targetVertex);
-                List<GraphEdgeRef> pathEdges = new ArrayList<>(state.pathEdges);
-                pathEdges.add(edge);
                 int hop = state.hop + 1;
-                GraphPathRef path = new GraphPathRef(vertexIds(pathVertices), edgeIds(pathEdges), hop,
-                    config.getSampleRate() < 1.0);
-                if (!emittedPaths.add(pathKey(path))) {
-                    continue;
-                }
                 Set<String> pathSources = new LinkedHashSet<>(state.sourceChunkIds);
                 pathSources.addAll(sourceIds);
                 List<String> orderedSources = new ArrayList<>(pathSources);
                 Collections.sort(orderedSources);
+                ExpansionState nextState = state.extend(targetId, targetVertex, edge, score,
+                    orderedSources, config.getSampleRate() < 1.0);
+                GraphPathRef path = nextState.path;
+                if (!emittedPaths.add(pathKey(path))) {
+                    continue;
+                }
                 producedChunks.addAll(sourceIds);
                 lastStats.tokensEstimated += (int) addedTokens;
                 lastStats.candidatesProduced = producedChunks.size();
@@ -430,8 +425,7 @@ public final class GraphRetriever {
                     / Math.max(1, frontierSizes.getOrDefault(hop - 1, 1));
                 lastStats.marginalYield = (double) newEvidenceByHop.getOrDefault(hop, 0)
                     / Math.max(1, edgesExaminedByHop.getOrDefault(hop, 0));
-                result.add(new GraphHit(state.anchor, state.seed, edge, path, pathVertices,
-                    pathEdges, orderedSources, score));
+                result.add(new GraphHit(state.anchor, path, orderedSources, score));
                 if (producedChunks.size() >= config.getCandidateBudget()) {
                     stopForBudget(RecallStopReason.CANDIDATE_LIMIT);
                     return result;
@@ -442,7 +436,7 @@ public final class GraphRetriever {
                 }
                 if (hop < config.getMaxHop()) {
                     increment(frontierSizes, hop);
-                    frontier.add(state.extend(targetId, targetVertex, edge, score, orderedSources));
+                    frontier.add(nextState);
                 } else {
                     reachedMaxHop = true;
                 }
@@ -582,22 +576,6 @@ public final class GraphRetriever {
         return entity == null ? Collections.emptyList() : entity.getSourceChunkIds();
     }
 
-    private static List<String> vertexIds(List<GraphVertexRef> vertices) {
-        List<String> result = new ArrayList<>();
-        for (GraphVertexRef vertex : vertices) {
-            result.add(vertex.getVertexId());
-        }
-        return result;
-    }
-
-    private static List<String> edgeIds(List<GraphEdgeRef> edges) {
-        List<String> result = new ArrayList<>();
-        for (GraphEdgeRef edge : edges) {
-            result.add(edge.getEdgeId());
-        }
-        return result;
-    }
-
     private static String pathKey(GraphPathRef path) {
         return path.getVertexIds().toString() + "\u001f" + path.getEdgeIds();
     }
@@ -615,28 +593,23 @@ public final class GraphRetriever {
             .comparingInt((ExpansionState value) -> value.hop)
             .thenComparing(Comparator.comparingDouble((ExpansionState value) -> value.score).reversed())
             .thenComparing(value -> value.entityId)
-            .thenComparing(value -> edgeIds(value.pathEdges).toString());
+            .thenComparing(value -> value.path.getEdgeIds().toString());
         private final EntityAnchorResolver.Anchor anchor;
-        private final GraphVertexRef seed;
         private final String entityId;
         private final int hop;
         private final double score;
-        private final List<GraphVertexRef> pathVertices;
-        private final List<GraphEdgeRef> pathEdges;
+        private final GraphPathRef path;
         private final Set<String> pathEntityIds;
         private final List<String> sourceChunkIds;
 
-        private ExpansionState(EntityAnchorResolver.Anchor anchor, GraphVertexRef seed, String entityId,
-                               int hop, double score, List<GraphVertexRef> pathVertices,
-                               List<GraphEdgeRef> pathEdges, Set<String> pathEntityIds,
+        private ExpansionState(EntityAnchorResolver.Anchor anchor, String entityId,
+                               int hop, double score, GraphPathRef path, Set<String> pathEntityIds,
                                List<String> sourceChunkIds) {
             this.anchor = anchor;
-            this.seed = seed;
             this.entityId = entityId;
             this.hop = hop;
             this.score = score;
-            this.pathVertices = pathVertices;
-            this.pathEdges = pathEdges;
+            this.path = path;
             this.pathEntityIds = pathEntityIds;
             this.sourceChunkIds = sourceChunkIds;
         }
@@ -645,23 +618,23 @@ public final class GraphRetriever {
                                            double score) {
             Set<String> entityIds = new LinkedHashSet<>();
             entityIds.add(anchor.getEntity().getEntityId());
-            return new ExpansionState(anchor, vertex, anchor.getEntity().getEntityId(), 0, score,
-                new ArrayList<>(Collections.singletonList(vertex)), new ArrayList<>(), entityIds,
-                new ArrayList<>());
+            return new ExpansionState(anchor, anchor.getEntity().getEntityId(), 0, score,
+                new GraphPathRef(Collections.singletonList(vertex), Collections.emptyList(), false),
+                entityIds, new ArrayList<>());
         }
 
         private ExpansionState extend(String targetId, GraphVertexRef vertex, GraphEdgeRef edge,
-                                      double nextScore, List<String> sources) {
-            List<GraphVertexRef> vertices = new ArrayList<>(pathVertices);
+                                      double nextScore, List<String> sources, boolean sampled) {
+            List<GraphVertexRef> vertices = new ArrayList<>(path.getVertices());
             vertices.add(vertex);
-            List<GraphEdgeRef> edges = new ArrayList<>(pathEdges);
+            List<GraphEdgeRef> edges = new ArrayList<>(path.getEdges());
             edges.add(edge);
             Set<String> entityIds = new LinkedHashSet<>(pathEntityIds);
             entityIds.add(targetId);
             List<String> allSources = new ArrayList<>(sourceChunkIds);
             allSources.addAll(sources);
-            return new ExpansionState(anchor, seed, targetId, hop + 1, nextScore, vertices, edges,
-                entityIds, allSources);
+            return new ExpansionState(anchor, targetId, hop + 1, nextScore,
+                new GraphPathRef(vertices, edges, sampled || path.isSampled()), entityIds, allSources);
         }
     }
 
@@ -689,24 +662,14 @@ public final class GraphRetriever {
     /** Graph candidate with path and source provenance. */
     public static final class GraphHit {
         private final EntityAnchorResolver.Anchor anchor;
-        private final GraphVertexRef seed;
-        private final GraphEdgeRef edge;
         private final GraphPathRef path;
-        private final List<GraphVertexRef> pathVertices;
-        private final List<GraphEdgeRef> pathEdges;
         private final List<String> sourceChunkIds;
         private final double score;
 
-        private GraphHit(EntityAnchorResolver.Anchor anchor, GraphVertexRef seed,
-                         GraphEdgeRef edge, GraphPathRef path,
-                         List<GraphVertexRef> pathVertices, List<GraphEdgeRef> pathEdges,
+        private GraphHit(EntityAnchorResolver.Anchor anchor, GraphPathRef path,
                          List<String> sourceChunkIds, double score) {
             this.anchor = anchor;
-            this.seed = seed;
-            this.edge = edge;
             this.path = path;
-            this.pathVertices = new ArrayList<>(pathVertices);
-            this.pathEdges = new ArrayList<>(pathEdges);
             this.sourceChunkIds = new ArrayList<>(sourceChunkIds);
             this.score = score;
         }
@@ -716,23 +679,11 @@ public final class GraphRetriever {
         }
 
         public GraphVertexRef getSeed() {
-            return seed;
-        }
-
-        public GraphEdgeRef getEdge() {
-            return edge;
+            return path.getVertices().get(0);
         }
 
         public GraphPathRef getPath() {
             return path;
-        }
-
-        public List<GraphVertexRef> getPathVertices() {
-            return Collections.unmodifiableList(pathVertices);
-        }
-
-        public List<GraphEdgeRef> getPathEdges() {
-            return Collections.unmodifiableList(pathEdges);
         }
 
         public List<String> getSourceChunkIds() {

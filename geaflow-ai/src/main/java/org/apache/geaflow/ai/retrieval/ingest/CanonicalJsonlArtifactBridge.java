@@ -28,8 +28,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -42,6 +40,7 @@ import org.apache.geaflow.ai.retrieval.index.IndexArtifact;
 import org.apache.geaflow.ai.retrieval.index.bm25.LuceneBm25IndexBuilder;
 import org.apache.geaflow.ai.retrieval.index.graph.OfflineGraphArtifactBuilder;
 import org.apache.geaflow.ai.retrieval.index.vector.OfflineVectorIndexBuilder;
+import org.apache.geaflow.ai.retrieval.metadata.ArtifactIntegrity;
 import org.apache.geaflow.ai.retrieval.metadata.DatasetManifest;
 import org.apache.geaflow.ai.retrieval.model.document.TextChunk;
 import org.apache.geaflow.ai.retrieval.model.graph.EntityRef;
@@ -64,7 +63,7 @@ public final class CanonicalJsonlArtifactBridge {
             || graphVersion == null || vectors == null) {
             throw new IllegalArgumentException("release, output, manifest, graph, and vectors are required");
         }
-        JsonObject ready = readObject(releaseDirectory.resolve("READY.json"));
+        JsonObject ready = readObject(ArtifactIntegrity.resolveInside(releaseDirectory, "READY.json"));
         if (!"READY".equals(requiredString(ready, "state"))
             || !manifest.getDataset().equals(requiredString(ready, "dataset"))
             || !manifest.getDatasetRelease().equals(requiredString(ready, "dataset_release"))
@@ -82,8 +81,8 @@ public final class CanonicalJsonlArtifactBridge {
             throw new IOException("supplied graph version does not match Python release version");
         }
         validateChecksums(releaseDirectory, ready.getAsJsonObject("artifact_checksums"));
-        Path documentsPath = resolveReleasePath(releaseDirectory, "documents.jsonl");
-        Path chunksPath = resolveReleasePath(releaseDirectory, "chunks.jsonl");
+        Path documentsPath = ArtifactIntegrity.resolveInside(releaseDirectory, "documents.jsonl");
+        Path chunksPath = ArtifactIntegrity.resolveInside(releaseDirectory, "chunks.jsonl");
         if (countLines(documentsPath) != requiredInt(ready, "documents")) {
             throw new IOException("document count does not match Python READY metadata");
         }
@@ -110,7 +109,7 @@ public final class CanonicalJsonlArtifactBridge {
             }
             publishStaging(staging, outputDirectory);
         } finally {
-            deleteTree(staging);
+            ArtifactIntegrity.deleteTree(staging);
         }
     }
 
@@ -138,12 +137,12 @@ public final class CanonicalJsonlArtifactBridge {
                 }
                 String text = requiredString(value, "text");
                 String textHash = requiredString(value, "text_hash");
-                if (!textHash.equals(sha256(text.getBytes(StandardCharsets.UTF_8)))) {
+                if (!textHash.equals(ArtifactIntegrity.sha256(text.getBytes(StandardCharsets.UTF_8)))) {
                     throw new IOException("chunk text hash does not match canonical text");
                 }
                 String documentId = requiredString(value, "document_id");
                 int chunkIndex = requiredInt(value, "chunk_index");
-                String expectedChunkId = sha256((documentId + "\0" + chunkIndex + "\0"
+                String expectedChunkId = ArtifactIntegrity.sha256((documentId + "\0" + chunkIndex + "\0"
                     + textHash + "\0" + policyVersion).getBytes(StandardCharsets.UTF_8));
                 if (!expectedChunkId.equals(requiredString(value, "chunk_id"))) {
                     throw new IOException("chunk ID does not match canonical content");
@@ -175,7 +174,8 @@ public final class CanonicalJsonlArtifactBridge {
 
     private static GraphRecords readGraph(Path root, JsonObject ready, List<TextChunk> chunks)
         throws IOException {
-        Path graphManifestPath = resolveReleasePath(root, requiredString(ready, "graph_manifest"));
+        Path graphManifestPath = ArtifactIntegrity.resolveInside(root,
+            requiredString(ready, "graph_manifest"));
         JsonObject graphManifest = readObject(graphManifestPath);
         if (!requiredString(ready, "version").equals(requiredString(graphManifest, "graph_version"))
             || !requiredString(ready, "entity_schema_version")
@@ -196,9 +196,10 @@ public final class CanonicalJsonlArtifactBridge {
         Set<String> vertexIds = new HashSet<>();
         Map<String, String> vertexTypes = new HashMap<>();
         int vertexRecordCount = 0;
-        Path verticesPath = resolveReleasePath(root,
+        Path verticesPath = ArtifactIntegrity.resolveInside(root,
             Paths.get(graphRelativeDirectory, "vertices.jsonl").toString());
-        if (!requiredString(graphManifest, "vertices_sha256").equals(sha256(verticesPath))) {
+        if (!requiredString(graphManifest, "vertices_sha256")
+            .equals(ArtifactIntegrity.sha256(verticesPath))) {
             throw new IOException("graph vertices checksum does not match graph manifest");
         }
         try (java.util.stream.Stream<String> lines = Files.lines(verticesPath, StandardCharsets.UTF_8)) {
@@ -236,9 +237,10 @@ public final class CanonicalJsonlArtifactBridge {
         Set<String> edgeIds = new HashSet<>();
         int edgeRecordCount = 0;
         int skippedMentionEdges = 0;
-        Path edgesPath = resolveReleasePath(root,
+        Path edgesPath = ArtifactIntegrity.resolveInside(root,
             Paths.get(graphRelativeDirectory, "edges.jsonl").toString());
-        if (!requiredString(graphManifest, "edges_sha256").equals(sha256(edgesPath))) {
+        if (!requiredString(graphManifest, "edges_sha256")
+            .equals(ArtifactIntegrity.sha256(edgesPath))) {
             throw new IOException("graph edges checksum does not match graph manifest");
         }
         try (java.util.stream.Stream<String> lines = Files.lines(edgesPath, StandardCharsets.UTF_8)) {
@@ -306,39 +308,11 @@ public final class CanonicalJsonlArtifactBridge {
     }
 
     private static void validateChecksums(Path root, JsonObject checksums) throws IOException {
-        if (checksums == null || checksums.entrySet().isEmpty()) {
-            throw new IOException("Python READY metadata has no artifact checksums");
+        try {
+            ArtifactIntegrity.validateChecksums(root, checksums);
+        } catch (IOException error) {
+            throw new IOException("Python READY checksum validation failed: " + error.getMessage(), error);
         }
-        Set<String> expectedPaths = new HashSet<>();
-        for (Map.Entry<String, JsonElement> entry : checksums.entrySet()) {
-            Path path = resolveReleasePath(root, entry.getKey());
-            String expectedDigest = entry.getValue().getAsString();
-            if (!Files.isRegularFile(path) || !expectedDigest.equals(sha256(path))) {
-                throw new IOException("Python release checksum mismatch: " + entry.getKey());
-            }
-            expectedPaths.add(entry.getKey());
-        }
-        Set<String> actual = new HashSet<>();
-        try (java.util.stream.Stream<Path> paths = Files.walk(root)) {
-            paths.filter(Files::isRegularFile).forEach(path -> {
-                if (!path.equals(root.resolve("READY.json"))) {
-                    actual.add(root.relativize(path).toString().replace(path.getFileSystem().getSeparator(), "/"));
-                }
-            });
-        }
-        if (!actual.equals(expectedPaths)) {
-            throw new IOException("Python READY checksum manifest does not cover release files");
-        }
-    }
-
-    private static Path resolveReleasePath(Path root, String relative) throws IOException {
-        Path realRoot = root.toRealPath();
-        Path resolved = root.resolve(relative).normalize();
-        if (!resolved.startsWith(root.normalize()) || !Files.exists(resolved)
-            || !resolved.toRealPath().startsWith(realRoot)) {
-            throw new IOException("release path escapes its root: " + relative);
-        }
-        return resolved;
     }
 
     private static void publishStaging(Path staging, Path output) throws IOException {
@@ -352,7 +326,7 @@ public final class CanonicalJsonlArtifactBridge {
                 Path target = output.resolve(staging.relativize(file));
                 Files.createDirectories(target.getParent());
                 if (Files.exists(target)) {
-                    if (!sha256(file).equals(sha256(target))) {
+                    if (!ArtifactIntegrity.sha256(file).equals(ArtifactIntegrity.sha256(target))) {
                         throw new IOException("existing Java artifact conflicts with staged output");
                     }
                     continue;
@@ -369,52 +343,6 @@ public final class CanonicalJsonlArtifactBridge {
                 Files.deleteIfExists(path);
             }
             throw failure;
-        }
-    }
-
-    private static void deleteTree(Path root) throws IOException {
-        if (!Files.exists(root)) {
-            return;
-        }
-        try (java.util.stream.Stream<Path> paths = Files.walk(root)) {
-            List<Path> entries = paths.sorted(java.util.Comparator.reverseOrder()).collect(java.util.stream.Collectors.toList());
-            for (Path entry : entries) {
-                Files.deleteIfExists(entry);
-            }
-        }
-    }
-
-    private static String sha256(Path path) throws IOException {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            try (java.io.InputStream input = Files.newInputStream(path)) {
-                byte[] buffer = new byte[8192];
-                int count;
-                while ((count = input.read(buffer)) >= 0) {
-                    digest.update(buffer, 0, count);
-                }
-            }
-            StringBuilder result = new StringBuilder();
-            for (byte value : digest.digest()) {
-                result.append(String.format(java.util.Locale.ROOT, "%02x", value & 0xff));
-            }
-            return result.toString();
-        } catch (NoSuchAlgorithmException error) {
-            throw new IllegalStateException("SHA-256 is unavailable", error);
-        }
-    }
-
-    private static String sha256(byte[] value) throws IOException {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] result = digest.digest(value);
-            StringBuilder hex = new StringBuilder();
-            for (byte current : result) {
-                hex.append(String.format(java.util.Locale.ROOT, "%02x", current & 0xff));
-            }
-            return hex.toString();
-        } catch (NoSuchAlgorithmException error) {
-            throw new IOException("SHA-256 is unavailable", error);
         }
     }
 

@@ -27,7 +27,7 @@ import org.apache.geaflow.ai.retrieval.model.evidence.ChannelScore;
 import org.apache.geaflow.ai.retrieval.model.evidence.Evidence;
 
 /** Deterministic weighted RRF ordering for BM25, vector, and graph evidence. */
-public final class WeightedRrfFusion implements Fusion {
+public final class WeightedRrfFusion implements CandidateFusion {
     private final WeightedRrfConfig config;
 
     public WeightedRrfFusion(WeightedRrfConfig config) {
@@ -63,7 +63,7 @@ public final class WeightedRrfFusion implements Fusion {
         List<Evidence> result = new ArrayList<>();
         for (Evidence value : evidence) {
             result.add(new Evidence(value.getEvidenceId(), value.getKind(), value.getText(),
-                value.getChunks(), value.getEntities(), value.getPaths(), value.getSources(),
+                value.getChunks(), value.getEntities(), value.getSources(),
                 value.getStageScores(), score(value), value.getFinalScore(), value.getRank(),
                 value.getGraphTraces(), value.getSchemaVersion(), value.getDataset(),
                 value.getDatasetVersion(), value.getSplit(), value.getGraphVersion(),
@@ -74,7 +74,7 @@ public final class WeightedRrfFusion implements Fusion {
         List<Evidence> ranked = new ArrayList<>();
         for (Evidence value : result) {
             ranked.add(new Evidence(value.getEvidenceId(), value.getKind(), value.getText(), value.getChunks(),
-                value.getEntities(), value.getPaths(), value.getSources(), value.getStageScores(), value.getFusedScore(),
+                value.getEntities(), value.getSources(), value.getStageScores(), value.getFusedScore(),
                 value.getFinalScore(), ranked.size() + 1, value.getGraphTraces(),
                 value.getSchemaVersion(), value.getDataset(), value.getDatasetVersion(),
                 value.getSplit(), value.getGraphVersion(), value.getIndexVersion()));

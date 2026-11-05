@@ -144,7 +144,6 @@ public class RetrievalService {
             response.setGraphName(command.getGraphName());
             response.setGraphVersion(cache.getGraphVersion(command.getGraphName()));
             response.setEvidence(evidenceMapper.map(hits));
-            response.setPaths(Collections.emptyList());
             response.setSources(Collections.emptyList());
             response.setDegradedChannels(Collections.emptyList());
             response.setEffectiveBudget(budget);

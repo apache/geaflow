@@ -104,7 +104,7 @@ class AdaptiveRoutingTest {
 
         RoutingFeatures fast = RoutingFeatures.builder().anchorCount(2).anchorConfidence(0.9)
             .graphGrowthRate(2.1).build();
-        RetrievalPlan fastPlan = policy.plan(context(30, fast), RetrievalProgress.builder()
+        RetrievalPlan fastPlan = policy.replan(context(30, fast), RetrievalProgress.builder()
             .anchorCount(2).anchorConfidence(0.9).graphGrowthRate(2.1).build());
         assertFalse(fastPlan.getChannelBudgets().containsKey("GRAPH"));
         assertTrue(fastPlan.getReasons().contains("GRAPH_STOPPED_GROWTH"));
@@ -120,7 +120,7 @@ class AdaptiveRoutingTest {
         DeterministicRulePolicy policy = new DeterministicRulePolicy();
         RoutingContext context = context(100, RoutingFeatures.empty());
 
-        RetrievalPlan replanned = policy.plan(context, RetrievalProgress.builder().boundary("AFTER_TEXT")
+        RetrievalPlan replanned = policy.replan(context, RetrievalProgress.builder().boundary("AFTER_TEXT")
             .candidateCounts(Collections.singletonMap("BM25", 34)).anchorCount(0).build());
 
         assertEquals(98, replanned.getChannelBudgets().get("GRAPH"));
@@ -172,12 +172,12 @@ class AdaptiveRoutingTest {
 
         RetrievalProgress exhausted = RetrievalProgress.builder().boundary("AFTER_TEXT")
             .anchorCount(0).replanCount(1).build();
-        RetrievalPlan plan = policy.plan(context, exhausted);
+        RetrievalPlan plan = policy.replan(context, exhausted);
 
         assertTrue(plan.getReasons().contains("REPLAN_BUDGET_EXHAUSTED"));
         assertEquals(100, sum(plan.getChannelBudgets()));
         // The exhausted boundary ignores late progress signals so repeated replans cannot drift.
-        RetrievalPlan second = policy.plan(context, RetrievalProgress.builder().boundary("AFTER_TEXT")
+        RetrievalPlan second = policy.replan(context, RetrievalProgress.builder().boundary("AFTER_TEXT")
             .firstStageScoreGap(0.9).anchorCount(9).anchorConfidence(0.99)
             .graphGrowthRate(5.0).replanCount(1).build());
         assertEquals(plan.getChannelBudgets(), second.getChannelBudgets());

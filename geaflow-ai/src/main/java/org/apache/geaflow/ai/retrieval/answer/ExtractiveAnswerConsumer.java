@@ -13,14 +13,15 @@ import org.apache.geaflow.ai.retrieval.model.document.SourceRef;
 import org.apache.geaflow.ai.retrieval.model.evidence.Evidence;
 
 /** Offline extractive consumer that never emits unsupported text. */
-public final class ExtractiveAnswerConsumer {
+public final class ExtractiveAnswerConsumer implements AnswerSynthesizer {
     private final TokenEstimator estimator;
 
     public ExtractiveAnswerConsumer(TokenEstimator estimator) {
         this.estimator = java.util.Objects.requireNonNull(estimator, "estimator");
     }
 
-    public AnswerResponse consume(AnswerRequest request, List<Evidence> evidence) {
+    @Override
+    public AnswerResponse synthesize(AnswerRequest request, List<Evidence> evidence) {
         if (request == null) {
             throw new IllegalArgumentException("request is required");
         }
@@ -163,8 +164,18 @@ public final class ExtractiveAnswerConsumer {
     private static CitationProvenance provenance(AnswerRequest request, Evidence item,
                                                  SourceRef source,
                                                  org.apache.geaflow.ai.retrieval.model.graph.GraphPathRef pathRef) {
-        org.apache.geaflow.ai.retrieval.model.evidence.GraphEvidenceTrace trace =
-            item.getGraphTraces().isEmpty() ? null : item.getGraphTraces().get(0);
+        org.apache.geaflow.ai.retrieval.model.evidence.GraphEvidenceTrace trace = null;
+        if (pathRef != null) {
+            for (org.apache.geaflow.ai.retrieval.model.evidence.GraphEvidenceTrace candidate
+                    : item.getGraphTraces()) {
+                if (candidate.getPath().sameIdentityAs(pathRef)) {
+                    trace = candidate;
+                    break;
+                }
+            }
+        } else if (item.getGraphTraces().size() == 1) {
+            trace = item.getGraphTraces().get(0);
+        }
         String queryId = null;
         String mode = request.getMode();
         String seedEntityId = null;
@@ -186,7 +197,8 @@ public final class ExtractiveAnswerConsumer {
             hop = pathRef.getHop();
         }
         if (trace != null) {
-            for (org.apache.geaflow.ai.retrieval.model.graph.GraphEdgeRef edge : trace.getPathEdges()) {
+            for (org.apache.geaflow.ai.retrieval.model.graph.GraphEdgeRef edge
+                    : trace.getPath().getEdges()) {
                 relationPath.add(edge.getLabel());
             }
             if (trace.getPath() != null) {

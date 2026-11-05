@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from .digests import sha256_file
 from .sources.source_loader import SourceLoader, SourceManifest
 
 
@@ -16,15 +16,12 @@ def resolve_manifest(path: Path, output: Path, loader: Optional[SourceLoader] = 
     manifest = SourceManifest.from_file(path)
     active_loader = loader or SourceLoader()
     source = active_loader._resolve_source(manifest)
-    digest = hashlib.sha256()
-    with source.open("rb") as stream:
-        for block in iter(lambda: stream.read(1024 * 1024), b""):
-            digest.update(block)
-    if digest.hexdigest() != manifest.sha256:
+    digest = sha256_file(source)
+    if digest != manifest.sha256:
         # Keep the loader's canonical checksum error and avoid writing an unverified resolution.
         active_loader._verify_checksum(source, manifest)
     resolved = json.loads(path.read_text(encoding="utf-8"))
-    resolved["sha256"] = digest.hexdigest()
+    resolved["sha256"] = digest
     resolved["resolved_cache_path"] = str(source.resolve())
     resolved["resolved_source_uri"] = source.resolve().as_uri()
     resolved["resolved_from"] = str(path.resolve())

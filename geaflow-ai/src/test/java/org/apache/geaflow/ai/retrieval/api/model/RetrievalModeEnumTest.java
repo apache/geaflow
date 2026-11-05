@@ -218,17 +218,24 @@ class RetrievalModeEnumTest {
 
     /** Routing policy that counts how often planning is invoked. */
     private static final class CountingPolicy
-        implements org.apache.geaflow.ai.retrieval.execution.RoutingPolicy {
+        implements org.apache.geaflow.ai.retrieval.execution.AdaptivePolicy {
         private final org.apache.geaflow.ai.retrieval.execution.DeterministicRulePolicy delegate =
             new org.apache.geaflow.ai.retrieval.execution.DeterministicRulePolicy();
         private int calls;
 
         @Override
         public org.apache.geaflow.ai.retrieval.execution.RetrievalPlan plan(
+            org.apache.geaflow.ai.retrieval.execution.RoutingContext context) {
+            calls++;
+            return delegate.plan(context);
+        }
+
+        @Override
+        public org.apache.geaflow.ai.retrieval.execution.RetrievalPlan replan(
             org.apache.geaflow.ai.retrieval.execution.RoutingContext context,
             org.apache.geaflow.ai.retrieval.execution.RetrievalProgress progress) {
             calls++;
-            return delegate.plan(context, progress);
+            return delegate.replan(context, progress);
         }
 
         @Override

@@ -11,6 +11,8 @@
  */
 package org.apache.geaflow.ai.retrieval.execution;
 
+import org.apache.geaflow.ai.retrieval.answer.AnswerSynthesizer;
+import org.apache.geaflow.ai.retrieval.answer.ExtractiveAnswerConsumer;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalErrorCode;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalException;
 import org.apache.geaflow.ai.retrieval.config.RetrievalProperties;
@@ -64,7 +66,12 @@ public final class RetrievalStrategyFactory {
         throw unsupported("token estimator", id);
     }
 
-    public static RoutingPolicy routingPolicy(String id, RetrievalProperties properties) {
+    /** Builds the default extractive answer synthesizer around the configured token estimator. */
+    public static AnswerSynthesizer answerSynthesizer(TokenEstimator estimator) {
+        return new ExtractiveAnswerConsumer(estimator);
+    }
+
+    public static AdaptivePolicy adaptivePolicy(String id, RetrievalProperties properties) {
         if (DETERMINISTIC_RULE_POLICY.equals(normalize(id))) {
             return new DeterministicRulePolicy(properties.getHighAverageIdf(),
                 properties.getHighScoreGap(), properties.getLongQueryLength(),

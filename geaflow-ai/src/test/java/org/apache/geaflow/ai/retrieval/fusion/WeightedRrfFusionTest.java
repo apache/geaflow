@@ -114,8 +114,8 @@ class WeightedRrfFusionTest {
         double fused = (bm25Rank == 0 ? 0 : 1.0 / (60 + bm25Rank))
             + (vectorRank == 0 ? 0 : 1.0 / (60 + vectorRank));
         return new Evidence(id, EvidenceKind.CHUNK, id, Collections.emptyList(),
-            Collections.emptyList(), Collections.emptyList(), Collections.emptyList(), scores,
-            fused, 1);
+            Collections.emptyList(), Collections.emptyList(), scores, fused, null, 1,
+            Collections.emptyList(), Evidence.CURRENT_SCHEMA_VERSION, null, null, null, null, null);
     }
 
     private static Evidence evidenceWithGraph(String id, int bm25Rank, int vectorRank, int graphRank) {
@@ -124,7 +124,8 @@ class WeightedRrfFusionTest {
         scores.put("VECTOR", new ChannelScore("VECTOR", 1.0, null, vectorRank));
         scores.put("GRAPH", new ChannelScore("GRAPH", 1.0, null, graphRank));
         return new Evidence(id, EvidenceKind.CHUNK, id, Collections.emptyList(),
-            Collections.emptyList(), Collections.emptyList(), Collections.emptyList(), scores, 0.0, 1);
+            Collections.emptyList(), Collections.emptyList(), scores, 0.0, null, 1,
+            Collections.emptyList(), Evidence.CURRENT_SCHEMA_VERSION, null, null, null, null, null);
     }
 
     private static java.util.List<String> ids(java.util.List<Evidence> values) {

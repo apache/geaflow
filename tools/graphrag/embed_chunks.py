@@ -5,16 +5,11 @@ import os
 from pathlib import Path
 
 import torch
-from transformers import AutoModel, AutoTokenizer
 
-
-def _load_encoder(model_path, device):
-    dtype = torch.float16 if device.type == "cuda" else torch.float32
-    tokenizer = AutoTokenizer.from_pretrained(model_path, local_files_only=True)
-    model = AutoModel.from_pretrained(model_path, local_files_only=True, torch_dtype=dtype)
-    model.to(device)
-    model.eval()
-    return tokenizer, model
+if __package__:
+    from .embedding import encode_batch, load_encoder
+else:
+    from embedding import encode_batch, load_encoder
 
 
 def _batches(path, batch_size):
@@ -44,7 +39,7 @@ def export(chunks_path, model_path, output, device_name, batch_size, max_length)
     requested = torch.device(device_name)
     if requested.type == "cuda" and not torch.cuda.is_available():
         raise RuntimeError("CUDA device requested but CUDA is unavailable")
-    tokenizer, model = _load_encoder(model_path, requested)
+    tokenizer, model = load_encoder(model_path, requested)
     target = Path(output)
     target.parent.mkdir(parents=True, exist_ok=True)
     temporary = target.with_name(target.name + ".tmp")
@@ -58,23 +53,12 @@ def export(chunks_path, model_path, output, device_name, batch_size, max_length)
                     if row["chunk_id"] in seen:
                         raise ValueError(f"duplicate chunk_id: {row['chunk_id']}")
                     seen.add(row["chunk_id"])
-                encoded = tokenizer([row["text"] for row in batch_rows], padding=True,
-                                    truncation=True, max_length=max_length, return_tensors="pt")
-                encoded = {key: value.to(requested) for key, value in encoded.items()}
-                with torch.inference_mode():
-                    hidden = model(**encoded).last_hidden_state
-                    mask = encoded["attention_mask"].unsqueeze(-1)
-                    values = (hidden * mask).sum(dim=1) / mask.sum(dim=1).clamp_min(1)
-                    values = torch.nn.functional.normalize(values.float(), p=2, dim=1)
-                if not torch.isfinite(values).all().item():
-                    raise ValueError("encoder produced non-finite values")
+                values = encode_batch([row["text"] for row in batch_rows], tokenizer,
+                                      model, requested, max_length)
                 if dimension is None:
                     dimension = values.shape[1]
                 if values.shape[1] != dimension:
                     raise ValueError("encoder produced inconsistent dimensions")
-                norms = torch.linalg.vector_norm(values, dim=1)
-                if not torch.allclose(norms, torch.ones_like(norms), atol=1e-3, rtol=1e-3):
-                    raise ValueError("encoder produced non-normalized vectors")
                 for row, vector in zip(batch_rows, values.cpu().tolist()):
                     stream.write(json.dumps({"chunkId": row["chunk_id"], "vector": vector}) + "\n")
                 written += len(batch_rows)

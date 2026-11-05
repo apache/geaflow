@@ -119,8 +119,8 @@ public final class RetrievalModelJson {
                 optionalString(object, "datasetVersion"), optionalString(object, "split"),
                 optionalString(object, "sourceHash"));
         } else if (type == GraphPathRef.class) {
-            return new GraphPathRef(strings(object, "vertexIds"),
-                strings(object, "edgeIds"), requiredInt(object, "hop"),
+            return new GraphPathRef(models(object, "vertices", GraphVertexRef.class),
+                models(object, "edges", GraphEdgeRef.class),
                 requiredBoolean(object, "sampled"));
         } else if (type == SourceRef.class) {
             return new SourceRef(requiredString(object, "documentId"),
@@ -141,39 +141,21 @@ public final class RetrievalModelJson {
         } else if (type == Evidence.class) {
             return new Evidence(optionalString(object, "evidenceId"), kind(object),
                 optionalString(object, "text"), models(object, "chunks", TextChunk.class),
-                models(object, "entities", EntityRef.class), models(object, "paths", GraphPathRef.class),
-                models(object, "sources", SourceRef.class), scores(object),
+                models(object, "entities", EntityRef.class), models(object, "sources", SourceRef.class), scores(object),
                 optionalDouble(object, "fusedScore"), optionalDouble(object, "finalScore"),
                 optionalInt(object, "rank"), models(object, "graphTraces", GraphEvidenceTrace.class),
-                optionalInt(object, "schemaVersion") == null
-                    ? Evidence.LEGACY_SCHEMA_VERSION : optionalInt(object, "schemaVersion"),
+                requiredInt(object, "schemaVersion"),
                 optionalString(object, "dataset"), optionalString(object, "datasetVersion"),
                 optionalString(object, "split"), optionalString(object, "graphVersion"),
                 optionalString(object, "indexVersion"));
         } else if (type == GraphEvidenceTrace.class) {
             JsonObject path = object.getAsJsonObject("path");
-            GraphVertexRef seed = optionalModel(object, "seed", GraphVertexRef.class);
-            String selectedMode = optionalString(object, "selectedMode");
-            if ((seed == null) != (selectedMode == null)) {
-                throw new JsonParseException("selectedMode and seed must be provided together");
-            }
-            String anchorEntityId = optionalString(object, "anchorEntityId");
-            if (seed != null && anchorEntityId != null
-                && !anchorEntityId.equals(seed.getEntityId())) {
-                throw new JsonParseException("anchorEntityId must match graph trace seed");
-            }
-            return seed == null
-                ? new GraphEvidenceTrace(requiredString(object, "queryId"),
-                    requiredString(object, "graphVersion"), requiredString(object, "anchorEntityId"),
-                    requiredString(object, "anchorMatchType"), requiredDouble(object, "anchorConfidence"),
-                    (GraphPathRef) parse(path, GraphPathRef.class), strings(object, "supportingChunkIds"))
-                : new GraphEvidenceTrace(requiredString(object, "queryId"),
-                    enumValue(selectedMode, RetrievalMode.class), seed,
-                    requiredString(object, "anchorMatchType"), requiredDouble(object, "anchorConfidence"),
-                    requiredString(object, "graphVersion"), (GraphPathRef) parse(path, GraphPathRef.class),
-                    strings(object, "supportingChunkIds"),
-                    models(object, "pathVertices", GraphVertexRef.class),
-                    models(object, "pathEdges", GraphEdgeRef.class));
+            return new GraphEvidenceTrace(requiredString(object, "queryId"),
+                enumValue(requiredString(object, "selectedMode"), RetrievalMode.class),
+                requiredString(object, "anchorMatchType"),
+                requiredDouble(object, "anchorConfidence"), requiredString(object, "graphVersion"),
+                (GraphPathRef) parse(path, GraphPathRef.class),
+                strings(object, "supportingChunkIds"));
         }
         throw new JsonParseException("unsupported retrieval model: " + type.getName());
     }
@@ -221,17 +203,6 @@ public final class RetrievalModelJson {
             result.add(fromElement(item, type));
         }
         return result;
-    }
-
-    private static <T> T optionalModel(JsonObject object, String name, Class<T> type) {
-        JsonElement element = object.get(name);
-        if (element == null || element.isJsonNull()) {
-            return null;
-        }
-        if (!element.isJsonObject()) {
-            throw new JsonParseException(name + " must be an object");
-        }
-        return fromElement(element, type);
     }
 
     private static <T extends Enum<T>> T enumValue(String value, Class<T> type) {

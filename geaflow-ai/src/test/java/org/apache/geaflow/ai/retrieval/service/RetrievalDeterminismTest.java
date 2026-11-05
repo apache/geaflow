@@ -158,7 +158,7 @@ class RetrievalDeterminismTest {
             for (GraphEvidenceTrace trace : evidence.getGraphTraces()) {
                 List<String> entityIds = new ArrayList<>();
                 for (org.apache.geaflow.ai.retrieval.model.graph.GraphVertexRef vertex
-                    : trace.getPathVertices()) {
+                    : trace.getPath().getVertices()) {
                     entityIds.add(vertex.getEntityId());
                 }
                 vertices.add(entityIds);

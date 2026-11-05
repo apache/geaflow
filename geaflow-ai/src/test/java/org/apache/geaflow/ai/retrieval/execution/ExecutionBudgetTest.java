@@ -37,6 +37,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
 import org.apache.geaflow.ai.retrieval.api.model.ExecutionMode;
 import org.apache.geaflow.ai.retrieval.model.document.TextChunk;
+import org.apache.geaflow.ai.retrieval.model.document.SourceRef;
 import org.apache.geaflow.ai.retrieval.model.evidence.Evidence;
 import org.apache.geaflow.ai.retrieval.model.evidence.EvidenceKind;
 import org.junit.jupiter.api.Test;
@@ -241,12 +242,16 @@ class ExecutionBudgetTest {
     }
 
     private static TextChunk chunk(String id, int tokens) {
-        return new TextChunk(id, "doc-" + id, 0, 0, 1, tokens, "text");
+        return new TextChunk(id, "doc-" + id, 0, 0, 1, tokens, "text", null, null,
+            "https://example.test/doc-" + id, "test", "v1", "test", "sha256:doc-" + id);
     }
 
     private static Evidence evidence(String id, TextChunk chunk, double score) {
         return new Evidence(id, EvidenceKind.CHUNK, chunk.getText(), Collections.singletonList(chunk),
-            Collections.emptyList(), Collections.emptyList(), Collections.emptyList(), Collections.emptyMap(),
-            score, 1);
+            Collections.emptyList(), Collections.singletonList(new SourceRef(chunk.getDocumentId(),
+                chunk.getSourceUri(), null, null, chunk.getDataset(), chunk.getDatasetVersion(),
+                chunk.getSplit(), chunk.getSourceHash())), Collections.emptyMap(), score, null, 1,
+            Collections.emptyList(), Evidence.CURRENT_SCHEMA_VERSION, "test", "v1", "test", null,
+            "index-v1");
     }
 }

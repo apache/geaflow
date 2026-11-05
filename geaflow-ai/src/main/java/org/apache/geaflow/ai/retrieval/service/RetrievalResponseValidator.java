@@ -80,8 +80,8 @@ public final class RetrievalResponseValidator {
             required(stage.getName(), "stage.name");
             required(stage.getStatus(), "stage.status");
         }
-        if (response.getEvidence() == null || response.getPaths() == null
-            || response.getSources() == null || response.getDegradedChannels() == null) {
+        if (response.getEvidence() == null || response.getSources() == null
+            || response.getDegradedChannels() == null) {
             throw invalid("response collections are required");
         }
         if (trace.getGraphVersion() != null
@@ -332,8 +332,6 @@ public final class RetrievalResponseValidator {
     public static RetrievalResponse normalizeCollections(RetrievalResponse response) {
         response.setEvidence(response.getEvidence() == null
             ? Collections.emptyList() : response.getEvidence());
-        response.setPaths(response.getPaths() == null
-            ? Collections.emptyList() : response.getPaths());
         response.setSources(response.getSources() == null
             ? Collections.emptyList() : response.getSources());
         response.setDegradedChannels(response.getDegradedChannels() == null

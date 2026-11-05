@@ -25,7 +25,7 @@ import org.apache.geaflow.ai.retrieval.api.model.RetrievalBudget;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalMode;
 
 /** Reproducible threshold policy for the first adaptive routing implementation. */
-public final class DeterministicRulePolicy implements RetrievalRoutingPolicy, AdaptivePolicy {
+public final class DeterministicRulePolicy implements AdaptivePolicy {
     public static final String POLICY_ID = "deterministic-rule";
     public static final String POLICY_VERSION = "v1";
 
@@ -204,16 +204,9 @@ public final class DeterministicRulePolicy implements RetrievalRoutingPolicy, Ad
         return parameters;
     }
 
-    /**
-     * Returns the initial plan using the pre-probe features.
-     *
-     * <p>This is the design-level {@link AdaptivePolicy#plan(RoutingContext)} entry point. It
-     * delegates to the same decision logic the working SPI uses, so both entry points cannot
-     * diverge.
-     */
     @Override
     public RetrievalPlan plan(RoutingContext context) {
-        return plan(context, null);
+        return createPlan(context, null);
     }
 
     @Override
@@ -225,16 +218,14 @@ public final class DeterministicRulePolicy implements RetrievalRoutingPolicy, Ad
      * Returns the plan revised at a stage boundary.
      *
      * <p>The design allows a policy to shrink or abandon graph expansion once probe statistics
-     * exist. This rule policy re-runs the same decision with the merged features, which is exactly
-     * what the working SPI's two-argument {@code plan} already does.
+     * exist. This rule policy re-runs the same decision with the merged features.
      */
     @Override
     public RetrievalPlan replan(RoutingContext context, RetrievalProgress progress) {
-        return plan(context, progress);
+        return createPlan(context, progress);
     }
 
-    @Override
-    public RetrievalPlan plan(RoutingContext context, RetrievalProgress progress) {
+    private RetrievalPlan createPlan(RoutingContext context, RetrievalProgress progress) {
         if (context == null) {
             throw new IllegalArgumentException("routing context is required");
         }
