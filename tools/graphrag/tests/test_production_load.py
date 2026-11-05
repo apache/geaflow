@@ -175,7 +175,6 @@ def test_slo_pass_reports_no_violations():
 
 def _worker_with_stub(monkeypatch, outcomes):
     """Returns an HttpWorker whose transport plays back `outcomes` in order."""
-    import http.client
     from tools.graphrag.production_load import HttpWorker
 
     worker = HttpWorker('http://127.0.0.1:1')

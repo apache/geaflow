@@ -1,5 +1,7 @@
+import gzip
 import json
 import zipfile
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -276,7 +278,6 @@ def test_equal_budget_rejects_divergent_candidate_multipliers():
 
 
 def test_output_stream_is_gzip_when_suffix_says_so(tmp_path):
-    import gzip, json
     target = tmp_path / 'rows.jsonl.gz'
     with _open_output(target) as stream:
         stream.write(json.dumps({'a': 1}) + '\n')
@@ -292,9 +293,6 @@ def test_output_stream_is_plain_text_otherwise(tmp_path):
 
 
 def test_summary_path_drops_compressed_suffix():
-    from pathlib import Path
-    from tools.graphrag.benchmark_http import _summary_path
-
     assert _summary_path(Path('run/six.jsonl')).name == 'six.csv'
     assert _summary_path(Path('run/six.jsonl.gz')).name == 'six.csv'
 

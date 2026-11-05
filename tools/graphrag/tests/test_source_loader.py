@@ -209,8 +209,11 @@ class SourceLoaderTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             source = root / "data.zip"
-            payload = lambda value: json.dumps({"id": value, "question": "q",
-                                                 "context": [["T", ["text"]]]})
+
+            def payload(value):
+                return json.dumps({"id": value, "question": "q",
+                                   "context": [["T", ["text"]]]})
+
             with zipfile.ZipFile(source, "w") as archive:
                 archive.writestr("train.json", payload("train"))
                 archive.writestr("dev.json", payload("dev"))

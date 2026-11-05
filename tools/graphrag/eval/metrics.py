@@ -1,5 +1,4 @@
 """Answer and evidence metrics used by the reproducible benchmark."""
-import re
 import string
 from collections import Counter
 from typing import Iterable, Sequence

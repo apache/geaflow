@@ -22,8 +22,7 @@ class PipelineTest(unittest.TestCase):
             checksum = hashlib.sha256(source.read_bytes()).hexdigest()
             manifest = SourceManifest("d", "r", "dev", None, str(source), checksum, "p")
 
-            def build(name):
-                return lambda output, chunks: _artifact(output, name, chunks)
+            build = _artifact_builder
 
             first = run_import(manifest, root / "versions", SourceLoader(), ChunkingConfig(50, 5),
                                build("bm25"), build("vector"))
@@ -48,7 +47,7 @@ class PipelineTest(unittest.TestCase):
                                           "context": [["A", ["A text"]]]}), encoding="utf-8")
             manifest = SourceManifest("d", "r", "dev", None, str(source),
                                       hashlib.sha256(source.read_bytes()).hexdigest(), "p")
-            build = lambda name: lambda output, chunks: _artifact(output, name, chunks)
+            build = _artifact_builder
             result = run_import(manifest, root / "versions", SourceLoader(), ChunkingConfig(50, 5),
                                 build("bm25"), build("vector"))
             ready_path = root / "versions" / result["version"] / "READY.json"
@@ -67,7 +66,7 @@ class PipelineTest(unittest.TestCase):
                                           "context": [["A", ["A text"]]]}), encoding="utf-8")
             checksum = hashlib.sha256(source.read_bytes()).hexdigest()
             manifest = SourceManifest("d", "r", "dev", None, str(source), checksum, "p")
-            build = lambda name: lambda output, chunks: _artifact(output, name, chunks)
+            build = _artifact_builder
             first = run_import(manifest, root / "versions", SourceLoader(), ChunkingConfig(50, 5),
                                build("bm25"), build("vector"), "embed", "v1", 7)
             second = run_import(manifest, root / "versions", SourceLoader(), ChunkingConfig(50, 5),
@@ -82,7 +81,7 @@ class PipelineTest(unittest.TestCase):
                                           "context": [["A", ["A text"]]]}), encoding="utf-8")
             manifest = SourceManifest("d", "r", "dev", None, str(source),
                                       hashlib.sha256(source.read_bytes()).hexdigest(), "p")
-            build = lambda name: lambda output, chunks: _artifact(output, name, chunks)
+            build = _artifact_builder
             result = run_import(manifest, root / "versions", SourceLoader(), ChunkingConfig(50, 5),
                                 build("bm25"), build("vector"))
             ready_path = root / "versions" / result["version"] / "READY.json"
@@ -101,7 +100,7 @@ class PipelineTest(unittest.TestCase):
                                           "context": [["A", ["A text"]]]}), encoding="utf-8")
             manifest = SourceManifest("d", "r", "dev", None, str(source),
                                       hashlib.sha256(source.read_bytes()).hexdigest(), "p")
-            build = lambda name: lambda output, chunks: _artifact(output, name, chunks)
+            build = _artifact_builder
             result = run_import(manifest, root / "versions", SourceLoader(), ChunkingConfig(50, 5),
                                 build("bm25"), build("vector"))
             artifact = root / "versions" / result["version"] / result["bm25_artifact"]
@@ -119,7 +118,7 @@ class PipelineTest(unittest.TestCase):
                                           "context": [["A", ["A text"]]]}), encoding="utf-8")
             manifest = SourceManifest("d", "r", "dev", None, str(source),
                                       hashlib.sha256(source.read_bytes()).hexdigest(), "p")
-            build = lambda name: lambda output, chunks: _artifact(output, name, chunks)
+            build = _artifact_builder
             result = run_import(manifest, root / "versions", SourceLoader(), ChunkingConfig(50, 5),
                                 build("bm25"), build("vector"))
             checksums = result["artifact_checksums"]
@@ -144,7 +143,7 @@ class PipelineTest(unittest.TestCase):
                                           "context": [["A", ["A text"]]]}), encoding="utf-8")
             manifest = SourceManifest("d", "r", "dev", None, str(source),
                                       hashlib.sha256(source.read_bytes()).hexdigest(), "p")
-            build = lambda name: lambda output, chunks: _artifact(output, name, chunks)
+            build = _artifact_builder
 
             with patch("tools.graphrag.ingest.pipeline.EXTRACTOR_VERSION", "extractor-a"):
                 first = run_import(manifest, root / "versions", SourceLoader(), ChunkingConfig(50, 5),
@@ -168,7 +167,7 @@ class PipelineTest(unittest.TestCase):
             source.write_text(json.dumps(record), encoding="utf-8")
             manifest = SourceManifest("d", "r", "dev", None, str(source),
                                       hashlib.sha256(source.read_bytes()).hexdigest(), "p")
-            build = lambda name: lambda output, chunks: _artifact(output, name, chunks)
+            build = _artifact_builder
             result = run_import(manifest, root / "versions", SourceLoader(), ChunkingConfig(50, 5),
                                 build("bm25"), build("vector"))
             final = root / "versions" / result["version"]
@@ -222,7 +221,7 @@ class PipelineTest(unittest.TestCase):
             source.write_text(json.dumps({"id": "d", "question": "q",
                                           "context": [["A", ["A text"]]]}), encoding="utf-8")
             checksum = hashlib.sha256(source.read_bytes()).hexdigest()
-            build = lambda name: lambda output, chunks: _artifact(output, name, chunks)
+            build = _artifact_builder
             first = SourceManifest("d", "release-1", "dev", None, str(source), checksum, "p")
             second = SourceManifest("d", "release-2", "dev", None, str(source), checksum, "p")
             first_result = run_import(first, root / "versions", SourceLoader(), ChunkingConfig(50, 5),
@@ -274,6 +273,13 @@ def _artifact(output, name, chunks):
     path = output / (name + ".artifact")
     path.write_text(str(len(chunks)), encoding="utf-8")
     return ArtifactBuildResult.from_chunk_ids(path, (chunk["chunk_id"] for chunk in chunks))
+
+
+def _artifact_builder(name):
+    def build(output, chunks):
+        return _artifact(output, name, chunks)
+
+    return build
 
 
 if __name__ == "__main__":
