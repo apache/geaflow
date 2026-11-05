@@ -39,6 +39,8 @@ import org.apache.geaflow.ai.retrieval.api.model.RetrievalResponse;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalTrace;
 import org.apache.geaflow.ai.retrieval.api.model.TraceStage;
 import org.apache.geaflow.ai.retrieval.config.RetrievalProperties;
+import org.apache.geaflow.ai.retrieval.execution.BudgetConstraint;
+import org.apache.geaflow.ai.retrieval.execution.RetrievalReplanEvent;
 import org.apache.geaflow.ai.retrieval.model.document.SourceRef;
 import org.apache.geaflow.ai.retrieval.model.evidence.Evidence;
 import org.apache.geaflow.ai.retrieval.model.graph.GraphPathRef;
@@ -57,7 +59,11 @@ public final class RetrievalApiJson {
     public static RetrievalRequest parseRequest(String json) {
         JsonObject object = object(json);
         validateRequestShape(object);
-        return GSON.fromJson(object, RetrievalRequest.class);
+        RetrievalRequest request = GSON.fromJson(object, RetrievalRequest.class);
+        if (object.has("budget") && !object.get("budget").isJsonNull()) {
+            request.setBudget(parseBudget(object.getAsJsonObject("budget"), false));
+        }
+        return request;
     }
 
     public static RetrievalResponse parseResponse(String json) {
@@ -88,6 +94,15 @@ public final class RetrievalApiJson {
         response.setTrace(parseTrace(object.getAsJsonObject("trace")));
         response.setEffectiveBudget(parseBudget(object.getAsJsonObject("effectiveBudget"), true));
         response.setDegradedChannels(strings(object, "degradedChannels"));
+        // The extractive answer is optional: results produced before it existed, and abstaining
+        // results, carry no answer. Absence must stay distinguishable from an empty string.
+        if (object.has("answer") && !object.get("answer").isJsonNull()) {
+            response.setAnswer(object.get("answer").getAsString());
+        }
+        if (object.has("answerAbstentionReason")
+            && !object.get("answerAbstentionReason").isJsonNull()) {
+            response.setAnswerAbstentionReason(object.get("answerAbstentionReason").getAsString());
+        }
         return RetrievalResponseValidator.validate(response, properties);
     }
 
@@ -167,6 +182,7 @@ public final class RetrievalApiJson {
         optionalString(object, "vectorSource");
         optionalString(object, "mode");
         optionalString(object, "executionMode");
+        optionalBoolean(object, "exactRanking");
         if (object.has("queryVector") && !object.get("queryVector").isJsonNull()) {
             JsonElement value = object.get("queryVector");
             if (!value.isJsonArray()) {
@@ -185,6 +201,14 @@ public final class RetrievalApiJson {
         }
     }
 
+    private static void optionalBoolean(JsonObject object, String name) {
+        if (object.has(name) && !object.get(name).isJsonNull()
+            && (!object.get(name).isJsonPrimitive()
+            || !object.get(name).getAsJsonPrimitive().isBoolean())) {
+            throw new JsonParseException(name + " must be boolean");
+        }
+    }
+
     private static RetrievalBudget parseBudget(JsonObject object, boolean requiredValues) {
         if (object == null) {
             throw new JsonParseException("budget must be an object");
@@ -193,11 +217,16 @@ public final class RetrievalApiJson {
         Integer timeoutMs = optionalInt(object, "timeoutMs");
         Integer maxCandidates = optionalInt(object, "maxCandidates");
         Integer tokenBudget = optionalInt(object, "tokenBudget");
+        Integer maxEdgeScans = optionalInt(object, "maxEdgeScans");
+        BudgetConstraint primaryConstraint = optionalBudgetConstraint(object);
         if (requiredValues && (topK == null || timeoutMs == null || maxCandidates == null
             || tokenBudget == null)) {
             throw new JsonParseException("effectiveBudget contains invalid values");
         }
-        return new RetrievalBudget(topK, timeoutMs, maxCandidates, tokenBudget);
+        RetrievalBudget budget = new RetrievalBudget(topK, timeoutMs, maxCandidates, tokenBudget,
+            primaryConstraint == null ? BudgetConstraint.CANDIDATES : primaryConstraint);
+        budget.setMaxEdgeScans(maxEdgeScans);
+        return budget;
     }
 
     private static RetrievalTrace parseTrace(JsonObject object) {
@@ -211,10 +240,21 @@ public final class RetrievalApiJson {
         trace.setSelectedMode(enumValue(object, "selectedMode",
             org.apache.geaflow.ai.retrieval.api.model.RetrievalMode.class));
         trace.setExecutionMode(enumValue(object, "executionMode", ExecutionMode.class));
+        if (object.has("exactRanking")) {
+            if (!object.get("exactRanking").isJsonPrimitive()
+                || !object.get("exactRanking").getAsJsonPrimitive().isBoolean()) {
+                throw new JsonParseException("trace.exactRanking must be boolean");
+            }
+            trace.setExactRanking(object.get("exactRanking").getAsBoolean());
+        }
         requireArray(object, "stages");
         trace.setStages(traceStages(object, "stages"));
         trace.setStopReason(optionalString(object, "stopReason"));
         trace.setGraphVersion(optionalString(object, "graphVersion"));
+        trace.setVisibleGraphVersion(optionalString(object, "visibleGraphVersion"));
+        trace.setActualVisibleGraphVersion(optionalString(object, "actualVisibleGraphVersion"));
+        trace.setDeltaDigest(optionalString(object, "deltaDigest"));
+        trace.setStatisticsVersion(optionalString(object, "statisticsVersion"));
         trace.setIndexVersion(optionalString(object, "indexVersion"));
         trace.setVectorVersion(optionalString(object, "vectorVersion"));
         trace.setEffectiveCandidateBudget(optionalInt(object, "effectiveCandidateBudget") == null
@@ -227,11 +267,34 @@ public final class RetrievalApiJson {
             org.apache.geaflow.ai.retrieval.execution.RecallStageStatus.class));
         trace.setChannelStopReasons(enumMap(object, "channelStopReasons",
             org.apache.geaflow.ai.retrieval.execution.RecallStopReason.class));
+        trace.setRawCandidatesScored(integerMap(object, "rawCandidatesScored"));
+        trace.setStageElapsedNanos(longMap(object, "stageElapsedNanos"));
+        trace.setUniqueEvidenceCandidates(optionalInt(object, "uniqueEvidenceCandidates") == null
+            ? 0 : optionalInt(object, "uniqueEvidenceCandidates"));
+        trace.setTokensRetained(optionalLong(object, "tokensRetained"));
+        trace.setTokenEstimatorVersion(optionalString(object, "tokenEstimatorVersion"));
+        trace.setRerankerVersion(optionalString(object, "rerankerVersion"));
+        trace.setFusionVersion(optionalString(object, "fusionVersion"));
+        trace.setPrimaryConstraint(optionalString(object, "primaryConstraint"));
+        trace.setCascadeProbeScoreGap(optionalDouble(object, "cascadeProbeScoreGap", 0.0));
+        trace.setCascadeDecision(optionalString(object, "cascadeDecision"));
+        trace.setPolicyId(optionalString(object, "policyId"));
+        trace.setPolicyVersion(optionalString(object, "policyVersion"));
+        trace.setFeatureSchemaVersion(optionalString(object, "featureSchemaVersion"));
+        trace.setPolicyParameters(stringMap(object, "policyParameters"));
+        trace.setRoutingFeatures(doubleMap(object, "routingFeatures"));
+        trace.setRoutingReasons(strings(object, "routingReasons"));
+        trace.setReplanEvents(replanEvents(object, "replanEvents"));
         trace.setAnchorsConsidered(optionalInt(object, "anchorsConsidered") == null ? 0 : optionalInt(object, "anchorsConsidered"));
         trace.setEdgesExamined(optionalInt(object, "edgesExamined") == null ? 0 : optionalInt(object, "edgesExamined"));
         trace.setNeighborsSampled(optionalInt(object, "neighborsSampled") == null ? 0 : optionalInt(object, "neighborsSampled"));
         trace.setVerticesReached(optionalInt(object, "verticesReached") == null ? 0 : optionalInt(object, "verticesReached"));
+        trace.setUniqueVertices(optionalInt(object, "uniqueVertices") == null ? 0 : optionalInt(object, "uniqueVertices"));
         trace.setGraphCandidatesProduced(optionalInt(object, "graphCandidatesProduced") == null ? 0 : optionalInt(object, "graphCandidatesProduced"));
+        trace.setGraphTokensEstimated(optionalInt(object, "graphTokensEstimated") == null ? 0 : optionalInt(object, "graphTokensEstimated"));
+        trace.setGraphEvidenceYield(optionalInt(object, "graphEvidenceYield") == null ? 0 : optionalInt(object, "graphEvidenceYield"));
+        trace.setGraphGrowthRate(optionalDouble(object, "graphGrowthRate", 0.0));
+        trace.setGraphMarginalYield(optionalDouble(object, "graphMarginalYield", 0.0));
         trace.setTotalCandidatesEvaluated(optionalInt(object, "totalCandidatesEvaluated") == null
             ? 0 : optionalInt(object, "totalCandidatesEvaluated"));
         trace.setSelectedChannels(strings(object, "selectedChannels"));
@@ -304,6 +367,26 @@ public final class RetrievalApiJson {
         return result;
     }
 
+    private static java.util.Map<String, Long> longMap(JsonObject object, String name) {
+        java.util.Map<String, Long> result = new java.util.LinkedHashMap<>();
+        JsonElement value = object.get(name);
+        if (value == null || value.isJsonNull()) {
+            return result;
+        }
+        if (!value.isJsonObject()) {
+            throw new JsonParseException(name + " must be an object");
+        }
+        for (java.util.Map.Entry<String, JsonElement> entry : value.getAsJsonObject().entrySet()) {
+            JsonElement item = entry.getValue();
+            if (!item.isJsonPrimitive() || !item.getAsJsonPrimitive().isNumber()
+                || !Double.isFinite(item.getAsDouble()) || item.getAsDouble() != Math.rint(item.getAsDouble())) {
+                throw new JsonParseException(name + " values must be integers");
+            }
+            result.put(entry.getKey(), item.getAsLong());
+        }
+        return result;
+    }
+
     private static java.util.Map<String, String> stringMap(JsonObject object, String name) {
         java.util.Map<String, String> result = new java.util.LinkedHashMap<>();
         JsonElement value = object.get(name);
@@ -319,6 +402,44 @@ public final class RetrievalApiJson {
                 throw new JsonParseException(name + " values must be strings");
             }
             result.put(entry.getKey(), item.getAsString());
+        }
+        return result;
+    }
+
+    private static java.util.Map<String, Double> doubleMap(JsonObject object, String name) {
+        java.util.Map<String, Double> result = new java.util.LinkedHashMap<>();
+        JsonElement value = object.get(name);
+        if (value == null || value.isJsonNull()) {
+            return result;
+        }
+        if (!value.isJsonObject()) {
+            throw new JsonParseException(name + " must be an object");
+        }
+        for (java.util.Map.Entry<String, JsonElement> entry : value.getAsJsonObject().entrySet()) {
+            JsonElement item = entry.getValue();
+            if (!item.isJsonPrimitive() || !item.getAsJsonPrimitive().isNumber()
+                || !Double.isFinite(item.getAsDouble())) {
+                throw new JsonParseException(name + " values must be finite numbers");
+            }
+            result.put(entry.getKey(), item.getAsDouble());
+        }
+        return result;
+    }
+
+    private static List<RetrievalReplanEvent> replanEvents(JsonObject object, String name) {
+        JsonElement value = object.get(name);
+        if (value == null || value.isJsonNull()) {
+            return new ArrayList<>();
+        }
+        if (!value.isJsonArray()) {
+            throw new JsonParseException(name + " must be an array");
+        }
+        List<RetrievalReplanEvent> result = new ArrayList<>();
+        for (JsonElement item : value.getAsJsonArray()) {
+            if (!item.isJsonObject()) {
+                throw new JsonParseException(name + " elements must be objects");
+            }
+            result.add(GSON.fromJson(item, RetrievalReplanEvent.class));
         }
         return result;
     }
@@ -449,6 +570,30 @@ public final class RetrievalApiJson {
             return Enum.valueOf(type, value);
         } catch (IllegalArgumentException e) {
             throw new JsonParseException("unknown " + name + ": " + value);
+        }
+    }
+
+    private static <T extends Enum<T>> T optionalEnum(JsonObject object, String name, Class<T> type) {
+        String value = optionalString(object, name);
+        if (value == null) {
+            return null;
+        }
+        try {
+            return Enum.valueOf(type, value);
+        } catch (IllegalArgumentException e) {
+            throw new JsonParseException("unknown " + name + ": " + value);
+        }
+    }
+
+    private static BudgetConstraint optionalBudgetConstraint(JsonObject object) {
+        String value = optionalString(object, "primaryConstraint");
+        if (value == null) {
+            return null;
+        }
+        try {
+            return BudgetConstraint.parse(value);
+        } catch (IllegalArgumentException error) {
+            throw new JsonParseException("unknown primaryConstraint: " + value);
         }
     }
 

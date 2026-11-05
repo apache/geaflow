@@ -26,6 +26,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import org.apache.geaflow.ai.retrieval.index.ArtifactIdentity;
@@ -52,7 +53,9 @@ import org.apache.lucene.store.FSDirectory;
 public final class LuceneBm25IndexBuilder implements Bm25IndexBuilder {
 
     private static final String INDEX_NAME = "bm25";
-    private static final String BUILDER_VERSION = "lucene-8.11.2-standard-v1";
+    private static final String BUILDER_VERSION = "lucene-8.11.2-standard-v2";
+    /** Indexed field for title and entity-alias surfaces, in addition to the chunk body. */
+    public static final String SURFACE_FIELD = "surface";
     private final Path outputDirectory;
 
     public LuceneBm25IndexBuilder(Path outputDirectory) {
@@ -61,8 +64,16 @@ public final class LuceneBm25IndexBuilder implements Bm25IndexBuilder {
 
     @Override
     public IndexArtifact build(IngestionContext context, List<TextChunk> chunks) throws IOException {
+        return build(context, chunks, Bm25IndexBuilder.noSurfaces());
+    }
+
+    @Override
+    public IndexArtifact build(IngestionContext context, List<TextChunk> chunks,
+                              Map<String, List<String>> chunkSurfaces) throws IOException {
         Objects.requireNonNull(context, "context");
         Objects.requireNonNull(chunks, "chunks");
+        Map<String, List<String>> surfaces = chunkSurfaces == null
+            ? Bm25IndexBuilder.noSurfaces() : chunkSurfaces;
         List<TextChunk> ordered = new ArrayList<>(chunks);
         ordered.sort(Comparator.comparing(TextChunk::getChunkId));
         Set<String> chunkIds = new HashSet<>();
@@ -71,10 +82,12 @@ public final class LuceneBm25IndexBuilder implements Bm25IndexBuilder {
                 throw new IOException("duplicate chunk ID " + chunk.getChunkId());
             }
         }
-        String version = context.getGraphVersion().getVersion();
-        Path published = ArtifactIdentity.resolveVersionedPath(outputDirectory, INDEX_NAME + "-", version, "");
+        String graphVersion = context.getGraphVersion().getVersion();
+        String indexVersion = context.getIndexVersion();
+        Path published = ArtifactIdentity.resolveVersionedPath(outputDirectory, INDEX_NAME + "-",
+            indexVersion, "");
         Files.createDirectories(outputDirectory);
-        Path staging = Files.createTempDirectory(outputDirectory, INDEX_NAME + "-" + version + "-");
+        Path staging = Files.createTempDirectory(outputDirectory, INDEX_NAME + "-" + indexVersion + "-");
         boolean publishedStaging = false;
         try {
             try (Directory directory = FSDirectory.open(staging)) {
@@ -86,6 +99,14 @@ public final class LuceneBm25IndexBuilder implements Bm25IndexBuilder {
                         document.add(new StringField("chunkId", chunk.getChunkId(), Field.Store.YES));
                         document.add(new StringField("documentId", chunk.getDocumentId(), Field.Store.YES));
                         document.add(new TextField("text", chunk.getText(), Field.Store.YES));
+                        // Title and entity aliases are separate indexed surfaces so a title-only or
+                        // alias-only query can still match, which a body-only index cannot do.
+                        for (String surface : surfaces.getOrDefault(chunk.getChunkId(),
+                            java.util.Collections.<String>emptyList())) {
+                            if (surface != null && !surface.trim().isEmpty()) {
+                                document.add(new TextField(SURFACE_FIELD, surface, Field.Store.NO));
+                            }
+                        }
                         document.add(new StoredField("startOffset", chunk.getStartOffset()));
                         document.add(new StoredField("endOffset", chunk.getEndOffset()));
                         if (chunk.getTextHash() != null) {
@@ -94,7 +115,7 @@ public final class LuceneBm25IndexBuilder implements Bm25IndexBuilder {
                         writer.addDocument(document);
                     }
                     writer.setLiveCommitData(new ArtifactIdentity(context.getGraphVersion().getGraphName(),
-                        version, version, ArtifactIdentity.fingerprint(ordered)).toMap().entrySet());
+                        graphVersion, indexVersion, ArtifactIdentity.fingerprint(ordered)).toMap().entrySet());
                     writer.commit();
                 }
                 try (DirectoryReader reader = DirectoryReader.open(directory)) {
@@ -105,8 +126,8 @@ public final class LuceneBm25IndexBuilder implements Bm25IndexBuilder {
             }
             publishedStaging = ArtifactPublisher.publish(staging, published,
                 existing -> validateExisting(existing, ordered, context));
-            IndexVersion indexVersion = new IndexVersion(INDEX_NAME, version, version);
-            IndexBuildMetadata metadata = new IndexBuildMetadata(context.getGraphVersion(), indexVersion,
+            IndexVersion versionMetadata = new IndexVersion(INDEX_NAME, indexVersion, graphVersion);
+            IndexBuildMetadata metadata = new IndexBuildMetadata(context.getGraphVersion(), versionMetadata,
                 INDEX_NAME, BUILDER_VERSION, published.toString(), true);
             return new LuceneIndexArtifact(metadata, published);
         } finally {
@@ -138,7 +159,7 @@ public final class LuceneBm25IndexBuilder implements Bm25IndexBuilder {
              DirectoryReader reader = DirectoryReader.open(directory)) {
             ArtifactIdentity.fromMap(reader.getIndexCommit().getUserData()).validate(
                 context.getGraphVersion().getGraphName(), context.getGraphVersion().getVersion(),
-                context.getGraphVersion().getVersion(), chunks);
+                context.getIndexVersion(), chunks);
             if (reader.numDocs() != chunks.size()) {
                 throw new IOException("existing BM25 document count mismatch");
             }

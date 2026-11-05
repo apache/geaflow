@@ -111,6 +111,29 @@ public final class VectorIndexReader implements Closeable {
         return identity;
     }
 
+    /**
+     * Returns how many chunks this artifact carries.
+     *
+     * <p>Index coverage is part of the published quality report, so a reader has to be able to
+     * state its own footprint instead of leaving callers to infer it from artifact size.
+     */
+    public int getChunkCount() {
+        return entries.size();
+    }
+
+    /** Returns whether the artifact carries a vector for the given chunk. */
+    public boolean coversChunk(String chunkId) {
+        if (chunkId == null) {
+            return false;
+        }
+        for (Entry entry : entries) {
+            if (chunkId.equals(entry.chunkId)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public int getDimensions() {
         return dimensions;
     }
@@ -130,6 +153,60 @@ public final class VectorIndexReader implements Closeable {
     public List<VectorHit> search(float[] query, int candidateLimit, int topK, long deadlineNanos) {
         List<VectorHit> hits = searchWithStats(query, candidateLimit, topK, deadlineNanos).getHits();
         return new ArrayList<>(hits.subList(0, Math.min(topK, hits.size())));
+    }
+
+    /**
+     * Executes an exact linear scan and returns the best {@code topK} hits. The
+     * candidate limit is applied to the ranked result, rather than to the
+     * artifact prefix. This is useful for correctness-sensitive evaluation;
+     * callers that require a hard evaluation budget should use {@link #search}.
+     */
+    public List<VectorHit> searchExact(float[] query, int candidateLimit, int topK) {
+        return searchExact(query, candidateLimit, topK, 0L);
+    }
+
+    public List<VectorHit> searchExact(float[] query, int candidateLimit, int topK, long deadlineNanos) {
+        List<VectorHit> hits = searchExactWithStats(query, candidateLimit, topK, deadlineNanos).getHits();
+        return new ArrayList<>(hits.subList(0, Math.min(topK, hits.size())));
+    }
+
+    /** Returns exact top candidates while preserving deadline and evaluation statistics. */
+    public ChannelSearchResult<VectorHit> searchExactWithStats(float[] query, int candidateLimit,
+                                                               int topK, long deadlineNanos) {
+        return searchExactWithStats(query, candidateLimit, topK, deadlineNanos, System::nanoTime);
+    }
+
+    public ChannelSearchResult<VectorHit> searchExactWithStats(float[] query, int candidateLimit,
+                                                               int topK, long deadlineNanos,
+                                                               LongSupplier clock) {
+        validateQuery(query);
+        if (candidateLimit < 1 || topK < 1) {
+            throw new RetrievalException(RetrievalErrorCode.INVALID_REQUEST, "invalid vector budget");
+        }
+        double queryNorm = norm(query);
+        List<VectorHit> hits = new ArrayList<>();
+        int evaluated = 0;
+        RecallStopReason reason = RecallStopReason.COMPLETED;
+        for (Entry entry : entries) {
+            if (deadlineNanos != 0L && clock.getAsLong() - deadlineNanos >= 0L) {
+                reason = RecallStopReason.DEADLINE;
+                break;
+            }
+            evaluated++;
+            double score = dot(query, entry.vector) / (queryNorm * norm(entry.vector));
+            if (Double.isFinite(score)) {
+                hits.add(new VectorHit(entry.chunkId, entry.documentId, score, 0));
+            }
+        }
+        hits.sort(Comparator.comparing(VectorHit::getSimilarity).reversed()
+            .thenComparing(VectorHit::getChunkId));
+        int resultSize = Math.min(candidateLimit, hits.size());
+        List<VectorHit> result = new ArrayList<>(resultSize);
+        for (int index = 0; index < resultSize; index++) {
+            VectorHit hit = hits.get(index);
+            result.add(new VectorHit(hit.getChunkId(), hit.getDocumentId(), hit.getSimilarity(), index + 1));
+        }
+        return new ChannelSearchResult<>(result, evaluated, reason);
     }
 
     public ChannelSearchResult<VectorHit> searchWithStats(float[] query, int candidateLimit,

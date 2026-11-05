@@ -22,6 +22,7 @@ package org.apache.geaflow.ai.retrieval.index.bm25;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -66,6 +67,37 @@ class LuceneBm25IndexBuilderTest {
             RetrievalException.class,
             () -> new Bm25IndexReader(java.nio.file.Paths.get("/tmp/missing-bm25-artifact")));
         assertEquals(RetrievalErrorCode.INDEX_NOT_READY, exception.getCode());
+    }
+
+    @Test
+    void readerEscapesNaturalLanguagePunctuation() throws Exception {
+        Path directory = Files.createTempDirectory("bm25-query-test");
+        TextChunk chunk = new TextChunk("c1", "doc", 0, 0, 20, 5,
+            "The director of Polish-Russian War (Film) was Xawery Zulawski.");
+        try (org.apache.geaflow.ai.retrieval.index.IndexArtifact ignored =
+                 new LuceneBm25IndexBuilder(directory).build(context(), Arrays.asList(chunk))) {
+            Path artifact = directory.resolve("bm25-v1");
+            Bm25IndexReader reader = new Bm25IndexReader(artifact);
+            try {
+                assertTrue(reader.search("Who directed Polish-Russian War (Film)?", 10, 5).size() > 0);
+            } finally {
+                reader.close();
+            }
+        }
+    }
+
+    @Test
+    void exactSearchRanksMatchesBeyondDocumentPrefix() throws Exception {
+        Path directory = Files.createTempDirectory("bm25-exact-test");
+        TextChunk first = new TextChunk("c1", "doc1", 0, 0, 20, 5, "target");
+        TextChunk stronger = new TextChunk("c2", "doc2", 0, 0, 40, 10, "target target target");
+        try (org.apache.geaflow.ai.retrieval.index.IndexArtifact ignored =
+                 new LuceneBm25IndexBuilder(directory).build(context(), Arrays.asList(first, stronger))) {
+            try (Bm25IndexReader reader = new Bm25IndexReader(directory.resolve("bm25-v1"))) {
+                assertEquals("c1", reader.search("target", 1, 1).get(0).getChunkId());
+                assertEquals("c2", reader.searchExact("target", 1, 1).get(0).getChunkId());
+            }
+        }
     }
 
     @Test

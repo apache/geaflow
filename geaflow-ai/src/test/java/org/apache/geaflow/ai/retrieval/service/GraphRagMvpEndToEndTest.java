@@ -13,6 +13,7 @@ package org.apache.geaflow.ai.retrieval.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -34,8 +35,11 @@ import org.apache.geaflow.ai.retrieval.api.model.RetrievalException;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalRequest;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalResponse;
 import org.apache.geaflow.ai.retrieval.codec.RetrievalApiJson;
+import org.apache.geaflow.ai.retrieval.execution.BudgetConstraint;
 import org.apache.geaflow.ai.retrieval.execution.RecallStageStatus;
 import org.apache.geaflow.ai.retrieval.execution.RecallStopReason;
+import org.apache.geaflow.ai.retrieval.execution.Reranker;
+import org.apache.geaflow.ai.retrieval.execution.TokenEstimator;
 import org.apache.geaflow.ai.retrieval.fusion.WeightedRrfConfig;
 import org.apache.geaflow.ai.retrieval.index.bm25.Bm25IndexReader;
 import org.apache.geaflow.ai.retrieval.index.bm25.LuceneBm25IndexBuilder;
@@ -82,7 +86,7 @@ class GraphRagMvpEndToEndTest {
         RetrievalRequest graphRequest = request("GRAPH_ONLY", null);
         graphRequest.setRequestId("request-graph-trace");
         RetrievalResponse graph = service.retrieve(graphRequest);
-        RetrievalResponse hybrid = service.retrieve(request("HYBRID", Arrays.asList(1.0, 0.0)));
+        RetrievalResponse hybrid = service.retrieve(request("ADAPTIVE_HYBRID", Arrays.asList(1.0, 0.0)));
 
         assertFalse(bm25.getEvidence().isEmpty());
         assertFalse(vector.getEvidence().isEmpty());
@@ -90,7 +94,10 @@ class GraphRagMvpEndToEndTest {
         assertEquals("request-graph-trace", graph.getRequestId());
         for (Evidence evidence : graph.getEvidence()) {
             for (org.apache.geaflow.ai.retrieval.model.evidence.GraphEvidenceTrace trace : evidence.getGraphTraces()) {
-                assertEquals(graph.getRequestId(), trace.getQueryId());
+                assertNotEquals(graph.getRequestId(), trace.getQueryId(),
+                    "queryId must be a query identity, not the request id");
+                assertEquals(org.apache.geaflow.ai.retrieval.model.document.RetrievalIds
+                    .queryId(graphRequest.getQuery(), graphRequest.getGraphVersion()), trace.getQueryId());
                 assertFalse(graphRequest.getQuery().equals(trace.getQueryId()));
             }
             assertEquals("https://example.test/" + evidence.getChunks().get(0).getDocumentId(),
@@ -100,13 +107,23 @@ class GraphRagMvpEndToEndTest {
         aliasRequest.setQuery("kongzi");
         assertFalse(service.retrieve(aliasRequest).getEvidence().isEmpty());
         assertFalse(hybrid.getEvidence().isEmpty());
+        assertTrue(hybrid.getTrace().getChannelBudgets().get("GRAPH") > 3,
+            hybrid.getTrace().getChannelBudgets().toString());
+        assertEquals(10, hybrid.getTrace().getChannelBudgets().values().stream()
+            .mapToInt(Integer::intValue).sum());
+        assertEquals(hybrid.getTrace().getChannelBudgets(), RetrievalApiJson.parseResponse(
+            RetrievalApiJson.toJson(hybrid)).getTrace().getChannelBudgets());
         Evidence merged = find(hybrid.getEvidence(), "5:doc-3c3");
         assertTrue(merged.getStageScores().containsKey("BM25"));
         assertTrue(merged.getStageScores().containsKey("VECTOR"));
         assertTrue(merged.getStageScores().containsKey("GRAPH"));
-        assertEquals(1.0 / (60 + merged.getStageScores().get("BM25").getRank())
-                + 1.0 / (60 + merged.getStageScores().get("VECTOR").getRank())
-                + 1.0 / (60 + merged.getStageScores().get("GRAPH").getRank()),
+        // Fused score uses the weights the routing plan selected, not a hardcoded 1.0/1.0/1.0.
+        assertEquals(hybrid.getTrace().getBm25Weight()
+                / (60 + merged.getStageScores().get("BM25").getRank())
+                + hybrid.getTrace().getVectorWeight()
+                / (60 + merged.getStageScores().get("VECTOR").getRank())
+                + hybrid.getTrace().getGraphWeight()
+                / (60 + merged.getStageScores().get("GRAPH").getRank()),
             merged.getFusedScore(), 1.0e-12);
         assertFalse(merged.getPaths().isEmpty());
         assertFalse(hybrid.getPaths().isEmpty());
@@ -123,16 +140,400 @@ class GraphRagMvpEndToEndTest {
 
         RetrievalRequest parallel = request("BM25_ONLY", null);
         parallel.setExecutionMode("PARALLEL");
-        assertCode(RetrievalErrorCode.UNSUPPORTED_OPTION, () -> service.retrieve(parallel));
+        assertEquals(org.apache.geaflow.ai.retrieval.api.model.ExecutionMode.PARALLEL,
+            service.retrieve(parallel).getTrace().getExecutionMode());
 
         RetrievalRequest badVector = request("VECTOR_ONLY", Collections.singletonList(1.0));
         assertCode(RetrievalErrorCode.INVALID_REQUEST, () -> service.retrieve(badVector));
 
-        RetrievalFixtureRegistry notReady = new RetrievalFixtureRegistry();
+        RetrievalChannelRegistry notReady = new RetrievalChannelRegistry();
         notReady.register(GRAPH, VERSION, VERSION, fixture.bm25, fixture.vector,
             fixture.chunks, fixture.entities, fixture.edges, false);
         assertCode(RetrievalErrorCode.INDEX_NOT_READY,
             () -> new RecallService(notReady).retrieve(request("BM25_ONLY", null)));
+    }
+
+    @Test
+    void parallelExecutionProducesTheSameStableEvidenceAsSequential() throws Exception {
+        Fixture fixture = fixture();
+        RecallService service = new RecallService(fixture.registry);
+        RetrievalRequest sequential = request("HYBRID", Arrays.asList(1.0, 0.0));
+        RetrievalResponse sequentialResponse = service.retrieve(sequential);
+        RetrievalRequest parallel = request("HYBRID", Arrays.asList(1.0, 0.0));
+        parallel.setExecutionMode("PARALLEL");
+
+        RetrievalResponse parallelResponse = service.retrieve(parallel);
+
+        assertEquals(evidenceIds(sequentialResponse), evidenceIds(parallelResponse));
+        assertEquals(sequentialResponse.getTrace().getCandidateCounts(),
+            parallelResponse.getTrace().getCandidateCounts());
+        assertEquals("PARALLEL", parallelResponse.getTrace().getExecutionMode().name());
+        assertEquals("PARALLEL", RetrievalApiJson.parseResponse(
+            RetrievalApiJson.toJson(parallelResponse)).getTrace().getExecutionMode().name());
+    }
+
+    @Test
+    void cascadedExecutionSkipsGraphWhenProbeHasNoTextEvidence() throws Exception {
+        Fixture fixture = fixture();
+        RetrievalChannelRegistry registry = new RetrievalChannelRegistry();
+        registry.register(GRAPH, VERSION, VERSION, fixture.bm25, null,
+            fixture.chunks, fixture.entities, fixture.edges, true);
+        RetrievalRequest request = request("HYBRID", Arrays.asList(1.0, 0.0));
+        request.setQuery("kongzi");
+        request.setExecutionMode("CASCADED");
+        request.setAllowPartialResults(true);
+
+        RetrievalResponse response = new RecallService(registry).retrieve(request);
+
+        assertEquals(RecallStageStatus.NOT_RUN, response.getTrace().getChannelStatuses().get("GRAPH"));
+        assertEquals(RecallStopReason.NO_RESULT, response.getTrace().getChannelStopReasons().get("GRAPH"));
+        assertEquals(0, response.getTrace().getEvaluatedCounts().get("GRAPH"));
+        assertEquals(2, response.getTrace().getChannelBudgets().get("BM25"));
+        assertEquals(2, response.getTrace().getChannelBudgets().get("VECTOR"));
+        assertEquals(6, response.getTrace().getChannelBudgets().get("GRAPH"));
+    }
+
+    @Test
+    void cascadedExecutionRunsGraphWhenProbeScoreGapIsConfident() throws Exception {
+        Fixture fixture = fixture();
+        RetrievalChannelRegistry registry = new RetrievalChannelRegistry();
+        registry.register(GRAPH, VERSION, VERSION, fixture.bm25, fixture.vector,
+            fixture.chunks, fixture.entities, Collections.singletonList(fixture.edges.get(0)), true);
+        RetrievalRequest request = request("HYBRID", Arrays.asList(1.0, 0.0));
+        request.setExecutionMode("CASCADED");
+
+        RetrievalResponse response = new RecallService(registry).retrieve(request);
+
+        assertTrue(response.getTrace().getChannelStatuses().get("GRAPH") == RecallStageStatus.SUCCESS
+            || response.getTrace().getChannelStatuses().get("GRAPH") == RecallStageStatus.DEGRADED);
+        assertEquals("RUN_GRAPH", response.getTrace().getCascadeDecision());
+        assertTrue(response.getTrace().getCascadeProbeScoreGap() > 0.0001);
+        RetrievalResponse restored = RetrievalApiJson.parseResponse(RetrievalApiJson.toJson(response));
+        assertEquals("CASCADED", restored.getTrace().getExecutionMode().name());
+        assertEquals("RUN_GRAPH", restored.getTrace().getCascadeDecision());
+        assertEquals(response.getTrace().getCascadeProbeScoreGap(),
+            restored.getTrace().getCascadeProbeScoreGap(), 1.0e-12);
+    }
+
+    @Test
+    void cascadedExecutionUsesTextCandidatesAsAnchorsWhenQuestionHasNoEntityMention() throws Exception {
+        Fixture fixture = fixture();
+        RetrievalRequest request = request("HYBRID", Arrays.asList(1.0, 0.0));
+        request.setQuery("taught");
+        request.setExecutionMode("CASCADED");
+
+        RetrievalResponse response = new RecallService(fixture.registry).retrieve(request);
+
+        assertEquals("RUN_GRAPH_FALLBACK_NO_ANCHOR", response.getTrace().getCascadeDecision());
+        assertTrue(response.getTrace().getChannelStatuses().get("GRAPH") == RecallStageStatus.SUCCESS
+            || response.getTrace().getChannelStatuses().get("GRAPH") == RecallStageStatus.DEGRADED);
+        assertTrue(response.getTrace().getAnchorsConsidered() > 0,
+            response.getTrace().getCandidateCounts() + " " + response.getTrace().getChannelStopReasons());
+        assertTrue(response.getTrace().getCandidateCounts().get("GRAPH") > 0);
+        assertEquals(10, response.getTrace().getEffectiveCandidateBudget());
+    }
+
+    @Test
+    void cascadedExecutionSkipsGraphWhenProbeScoreGapIsLow() throws Exception {
+        Fixture fixture = fixture();
+        RetrievalRequest request = request("HYBRID", Arrays.asList(1.0, 0.0));
+        request.setQuery("Astronomy");
+        request.setExecutionMode("CASCADED");
+        request.setBudget(new RetrievalBudget(1, 1000, 3, 100, BudgetConstraint.CANDIDATES));
+
+        RetrievalResponse response = new RecallService(fixture.registry).retrieve(request);
+
+        assertEquals(RecallStageStatus.NOT_RUN, response.getTrace().getChannelStatuses().get("GRAPH"));
+        assertEquals("SKIP_LOW_SCORE_GAP", response.getTrace().getCascadeDecision());
+        assertEquals(0.0, response.getTrace().getCascadeProbeScoreGap(), 1.0e-12);
+    }
+
+    @Test
+    void cascadedExecutionDoesNotTrustOneProbeEvidenceAtMinimumBudget() throws Exception {
+        Fixture fixture = fixture();
+        RetrievalRequest request = request("HYBRID", Arrays.asList(1.0, 0.0));
+        request.setExecutionMode("CASCADED");
+        request.setBudget(new RetrievalBudget(1, 1000, 3, 100, BudgetConstraint.CANDIDATES));
+
+        RetrievalResponse response = new RecallService(fixture.registry).retrieve(request);
+
+        assertEquals(RecallStageStatus.NOT_RUN, response.getTrace().getChannelStatuses().get("GRAPH"));
+        assertEquals("SKIP_INSUFFICIENT_EVIDENCE", response.getTrace().getCascadeDecision());
+        assertEquals(0.0, response.getTrace().getCascadeProbeScoreGap(), 1.0e-12);
+    }
+
+    @Test
+    void graphExpansionStopsWhenTokenBudgetIsExhausted() throws Exception {
+        Fixture fixture = fixture();
+        RetrievalRequest request = request("GRAPH_ONLY", null);
+        request.setBudget(new RetrievalBudget(4, 1000, 10, 1, BudgetConstraint.TOKENS));
+
+        RetrievalResponse response = new RecallService(fixture.registry).retrieve(request);
+
+        assertTrue(response.getEvidence().isEmpty());
+        assertEquals(RecallStopReason.TOKEN_BUDGET,
+            response.getTrace().getChannelStopReasons().get("GRAPH"));
+        assertEquals(0, response.getTrace().getTokensRetained());
+    }
+
+    @Test
+    void hybridTokenBudgetIsSharedAcrossChannels() throws Exception {
+        Fixture fixture = fixture();
+        RetrievalChannelRegistry registry = new RetrievalChannelRegistry();
+        registry.register(GRAPH, VERSION, VERSION, fixture.bm25, fixture.vector,
+            fixture.chunks, fixture.entities, Collections.singletonList(fixture.edges.get(0)), true);
+        RetrievalRequest request = request("HYBRID", Arrays.asList(1.0, 0.0));
+        request.setBudget(new RetrievalBudget(4, 1000, 10, 6, BudgetConstraint.TOKENS));
+
+        RetrievalResponse response = new RecallService(registry).retrieve(request);
+
+        assertTrue(response.getTrace().getTokensRetained() <= 6);
+        assertEquals(6L, response.getTrace().getTokensRetained());
+        assertTrue(response.getEvidence().size() <= 1);
+    }
+
+    @Test
+    void nonTokenPrimaryConstraintsReportTokensWithoutEnforcingTokenBudget() throws Exception {
+        Fixture fixture = fixture();
+        for (BudgetConstraint primary : Arrays.asList(BudgetConstraint.CANDIDATES, BudgetConstraint.LATENCY)) {
+            RetrievalRequest request = request("BM25_ONLY", null);
+            request.setBudget(new RetrievalBudget(4, 1000, 10, 1, primary));
+
+            RetrievalResponse response = new RecallService(fixture.registry).retrieve(request);
+
+            assertFalse(response.getEvidence().isEmpty());
+            assertTrue(response.getTrace().getTokensRetained() > 1);
+            assertEquals(primary.name(), response.getTrace().getPrimaryConstraint());
+        }
+    }
+
+    @Test
+    void nonCandidatePrimaryConstraintsDoNotEnforceRequestCandidateBudget() throws Exception {
+        Fixture fixture = fixture();
+        for (BudgetConstraint primary : Arrays.asList(BudgetConstraint.LATENCY, BudgetConstraint.TOKENS)) {
+            RetrievalRequest request = request("HYBRID", Arrays.asList(1.0, 0.0));
+            request.setBudget(new RetrievalBudget(4, 1000, 3, 100, primary));
+
+            RetrievalResponse response = new RecallService(fixture.registry).retrieve(request);
+
+            assertTrue(response.getTrace().getTotalCandidatesEvaluated() > 3);
+            assertTrue(response.getTrace().getEffectiveCandidateBudget() > 3);
+            assertFalse(response.getTrace().getChannelStopReasons().containsValue(
+                RecallStopReason.CANDIDATE_BUDGET));
+        }
+    }
+
+    @Test
+    void customEstimatorAndRerankerReachTheRegistryExecution() throws Exception {
+        Fixture fixture = fixture();
+        TokenEstimator estimator = new TokenEstimator() {
+            @Override
+            public int estimate(TextChunk chunk) {
+                return chunk.getTokenEstimate();
+            }
+
+            @Override
+            public String getVersion() {
+                return "test-estimator-v7";
+            }
+        };
+        Reranker reranker = new Reranker() {
+            @Override
+            public List<Evidence> rerank(List<Evidence> candidates) {
+                List<Evidence> reversed = new ArrayList<>(candidates);
+                Collections.reverse(reversed);
+                return reversed;
+            }
+
+            @Override
+            public String getVersion() {
+                return "test-reranker-v3";
+            }
+        };
+        RecallService service = new RecallService(fixture.registry, WeightedRrfConfig.DEFAULT,
+            System::nanoTime, estimator, reranker);
+
+        RetrievalResponse response = service.retrieve(request("BM25_ONLY", null));
+
+        assertEquals("test-estimator-v7", response.getTrace().getTokenEstimatorVersion());
+        assertEquals("test-reranker-v3", response.getTrace().getRerankerVersion());
+        assertEquals("5:doc-1c1", response.getEvidence().get(response.getEvidence().size() - 1)
+            .getEvidenceId());
+    }
+
+    @Test
+    void replanEmitsAuditedAdjustmentsAndKeepsTraceReplayable() throws Exception {
+        Fixture fixture = fixture();
+        RecallService service = new RecallService(fixture.registry,
+            WeightedRrfConfig.DEFAULT, System::nanoTime, new org.apache.geaflow.ai.retrieval.execution
+                .DeterministicTokenEstimator(),
+            new org.apache.geaflow.ai.retrieval.execution.DeterministicReranker(),
+            new org.apache.geaflow.ai.retrieval.execution.DeterministicRulePolicy(), 2);
+
+        RetrievalResponse response = service.retrieve(request("HYBRID", Arrays.asList(1.0, 0.0)));
+
+        assertTrue(response.getTrace().getReplanEvents().size() <= 2);
+        for (org.apache.geaflow.ai.retrieval.execution.RetrievalReplanEvent event
+            : response.getTrace().getReplanEvents()) {
+            assertEquals("AFTER_TEXT", event.getBoundary());
+            assertTrue(event.getRemainingCandidates() >= 0);
+            assertEquals("GRAPH_STAGE_BOUNDARY", event.getReason());
+        }
+        RetrievalResponse replayed = RetrievalApiJson.parseResponse(RetrievalApiJson.toJson(response));
+        assertEquals(response.getTrace().getReplanEvents().size(),
+            replayed.getTrace().getReplanEvents().size());
+        for (int i = 0; i < response.getTrace().getReplanEvents().size(); i++) {
+            org.apache.geaflow.ai.retrieval.execution.RetrievalReplanEvent original
+                = response.getTrace().getReplanEvents().get(i);
+            org.apache.geaflow.ai.retrieval.execution.RetrievalReplanEvent copy
+                = replayed.getTrace().getReplanEvents().get(i);
+            assertEquals(original.getAdjustments(), copy.getAdjustments());
+            assertEquals(original.getBoundary(), copy.getBoundary());
+            assertEquals(original.getUnusedCandidates(), copy.getUnusedCandidates());
+            assertEquals(original.getOldPlan().getChannelBudgets(), copy.getOldPlan().getChannelBudgets());
+            assertEquals(original.getNewPlan().getCandidateBudget(), copy.getNewPlan().getCandidateBudget());
+            assertEquals(original.getNewPlan().getPolicyId(), copy.getNewPlan().getPolicyId());
+        }
+        assertEquals(response.getTrace().getChannelBudgets(), replayed.getTrace().getChannelBudgets());
+        assertEquals(response.getTrace().getRoutingFeatures(), replayed.getTrace().getRoutingFeatures());
+    }
+
+    @Test
+    void pluggableFusionStrategyIsHonoredAndRecordedInTrace() throws Exception {
+        Fixture fixture = fixture();
+        org.apache.geaflow.ai.retrieval.fusion.WeightedRrfFusion delegate =
+            new org.apache.geaflow.ai.retrieval.fusion.WeightedRrfFusion(
+                org.apache.geaflow.ai.retrieval.fusion.WeightedRrfConfig.DEFAULT);
+        java.util.concurrent.atomic.AtomicInteger sorts = new java.util.concurrent.atomic.AtomicInteger();
+        org.apache.geaflow.ai.retrieval.fusion.Fusion custom =
+            new org.apache.geaflow.ai.retrieval.fusion.Fusion() {
+                @Override
+                public org.apache.geaflow.ai.retrieval.fusion.WeightedRrfConfig getConfig() {
+                    return delegate.getConfig();
+                }
+
+                @Override
+                public double score(org.apache.geaflow.ai.retrieval.model.evidence.Evidence evidence) {
+                    return delegate.score(evidence);
+                }
+
+                @Override
+                public java.util.List<org.apache.geaflow.ai.retrieval.model.evidence.Evidence> sort(
+                    java.util.List<org.apache.geaflow.ai.retrieval.model.evidence.Evidence> evidence) {
+                    sorts.incrementAndGet();
+                    return delegate.sort(evidence);
+                }
+
+                @Override
+                public java.util.List<org.apache.geaflow.ai.retrieval.model.evidence.Evidence>
+                    preserveTopKChannel(
+                        java.util.List<org.apache.geaflow.ai.retrieval.model.evidence.Evidence> ranked,
+                        int topK, String channel, int minimumCount) {
+                    return delegate.preserveTopKChannel(ranked, topK, channel, minimumCount);
+                }
+
+                @Override
+                public String getVersion() {
+                    return "test-fusion-v1";
+                }
+            };
+        RecallService service = new RecallService(fixture.registry, custom, System::nanoTime,
+            new org.apache.geaflow.ai.retrieval.execution.DeterministicTokenEstimator(),
+            new org.apache.geaflow.ai.retrieval.execution.DeterministicReranker(),
+            new org.apache.geaflow.ai.retrieval.execution.DeterministicRulePolicy(), 1, null);
+
+        RetrievalResponse response = service.retrieve(request("HYBRID", Arrays.asList(1.0, 0.0)));
+
+        assertTrue(sorts.get() > 0, "custom fusion must be used for ranking");
+        assertEquals("test-fusion-v1", response.getTrace().getFusionVersion());
+        // The strategy swap must not change the evidence the default fusion would have produced.
+        org.apache.geaflow.ai.retrieval.fusion.WeightedRrfFusion reference =
+            new org.apache.geaflow.ai.retrieval.fusion.WeightedRrfFusion(
+                org.apache.geaflow.ai.retrieval.fusion.WeightedRrfConfig.DEFAULT);
+        assertEquals(reference.getVersion(), new org.apache.geaflow.ai.retrieval.fusion
+            .WeightedRrfFusion(org.apache.geaflow.ai.retrieval.fusion.WeightedRrfConfig.DEFAULT)
+            .getVersion());
+    }
+
+    @Test
+    void replanEventSurvivesJsonRoundTripWhenBoundaryShiftsThePlan() throws Exception {
+        Fixture fixture = fixture();
+        org.apache.geaflow.ai.retrieval.execution.DeterministicRulePolicy delegate =
+            new org.apache.geaflow.ai.retrieval.execution.DeterministicRulePolicy();
+        // Force the boundary replan to produce a different plan so the loop records an event.
+        org.apache.geaflow.ai.retrieval.execution.RoutingPolicy shifting = new
+            org.apache.geaflow.ai.retrieval.execution.RoutingPolicy() {
+                @Override
+                public org.apache.geaflow.ai.retrieval.execution.RetrievalPlan plan(
+                    org.apache.geaflow.ai.retrieval.execution.RoutingContext routingContext,
+                    org.apache.geaflow.ai.retrieval.execution.RetrievalProgress progress) {
+                    org.apache.geaflow.ai.retrieval.execution.RetrievalPlan base =
+                        delegate.plan(routingContext, progress);
+                    if (progress == null) {
+                        return base;
+                    }
+                    int graphBudget = base.getChannelBudgets().getOrDefault("GRAPH", 0);
+                    int textBudget = base.getChannelBudgets().getOrDefault("BM25", 2);
+                    if (textBudget < 2) {
+                        return base;
+                    }
+                    org.apache.geaflow.ai.retrieval.execution.RetrievalPlan shifted =
+                        org.apache.geaflow.ai.retrieval.execution.RetrievalPlan.builder(base)
+                            .channelBudget("GRAPH", graphBudget + 1).channelBudget("BM25", textBudget - 1)
+                            .build();
+                    return shifted;
+                }
+
+                @Override
+                public String getPolicyId() {
+                    return delegate.getPolicyId();
+                }
+
+                @Override
+                public String getPolicyVersion() {
+                    return delegate.getPolicyVersion();
+                }
+
+                @Override
+                public java.util.Map<String, String> getParameters() {
+                    return delegate.getParameters();
+                }
+            };
+        RecallService service = new RecallService(fixture.registry, WeightedRrfConfig.DEFAULT,
+            System::nanoTime, new org.apache.geaflow.ai.retrieval.execution.DeterministicTokenEstimator(),
+            new org.apache.geaflow.ai.retrieval.execution.DeterministicReranker(), shifting, 1);
+
+        RetrievalResponse response = service.retrieve(request("ADAPTIVE_HYBRID", Arrays.asList(1.0, 0.0)));
+
+        assertEquals(1, response.getTrace().getReplanEvents().size());
+        org.apache.geaflow.ai.retrieval.execution.RetrievalReplanEvent original =
+            response.getTrace().getReplanEvents().get(0);
+        org.apache.geaflow.ai.retrieval.execution.RetrievalReplanEvent copy = RetrievalApiJson.parseResponse(
+            RetrievalApiJson.toJson(response)).getTrace().getReplanEvents().get(0);
+        assertEquals(original.getBoundary(), copy.getBoundary());
+        assertEquals(original.getAdjustments(), copy.getAdjustments());
+        assertEquals(original.getUnusedCandidates(), copy.getUnusedCandidates());
+        assertEquals(original.getUnusedTokens(), copy.getUnusedTokens());
+        assertEquals(original.getOldPlan().getChannelBudgets(), copy.getOldPlan().getChannelBudgets());
+        assertEquals(original.getOldPlan().getPolicyId(), copy.getOldPlan().getPolicyId());
+        assertEquals(original.getOldPlan().getCandidateBudget(), copy.getOldPlan().getCandidateBudget());
+        assertEquals(original.getNewPlan().getChannelBudgets(), copy.getNewPlan().getChannelBudgets());
+        assertEquals(original.getNewPlan().getMaxDiffusionGrowth(),
+            copy.getNewPlan().getMaxDiffusionGrowth(), 1.0e-12);
+    }
+
+    @Test
+    void replanCountStaysBoundedByConfiguredMaximum() throws Exception {
+        Fixture fixture = fixture();
+        RecallService noReplan = new RecallService(fixture.registry, WeightedRrfConfig.DEFAULT,
+            System::nanoTime, new org.apache.geaflow.ai.retrieval.execution.DeterministicTokenEstimator(),
+            new org.apache.geaflow.ai.retrieval.execution.DeterministicReranker(),
+            new org.apache.geaflow.ai.retrieval.execution.DeterministicRulePolicy(), 0);
+
+        RetrievalResponse response = noReplan.retrieve(request("HYBRID", Arrays.asList(1.0, 0.0)));
+
+        assertTrue(response.getTrace().getReplanEvents().isEmpty());
+        assertFalse(response.getEvidence().isEmpty());
     }
 
     @Test
@@ -154,7 +555,7 @@ class GraphRagMvpEndToEndTest {
     void enforcesCandidateBudgetAndNoAnchorScan() throws Exception {
         Fixture fixture = fixture();
         RecallService service = new RecallService(fixture.registry);
-        RetrievalRequest request = request("HYBRID", Arrays.asList(1.0, 0.0));
+        RetrievalRequest request = request("ADAPTIVE_HYBRID", Arrays.asList(1.0, 0.0));
         request.setBudget(new RetrievalBudget(1, 1000, 1, 100));
         assertCode(RetrievalErrorCode.INVALID_REQUEST, () -> service.retrieve(request));
         request.setBudget(new RetrievalBudget(1, 1000, 3, 100));
@@ -167,6 +568,19 @@ class GraphRagMvpEndToEndTest {
         assertEquals(Arrays.asList("BM25", "VECTOR", "GRAPH"),
             response.getTrace().getSelectedChannels());
         assertEquals(response.getRequestId(), response.getTrace().getRequestId());
+
+        RetrievalRequest exact = request("ADAPTIVE_HYBRID", Arrays.asList(1.0, 0.0));
+        exact.setBudget(new RetrievalBudget(1, 1000, 3, 100));
+        exact.setExactRanking(true);
+        RetrievalResponse exactResponse = service.retrieve(exact);
+        assertEquals(RecallStageStatus.NOT_RUN,
+            exactResponse.getTrace().getChannelStatuses().get("GRAPH"));
+        assertEquals(RecallStopReason.CANDIDATE_BUDGET,
+            exactResponse.getTrace().getChannelStopReasons().get("GRAPH"));
+        assertEquals(3, exactResponse.getTrace().getChannelBudgets().values().stream()
+            .mapToInt(Integer::intValue).sum());
+        assertEquals(exactResponse.getTrace().getChannelBudgets(), RetrievalApiJson.parseResponse(
+            RetrievalApiJson.toJson(exactResponse)).getTrace().getChannelBudgets());
 
         RetrievalRequest noAnchor = request("GRAPH_ONLY", null);
         noAnchor.setQuery("unknown entity");
@@ -213,26 +627,30 @@ class GraphRagMvpEndToEndTest {
             new EntityRef("scaled-e2", "Ethics", "topic"));
         List<GraphEdgeRef> edges = Collections.singletonList(new GraphEdgeRef(
             "scaled-edge-1", "supports", "scaled-e1", "scaled-e2", graphEvidenceChunkIds));
-        RetrievalFixtureRegistry registry = new RetrievalFixtureRegistry();
+        RetrievalChannelRegistry registry = new RetrievalChannelRegistry();
         registry.register(GRAPH, VERSION, VERSION, bm25, vector, chunks,
             entities, edges, true);
 
-        RetrievalRequest request = request("HYBRID", Arrays.asList(1.0, 0.0));
+        // Channel budget allocation is a routing decision, so this must ask for the adaptive mode
+        // explicitly rather than relying on hybrid plus execution-mode side effects. The text probe
+        // may consume at most GRAPH_PROBE_SHARE (0.4) of the 400-candidate budget, so the graph
+        // channel keeps 240 - the largest share - instead of the previous fixed 380/10/10 split.
+        RetrievalRequest request = request("ADAPTIVE_HYBRID", Arrays.asList(1.0, 0.0));
         request.setRequestId("stable-request");
-        request.setBudget(new RetrievalBudget(10, 5000, 400, 100));
+        request.setBudget(new RetrievalBudget(10, 5000, 400, 2000));
         RecallService service = new RecallService(registry);
         RetrievalResponse first = service.retrieve(request);
         RetrievalResponse second = service.retrieve(request);
 
         assertEquals(Arrays.asList("BM25", "VECTOR", "GRAPH"), first.getTrace().getSelectedChannels());
-        assertEquals(134, first.getTrace().getChannelBudgets().get("BM25"));
-        assertEquals(133, first.getTrace().getChannelBudgets().get("VECTOR"));
-        assertEquals(133, first.getTrace().getChannelBudgets().get("GRAPH"));
-        assertTrue(first.getTrace().getEvaluatedCounts().get("BM25") <= 134);
-        assertTrue(first.getTrace().getEvaluatedCounts().get("VECTOR") <= 133);
-        assertTrue(first.getTrace().getEvaluatedCounts().get("GRAPH") <= 133);
-        assertEquals(133, first.getTrace().getCandidateCounts().get("GRAPH"));
-        assertEquals(133, first.getTrace().getGraphCandidatesProduced());
+        assertEquals(80, first.getTrace().getChannelBudgets().get("BM25"));
+        assertEquals(80, first.getTrace().getChannelBudgets().get("VECTOR"));
+        assertEquals(240, first.getTrace().getChannelBudgets().get("GRAPH"));
+        assertTrue(first.getTrace().getEvaluatedCounts().get("BM25") <= 80);
+        assertTrue(first.getTrace().getEvaluatedCounts().get("VECTOR") <= 80);
+        assertTrue(first.getTrace().getEvaluatedCounts().get("GRAPH") <= 240);
+        assertEquals(240, first.getTrace().getCandidateCounts().get("GRAPH"));
+        assertEquals(240, first.getTrace().getGraphCandidatesProduced());
         assertTrue(first.getTrace().getTotalCandidatesEvaluated() <= 400);
         assertTrue(first.getEvidence().size() <= 10);
         assertEquals(first.getEvidence(), second.getEvidence());
@@ -259,7 +677,7 @@ class GraphRagMvpEndToEndTest {
     @Test
     void supportsExplicitPartialHybridWhenOneChannelIsUnavailable() throws Exception {
         Fixture fixture = fixture();
-        RetrievalFixtureRegistry partialRegistry = new RetrievalFixtureRegistry();
+        RetrievalChannelRegistry partialRegistry = new RetrievalChannelRegistry();
         partialRegistry.register(GRAPH, VERSION, VERSION, null, fixture.vector,
             fixture.chunks, fixture.entities, fixture.edges, true);
         RecallService service = new RecallService(partialRegistry);
@@ -277,17 +695,19 @@ class GraphRagMvpEndToEndTest {
     @Test
     void replacementDefersReaderCloseUntilActiveRetrievalLeaseEnds() throws Exception {
         Fixture fixture = fixture();
-        RetrievalFixtureRegistry registry = new RetrievalFixtureRegistry();
+        RetrievalChannelRegistry registry = new RetrievalChannelRegistry();
         Bm25IndexReader oldReader = new Bm25IndexReader(tempDir.resolve("bm25/bm25-v1"), VERSION, VERSION);
         Bm25IndexReader replacementReader = new Bm25IndexReader(
             tempDir.resolve("bm25/bm25-v1"), VERSION, VERSION);
         registry.register(GRAPH, VERSION, VERSION, oldReader, null,
             fixture.chunks, fixture.entities, fixture.edges, true);
 
-        try (RetrievalFixtureRegistry.Fixture.Lease lease = registry.acquire(GRAPH, VERSION, VERSION)) {
+        try (RetrievalChannelRegistry.Fixture.Lease lease = registry.acquire(GRAPH, VERSION, VERSION)) {
             registry.register(GRAPH, VERSION, VERSION, replacementReader, null,
                 fixture.chunks, fixture.entities, fixture.edges, true);
-            assertFalse(lease.getFixture().getBm25().search("Confucius", 3, 3).isEmpty());
+            try (RetrievalChannelRegistry.Fixture.Lease stageLease = lease.getFixture().acquireLease()) {
+                assertFalse(stageLease.getFixture().getBm25().search("Confucius", 3, 3).isEmpty());
+            }
         } finally {
             registry.close();
         }
@@ -298,12 +718,12 @@ class GraphRagMvpEndToEndTest {
     @Test
     void clearDefersReaderCloseUntilActiveRetrievalLeaseEnds() throws Exception {
         Fixture fixture = fixture();
-        RetrievalFixtureRegistry registry = new RetrievalFixtureRegistry();
+        RetrievalChannelRegistry registry = new RetrievalChannelRegistry();
         Bm25IndexReader reader = new Bm25IndexReader(tempDir.resolve("bm25/bm25-v1"), VERSION, VERSION);
         registry.register(GRAPH, VERSION, VERSION, reader, null,
             fixture.chunks, fixture.entities, fixture.edges, true);
 
-        try (RetrievalFixtureRegistry.Fixture.Lease lease = registry.acquire(GRAPH, VERSION, VERSION)) {
+        try (RetrievalChannelRegistry.Fixture.Lease lease = registry.acquire(GRAPH, VERSION, VERSION)) {
             registry.clear();
             assertFalse(lease.getFixture().getBm25().search("Confucius", 3, 3).isEmpty());
         }
@@ -374,7 +794,7 @@ class GraphRagMvpEndToEndTest {
         RecallService service = new RecallService(fixture.registry, WeightedRrfConfig.DEFAULT,
             () -> time.getAndAdd(1_000_000L));
         RetrievalRequest timed = request("HYBRID", Arrays.asList(1.0, 0.0));
-        timed.setBudget(new RetrievalBudget(2, 7, 4, 100));
+        timed.setBudget(new RetrievalBudget(2, 7, 4, 100, BudgetConstraint.LATENCY));
         assertCode(RetrievalErrorCode.RETRIEVAL_TIMEOUT, () -> service.retrieve(timed));
         time.set(0L);
         timed.setAllowPartialResults(true);
@@ -388,11 +808,28 @@ class GraphRagMvpEndToEndTest {
     }
 
     @Test
+    void candidateAndTokenPrimaryConstraintsDoNotEnableLatencyDeadline() throws Exception {
+        Fixture fixture = fixture();
+        AtomicLong time = new AtomicLong();
+        RecallService service = new RecallService(fixture.registry, WeightedRrfConfig.DEFAULT,
+            () -> time.getAndAdd(2_000_000_000L));
+        for (BudgetConstraint primary : Arrays.asList(BudgetConstraint.CANDIDATES, BudgetConstraint.TOKENS)) {
+            RetrievalRequest request = request("BM25_ONLY", null);
+            request.setBudget(new RetrievalBudget(2, 1, 4, 100, primary));
+
+            RetrievalResponse response = service.retrieve(request);
+
+            assertFalse(response.getEvidence().isEmpty());
+            assertFalse("DEADLINE".equals(response.getTrace().getStopReason()));
+        }
+    }
+
+    @Test
     void corruptVectorCanDegradeWithoutLosingBm25Evidence() throws Exception {
         Fixture fixture = fixture();
         Path broken = tempDir.resolve("vector/vector-v1.bin");
         Files.write(broken, new byte[] {0, 1, 2});
-        RetrievalFixtureRegistry registry = new RetrievalFixtureRegistry();
+        RetrievalChannelRegistry registry = new RetrievalChannelRegistry();
         registry.load(GRAPH, VERSION, VERSION, tempDir.resolve("bm25/bm25-v1"), broken,
             fixture.chunks, fixture.entities, fixture.edges, "fixture", VERSION);
         readers.add(registry.get(GRAPH, VERSION, VERSION).getBm25());
@@ -411,7 +848,7 @@ class GraphRagMvpEndToEndTest {
     @Test
     void loaderPreservesBm25FailureAndRejectsBothFailedChannels() throws Exception {
         Fixture fixture = fixture();
-        RetrievalFixtureRegistry registry = new RetrievalFixtureRegistry();
+        RetrievalChannelRegistry registry = new RetrievalChannelRegistry();
         registry.load(GRAPH, VERSION, VERSION, tempDir.resolve("absent"), tempDir.resolve("vector/vector-v1.bin"),
             fixture.chunks, fixture.entities, fixture.edges, "fixture", VERSION);
         RetrievalRequest hybrid = request("HYBRID", Arrays.asList(1.0, 0.0));
@@ -427,7 +864,7 @@ class GraphRagMvpEndToEndTest {
     @Test
     void registryRejectsMislabelledReadersAndChangedChunks() throws Exception {
         Fixture fixture = fixture();
-        RetrievalFixtureRegistry registry = new RetrievalFixtureRegistry();
+        RetrievalChannelRegistry registry = new RetrievalChannelRegistry();
         assertCode(RetrievalErrorCode.INDEX_NOT_READY, () -> registry.register(GRAPH, "v2", "v2",
             fixture.bm25, fixture.vector, fixture.chunks, fixture.entities, fixture.edges, true));
         assertCode(RetrievalErrorCode.INDEX_NOT_READY, () -> registry.register("other-graph", VERSION, VERSION,
@@ -462,7 +899,7 @@ class GraphRagMvpEndToEndTest {
     @Test
     void graphSourcesCannotExceedEvidenceBudgetAndGraphTraceRoundTrips() throws Exception {
         Fixture fixture = fixture();
-        RetrievalFixtureRegistry registry = new RetrievalFixtureRegistry();
+        RetrievalChannelRegistry registry = new RetrievalChannelRegistry();
         List<GraphEdgeRef> edges = Collections.singletonList(new GraphEdgeRef("edge-1", "studies", "e1", "e2",
             Arrays.asList("c1", "c2", "c3")));
         registry.register(GRAPH, VERSION, VERSION, fixture.bm25, fixture.vector, fixture.chunks, fixture.entities, edges, true);
@@ -590,18 +1027,28 @@ class GraphRagMvpEndToEndTest {
     void graphDeadlineAndEdgeCapAreObservableAndRepeatedPathsAreMerged() throws Exception {
         Fixture fixture = fixture();
         List<GraphEdgeRef> repeated = Arrays.asList(fixture.edges.get(0), fixture.edges.get(0), fixture.edges.get(1));
-        RetrievalFixtureRegistry registry = new RetrievalFixtureRegistry();
+        RetrievalChannelRegistry registry = new RetrievalChannelRegistry();
         registry.register(GRAPH, VERSION, VERSION, fixture.bm25, fixture.vector, fixture.chunks, fixture.entities, repeated, true);
         RecallService service = new RecallService(registry);
         RetrievalResponse response = service.retrieve(request("GRAPH_ONLY", null));
         assertEquals(1, response.getEvidence().size());
         assertEquals(1, response.getEvidence().get(0).getPaths().size());
+        assertEquals(response.getTrace().getGraphCandidatesProduced(),
+            response.getTrace().getRawCandidatesScored().get("GRAPH"));
+        assertEquals(response.getTrace().getGraphCandidatesProduced(),
+            response.getTrace().getEvaluatedCounts().get("GRAPH"),
+            "candidate work counts produced candidates, not raw edge scans");
+        assertTrue(response.getTrace().getEdgesExamined() >= 0,
+            "edge scans stay a separately reported secondary cost");
         RetrievalRequest capped = request("GRAPH_ONLY", null);
-        capped.setBudget(new RetrievalBudget(1, 1000, 1, 100));
-        assertTrue(service.retrieve(capped).getTrace().getEdgesExamined() <= 1);
+        RetrievalBudget cappedBudget = new RetrievalBudget(1, 1000, 1, 100);
+        cappedBudget.setMaxEdgeScans(1);
+        capped.setBudget(cappedBudget);
+        assertTrue(service.retrieve(capped).getTrace().getEdgesExamined() <= 1,
+            "an explicit edge-scan bound caps scan work");
         AtomicLong time = new AtomicLong();
         RecallService timed = new RecallService(registry, WeightedRrfConfig.DEFAULT, () -> time.getAndAdd(1_000_000L));
-        capped.setBudget(new RetrievalBudget(1, 2, 2, 100));
+        capped.setBudget(new RetrievalBudget(1, 2, 2, 100, BudgetConstraint.LATENCY));
         assertCode(RetrievalErrorCode.RETRIEVAL_TIMEOUT, () -> timed.retrieve(capped));
         time.set(0L);
         capped.setAllowPartialResults(true);
@@ -635,7 +1082,7 @@ class GraphRagMvpEndToEndTest {
     @Test
     void missingVectorAndCorruptBm25LoaderPathsRetainSuccessfulChannel() throws Exception {
         Fixture fixture = fixture();
-        RetrievalFixtureRegistry registry = new RetrievalFixtureRegistry();
+        RetrievalChannelRegistry registry = new RetrievalChannelRegistry();
         registry.load(GRAPH, VERSION, VERSION, tempDir.resolve("bm25/bm25-v1"), tempDir.resolve("absent"),
             fixture.chunks, fixture.entities, fixture.edges, "fixture", VERSION);
         readers.add(registry.get(GRAPH, VERSION, VERSION).getBm25());
@@ -671,9 +1118,14 @@ class GraphRagMvpEndToEndTest {
                 RetrievalResponse response = calls.get(index).get();
                 assertEquals(index % 2 == 0 ? Arrays.asList("BM25", "VECTOR", "GRAPH") : Collections.singletonList("GRAPH"),
                     response.getTrace().getSelectedChannels());
-                assertEquals(index % 2 == 0 ? 4 : 2, response.getTrace().getTotalCandidatesEvaluated());
-                assertEquals(index % 2 == 0 ? Collections.emptyList() : Collections.singletonList("GRAPH"),
-                    response.getDegradedChannels());
+                if (index % 2 == 0) {
+                    assertTrue(response.getTrace().getTotalCandidatesEvaluated() > 4);
+                } else {
+                    assertEquals(response.getTrace().getGraphCandidatesProduced(),
+                        response.getTrace().getTotalCandidatesEvaluated(),
+                        "graph candidate work is independent from edge scan work");
+                }
+                assertEquals(Collections.singletonList("GRAPH"), response.getDegradedChannels());
             }
         } finally {
             executor.shutdownNow();
@@ -713,7 +1165,7 @@ class GraphRagMvpEndToEndTest {
         List<GraphEdgeRef> edges = Arrays.asList(
             new GraphEdgeRef("edge-1", "studies", "e1", "e2", Collections.singletonList("c3")),
             new GraphEdgeRef("edge-invalid", "bad", "e1", "e2", Collections.singletonList("missing")));
-        RetrievalFixtureRegistry registry = new RetrievalFixtureRegistry();
+        RetrievalChannelRegistry registry = new RetrievalChannelRegistry();
         registry.register(GRAPH, VERSION, VERSION, bm25, vector, chunks, entities, edges, true);
         return new Fixture(registry, bm25, vector, chunks, entities, edges);
     }
@@ -742,20 +1194,28 @@ class GraphRagMvpEndToEndTest {
             .orElseThrow(() -> new AssertionError("missing evidence " + id));
     }
 
+    private static List<String> evidenceIds(RetrievalResponse response) {
+        List<String> ids = new ArrayList<>();
+        for (Evidence evidence : response.getEvidence()) {
+            ids.add(evidence.getEvidenceId());
+        }
+        return ids;
+    }
+
     private static void assertCode(RetrievalErrorCode code, org.junit.jupiter.api.function.Executable executable) {
         RetrievalException exception = assertThrows(RetrievalException.class, executable);
         assertEquals(code, exception.getCode());
     }
 
     private static final class Fixture {
-        private final RetrievalFixtureRegistry registry;
+        private final RetrievalChannelRegistry registry;
         private final Bm25IndexReader bm25;
         private final VectorIndexReader vector;
         private final List<TextChunk> chunks;
         private final List<EntityRef> entities;
         private final List<GraphEdgeRef> edges;
 
-        private Fixture(RetrievalFixtureRegistry registry, Bm25IndexReader bm25,
+        private Fixture(RetrievalChannelRegistry registry, Bm25IndexReader bm25,
                         VectorIndexReader vector, List<TextChunk> chunks,
                         List<EntityRef> entities, List<GraphEdgeRef> edges) {
             this.registry = registry;

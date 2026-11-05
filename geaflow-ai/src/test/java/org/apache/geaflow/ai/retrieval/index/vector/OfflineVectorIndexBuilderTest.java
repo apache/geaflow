@@ -19,6 +19,8 @@
 
 package org.apache.geaflow.ai.retrieval.index.vector;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -91,6 +93,26 @@ class OfflineVectorIndexBuilderTest {
         vectors.put("chunk", new float[] {0.0F, 1.0F});
         assertThrows(java.io.IOException.class, () -> new OfflineVectorIndexBuilder(directory, vectors, "fixture", "v1")
             .build(context(), Collections.singletonList(chunk)));
+    }
+
+    @Test
+    void exactSearchRanksEntriesBeyondArtifactPrefix() throws Exception {
+        Path directory = Files.createTempDirectory("vector-exact-test");
+        TextChunk first = new TextChunk("c1", "doc1", 0, 0, 4, 1, "first");
+        TextChunk second = new TextChunk("c2", "doc2", 0, 0, 4, 1, "second");
+        Map<String, float[]> vectors = new HashMap<>();
+        vectors.put("c1", new float[] {1.0F, 0.0F});
+        vectors.put("c2", new float[] {0.0F, 1.0F});
+        try (org.apache.geaflow.ai.retrieval.index.IndexArtifact ignored =
+                 new OfflineVectorIndexBuilder(directory, vectors, "fixture", "v1")
+                     .build(context(), Arrays.asList(first, second));
+             VectorIndexReader reader = new VectorIndexReader(directory.resolve("vector-v1.bin"))) {
+            assertEquals("c1", reader.search(new float[] {0.0F, 1.0F}, 1, 1).get(0).getChunkId());
+            assertEquals("c2", reader.searchExact(new float[] {0.0F, 1.0F}, 1, 1).get(0).getChunkId());
+            assertEquals(2, reader.getChunkCount(),
+                "readers must report how many chunks they cover so index coverage is measurable");
+            assertTrue(reader.coversChunk("c1"));
+        }
     }
 
     @Test

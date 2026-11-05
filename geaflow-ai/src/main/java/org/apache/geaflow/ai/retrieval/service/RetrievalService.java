@@ -33,6 +33,7 @@ import org.apache.geaflow.ai.retrieval.api.model.RetrievalResponse;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalTrace;
 import org.apache.geaflow.ai.retrieval.api.model.TraceStage;
 import org.apache.geaflow.ai.retrieval.config.RetrievalProperties;
+import org.apache.geaflow.ai.retrieval.fusion.WeightedRrfConfig;
 import org.apache.geaflow.ai.service.ServerMemoryCache;
 import org.noear.solon.annotation.Component;
 import org.noear.solon.annotation.Init;
@@ -52,22 +53,31 @@ public class RetrievalService {
     private RetrievalProperties properties;
     @Inject
     private RetrievalMetrics metrics;
+    @Inject
+    private RetrievalChannelRegistry fixtureRegistry;
     private RetrievalRequestValidator validator;
     private final EvidenceMapper evidenceMapper = new EvidenceMapper();
 
     public RetrievalService() {
-        this(new ServerMemoryCache(), new RetrievalProperties(), new RetrievalMetrics());
+        this(new ServerMemoryCache(), new RetrievalProperties(), new RetrievalMetrics(), null);
     }
 
     public RetrievalService(ServerMemoryCache cache, RetrievalProperties properties) {
-        this(cache, properties, new RetrievalMetrics());
+        this(cache, properties, new RetrievalMetrics(), null);
     }
 
     public RetrievalService(ServerMemoryCache cache, RetrievalProperties properties,
                             RetrievalMetrics metrics) {
+        this(cache, properties, metrics, null);
+    }
+
+    /** Creates the HTTP-facing service with an optional versioned GraphRAG registry. */
+    public RetrievalService(ServerMemoryCache cache, RetrievalProperties properties,
+                            RetrievalMetrics metrics, RetrievalChannelRegistry fixtureRegistry) {
         this.cache = cache;
         this.properties = properties;
         this.metrics = metrics;
+        this.fixtureRegistry = fixtureRegistry;
         this.properties.validateConfiguration();
         this.validator = new RetrievalRequestValidator(properties);
     }
@@ -76,6 +86,12 @@ public class RetrievalService {
     public void initialize() {
         properties.validateConfiguration();
         validator = new RetrievalRequestValidator(properties);
+    }
+
+    /** Builds a recall service that honours the configured routing policy and fusion weights. */
+    private RecallService recallService() {
+        return RecallService.fromProperties(fixtureRegistry, WeightedRrfConfig.DEFAULT,
+            System::nanoTime, properties);
     }
 
     public RetrievalResponse retrieve(RetrievalRequest request) {
@@ -87,8 +103,18 @@ public class RetrievalService {
         try {
             if (request != null && request.getMode() != null
                 && !"KEYWORD".equalsIgnoreCase(request.getMode().trim())) {
-                throw new RetrievalException(RetrievalErrorCode.UNSUPPORTED_OPTION,
-                    "HTTP retrieval currently supports KEYWORD only");
+                if (fixtureRegistry == null) {
+                    throw new RetrievalException(RetrievalErrorCode.UNSUPPORTED_OPTION,
+                        "structured retrieval registry is not configured");
+                }
+                // Build the recall service from the injected properties. Constructing it with the
+                // bare registry silently ignored every retrieval.deterministic-rule.*,
+                // retrieval.graph.*, and retrieval.rrf-* setting, so the routing policy ran on
+                // hard-coded defaults and configuration changes had no effect on the wire.
+                RetrievalResponse response = recallService().retrieve(request, requestId);
+                metrics.recordResponse(response);
+                metrics.recordSuccess(elapsedMs(startedAt));
+                return response;
             }
             RetrievalCommand command = validator.validate(request);
             ServerMemoryCache.ReadyStatus readiness = cache.keywordReadiness(command.getGraphName());
@@ -129,10 +155,14 @@ public class RetrievalService {
             trace.setGraphVersion(response.getGraphVersion());
             trace.setSelectedMode(command.getMode());
             trace.setExecutionMode(command.getExecutionMode());
+            trace.setPrimaryConstraint(budget.getPrimaryConstraint().name());
+            trace.setEffectiveCandidateBudget(budget.getMaxCandidates());
+            trace.setEffectiveTopK(budget.getTopK());
             trace.setStages(Collections.singletonList(new TraceStage("keyword", "SUCCESS", null)));
             trace.setStopReason(hits.isEmpty() ? "NO_MATCH" : "TOP_K");
             response.setTrace(trace);
             long elapsedMs = elapsedMs(startedAt);
+            metrics.recordResponse(response);
             metrics.recordSuccess(elapsedMs);
             LOGGER.info("retrieval completed graph={} mode={} topK={} maxCandidates={} "
                     + "timeoutMs={} candidateBudget={} results={} status=SUCCESS elapsedMs={}",

@@ -39,6 +39,10 @@ public final class DatasetManifest {
     private final String vectorSource;
     private final String vectorVersion;
     private final long randomSeed;
+    /** Entity extraction configuration the build used; null only for pre-existing manifests. */
+    private final String entityExtractorVersion;
+    /** Budget the build is intended to be evaluated at; null only for pre-existing manifests. */
+    private final BudgetConfiguration budgetConfiguration;
 
     public DatasetManifest(
         String manifestVersion,
@@ -54,6 +58,34 @@ public final class DatasetManifest {
         String vectorSource,
         String vectorVersion,
         long randomSeed) {
+        this(manifestVersion, dataset, datasetRelease, split, sourceUri, cachePath, sha256,
+            preprocessingVersion, chunking, graphSchemaVersion, vectorSource, vectorVersion,
+            randomSeed, null, null);
+    }
+
+    /**
+     * Creates a manifest that also records the entity extraction configuration and the budget the
+     * build is meant to be evaluated at.
+     *
+     * <p>The design requires both values in every data build so two builds differing only in
+     * extractor version or budget remain distinguishable from their metadata alone.
+     */
+    public DatasetManifest(
+        String manifestVersion,
+        String dataset,
+        String datasetRelease,
+        String split,
+        String sourceUri,
+        String cachePath,
+        String sha256,
+        String preprocessingVersion,
+        ChunkingConfiguration chunking,
+        String graphSchemaVersion,
+        String vectorSource,
+        String vectorVersion,
+        long randomSeed,
+        String entityExtractorVersion,
+        BudgetConfiguration budgetConfiguration) {
         if (!CURRENT_VERSION.equals(manifestVersion)) {
             throw MetadataValidation.invalid("unsupported manifestVersion");
         }
@@ -89,6 +121,9 @@ public final class DatasetManifest {
         this.vectorSource = vectorSource;
         this.vectorVersion = vectorVersion;
         this.randomSeed = randomSeed;
+        this.entityExtractorVersion = entityExtractorVersion == null
+            || entityExtractorVersion.trim().isEmpty() ? null : entityExtractorVersion.trim();
+        this.budgetConfiguration = budgetConfiguration;
     }
 
     public String getManifestVersion() {
@@ -164,6 +199,22 @@ public final class DatasetManifest {
         return dataset;
     }
 
+    /**
+     * Returns the entity extraction configuration this build used.
+     *
+     * <p>Distinct from {@link #getGraphSchemaVersion()}: the extractor decides which entities are
+     * produced, the graph schema decides how they are stored. Null for manifests written before the
+     * field existed.
+     */
+    public String getEntityExtractorVersion() {
+        return entityExtractorVersion;
+    }
+
+    /** Returns the budget this build is intended to be evaluated at, or null when unrecorded. */
+    public BudgetConfiguration getBudgetConfiguration() {
+        return budgetConfiguration;
+    }
+
     /** Returns the dataset name alias retained for manifest consumers. */
     public String getDatasetName() {
         return dataset;
@@ -190,13 +241,15 @@ public final class DatasetManifest {
             && Objects.equals(chunking, that.chunking)
             && Objects.equals(graphSchemaVersion, that.graphSchemaVersion)
             && Objects.equals(vectorSource, that.vectorSource)
-            && Objects.equals(vectorVersion, that.vectorVersion);
+            && Objects.equals(vectorVersion, that.vectorVersion)
+            && Objects.equals(entityExtractorVersion, that.entityExtractorVersion)
+            && Objects.equals(budgetConfiguration, that.budgetConfiguration);
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(manifestVersion, dataset, datasetRelease, split, sourceUri, cachePath,
             sha256, preprocessingVersion, chunking, graphSchemaVersion, vectorSource, vectorVersion,
-            randomSeed);
+            randomSeed, entityExtractorVersion, budgetConfiguration);
     }
 }

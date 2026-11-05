@@ -25,18 +25,32 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.apache.geaflow.ai.retrieval.model.graph.EntityRef;
 import org.apache.geaflow.ai.retrieval.model.graph.GraphEdgeRef;
+import org.apache.geaflow.ai.retrieval.model.graph.GraphVertexRef;
 
 /** Deterministic in-memory graph provider used by fixtures and artifact readers. */
 public final class InMemoryGraphNeighborProvider implements GraphNeighborProvider {
     private final Map<String, List<GraphEdgeRef>> byEntity = new HashMap<>();
+    private final Map<String, GraphVertexRef> vertices = new HashMap<>();
 
     public InMemoryGraphNeighborProvider(List<GraphEdgeRef> edges) {
+        this(edges, Collections.emptyList());
+    }
+
+    public InMemoryGraphNeighborProvider(List<GraphEdgeRef> edges, List<GraphVertexRef> graphVertices) {
         if (edges != null) {
             for (GraphEdgeRef edge : edges) {
                 if (edge != null) {
                     add(edge.getSourceEntityId(), edge);
                     add(edge.getTargetEntityId(), edge);
+                }
+            }
+        }
+        if (graphVertices != null) {
+            for (GraphVertexRef vertex : graphVertices) {
+                if (vertex != null && vertices.put(vertex.getEntityId(), vertex) != null) {
+                    throw new IllegalArgumentException("multiple graph vertices map to one entity");
                 }
             }
         }
@@ -56,5 +70,26 @@ public final class InMemoryGraphNeighborProvider implements GraphNeighborProvide
     public List<GraphEdgeRef> neighbors(String entityId) {
         List<GraphEdgeRef> result = byEntity.get(entityId);
         return result == null ? Collections.emptyList() : Collections.unmodifiableList(result);
+    }
+
+    @Override
+    public List<GraphEdgeRef> prioritizedNeighbors(String entityId,
+                                                   Comparator<GraphEdgeRef> priority,
+                                                   int limit) {
+        List<GraphEdgeRef> result = new ArrayList<>(neighbors(entityId));
+        result.sort(priority);
+        return limit < result.size() ? result.subList(0, limit) : result;
+    }
+
+    @Override
+    public NeighborBatch prioritizedNeighbors(String entityId, Comparator<GraphEdgeRef> priority,
+                                               int candidateLimit, int scanLimit) {
+        return NeighborBatch.select(neighbors(entityId), priority, candidateLimit, scanLimit);
+    }
+
+    @Override
+    public GraphVertexRef vertex(EntityRef entity) {
+        GraphVertexRef vertex = vertices.get(entity.getEntityId());
+        return vertex == null ? GraphNeighborProvider.super.vertex(entity) : vertex;
     }
 }

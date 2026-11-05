@@ -35,6 +35,7 @@ import org.apache.geaflow.ai.retrieval.api.model.RetrievalError;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalException;
 import org.apache.geaflow.ai.retrieval.codec.RetrievalApiJson;
 import org.apache.geaflow.ai.retrieval.config.RetrievalProperties;
+import org.apache.geaflow.ai.retrieval.service.RetrievalChannelRegistry;
 import org.apache.geaflow.ai.retrieval.service.RetrievalMetrics;
 import org.apache.geaflow.ai.retrieval.service.RetrievalService;
 import org.apache.geaflow.ai.search.VectorSearch;
@@ -70,6 +71,9 @@ public class GeaFlowMemoryServer {
     @Inject
     private RetrievalService retrievalService;
 
+    @Inject
+    private RetrievalChannelRegistry retrievalFixtureRegistry;
+
     private static final RetrievalService FALLBACK_SERVICE = new RetrievalService(
         FALLBACK_CACHE, new RetrievalProperties(), FALLBACK_METRICS);
 
@@ -83,7 +87,9 @@ public class GeaFlowMemoryServer {
             LOGGER.info("Starting {} on port {}", SERVER_NAME, port);
             app.filter(-100, (ctx, chain) -> {
                 String path = ctx.path();
-                if (path.startsWith("/graph/") || path.startsWith("/query/")) {
+                if (path.startsWith("/graph/") || path.startsWith("/query/")
+                    || path.startsWith("/api/v1/retrievals") || path.startsWith("/ready")
+                    || path.startsWith("/metrics/")) {
                     String error = authenticationError(ctx, app.context().getBean(RetrievalProperties.class),
                         resolveRequestId(ctx.header("X-Request-Id")));
                     if (error != null) {
@@ -162,6 +168,85 @@ public class GeaFlowMemoryServer {
         }
     }
 
+    /**
+     * Answers a question from the evidence returned by a retrieval call.
+     *
+     * <p>This is the constrained consumption layer: the answer is extractive, every sentence is
+     * cited to a returned evidence id, and an unsupported request abstains instead of inventing
+     * text. Retrieval identity is echoed so callers can reconcile an answer with its search.
+     */
+    @Post
+    @Mapping("/api/v1/answers")
+    public String answer(org.noear.solon.core.handle.Context ctx, @Body String input) {
+        String requestId = resolveRequestId(ctx.header("X-Request-Id"));
+        long startedAt = System.nanoTime();
+        ctx.headerSet("X-Request-Id", requestId);
+        ctx.contentType("application/json; charset=utf-8");
+        RetrievalProperties properties = properties();
+        String authenticationFailure = authenticationError(ctx, properties, requestId);
+        if (authenticationFailure != null) {
+            return authenticationFailure;
+        }
+        try {
+            org.apache.geaflow.ai.retrieval.answer.AnswerRequest answerRequest =
+                org.apache.geaflow.ai.retrieval.codec.AnswerApiJson.parseRequest(input);
+            org.apache.geaflow.ai.retrieval.api.model.RetrievalRequest retrievalRequest =
+                new org.apache.geaflow.ai.retrieval.api.model.RetrievalRequest();
+            retrievalRequest.setGraphName(firstNonBlank(answerRequest.getGraphName(),
+                properties.getArtifactGraphName() == null
+                || properties.getArtifactGraphName().trim().isEmpty()
+                ? properties.getReadyGraphName() : properties.getArtifactGraphName()));
+            retrievalRequest.setGraphVersion(firstNonBlank(answerRequest.getGraphVersion(),
+                properties.getArtifactGraphVersion()));
+            retrievalRequest.setIndexVersion(firstNonBlank(answerRequest.getIndexVersion(),
+                properties.getArtifactIndexVersion()));
+            retrievalRequest.setQuery(answerRequest.getQuestion());
+            // The answer layer works from text evidence. Callers choose the mode; the default is
+            // the configured one because an answer-only caller has no precomputed query vector to
+            // satisfy HYBRID/VECTOR_ONLY.
+            retrievalRequest.setMode(firstNonBlank(answerRequest.getMode(),
+                properties.getDefaultMode()));
+            org.apache.geaflow.ai.retrieval.api.model.RetrievalBudget budget =
+                new org.apache.geaflow.ai.retrieval.api.model.RetrievalBudget(
+                    properties.getDefaultTopK(), properties.getDefaultTimeoutMs(),
+                    properties.getDefaultMaxCandidates(), properties.getDefaultTokenBudget());
+            retrievalRequest.setBudget(budget);
+            org.apache.geaflow.ai.retrieval.api.model.RetrievalResponse retrieval =
+                runtimeRetrievalService().retrieve(retrievalRequest, requestId);
+            org.apache.geaflow.ai.retrieval.answer.AnswerResponse response =
+                new org.apache.geaflow.ai.retrieval.answer.ExtractiveAnswerConsumer(
+                    org.apache.geaflow.ai.retrieval.execution.RetrievalStrategyFactory.tokenEstimator(
+                        properties.getTokenEstimatorId()))
+                    .consume(new org.apache.geaflow.ai.retrieval.answer.AnswerRequest(
+                            answerRequest.getQuestion(), answerRequest.getTokenBudget(), requestId,
+                            retrieval.getGraphVersion(), answerRequest.getIndexVersion(),
+                            retrievalRequest.getGraphName()),
+                        retrieval.getEvidence());
+            ctx.status(200);
+            return org.apache.geaflow.ai.retrieval.codec.AnswerApiJson.toJson(response);
+        } catch (RetrievalException exception) {
+            ctx.status(exception.getCode().getHttpStatus());
+            return RetrievalApiJson.toJson(new RetrievalError(requestId, exception.getCode(),
+                exception.getMessage()));
+        } catch (com.google.gson.JsonParseException exception) {
+            ctx.status(400);
+            runtimeMetrics().recordFailure(
+                org.apache.geaflow.ai.retrieval.api.model.RetrievalErrorCode.INVALID_REQUEST,
+                elapsedMs(startedAt));
+            return RetrievalApiJson.toJson(new RetrievalError(requestId,
+                org.apache.geaflow.ai.retrieval.api.model.RetrievalErrorCode.INVALID_REQUEST,
+                "Malformed JSON request"));
+        } catch (RuntimeException exception) {
+            ctx.status(500);
+            runtimeMetrics().recordFailure(
+                org.apache.geaflow.ai.retrieval.api.model.RetrievalErrorCode.INTERNAL_ERROR,
+                elapsedMs(startedAt));
+            return RetrievalApiJson.toJson(new RetrievalError(requestId,
+                org.apache.geaflow.ai.retrieval.api.model.RetrievalErrorCode.INTERNAL_ERROR,
+                "internal answer error"));
+        }
+    }
+
     private static String authenticationError(org.noear.solon.core.handle.Context ctx,
                                               RetrievalProperties properties, String requestId) {
         if (!properties.isRemoteAccessEnabled()) {
@@ -217,6 +302,12 @@ public class GeaFlowMemoryServer {
     @Get
     @Mapping("/health")
     public String health(org.noear.solon.core.handle.Context ctx) {
+        String requestId = resolveRequestId(ctx.header("X-Request-Id"));
+        ctx.headerSet("X-Request-Id", requestId);
+        String authenticationFailure = authenticationError(ctx, properties(), requestId);
+        if (authenticationFailure != null) {
+            return authenticationFailure;
+        }
         ctx.status(200);
         ctx.contentType("application/json; charset=utf-8");
         return "{\"status\":\"UP\",\"service\":\"" + SERVER_NAME + "\"}";
@@ -225,33 +316,160 @@ public class GeaFlowMemoryServer {
     @Get
     @Mapping("/ready")
     public String ready(org.noear.solon.core.handle.Context ctx) {
+        String requestId = resolveRequestId(ctx.header("X-Request-Id"));
+        ctx.headerSet("X-Request-Id", requestId);
         RetrievalProperties properties = properties();
+        String authenticationFailure = authenticationError(ctx, properties, requestId);
+        if (authenticationFailure != null) {
+            return authenticationFailure;
+        }
         ServerMemoryCache.ReadinessStatus status;
+        Map<String, String> readinessComponents = null;
         try {
             properties.validateConfiguration();
-            status = runtimeCache().keywordReadiness(properties.getReadyGraphName());
+            String configuredGraph = properties.getArtifactBundleRoot() == null
+                || properties.getArtifactBundleRoot().trim().isEmpty()
+                ? properties.getReadyGraphName() : properties.getArtifactGraphName();
+            status = runtimeCache().keywordReadiness(configuredGraph);
+            boolean bundleConfigured = properties.getArtifactBundleRoot() != null
+                && !properties.getArtifactBundleRoot().trim().isEmpty();
+            if (retrievalFixtureRegistry != null) {
+                // A published fixture is only usable when every artifact it needs is present.
+                // Checking the components individually keeps /ready honest instead of reporting
+                // green because some fixture happens to exist.
+                RetrievalChannelRegistry.ReadinessReport report = bundleConfigured
+                    ? retrievalFixtureRegistry.readiness(configuredGraph,
+                        properties.getArtifactGraphVersion(), properties.getArtifactIndexVersion())
+                    : retrievalFixtureRegistry.readiness(configuredGraph, null, null);
+                if (report.isReady()) {
+                    status = new ServerMemoryCache.ReadinessStatus(true, configuredGraph,
+                        properties.getArtifactGraphVersion(), "READY");
+                } else if (bundleConfigured) {
+                    status = new ServerMemoryCache.ReadinessStatus(false, configuredGraph,
+                        properties.getArtifactGraphVersion(), report.getReason());
+                    readinessComponents = report.getComponents();
+                }
+            }
         } catch (RetrievalException exception) {
             status = new ServerMemoryCache.ReadinessStatus(false, null, null,
                 "INVALID_CONFIGURATION");
         }
         ctx.status(status.isReady() ? 200 : 503);
         ctx.contentType("application/json; charset=utf-8");
-        return "{\"status\":\"" + (status.isReady() ? "READY" : "NOT_READY")
-            + "\",\"graphName\":\"" + String.valueOf(status.getGraphName())
-            + "\",\"graphVersion\":\"" + String.valueOf(status.getGraphVersion())
-            + "\",\"reason\":\"" + status.getReason() + "\"}";
+        return readyBody(status.isReady(), status.getGraphName(), status.getGraphVersion(),
+            status.getReason(), readinessComponents);
+    }
+
+    /**
+     * Serializes the readiness body with Gson's writer so string escaping is correct.
+     *
+     * <p>{@code graphName}/{@code graphVersion} come from configuration and may contain quotes,
+     * backslashes or control characters, which hand-built JSON would emit as an invalid document.
+     * The body is written directly instead of through {@code RetrievalApiJson.toJson}: that path
+     * re-serializes the map and would drop the explicit JSON null placeholders.
+     */
+    static String readyBody(boolean ready, String graphName, String graphVersion, String reason) {
+        return readyBody(ready, graphName, graphVersion, reason, null);
+    }
+
+    /**
+     * Serializes readiness with the per-artifact outcome that produced it.
+     *
+     * <p>A bare {@code reason} tells a caller that something is missing but not which artifact.
+     * Publishing the component map lets an operator (and a contract test) distinguish a broken
+     * graph from a missing BM25 or vector index without reading server logs.
+     */
+    static String readyBody(boolean ready, String graphName, String graphVersion, String reason,
+                            Map<String, String> components) {
+        StringBuilder body = new StringBuilder("{\"status\":");
+        appendJsonString(body, ready ? "READY" : "NOT_READY");
+        body.append(",\"graphName\":");
+        appendJsonString(body, graphName);
+        body.append(",\"graphVersion\":");
+        appendJsonString(body, graphVersion);
+        body.append(",\"reason\":");
+        appendJsonString(body, reason);
+        if (components != null) {
+            body.append(",\"components\":{");
+            boolean first = true;
+            for (Map.Entry<String, String> entry : components.entrySet()) {
+                if (!first) {
+                    body.append(',');
+                }
+                first = false;
+                appendJsonString(body, entry.getKey());
+                body.append(':');
+                appendJsonString(body, entry.getValue());
+            }
+            body.append('}');
+        }
+        return body.append('}').toString();
+    }
+
+    private static void appendJsonString(StringBuilder target, String value) {
+        if (value == null) {
+            target.append("null");
+            return;
+        }
+        target.append('"');
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            switch (c) {
+                case '"':
+                    target.append("\\\"");
+                    break;
+                case '\\':
+                    target.append("\\\\");
+                    break;
+                case '\n':
+                    target.append("\\n");
+                    break;
+                case '\r':
+                    target.append("\\r");
+                    break;
+                case '\t':
+                    target.append("\\t");
+                    break;
+                case '\b':
+                    target.append("\\b");
+                    break;
+                case '\f':
+                    target.append("\\f");
+                    break;
+                default:
+                    if (c < 0x20) {
+                        target.append(String.format("\\u%04x", (int) c));
+                    } else {
+                        target.append(c);
+                    }
+            }
+        }
+        target.append('"');
     }
 
     @Get
     @Mapping("/metrics/retrieval")
     public String metrics(org.noear.solon.core.handle.Context ctx) {
+        String requestId = resolveRequestId(ctx.header("X-Request-Id"));
+        ctx.headerSet("X-Request-Id", requestId);
+        String authenticationFailure = authenticationError(ctx, properties(), requestId);
+        if (authenticationFailure != null) {
+            return authenticationFailure;
+        }
         RetrievalMetrics.Snapshot snapshot = runtimeMetrics().snapshot();
         ctx.status(200);
         ctx.contentType("application/json; charset=utf-8");
         return "{\"total\":" + snapshot.getTotal() + ",\"success\":"
             + snapshot.getSuccess() + ",\"timeout\":" + snapshot.getTimeout()
             + ",\"failure\":" + snapshot.getFailure() + ",\"totalElapsedMs\":"
-            + snapshot.getTotalElapsedMs() + "}";
+            + snapshot.getTotalElapsedMs() + ",\"p50ElapsedMs\":" + snapshot.getP50ElapsedMs()
+            + ",\"p95ElapsedMs\":" + snapshot.getP95ElapsedMs() + ",\"channelCounts\":"
+            + RetrievalApiJson.toJson(snapshot.getChannelCounts()) + ",\"candidateCounts\":"
+            + RetrievalApiJson.toJson(snapshot.getCandidateCounts()) + ",\"stageElapsedNanos\":"
+            + RetrievalApiJson.toJson(snapshot.getStageElapsedNanos()) + ",\"edgesExamined\":"
+            + snapshot.getEdgesExamined() + ",\"tokensRetained\":" + snapshot.getTokensRetained()
+            + ",\"degradationReasons\":" + RetrievalApiJson.toJson(snapshot.getDegradationReasons())
+            + ",\"replanReasons\":" + RetrievalApiJson.toJson(snapshot.getReplanReasons()) + "}";
     }
 
     private RetrievalProperties properties() {
@@ -264,6 +482,10 @@ public class GeaFlowMemoryServer {
 
     private RetrievalMetrics runtimeMetrics() {
         return metrics == null ? FALLBACK_METRICS : metrics;
+    }
+
+    private static String firstNonBlank(String preferred, String fallback) {
+        return preferred == null || preferred.trim().isEmpty() ? fallback : preferred;
     }
 
     private RetrievalService runtimeRetrievalService() {

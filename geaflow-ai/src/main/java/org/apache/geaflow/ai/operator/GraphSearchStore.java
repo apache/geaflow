@@ -72,6 +72,7 @@ public class GraphSearchStore {
 
     private SearchStore store;
     private long entityNum = 0L;
+    private boolean writeClosed;
     private boolean closed;
 
     public GraphSearchStore() {
@@ -79,7 +80,7 @@ public class GraphSearchStore {
     }
 
     public boolean indexVertex(GraphVertex graphVertex, List<IVector> indexVectors) {
-        ensureOpen();
+        ensureWritable();
         Map<String, String> kv = new HashMap<>();
         Vertex vertex = graphVertex.getVertex();
         kv.put(SearchConstants.ID, vertex.getId());
@@ -101,7 +102,7 @@ public class GraphSearchStore {
     }
 
     public boolean indexEdge(GraphEdge graphEdge, List<IVector> indexVectors) {
-        ensureOpen();
+        ensureWritable();
         Map<String, String> kv = new HashMap<>();
         Edge edge = graphEdge.getEdge();
         kv.put(SearchConstants.SRC, edge.getSrcId());
@@ -136,7 +137,7 @@ public class GraphSearchStore {
     public List<ScoredGraphEntity> searchScored(String key1, GraphAccessor graphAccessor,
                                                 int topK, int maxCandidates,
                                                 long deadlineNanos) {
-        ensureOpen();
+        ensureReadable();
         try {
             String query = SearchUtils.formatQuery(key1);
             TopDocs docs = store.searchDoc(SearchConstants.CONTENT, query,
@@ -212,11 +213,13 @@ public class GraphSearchStore {
         entityNum++;
     }
 
+    /** Closes the writer, reader, directory, and analyzer. */
     public synchronized void close() {
         if (closed) {
             return;
         }
         closed = true;
+        writeClosed = true;
         try {
             store.close();
         } catch (Throwable e) {
@@ -225,9 +228,10 @@ public class GraphSearchStore {
     }
 
     public void finishWriting() {
-        ensureOpen();
+        ensureWritable();
         try {
             store.finishWriting();
+            writeClosed = true;
         } catch (Throwable e) {
             throw new RuntimeException("Cannot finish search store writes", e);
         }
@@ -245,11 +249,16 @@ public class GraphSearchStore {
         return store.getConfig();
     }
 
-    private void ensureOpen() {
-        if (closed) {
+    private void ensureWritable() {
+        if (writeClosed || closed) {
             throw new IllegalStateException("graph search store is closed");
         }
     }
 
+    private void ensureReadable() {
+        if (closed) {
+            throw new IllegalStateException("graph search store is closed");
+        }
+    }
 
 }

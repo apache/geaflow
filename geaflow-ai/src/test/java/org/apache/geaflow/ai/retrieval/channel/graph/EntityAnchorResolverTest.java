@@ -59,6 +59,32 @@ class EntityAnchorResolverTest {
         assertTrue(resolver.resolve("Confucius", Collections.singletonList(entity), 1L, () -> 1L).isEmpty());
     }
 
+    @Test
+    void indexedResolverFindsEntityMentionsInsideNaturalLanguageQuestions() {
+        EntityRef entity = new EntityRef("e1", "Polish-Russian War (Film)", "film");
+        EntityAnchorResolver indexed = new EntityAnchorResolver(Collections.singletonList(entity));
+        assertEquals(Collections.singletonList("e1"), entityIds(indexed.resolve(
+            "Who directed the film Polish-Russian War (Film)?", 0L, System::nanoTime)));
+        assertTrue(indexed.resolve("Who directed Polish-Russian Warfare?", 0L, System::nanoTime).isEmpty());
+    }
+
+    @Test
+    void resolvesBoundedAnchorsFromRetrievedChunkProvenanceWhenQuestionHasNoName() {
+        EntityRef first = new EntityRef("e1", "Confucius", Collections.emptyList(), "person",
+            Collections.singletonList("c1"));
+        EntityRef second = new EntityRef("e2", "Ethics", Collections.emptyList(), "topic",
+            Collections.singletonList("c2"));
+        EntityAnchorResolver indexed = new EntityAnchorResolver(Arrays.asList(first, second));
+
+        List<EntityAnchorResolver.Anchor> anchors = indexed.resolveFromCandidates(
+            "unmatched question", Arrays.asList(first, second), Arrays.asList("c1", "c2"),
+            1, 0L, System::nanoTime);
+
+        assertEquals(Collections.singletonList("e1"), entityIds(anchors));
+        assertEquals("TEXT_CANDIDATE", anchors.get(0).getMatchType());
+        assertEquals(0.35D, anchors.get(0).getConfidence());
+    }
+
     private static List<String> entityIds(List<EntityAnchorResolver.Anchor> anchors) {
         java.util.ArrayList<String> ids = new java.util.ArrayList<>();
         for (EntityAnchorResolver.Anchor anchor : anchors) {
