@@ -20,10 +20,36 @@
 package org.apache.geaflow.state.iterator;
 
 import java.io.Serializable;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 import org.apache.geaflow.common.iterator.CloseableIterator;
 import org.apache.geaflow.state.data.OneDegreeGraph;
 
 public interface IOneDegreeGraphIterator<K, VV, EV> extends
     CloseableIterator<OneDegreeGraph<K, VV, EV>>, Serializable {
 
+    /**
+     * Get active partition names for this iterator.
+     * @return list of active partition names, empty if not partitioned
+     */
+    default List<String> getActivePartitions() {
+        return Collections.emptyList();
+    }
+
+    /**
+     * Check if this iterator supports partition-aware scanning.
+     * @return true if partition-aware, false otherwise
+     */
+    default boolean isPartitionAware() {
+        return false;
+    }
+
+    /**
+     * Get partition statistics for monitoring and optimization.
+     * @return partition statistics map, empty if not applicable
+     */
+    default Map<String, Long> getPartitionStats() {
+        return Collections.emptyMap();
+    }
 }
