@@ -22,6 +22,9 @@ package org.apache.geaflow.dsl.udf.array;
 import org.apache.geaflow.dsl.udf.table.array.ArrayAppend;
 import org.apache.geaflow.dsl.udf.table.array.ArrayContains;
 import org.apache.geaflow.dsl.udf.table.array.ArrayDistinct;
+import org.apache.geaflow.dsl.udf.table.array.ArrayMax;
+import org.apache.geaflow.dsl.udf.table.array.ArrayMin;
+import org.apache.geaflow.dsl.udf.table.array.ArrayReverse;
 import org.apache.geaflow.dsl.udf.table.array.ArrayUnion;
 import org.testng.Assert;
 import org.testng.annotations.Test;
@@ -59,5 +62,48 @@ public class ArrayTest {
         Object[] input2 = new Object[]{1, 3, 5, 2, -4, -6};
         Object[] res = udf.eval(input1, input2);
         Assert.assertEquals(res.length, 8);
+    }
+
+    @Test
+    public void testArrayReverse() throws Exception {
+        ArrayReverse udf = new ArrayReverse();
+        Assert.assertEquals(udf.eval(new Object[]{1, 2, 4, -1}), new Object[]{-1, 4, 2, 1});
+        Assert.assertEquals(udf.eval(new Object[]{1, null, 3}), new Object[]{3, null, 1});
+        Assert.assertEquals(udf.eval(new Object[]{}), new Object[]{});
+        Assert.assertNull(udf.eval(null));
+    }
+
+    @Test
+    public void testArrayMax() throws Exception {
+        ArrayMax udf = new ArrayMax();
+        Assert.assertEquals(udf.eval(new Object[]{1, 2, 4, -1}), 4);
+        Assert.assertEquals(udf.eval(new Object[]{"a", "c", "b"}), "c");
+        Assert.assertEquals(udf.eval(new Object[]{1, null, 3}), 3);
+        Assert.assertNull(udf.eval(new Object[]{}));
+        Assert.assertNull(udf.eval(new Object[]{null, null}));
+        Assert.assertNull(udf.eval(null));
+    }
+
+    @Test(expectedExceptions = IllegalArgumentException.class)
+    public void testArrayMaxWithUnsupportedElementType() throws Exception {
+        ArrayMax udf = new ArrayMax();
+        udf.eval(new Object[]{new Object()});
+    }
+
+    @Test
+    public void testArrayMin() throws Exception {
+        ArrayMin udf = new ArrayMin();
+        Assert.assertEquals(udf.eval(new Object[]{1, 2, 4, -1}), -1);
+        Assert.assertEquals(udf.eval(new Object[]{"a", "c", "b"}), "a");
+        Assert.assertEquals(udf.eval(new Object[]{1, null, 3}), 1);
+        Assert.assertNull(udf.eval(new Object[]{}));
+        Assert.assertNull(udf.eval(new Object[]{null, null}));
+        Assert.assertNull(udf.eval(null));
+    }
+
+    @Test(expectedExceptions = IllegalArgumentException.class)
+    public void testArrayMinWithUnsupportedElementType() throws Exception {
+        ArrayMin udf = new ArrayMin();
+        udf.eval(new Object[]{new Object()});
     }
 }
