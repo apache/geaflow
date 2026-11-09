@@ -34,7 +34,7 @@
 
     <properties>
         <kubernetes.client.version>6.2.0</kubernetes.client.version>
-        <bouncycastle.version>1.50</bouncycastle.version>
+        <bouncycastle.version>1.70</bouncycastle.version>
     </properties>
 
     <dependencies>
