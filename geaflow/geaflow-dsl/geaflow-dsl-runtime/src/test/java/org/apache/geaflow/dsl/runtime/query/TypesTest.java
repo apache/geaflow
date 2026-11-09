@@ -19,9 +19,30 @@
 
 package org.apache.geaflow.dsl.runtime.query;
 
+import java.util.TimeZone;
+import org.testng.annotations.AfterClass;
+import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
 
 public class TypesTest {
+
+    private static TimeZone originalTimeZone;
+
+    /**
+     * Fix the JVM timezone to Asia/Shanghai (UTC+8) for the duration of this
+     * test class so that timestamp-to-string conversions produce the values
+     * stored in the expect files, regardless of the host machine's locale.
+     */
+    @BeforeClass
+    public static void setUpTimeZone() {
+        originalTimeZone = TimeZone.getDefault();
+        TimeZone.setDefault(TimeZone.getTimeZone("Asia/Shanghai"));
+    }
+
+    @AfterClass
+    public static void tearDownTimeZone() {
+        TimeZone.setDefault(originalTimeZone);
+    }
 
     @Test
     public void testBooleanType_001() throws Exception {

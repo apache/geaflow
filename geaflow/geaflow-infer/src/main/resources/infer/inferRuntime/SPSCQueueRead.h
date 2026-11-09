@@ -63,7 +63,7 @@ class SPSCQueueRead : public SPSCQueueBase
   public:
     SPSCQueueRead(const char* fileName, int64_t len): SPSCQueueBase(mmap(fileName, len), len), toMove_(0) {}
 
-    ~SPSCQueueRead() {}
+    virtual ~SPSCQueueRead() {}
 
     void close() {
         updateReadPtr();
