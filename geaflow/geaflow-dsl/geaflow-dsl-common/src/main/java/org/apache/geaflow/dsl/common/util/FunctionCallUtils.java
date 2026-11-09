@@ -64,13 +64,6 @@ public class FunctionCallUtils {
         BOX_TYPE_MAPS.put(byte.class, Byte.class);
         BOX_TYPE_MAPS.put(boolean.class, Boolean.class);
         BOX_TYPE_MAPS.put(double.class, Double.class);
-
-        UNBOX_TYPE_MAPS.put(Integer.class, int.class);
-        UNBOX_TYPE_MAPS.put(Long.class, long.class);
-        UNBOX_TYPE_MAPS.put(Short.class, short.class);
-        UNBOX_TYPE_MAPS.put(Byte.class, byte.class);
-        UNBOX_TYPE_MAPS.put(Boolean.class, boolean.class);
-        UNBOX_TYPE_MAPS.put(Double.class, double.class);
     }
 
     public static Method findMatchMethod(Class<?> udfClass, List<Class<?>> paramTypes) {
@@ -238,11 +231,6 @@ public class FunctionCallUtils {
     public static Class<?> getBoxType(Class<?> type) {
         return BOX_TYPE_MAPS.getOrDefault(type, type);
     }
-
-    public static Class<?> getUnboxType(Class<?> type) {
-        return UNBOX_TYPE_MAPS.getOrDefault(type, type);
-    }
-
 
     public static Type[] getUDAFGenericTypes(Class<?> udafClass) {
         return FunctionCallUtils.getGenericTypes(udafClass, UDAF.class);
