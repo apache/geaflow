@@ -70,12 +70,9 @@ public:
             delete(writer);
             writer = nullptr;
         }
-        delete(readBuffer);
-        
-        if (nullptr != readBufferPtr){
-            delete(readBufferPtr);
-            readBufferPtr = nullptr;
-        }
+        delete[] readBuffer;
+        readBuffer = nullptr;
+        readBufferPtr = nullptr;
     }
 
     bool ParseQueuePath(const std::string &mmap_key, std::string& mmapName, long* buf) {

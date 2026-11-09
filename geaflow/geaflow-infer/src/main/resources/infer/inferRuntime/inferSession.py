@@ -19,22 +19,27 @@ import os
 import torch
 torch.set_num_threads(1)
 
-# class TorchInferSession(object):
-#     def __init__(self, transform_class) -> None:
-#         self._transform = transform_class
-#         self._model_path = os.getcwd() + "/model.pt"
-#         self._model = transform_class.load_model(self._model_path)
-#
-#     def run(self, *inputs):
-#         feature = self._transform.transform_pre(*inputs)
-#         res = self._model(*feature)
-#         return self._transform.transform_post(res)
-
 class TorchInferSession(object):
     def __init__(self, transform_class) -> None:
         self._transform = transform_class
+        self._model_path = os.getcwd() + "/model.pt"
+        if not hasattr(transform_class, "load_model"):
+            raise RuntimeError("transform class must define load_model(model_path)")
+        self._model = transform_class.load_model(self._model_path)
+        self._legacy_mode = self._model is None
+        if not self._legacy_mode and not callable(self._model):
+            raise RuntimeError("load_model(model_path) must return a callable model")
 
     def run(self, *inputs):
-        a,b = self._transform.transform_pre(*inputs)
-        return self._transform.transform_post(a)
+        if self._legacy_mode:
+            return self._transform.transform_post(self._transform.transform_pre(*inputs))
 
+        feature = self._transform.transform_pre(*inputs)
+        if isinstance(feature, tuple):
+            model_args = feature
+        elif isinstance(feature, list):
+            model_args = tuple(feature)
+        else:
+            model_args = (feature,)
+        res = self._model(*model_args)
+        return self._transform.transform_post(res)

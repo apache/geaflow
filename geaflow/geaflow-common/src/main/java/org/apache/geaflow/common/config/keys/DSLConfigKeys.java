@@ -142,4 +142,34 @@ public class DSLConfigKeys implements Serializable {
         .key("geaflow.dsl.source.parallelism")
         .noDefaultValue()
         .description("Set source parallelism");
+
+    public static final ConfigKey GEAFLOW_DSL_GCN_HOPS = ConfigKeys
+        .key("geaflow.dsl.gcn.hops")
+        .defaultValue(2)
+        .description("The hop count for built-in gcn.");
+
+    public static final ConfigKey GEAFLOW_DSL_GCN_FANOUT = ConfigKeys
+        .key("geaflow.dsl.gcn.fanout")
+        .defaultValue(-1)
+        .description("The max sampled neighbors per visited vertex for built-in gcn.");
+
+    public static final ConfigKey GEAFLOW_DSL_GCN_EDGE_DIRECTION = ConfigKeys
+        .key("geaflow.dsl.gcn.edge.direction")
+        .defaultValue("BOTH")
+        .description("The edge direction for built-in gcn. Optional values: IN, OUT, BOTH.");
+
+    public static final ConfigKey GEAFLOW_DSL_GCN_VERTEX_FEATURE_FIELDS = ConfigKeys
+        .key("geaflow.dsl.gcn.vertex.feature.fields")
+        .noDefaultValue()
+        .description("Comma-separated vertex feature field names for built-in gcn.");
+
+    public static final ConfigKey GEAFLOW_DSL_GCN_BATCH_SIZE = ConfigKeys
+        .key("geaflow.dsl.gcn.batch.size")
+        .defaultValue(64)
+        .description("The max infer batch size for built-in gcn.");
+
+    public static final ConfigKey GEAFLOW_DSL_GCN_EDGE_WEIGHT_FIELD = ConfigKeys
+        .key("geaflow.dsl.gcn.edge.weight.field")
+        .noDefaultValue()
+        .description("Optional edge weight field name for built-in gcn.");
 }
