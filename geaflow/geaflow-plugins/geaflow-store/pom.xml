@@ -35,6 +35,7 @@
         <module>geaflow-store-api</module>
         <module>geaflow-store-memory</module>
         <module>geaflow-store-rocksdb</module>
+        <module>geaflow-store-lmdb</module>
         <module>geaflow-store-redis</module>
         <module>geaflow-store-jdbc</module>
         <module>geaflow-store-paimon</module>
