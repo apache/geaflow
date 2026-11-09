@@ -31,7 +31,7 @@
     <artifactId>geaflow-store</artifactId>
     <packaging>pom</packaging>
 
-    <modules>
+   <modules>
         <module>geaflow-store-api</module>
         <module>geaflow-store-memory</module>
         <module>geaflow-store-rocksdb</module>
@@ -39,6 +39,7 @@
         <module>geaflow-store-jdbc</module>
         <module>geaflow-store-paimon</module>
         <module>geaflow-store-vector</module>
+        <module>geaflow-store-sqlite</module>
     </modules>
 
     <dependencies>
