@@ -35,7 +35,7 @@
         <junit.version>5.10.1</junit.version>
         <slf4j.version>1.7.15</slf4j.version>
         <log4j.version>1.2.17</log4j.version>
-        <log4j.slf4j.version>2.17.1</log4j.slf4j.version>
+        <log4j.slf4j.version>2.25.3</log4j.slf4j.version>
         <lmax.disrupter.veresion>3.4.4</lmax.disrupter.veresion>
     </properties>
 
