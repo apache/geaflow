@@ -229,14 +229,22 @@ public final class VectorIndexReader implements Closeable {
                 reason = RecallStopReason.DEADLINE;
                 break;
             }
-            if (evaluated >= candidateLimit) {
-                reason = RecallStopReason.CANDIDATE_BUDGET;
-                break;
-            }
-            evaluated++;
             double score = dot(query, entry.vector) / (queryNorm * norm(entry.vector));
-            if (Double.isFinite(score)) {
+            evaluated++;
+            if (!Double.isFinite(score)) {
+                continue;
+            }
+            if (hits.size() < candidateLimit) {
                 hits.add(new VectorHit(entry.chunkId, entry.documentId, score, 0));
+            } else if (score > worstSimilarity(hits)) {
+                // Retain by similarity, not by storage order. The artifact stores vectors in
+                // chunkId order, so a prefix-limited scan returned the same alphabetical slice for
+                // every query and scored at chance level.
+                hits.remove(worstHit(hits));
+                hits.add(new VectorHit(entry.chunkId, entry.documentId, score, 0));
+            }
+            if (hits.size() >= candidateLimit && reason == RecallStopReason.COMPLETED) {
+                reason = RecallStopReason.CANDIDATE_BUDGET;
             }
         }
         hits.sort(Comparator.comparing(VectorHit::getSimilarity).reversed()
@@ -253,6 +261,21 @@ public final class VectorIndexReader implements Closeable {
             reason = RecallStopReason.DEADLINE;
         }
         return new ChannelSearchResult<>(result, evaluated, reason);
+    }
+
+    /** Returns the lowest similarity retained, used as the eviction threshold. */
+    private static double worstSimilarity(List<VectorHit> hits) {
+        return worstHit(hits).getSimilarity();
+    }
+
+    private static VectorHit worstHit(List<VectorHit> hits) {
+        VectorHit weakest = hits.get(0);
+        for (VectorHit hit : hits) {
+            if (hit.getSimilarity() < weakest.getSimilarity()) {
+                weakest = hit;
+            }
+        }
+        return weakest;
     }
 
     public void validateQuery(float[] query) {

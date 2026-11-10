@@ -606,7 +606,10 @@ class GraphRagMvpEndToEndTest {
         assertEquals(1, response.getTrace().getCandidateCounts().get("BM25"));
         assertEquals(1, response.getTrace().getCandidateCounts().get("VECTOR"));
         assertEquals(1, response.getTrace().getCandidateCounts().get("GRAPH"));
-        assertEquals(3, response.getTrace().getTotalCandidatesEvaluated());
+        // Evaluated counts report scoring work, not candidate output. The text channels rank their
+        // whole fixture (2 and 3 documents) while still retaining a single candidate each, so the
+        // total is larger than the 3 retained candidates.
+        assertEquals(6, response.getTrace().getTotalCandidatesEvaluated());
         assertEquals(Arrays.asList("BM25", "VECTOR", "GRAPH"),
             response.getTrace().getSelectedChannels());
         assertEquals(response.getRequestId(), response.getTrace().getRequestId());
@@ -615,12 +618,16 @@ class GraphRagMvpEndToEndTest {
         exact.setBudget(new RetrievalBudget(1, 1000, 3, 100));
         exact.setExactRanking(true);
         RetrievalResponse exactResponse = service.retrieve(exact);
-        assertEquals(RecallStageStatus.NOT_RUN,
+        // Exact ranking makes both text channels score their whole index. That is scoring work,
+        // not candidate output, so it must not consume the graph stage's allocation: the graph
+        // stage still runs and the three allocations still sum to the request budget.
+        assertEquals(RecallStageStatus.SUCCESS,
             exactResponse.getTrace().getChannelStatuses().get("GRAPH"));
-        assertEquals(RecallStopReason.CANDIDATE_BUDGET,
-            exactResponse.getTrace().getChannelStopReasons().get("GRAPH"));
         assertEquals(3, exactResponse.getTrace().getChannelBudgets().values().stream()
             .mapToInt(Integer::intValue).sum());
+        assertTrue(exactResponse.getTrace().getCandidateCounts().values().stream()
+                .mapToInt(Integer::intValue).sum() <= 3,
+            "retained candidates must stay inside the request budget");
         assertEquals(exactResponse.getTrace().getChannelBudgets(), RetrievalApiJson.parseResponse(
             RetrievalApiJson.toJson(exactResponse)).getTrace().getChannelBudgets());
 
@@ -688,12 +695,15 @@ class GraphRagMvpEndToEndTest {
         assertEquals(80, first.getTrace().getChannelBudgets().get("BM25"));
         assertEquals(80, first.getTrace().getChannelBudgets().get("VECTOR"));
         assertEquals(240, first.getTrace().getChannelBudgets().get("GRAPH"));
-        assertTrue(first.getTrace().getEvaluatedCounts().get("BM25") <= 80);
-        assertTrue(first.getTrace().getEvaluatedCounts().get("VECTOR") <= 80);
-        assertTrue(first.getTrace().getEvaluatedCounts().get("GRAPH") <= 240);
+        assertTrue(first.getTrace().getCandidateCounts().get("BM25") <= 80,
+            "the retained candidate count, not the scoring work, is what the budget bounds");
+        assertTrue(first.getTrace().getCandidateCounts().get("VECTOR") <= 80);
+        assertTrue(first.getTrace().getCandidateCounts().get("GRAPH") <= 240);
         assertEquals(240, first.getTrace().getCandidateCounts().get("GRAPH"));
         assertEquals(240, first.getTrace().getGraphCandidatesProduced());
-        assertTrue(first.getTrace().getTotalCandidatesEvaluated() <= 400);
+        assertTrue(first.getTrace().getCandidateCounts().values().stream()
+                .mapToInt(Integer::intValue).sum() <= 400,
+            "retained candidates must stay inside the request budget");
         assertTrue(first.getEvidence().size() <= 10);
         assertEquals(first.getEvidence(), second.getEvidence());
         assertEquals(first.getTrace().getCandidateCounts(), second.getTrace().getCandidateCounts());
@@ -927,7 +937,9 @@ class GraphRagMvpEndToEndTest {
         assertEquals(2, response.getTrace().getChannelBudgets().get("BM25"));
         assertEquals(2, response.getTrace().getChannelBudgets().get("VECTOR"));
         assertEquals(1, response.getTrace().getChannelBudgets().get("GRAPH"));
-        assertTrue(response.getTrace().getTotalCandidatesEvaluated() <= 5);
+        assertTrue(response.getTrace().getCandidateCounts().values().stream()
+                .mapToInt(Integer::intValue).sum() <= 5,
+            "retained candidates must stay inside the request budget");
         for (int index = 0; index < response.getEvidence().size(); index++) {
             assertEquals(index + 1, response.getEvidence().get(index).getRank());
         }
@@ -1003,7 +1015,9 @@ class GraphRagMvpEndToEndTest {
         Fixture fixture = fixture();
         org.apache.geaflow.ai.retrieval.index.ChannelSearchResult<org.apache.geaflow.ai.retrieval.index.bm25.Bm25Hit> limited =
             fixture.bm25.searchWithStats("Confucius astronomy ethics stars", 1, 1, 0L);
-        assertEquals(1, limited.getCandidatesEvaluated());
+        // The limit bounds retained hits, so all three matching documents are still scored and
+        // the single retained hit must be the best-scoring one rather than the first by doc id.
+        assertEquals(3, limited.getCandidatesEvaluated());
         assertEquals(1, limited.getHits().size());
         assertEquals(RecallStopReason.CANDIDATE_BUDGET, limited.getStopReason());
         AtomicLong clock = new AtomicLong();
@@ -1020,8 +1034,10 @@ class GraphRagMvpEndToEndTest {
         Fixture fixture = fixture();
         org.apache.geaflow.ai.retrieval.index.ChannelSearchResult<org.apache.geaflow.ai.retrieval.index.vector.VectorHit> prefix =
             fixture.vector.searchWithStats(new float[] {0.0F, 1.0F}, 1, 1, 0L);
-        assertEquals(1, prefix.getCandidatesEvaluated());
-        assertEquals("c1", prefix.getHits().get(0).getChunkId());
+        // Every stored vector is scored; the limit only bounds how many are kept. The vector that
+        // matches the query belongs at rank 1 regardless of its position in the artifact.
+        assertEquals(3, prefix.getCandidatesEvaluated());
+        assertEquals("c2", prefix.getHits().get(0).getChunkId());
         assertEquals(RecallStopReason.CANDIDATE_BUDGET, prefix.getStopReason());
         assertEquals("c2", fixture.vector.search(new float[] {0.0F, 1.0F}, 3, 1).get(0).getChunkId());
         AtomicLong time = new AtomicLong();

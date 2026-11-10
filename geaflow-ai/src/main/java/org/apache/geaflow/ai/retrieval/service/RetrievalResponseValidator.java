@@ -202,12 +202,17 @@ public final class RetrievalResponseValidator {
             if (channelBudget == null || channelBudget < 1) {
                 throw invalid("channel budget must be positive: " + channel);
             }
-            if (evaluated == null || evaluated < 0 || !trace.isExactRanking() && evaluated > channelBudget) {
+            if (evaluated == null || evaluated < 0) {
                 throw invalid("invalid evaluated count: " + channel);
             }
-            if (candidates == null || candidates < 0
-                || candidates > ("GRAPH".equals(channel) ? channelBudget : evaluated)) {
+            // ``evaluated`` reports how many candidates a channel scored; ``candidates`` reports
+            // how many it retained. Only the retained count is bounded by the channel budget, so a
+            // channel that ranked a large index legitimately scores more than it keeps.
+            if (candidates == null || candidates < 0 || candidates > channelBudget) {
                 throw invalid("invalid candidate count: " + channel);
+            }
+            if (candidates > evaluated) {
+                throw invalid("candidate count exceeds evaluated count: " + channel);
             }
             if (trace.getChannelStatuses().get(channel) == null
                 || trace.getChannelStopReasons().get(channel) == null) {

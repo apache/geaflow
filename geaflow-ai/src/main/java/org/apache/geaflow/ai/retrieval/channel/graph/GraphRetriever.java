@@ -787,16 +787,27 @@ public final class GraphRetriever {
             return stats;
         }
 
-        /** Evidence produced so far, in expansion order. */
+        /**
+         * Evidence produced so far, in expansion order.
+         *
+         * <p>Expansion order is a traversal artefact: it follows the frontier, whose second sort key
+         * is a deterministic hash used for sampling. It is not a relevance order, so callers that
+         * rank notice must use {@link #finish()}, which orders by association score.
+         */
         public List<GraphHit> getHits() {
             return Collections.unmodifiableList(new ArrayList<>(result));
         }
 
         /**
-         * Finalises stop reasons that depend on how the whole expansion ended.
+         * Finalises stop reasons that depend on how the whole expansion ended and orders the hits
+         * by descending association score.
          *
          * <p>Called by the single-shot path; the split path calls it after its last hop so both
          * report the same reason for the same work.
+         *
+         * <p>Fusion turns each channel's position into a reciprocal-rank term. Returning traversal
+         * order made the graph channel's rank noise, which mattered most because that channel also
+         * carries the largest fusion weight. Ties break on the path so the order stays deterministic.
          */
         public List<GraphHit> finish() {
             if (!finished) {
@@ -808,7 +819,13 @@ public final class GraphRetriever {
                 }
                 owner.lastStats = stats;
             }
-            return Collections.unmodifiableList(new ArrayList<>(result));
+            // Retention used the candidate budget, so the surviving set is unchanged; only the
+            // order used for ranking is corrected here.
+            List<GraphHit> ranked = new ArrayList<>(result);
+            ranked.sort(Comparator.comparingDouble(GraphHit::getScore).reversed()
+                .thenComparing(hit -> pathKey(hit.getPath()))
+                .thenComparing(hit -> hit.getAnchor().getEntity().getEntityId()));
+            return Collections.unmodifiableList(ranked);
         }
     }
 

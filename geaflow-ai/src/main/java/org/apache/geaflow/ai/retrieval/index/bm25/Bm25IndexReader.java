@@ -333,6 +333,16 @@ public final class Bm25IndexReader implements Closeable {
     }
 
     private final class BoundedCollector extends SimpleCollector {
+        /**
+         * Number of hits retained, not the number of documents scored.
+         *
+         * <p>The collector must keep the highest-scoring documents it saw, so a limit applied to
+         * the traversal would select by Lucene's internal doc id instead of by relevance. Because
+         * {@link LuceneBm25IndexBuilder} inserts documents in {@code chunkId} order, that ordering
+         * is unrelated to the query: a limit-as-prefix implementation returned the alphabetically
+         * first matches and scored poorly regardless of query. The limit therefore caps the
+         * retained set, and {@link #evaluated} reports the real amount of scoring work.
+         */
         private final int limit;
         private final long deadline;
         private final LongSupplier clock;
@@ -377,22 +387,56 @@ public final class Bm25IndexReader implements Closeable {
         @Override
         public void collect(int doc) throws IOException {
             checkDeadline();
-            if (evaluated >= limit) {
-                reason = RecallStopReason.CANDIDATE_BUDGET;
-                throw new SearchStopped();
-            }
-            evaluated++;
             float score = scorer.score();
+            if (!Float.isFinite(score)) {
+                throw new IOException("invalid BM25 score");
+            }
+            // Reject weak documents without paying for a stored-document load. Every retained hit
+            // must beat the current worst kept hit; until the heap is full there is no threshold.
+            if (hits.size() >= limit && score <= worst().getScore()) {
+                evaluated++;
+                return;
+            }
             Document document = searcher.doc(docBase + doc);
             String chunkId = document.get("chunkId");
             String documentId = document.get("documentId");
             String text = document.get("text");
-            if (chunkId == null || documentId == null || text == null || !Float.isFinite(score)
-                || !chunkIds.add(chunkId)) {
-                throw new IOException("invalid or duplicate BM25 document");
+            if (chunkId == null || documentId == null || text == null) {
+                throw new IOException("invalid BM25 document");
             }
-            hits.add(new Bm25Hit(chunkId, documentId, score, 0, text, observedTerms.terms,
-                observedTerms.averageIdf));
+            evaluated++;
+            if (hits.size() < limit) {
+                if (chunkIds.add(chunkId)) {
+                    hits.add(new Bm25Hit(chunkId, documentId, score, 0, text, observedTerms.terms,
+                        observedTerms.averageIdf));
+                }
+                return;
+            }
+            // Evict the weakest retained hit. A document can be reached twice only through the
+            // optional surface field, so a duplicate id must not displace a scored hit.
+            Bm25Hit weakest = worst();
+            if (score > weakest.getScore() && chunkIds.add(chunkId)) {
+                hits.remove(weakest);
+                chunkIds.remove(weakest.getChunkId());
+                hits.add(new Bm25Hit(chunkId, documentId, score, 0, text, observedTerms.terms,
+                    observedTerms.averageIdf));
+            }
+            // The retained set is saturated: later hits can only enter by replacing a scored hit,
+            // so the result is bounded by relevance rather than by traversal order.
+            if (reason == RecallStopReason.COMPLETED) {
+                reason = RecallStopReason.CANDIDATE_BUDGET;
+            }
+        }
+
+        /** Returns the lowest-scoring retained hit, which is the eviction candidate. */
+        private Bm25Hit worst() {
+            Bm25Hit weakest = hits.get(0);
+            for (Bm25Hit hit : hits) {
+                if (hit.getScore() < weakest.getScore()) {
+                    weakest = hit;
+                }
+            }
+            return weakest;
         }
 
         @Override

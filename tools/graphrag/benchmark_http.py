@@ -238,7 +238,7 @@ def request_body(args, query, method, query_vector=None):
             'graphName': args.graph_name, 'graphVersion': args.graph_version,
             'indexVersion': args.index_version, 'query': query['question'],
             'mode': config['mode'], 'executionMode': config['executionMode'],
-            'exactRanking': bool(config['exactRanking'] and getattr(args, 'exact_ranking', False)),
+            'exactRanking': bool(config['exactRanking'] and getattr(args, 'exact_ranking', True)),
             'budget': {'topK': args.top_k,
                        'timeoutMs': args.timeout_ms,
                        'maxCandidates': candidate_limit, 'tokenBudget': args.token_budget,
@@ -394,7 +394,7 @@ def run(args):
               'codeRevision', 'datasetRelease', 'randomSeed', 'configVersion',
               'meanLatencyMs',
               'p50LatencyMs', 'p95LatencyMs', 'p99LatencyMs', 'supportingSentenceRecall',
-              'allSupportingSentencesHit', 'unresolvedSupportingFacts')
+              'allSupportingSentencesHit', 'unresolvedSupportingFacts', 'textChannelBoundScored')
     with summary.open('w', newline='', encoding='utf-8') as stream:
         writer = csv.DictWriter(stream, fieldnames=fields)
         writer.writeheader()
@@ -485,7 +485,25 @@ def run(args):
                              'allSupportingSentencesHit': sum(row['allSupportingSentencesHit'] for row in measured)
                              / len(measured) if measured else None,
                              'unresolvedSupportingFacts': sum(row['unresolvedSupportingFacts']
-                                                              for row in selected)})
+                                                              for row in selected),
+                             # A text channel that scored exactly its candidate limit on every request
+                             # is bounded, not saturated. Reporting that here keeps a capped run
+                             # from being read as a measurement of text retrieval quality.
+                             'textChannelBoundScored': _text_channel_bound(selected)})
+
+
+def _text_channel_bound(rows):
+    """Flags a text channel that scored exactly its candidate limit on every request."""
+    if not rows:
+        return 0
+    limit = max(row.get('candidateLimit') or 0 for row in rows)
+    if limit < 1:
+        return 0
+    for key in ('rawScoredBM25', 'rawScoredVECTOR'):
+        scored = [row.get(key) or 0 for row in rows]
+        if scored and all(value == limit for value in scored):
+            return 1
+    return 0
 
 
 def _first(rows, key):
@@ -546,8 +564,13 @@ if __name__ == '__main__':
                         help='the ONE hard budget constraint this run spends; recorded on every '
                              'row so an equal-budget comparison cannot mix constraint kinds')
     parser.add_argument('--workers', type=int, default=4)
-    parser.add_argument('--exact-ranking', action='store_true',
-                        help='scan the complete text/vector index before ranking (quality mode)')
+    parser.add_argument('--exact-ranking', action='store_true', default=True,
+                        help='scan the complete text/vector index before ranking (quality mode). '
+                             'On by default: the bounded path exists to cap scoring work, and a '
+                             'benchmark that silently measured the capped path reported '
+                             'text-channel recall at chance level.')
+    parser.add_argument('--no-exact-ranking', dest='exact_ranking', action='store_false',
+                        help='measure the candidate-bounded path instead of exact ranking')
     parser.add_argument('--ablation', choices=ABLATIONS[1:], default=None,
                         help='Run the FIXED_HYBRID/ADAPTIVE_HYBRID pair under one ablation '
                              'condition (query-category: no-anchor, high-degree, lexical, semantic, '

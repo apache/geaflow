@@ -315,8 +315,12 @@ public final class RetrievalExecutor {
     }
 
     private static int candidatesUsed(RetrievalTrace trace) {
+        // Budget consumption is the candidate output, not the scoring work behind it. A channel
+        // that ranked its whole index still contributes at most its candidate share downstream,
+        // so counting scored documents here would let one channel spend the request's budget and
+        // leave later stages with a zero allocation.
         int candidatesUsed = 0;
-        for (Integer count : trace.getEvaluatedCounts().values()) {
+        for (Integer count : trace.getCandidateCounts().values()) {
             candidatesUsed += count;
         }
         return candidatesUsed;
@@ -600,7 +604,12 @@ public final class RetrievalExecutor {
             int textBudget = 0;
             for (String textChannel : Arrays.asList("BM25", "VECTOR")) {
                 if (plan.getChannelBudgets().containsKey(textChannel)) {
-                    textBudget += Math.max(1, trace.getEvaluatedCounts().get(textChannel));
+                    // Charge the candidates a text channel retained, not the documents it scored.
+                    // Ranking a full index is bounded work that still returns at most its share;
+                    // charging the scan made text channels exhaust the request budget on their own
+                    // and left the graph stage with nothing, even though the graph allocation was
+                    // untouched.
+                    textBudget += Math.max(1, trace.getCandidateCounts().get(textChannel));
                 }
             }
             int graphBudget = 0;
@@ -616,8 +625,8 @@ public final class RetrievalExecutor {
                 if (!command.isExactRanking()) {
                     for (String textChannel : Arrays.asList("BM25", "VECTOR")) {
                         if (plan.getChannelBudgets().containsKey(textChannel)) {
-                            int evaluated = trace.getEvaluatedCounts().get(textChannel);
-                            int allocated = Math.max(1, evaluated);
+                            int retained = trace.getCandidateCounts().get(textChannel);
+                            int allocated = Math.max(1, retained);
                             trace.getChannelBudgets().put(textChannel, allocated);
                         }
                     }
@@ -680,8 +689,10 @@ public final class RetrievalExecutor {
         evidence = reranker.rerank(evidence);
         trace.setUniqueEvidenceCandidates(evidence.size());
         if (plan.getMode() == RetrievalMode.HYBRID) {
+            // The quota keeps graph evidence in the window; it must stay below the window or it
+            // becomes a floor that outranks the fused order.
             evidence = activeFusion.preserveTopKChannel(evidence, plan.getTopK(), "GRAPH",
-                plan.getTopK());
+                graphQuota(plan.getTopK()));
         }
         boolean enforceTokenBudget = budget.getPrimaryConstraint() == BudgetConstraint.TOKENS
             && tokenLedger == null;
@@ -906,7 +917,7 @@ public final class RetrievalExecutor {
             trace.getStageElapsedNanos().put("GRAPH", output.elapsedNanos);
             retrieveGraphStats(trace, session.getStats());
             if (tokenLedger != null) {
-                chargeEvaluatedCandidates(tokenLedger, output.evaluated);
+                chargeEvaluatedCandidates(tokenLedger, output.candidates);
             }
             trace.getEvaluatedCounts().put("GRAPH", output.evaluated);
             trace.getRawCandidatesScored().put("GRAPH", output.rawCandidatesScored);
@@ -1031,7 +1042,7 @@ public final class RetrievalExecutor {
             }
             ChannelOutput output = stage.getValue();
             if (tokenLedger != null) {
-                chargeEvaluatedCandidates(tokenLedger, output.evaluated);
+                chargeEvaluatedCandidates(tokenLedger, output.candidates);
             }
             trace.getEvaluatedCounts().put(name, output.evaluated);
             trace.getRawCandidatesScored().put(name, output.rawCandidatesScored);
@@ -1071,8 +1082,13 @@ public final class RetrievalExecutor {
     }
 
     /**
-     * Charges the candidates a channel actually scored against the ledger so
-     * {@link BudgetLedger#getCandidatesEvaluated()} reflects real work instead of staying at zero.
+     * Charges a channel's candidate output against the ledger.
+     *
+     * <p>The budget bounds how many candidates a request may retain, not how many documents a
+     * channel had to score to find them. Charging the scoring count conflated the two: a text
+     * channel that ranked its full index still returns at most its candidate share, so charging
+     * the scan made one channel consume the whole request's budget and starve the graph stage.
+     * Scoring work stays visible in {@code rawCandidatesScored}.
      */
     private static void chargeEvaluatedCandidates(BudgetLedger ledger, int evaluated) {
         ledger.tryEvaluateCandidates(evaluated);
@@ -1192,6 +1208,18 @@ public final class RetrievalExecutor {
 
     private int cascadeMinBudget() {
         return properties == null ? 5 : properties.getCascadeMinBudget();
+    }
+
+    /**
+     * Resolves how many returned positions graph evidence may be given by quota.
+     *
+     * <p>At least one position so the channel is never dropped entirely, and at most
+     * {@code topK - 1} so the quota can never occupy the entire window.
+     */
+    private int graphQuota(int topK) {
+        double share = properties == null ? 0.34D : properties.getGraphQuotaShare();
+        int quota = (int) Math.round(topK * share);
+        return Math.max(1, Math.min(topK - 1, quota));
     }
 
     private int cascadeProbeMax() {

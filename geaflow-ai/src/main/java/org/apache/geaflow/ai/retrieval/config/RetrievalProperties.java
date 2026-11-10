@@ -149,6 +149,17 @@ public class RetrievalProperties {
      */
     @Inject("${retrieval.graph-fusion.probe-share:0.4}")
     private double graphProbeShare = 0.4D;
+    /**
+     * Largest share of the returned evidence that graph-channel hits may be given by quota.
+     *
+     * <p>The quota guarantees graph evidence survives fusion when the graph channel emits fewer
+     * ranks than {@code topK}. Setting it to the whole window forced every returned position to
+     * carry graph evidence, which evicted higher-scoring text candidates: on HotpotQA that removed
+     * the top BM25 hits from 79.7% of the recall lost against the BM25 baseline. A third of the
+     * window keeps the channel represented without outvoting the fused order.
+     */
+    @Inject("${retrieval.graph-fusion.graph-quota-share:0.34}")
+    private double graphQuotaShare = 0.34D;
     /** BM25 fusion weight when the query shows lexical confidence. */
     @Inject("${retrieval.graph-fusion.lexical-bm25-weight:1.25}")
     private double lexicalBm25Weight = 1.25D;
@@ -302,8 +313,9 @@ public class RetrievalProperties {
             || !(lexicalVectorWeight >= 0.0D) || !Double.isFinite(lexicalVectorWeight)
             || !(semanticBm25Weight >= 0.0D) || !Double.isFinite(semanticBm25Weight)
             || !(semanticVectorWeight >= 0.0D) || !Double.isFinite(semanticVectorWeight)
-            || !(graphProbeShare >= 0.0D) || !(graphProbeShare < 1.0D) || !Double.isFinite(graphProbeShare)) {
-            throw invalid("graph-fusion weights and probe share are invalid");
+            || !(graphProbeShare >= 0.0D) || !(graphProbeShare < 1.0D) || !Double.isFinite(graphProbeShare)
+            || !(graphQuotaShare >= 0.0D) || !(graphQuotaShare < 1.0D) || !Double.isFinite(graphQuotaShare)) {
+            throw invalid("graph-fusion weights, probe share, and graph quota share are invalid");
         }
         if (rrfRankConstant < 1) {
             throw invalid("rrf-rank-constant must be at least 1");
@@ -811,6 +823,14 @@ public class RetrievalProperties {
 
     public void setGraphProbeShare(double graphProbeShare) {
         this.graphProbeShare = graphProbeShare;
+    }
+
+    public double getGraphQuotaShare() {
+        return graphQuotaShare;
+    }
+
+    public void setGraphQuotaShare(double graphQuotaShare) {
+        this.graphQuotaShare = graphQuotaShare;
     }
 
     public double getLexicalBm25Weight() {

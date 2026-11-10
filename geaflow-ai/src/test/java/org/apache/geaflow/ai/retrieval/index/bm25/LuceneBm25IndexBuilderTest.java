@@ -94,8 +94,38 @@ class LuceneBm25IndexBuilderTest {
         try (org.apache.geaflow.ai.retrieval.index.IndexArtifact ignored =
                  new LuceneBm25IndexBuilder(directory).build(context(), Arrays.asList(first, stronger))) {
             try (Bm25IndexReader reader = new Bm25IndexReader(directory.resolve("bm25-v1"))) {
-                assertEquals("c1", reader.search("target", 1, 1).get(0).getChunkId());
+                // The candidate limit bounds how many hits are retained, not how far the index is
+                // traversed. Both paths must therefore return the more relevant document; a limit
+                // applied to traversal order returned "c1" purely because its chunkId sorts first.
+                assertEquals("c2", reader.search("target", 1, 1).get(0).getChunkId());
                 assertEquals("c2", reader.searchExact("target", 1, 1).get(0).getChunkId());
+            }
+        }
+    }
+
+    @Test
+    void boundedSearchRetainsTopScoringMatchesRegardlessOfIndexOrder() throws Exception {
+        Path directory = Files.createTempDirectory("bm25-bounded-rank-test");
+        // Index every strong match under a high chunkId so that traversal order (which follows
+        // chunkId) visits the filler documents first. A limit applied to traversal would return
+        // only filler; the limit must instead select by score.
+        java.util.List<TextChunk> chunks = new java.util.ArrayList<>();
+        for (int index = 0; index < 40; index++) {
+            chunks.add(new TextChunk(String.format("a-%03d", index), "docFiller" + index,
+                0, 0, 4, 1, "target"));
+        }
+        TextChunk strong = new TextChunk("z-999", "docStrong", 0, 0, 40, 10,
+            "target target target target target");
+        chunks.add(strong);
+        try (org.apache.geaflow.ai.retrieval.index.IndexArtifact ignored =
+                 new LuceneBm25IndexBuilder(directory).build(context(), chunks)) {
+            try (Bm25IndexReader reader = new Bm25IndexReader(directory.resolve("bm25-v1"))) {
+                java.util.List<Bm25Hit> hits = reader.search("target", 5, 5);
+                assertEquals("z-999", hits.get(0).getChunkId(),
+                    "the highest-scoring chunk must survive a candidate limit smaller than the hit set");
+                assertTrue(hits.get(0).getScore() >= hits.get(hits.size() - 1).getScore(),
+                    "retained hits must be ordered by descending score");
+                assertEquals(5, hits.size(), "the candidate limit still bounds the retained set");
             }
         }
     }

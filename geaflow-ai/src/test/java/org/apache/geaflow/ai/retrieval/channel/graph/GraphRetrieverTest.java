@@ -23,6 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.AbstractList;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -465,8 +466,11 @@ class GraphRetrieverTest {
             new InMemoryGraphNeighborProvider(edges), chunks, config, 0L, System::nanoTime);
 
         assertEquals(2, hits.size());
-        assertEquals(2.0, hits.get(0).getScore(), 1e-9);
-        assertEquals(3.0, hits.get(1).getScore(), 1e-9);
+        // Hits are returned in descending association score, and the second hop carries the higher
+        // relation priority (supports=3.0) with no decay applied to it, so it ranks first. The hop
+        // that decays is the one entered from a scored predecessor, which this fixture never does.
+        assertEquals(3.0, hits.get(0).getScore(), 1e-9);
+        assertEquals(2.0, hits.get(1).getScore(), 1e-9);
     }
 
     @Test
@@ -579,6 +583,75 @@ class GraphRetrieverTest {
             + ", edges=" + retriever.getLastStats().getEdgesExamined());
         assertEquals(RecallStopReason.DIFFUSION_GROWTH_LIMIT, retriever.getLastStats().getStopReason());
         assertEquals(5, retriever.getLastStats().getEdgesExamined());
+    }
+
+    @Test
+    void ordersHitsByAssociationScoreNotByTraversalOrder() {
+        List<EntityRef> entities = Arrays.asList(
+            new EntityRef("e1", "Confucius", "person"),
+            new EntityRef("e2", "Weak", "topic"),
+            new EntityRef("e3", "Strong", "topic"));
+        // The weak edge is traversed first, so expansion order would place cWeak ahead of cStrong.
+        // Ranking must follow the association score instead, because fusion turns the position into
+        // a reciprocal-rank term.
+        List<GraphEdgeRef> edges = Arrays.asList(
+            new GraphEdgeRef("edge-weak", "weak", "e1", "e2", Collections.singletonList("cWeak")),
+            new GraphEdgeRef("edge-strong", "strong", "e1", "e3",
+                Collections.singletonList("cStrong")));
+        Map<String, TextChunk> chunks = new HashMap<>();
+        chunks.put("cWeak", new TextChunk("cWeak", "doc-1", 0, 0, 1, 1, "weak"));
+        chunks.put("cStrong", new TextChunk("cStrong", "doc-2", 0, 0, 1, 1, "strong"));
+        GraphRetrievalConfig config = GraphRetrievalConfig.builder()
+            .maxHop(1).candidateBudget(10).edgeScanBudget(10).neighborCap(10)
+            .degreePenalty(0.0).relationPriority("weak", 1.0).relationPriority("strong", 4.0)
+            .build();
+
+        List<GraphRetriever.GraphHit> hits = new GraphRetriever().retrieve("Confucius", entities,
+            new InMemoryGraphNeighborProvider(edges), chunks, config, 0L, System::nanoTime);
+
+        assertEquals(2, hits.size());
+        assertEquals("cStrong", hits.get(0).getSourceChunkIds().get(0),
+            "the highest association score must rank first regardless of traversal order");
+        assertEquals("cWeak", hits.get(1).getSourceChunkIds().get(0));
+        assertEquals(4.0, hits.get(0).getScore(), 1e-9);
+    }
+
+    @Test
+    void segmentedExpansionReturnsTheSameOrderAsTheSingleCall() {
+        List<EntityRef> entities = Arrays.asList(
+            new EntityRef("e1", "Confucius", "person"),
+            new EntityRef("e2", "Ethics", "topic"),
+            new EntityRef("e3", "Wisdom", "topic"));
+        List<GraphEdgeRef> edges = Arrays.asList(
+            new GraphEdgeRef("edge-1", "teaches", "e1", "e2", Collections.singletonList("c1")),
+            new GraphEdgeRef("edge-2", "supports", "e2", "e3", Collections.singletonList("c2")));
+        Map<String, TextChunk> chunks = new HashMap<>();
+        chunks.put("c1", new TextChunk("c1", "doc-1", 0, 0, 1, 1, "one"));
+        chunks.put("c2", new TextChunk("c2", "doc-2", 0, 0, 1, 1, "two"));
+        GraphRetrievalConfig config = GraphRetrievalConfig.builder()
+            .maxHop(2).candidateBudget(10).edgeScanBudget(10).neighborCap(10)
+            .hopDecay(0.5).degreePenalty(0.0).relationPriority("teaches", 2.0)
+            .relationPriority("supports", 3.0).build();
+        GraphRetriever retriever = new GraphRetriever();
+        InMemoryGraphNeighborProvider provider = new InMemoryGraphNeighborProvider(edges);
+
+        List<GraphRetriever.GraphHit> single = retriever.retrieve("Confucius", entities, provider,
+            chunks, config, 0L, System::nanoTime);
+
+        GraphRetriever segmentedRetriever = new GraphRetriever();
+        GraphRetriever.ExpansionSession session = segmentedRetriever.beginRetrieval("Confucius", entities,
+            provider, chunks, config, 0L, System::nanoTime, null, new ArrayList<>());
+        while (!session.isTerminal() && !session.isExhausted()) {
+            segmentedRetriever.expandOneHop(session, config, 0L, System::nanoTime);
+        }
+        List<GraphRetriever.GraphHit> segmented = session.finish();
+
+        assertEquals(single.size(), segmented.size());
+        for (int index = 0; index < single.size(); index++) {
+            assertEquals(single.get(index).getSourceChunkIds(), segmented.get(index).getSourceChunkIds(),
+                "hop-split expansion must produce the same ranked order as a single call");
+            assertEquals(single.get(index).getScore(), segmented.get(index).getScore(), 1e-9);
+        }
     }
 
     private static GraphEdgeRef edge(int index) {
