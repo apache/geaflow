@@ -41,6 +41,19 @@
         <gson.version>2.2.4</gson.version>
     </properties>
 
+    <dependencyManagement>
+        <dependencies>
+            <!-- Keep individual Netty modules binary-compatible with GeaFlow's netty-all. -->
+            <dependency>
+                <groupId>io.netty</groupId>
+                <artifactId>netty-bom</artifactId>
+                <version>4.1.51.Final</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
     <dependencies>
         <dependency>
             <groupId>org.slf4j</groupId>
@@ -139,19 +152,16 @@
             <groupId>org.apache.geaflow</groupId>
             <artifactId>geaflow-pipeline</artifactId>
             <version>${project.version}</version>
-            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.apache.geaflow</groupId>
             <artifactId>geaflow-on-local</artifactId>
             <version>${project.version}</version>
-            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.apache.geaflow</groupId>
             <artifactId>geaflow-dsl-runtime</artifactId>
             <version>${project.version}</version>
-            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
@@ -176,6 +186,33 @@
 
   <build>
     <plugins>
+      <plugin>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>default-test</id>
+            <configuration>
+              <excludedGroups>udga-packaged</excludedGroups>
+            </configuration>
+          </execution>
+          <execution>
+            <id>udga-packaged</id>
+            <phase>verify</phase>
+            <goals><goal>test</goal></goals>
+            <configuration>
+              <argLine>${coverageAgent} ${extraJavaTestArgs}</argLine>
+              <includes>
+                <include>**/TemporalUdgaIntegrationTest.java</include>
+              </includes>
+              <groups>udga-packaged</groups>
+              <reportsDirectory>${project.build.directory}/packaged-reports</reportsDirectory>
+              <systemPropertyVariables>
+                <temporal.udga.jar>${project.build.directory}/${project.build.finalName}-jar-with-dependencies.jar</temporal.udga.jar>
+              </systemPropertyVariables>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
       <plugin>
         <groupId>org.apache.rat</groupId>
         <artifactId>apache-rat-plugin</artifactId>
