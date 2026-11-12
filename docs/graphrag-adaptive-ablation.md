@@ -83,7 +83,7 @@ the same final plan whether or not it is allowed to revise it.
 flatten the graph's advantage in fused ranking. With `graph-weight` at the shipped 2.0
 against `text-weight` 0.25, the graph's reciprocal-rank contribution is weighted eight
 times higher than text, and on 2Wiki the text channels are the stronger retriever
-(BM25 MRR 0.7367 vs graph 0.5259). Weighting the weaker channel up costs ranking quality.
+(BM25 MRR 0.7368 vs graph 0.5260). Weighting the weaker channel up costs ranking quality.
 
 **The cascade gate costs some edges without buying quality.** Widening it
 (`no-cascade-gate`) raises edges from 30.1 to 38.1 (+26.6%) and replans from 1.21 to 1.64,
@@ -106,8 +106,8 @@ better than the graph channel:
 
 | Dataset | BM25 MRR | GRAPH_ONLY MRR | Gap |
 | --- | --- | --- | --- |
-| 2WikiMultiHopQA | 0.7367 | 0.5259 | text leads by 0.2108 |
-| HotpotQA | 0.8253 | 0.3272 | text leads by 0.4981 |
+| 2WikiMultiHopQA | 0.7368 | 0.5260 | text leads by 0.2108 |
+| HotpotQA | 0.8254 | 0.3272 | text leads by 0.4982 |
 
 With `graph-weight=2.0` and `text-weight=0.25`, reciprocal-rank fusion promotes graph
 results that rank behind text results. Section 3 measures the consequence: flattening the
