@@ -142,7 +142,9 @@ log "limit:     ${LIMIT}"
 log "conditions: ${CONDITIONS}"
 
 CLASSPATH_FILE="${OUT_DIR}/classpath.txt"
-if [[ ! -f "${CLASSPATH_FILE}" ]]; then
+# A non-empty file is required: a build interrupted by a signal leaves a zero-byte
+# classpath behind, and reusing it fails later with a confusing NoClassDefFoundError.
+if [[ ! -s "${CLASSPATH_FILE}" ]]; then
     log "building service classpath"
     ( cd "${ROOT}" && mvn -o -q -pl geaflow-ai -am -DskipTests -Dmaven.javadoc.skip=true \
         -Djacoco.skip=true -Drat.skip=true dependency:build-classpath \
