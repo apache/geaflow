@@ -76,8 +76,8 @@ mvn -pl geaflow-ai -o -am -DskipTests -Drat.skip=true -Djacoco.skip=true package
 Run the test suites:
 
 ```bash
-mvn -pl geaflow-ai -o test -Drat.skip=true -Djacoco.skip=true   # 455 tests
-python3 -m pytest tools/graphrag/tests/ -q                       # 114 tests
+mvn -pl geaflow-ai -o test -Drat.skip=true -Djacoco.skip=true   # 463 tests
+python3 -m pytest tools/graphrag/tests/ -q                       # 115 tests
 ```
 
 ## 4. Reproducing the reported numbers
