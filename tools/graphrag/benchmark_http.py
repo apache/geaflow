@@ -341,6 +341,10 @@ def run(args):
                                         if isinstance(trace, dict) else None)
         row['replanCount'] = len(trace.get('replanEvents') or []) if isinstance(trace, dict) else 0
         row['tokensRetained'] = trace.get('tokensRetained', 0) if isinstance(trace, dict) else 0
+        # The graph stage's own token estimate is reported separately from the retained total so a
+        # reader can tell expansion cost apart from what the answer layer finally carries.
+        row['graphTokensEstimated'] = (trace.get('graphTokensEstimated', 0)
+                                        if isinstance(trace, dict) else 0)
         row['edgesExamined'] = trace.get('edgesExamined', 0) if isinstance(trace, dict) else 0
         # The design requires every secondary work measurement to be reported, "so a graph method
         # should not appear cheap only because it returns few candidates after scanning a large
@@ -385,7 +389,8 @@ def run(args):
               'protocolValid', 'nonempty', 'withPaths', 'withGraphTraces', 'withProvenance',
               'traceValid', 'meanAttempts', 'meanEvaluatedBM25', 'meanEvaluatedVECTOR',
               'meanEvaluatedGRAPH', 'meanRawScoredBM25', 'meanRawScoredVECTOR',
-              'meanRawScoredGRAPH', 'meanTokensRetained', 'meanEdgesExamined',
+              'meanRawScoredGRAPH', 'meanTokensRetained', 'meanGraphTokensEstimated',
+              'totalTokensRetained', 'meanEdgesExamined',
               'meanNeighborsSampled', 'meanVerticesReached', 'meanUniqueEvidenceCandidates',
               'evidenceRecallAtK', 'mrr', 'ndcgAtK', 'relationPathHit', 'relationPathTargetCount',
               'answerExactMatch', 'answerF1', 'answerAbstentionCount',
@@ -441,6 +446,13 @@ def run(args):
                              / len(selected) if selected else 0,
                              'meanTokensRetained': sum(row['tokensRetained'] for row in selected)
                              / len(selected) if selected else 0,
+                             'meanGraphTokensEstimated': sum(
+                                 row.get('graphTokensEstimated') or 0 for row in selected)
+                             / len(selected) if selected else 0,
+                             # Total rather than per-request: the cost of a whole evaluation run is
+                             # what a reader compares against a per-token price, and a mean hides
+                             # the fact that a 500-query run spends 500x its per-query budget.
+                             'totalTokensRetained': sum(row['tokensRetained'] for row in selected),
                              'meanEdgesExamined': sum(row['edgesExamined'] for row in selected)
                              / len(selected) if selected else 0,
                              'meanNeighborsSampled': sum(row['neighborsSampled']

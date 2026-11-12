@@ -671,3 +671,21 @@ def test_vector_ablations_keep_the_query_vector():
     # Budget-only ablations do not change the mode, so the vector stays.
     assert 'queryVector' in apply_ablation(body, 'budget-tight')
     assert 'queryVector' in apply_ablation(body, 'budget-loose')
+
+
+def test_token_cost_columns_are_reported():
+    """The cost side of the comparison needs totals, not only a mean.
+
+    A per-request mean hides how much a whole run spends, and the graph stage's own estimate
+    is the one a reader can attribute to expansion rather than to what the answer layer kept.
+    """
+    import csv
+    import io
+    import re
+    source = (Path(__file__).resolve().parents[1] / 'benchmark_http.py').read_text()
+    fields = re.search(r"fields = \((.*?)\)\n", source, re.S).group(1)
+    for name in ('meanGraphTokensEstimated', 'totalTokensRetained'):
+        assert "'%s'" % name in fields, '%s missing from the summary schema' % name
+    # Both must be populated in the writerow block, otherwise the column is always blank.
+    assert "'meanGraphTokensEstimated': sum(" in source
+    assert "'totalTokensRetained': sum(" in source
