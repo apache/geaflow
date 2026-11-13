@@ -205,6 +205,7 @@
                 <include>**/TemporalUdgaIntegrationTest.java</include>
               </includes>
               <groups>udga-packaged</groups>
+              <failIfNoSpecifiedTests>true</failIfNoSpecifiedTests>
               <reportsDirectory>${project.build.directory}/packaged-reports</reportsDirectory>
               <systemPropertyVariables>
                 <temporal.udga.jar>${project.build.directory}/${project.build.finalName}-jar-with-dependencies.jar</temporal.udga.jar>
