@@ -12,10 +12,12 @@ from tools.graphrag.benchmark_http import (METHODS, METHOD_CONFIG, _open_output,
                                             apply_ablation, assert_equal_budget,
                                             assert_single_primary_constraint, request_body,
                                             run_provenance)
-from tools.graphrag.eval.retrieval import (load_query_vectors, load_supporting_facts,
+from tools.graphrag.eval.retrieval import (EvidenceNamespaceError, assert_evidence_in_corpus,
+                                            assert_gold_resolved, load_chunk_ids,
+                                            load_query_vectors, load_supporting_facts,
                                             load_supporting_sentences, load_supporting_targets,
                                             materialize_hotpot_queries, score_evidence,
-                                            supporting_fact_audit)
+                                            supporting_fact_audit, unknown_evidence_ids)
 
 
 def test_query_vectors_align_by_id(tmp_path):
@@ -689,3 +691,46 @@ def test_token_cost_columns_are_reported():
     # Both must be populated in the writerow block, otherwise the column is always blank.
     assert "'meanGraphTokensEstimated': sum(" in source
     assert "'totalTokensRetained': sum(" in source
+
+
+def test_corpus_guard_rejects_evidence_from_another_release(tmp_path):
+    """Regression for the 20261104 run: gold resolved, yet every returned id was foreign.
+
+    unresolvedSupportingFacts cannot catch this, because gold sentences resolve against whatever
+    chunks file was supplied. Only comparing the returned ids against that file's own chunk ids
+    exposes that the service is serving a different corpus.
+    """
+    chunks = tmp_path / 'chunks.jsonl'
+    chunks.write_text('\n'.join(json.dumps({'chunk_id': value}) for value in ('a', 'b')) + '\n')
+    chunk_ids = load_chunk_ids(chunks)
+
+    assert chunk_ids == {'a', 'b'}
+    # The normal case must not fire: every returned id belongs to the scored corpus.
+    assert_evidence_in_corpus(['a', 'b'], chunk_ids, chunks_path=chunks)
+
+    with pytest.raises(EvidenceNamespaceError) as failure:
+        assert_evidence_in_corpus(['a', 'foreign-1', 'foreign-2'], chunk_ids,
+                                  chunks_path=chunks, context=' on BM25_ONLY (query q1)')
+    message = str(failure.value)
+    assert 'foreign-1' in message and 'namespace mismatch' in message
+    assert 'on BM25_ONLY (query q1)' in message
+    assert '--allow-unknown-evidence-ids' in message
+
+
+def test_corpus_guard_deduplicates_before_counting():
+    # The same unknown id repeated across a response is one mismatch, not several.
+    assert unknown_evidence_ids(['x', 'x', 'a'], {'a'}) == ['x']
+    assert unknown_evidence_ids(['a', 'b'], {'a', 'b'}) == []
+
+
+def test_gold_resolution_guard_rejects_a_majority_unresolved():
+    targets = {'q1': {'unresolvedSupportingFacts': 2},
+               'q2': {'unresolvedSupportingFacts': 1},
+               'q3': {'unresolvedSupportingFacts': 0}}
+    with pytest.raises(ValueError) as failure:
+        assert_gold_resolved(targets, ['q1', 'q2', 'q3'], chunks_path='chunks.jsonl')
+    assert '2 of 3' in str(failure.value)
+
+    # A small unresolved minority is normal (2Wiki has 28 in 500 queries) and must not abort.
+    assert_gold_resolved(targets, ['q1', 'q2', 'q3'], max_unresolved_ratio=0.8)
+    assert_gold_resolved({'q1': {'unresolvedSupportingFacts': None}}, ['q1'])

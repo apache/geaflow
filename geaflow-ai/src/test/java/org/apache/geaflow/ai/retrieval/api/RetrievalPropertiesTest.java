@@ -53,10 +53,12 @@ public class RetrievalPropertiesTest {
 
         Assertions.assertEquals("deterministic-rule", properties.getRoutingPolicyId());
         Assertions.assertEquals(1, properties.getMaxReplanCount());
+        // Single-hop by default: the retriever's own diffusion stop made the second hop idle.
+        Assertions.assertEquals(1, properties.getMaxHop());
         Assertions.assertTrue(properties.isStrictPlanValidation());
         Assertions.assertEquals("deterministic-reranker-v1", properties.getRerankerId());
         Assertions.assertEquals("chars4-v1", properties.getTokenEstimatorId());
-        Assertions.assertEquals(1.5D, properties.getHighAverageIdf(), 1.0e-12);
+        Assertions.assertEquals(4.0D, properties.getHighAverageIdf(), 1.0e-12);
         // The score gap is a difference of reciprocal-rank terms: the measured 2Wiki run stays
         // inside [0, 0.003], so a 0.20 default compared against it could never be satisfied.
         Assertions.assertEquals(0.0005D, properties.getHighScoreGap(), 1.0e-12);
@@ -75,8 +77,8 @@ public class RetrievalPropertiesTest {
 
         // These were constants inside the routing policy and the fusion config. They set how much of
         // the fused score the graph channel receives, so they must be visible and settable.
-        Assertions.assertEquals(2.0D, properties.getGraphFusionGraphWeight(), 1.0e-12);
-        Assertions.assertEquals(0.25D, properties.getGraphFusionTextWeight(), 1.0e-12);
+        Assertions.assertEquals(0.25D, properties.getGraphFusionGraphWeight(), 1.0e-12);
+        Assertions.assertEquals(1.0D, properties.getGraphFusionTextWeight(), 1.0e-12);
         Assertions.assertEquals(0.4D, properties.getGraphProbeShare(), 1.0e-12);
         Assertions.assertEquals(1.25D, properties.getLexicalBm25Weight(), 1.0e-12);
         Assertions.assertEquals(0.85D, properties.getLexicalVectorWeight(), 1.0e-12);
@@ -149,9 +151,10 @@ public class RetrievalPropertiesTest {
         }
         Assertions.assertEquals("0.0005", ymlDefaults.get("retrieval.deterministic-rule.high-score-gap"),
             "application.yml must not re-pin the score gap outside the reachable range");
-        Assertions.assertEquals("2.0", ymlDefaults.get("retrieval.graph-fusion.graph-weight"));
-        Assertions.assertEquals("0.25", ymlDefaults.get("retrieval.graph-fusion.text-weight"));
+        Assertions.assertEquals("0.25", ymlDefaults.get("retrieval.graph-fusion.graph-weight"));
+        Assertions.assertEquals("1.0", ymlDefaults.get("retrieval.graph-fusion.text-weight"));
         Assertions.assertEquals("0.4", ymlDefaults.get("retrieval.graph-fusion.probe-share"));
+        Assertions.assertEquals("1", ymlDefaults.get("retrieval.max-hop"));
         Assertions.assertEquals("60", ymlDefaults.get("retrieval.rrf-rank-constant"));
         Assertions.assertEquals("0.0001", ymlDefaults.get("retrieval.cascade.min-probe-score-gap"));
         Assertions.assertEquals("2", ymlDefaults.get("retrieval.cascade.min-probe-evidence"));
@@ -168,6 +171,12 @@ public class RetrievalPropertiesTest {
         }
         String path = subsection.isEmpty() ? section + "." + key : section + "." + subsection + "." + key;
         target.put(path, expr.substring(colon + 1));
+    }
+
+    @Test
+    void rejectsAnOutOfRangeHopCeiling() {
+        Assertions.assertThrows(RetrievalException.class, () -> invalid(p -> p.setMaxHop(0)));
+        Assertions.assertThrows(RetrievalException.class, () -> invalid(p -> p.setMaxHop(5)));
     }
 
     private static void invalid(java.util.function.Consumer<RetrievalProperties> mutation) {

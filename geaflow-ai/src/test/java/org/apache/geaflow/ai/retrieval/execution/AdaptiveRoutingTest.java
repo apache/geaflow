@@ -57,9 +57,9 @@ class AdaptiveRoutingTest {
     void rulePolicyPrefersLexicalAndSemanticChannelsAtThresholds() {
         DeterministicRulePolicy policy = new DeterministicRulePolicy(1.5, 0.2, 8,
             0.75, 1, 32, 2.0, 16);
-        // A confident anchor means the graph channel has a seed to expand, so it leads the fusion
-        // regardless of how rare the query terms are. Rare terms alone do not mean BM25 matched
-        // anything: on the measured runs the IDF median is 3.0 while BM25 recall stays at 0.002.
+        // A confident anchor means the graph channel has a seed to expand, so it keeps its place in
+        // the fusion regardless of how rare the query terms are. Rare terms alone do not mean BM25
+        // matched anything: the measured IDF median is 3.0, well above the lexical threshold.
         RoutingContext anchored = context(100, RoutingFeatures.builder().averageIdf(1.5)
             .anchorCount(1).anchorConfidence(0.8).build());
         RetrievalPlan graphLed = policy.plan(anchored);
@@ -69,8 +69,8 @@ class AdaptiveRoutingTest {
         assertEquals(20, graphLed.getChannelBudgets().get("BM25"));
         assertEquals(20, graphLed.getChannelBudgets().get("VECTOR"));
         assertEquals(60, graphLed.getChannelBudgets().get("GRAPH"));
-        assertEquals(0.25, graphLed.getBm25Weight());
-        assertEquals(2.0, graphLed.getGraphWeight());
+        assertEquals(1.0, graphLed.getBm25Weight());
+        assertEquals(0.25, graphLed.getGraphWeight());
         assertEquals("GRAPH_DOMINANT_FUSION", graphLed.getReasons().get(0));
 
         // Without an anchor the text channels take over; the lexical branch needs rare terms.
@@ -79,7 +79,8 @@ class AdaptiveRoutingTest {
         RetrievalPlan lexical = policy.plan(unanchored);
         assertTrue(lexical.getReasons().contains("LEXICAL_CONFIDENCE"), lexical.getReasons().toString());
         assertEquals(1.25, lexical.getBm25Weight());
-        assertEquals(1.0, lexical.getGraphWeight());
+        assertEquals(0.25, lexical.getGraphWeight(),
+            "the lexical branch re-balances the text channels, not the graph weight");
 
         RoutingContext semanticContext = context(100, RoutingFeatures.builder().queryLength(8)
             .anchorCount(0).build());
@@ -176,12 +177,22 @@ class AdaptiveRoutingTest {
 
         assertTrue(plan.getReasons().contains("REPLAN_BUDGET_EXHAUSTED"));
         assertEquals(100, sum(plan.getChannelBudgets()));
-        // The exhausted boundary ignores late progress signals so repeated replans cannot drift.
+        // Late signals that carry no stop condition must not move the allocation once the replan
+        // budget is spent, so repeated replans cannot drift.
         RetrievalPlan second = policy.replan(context, RetrievalProgress.builder().boundary("AFTER_TEXT")
             .firstStageScoreGap(0.9).anchorCount(9).anchorConfidence(0.99)
-            .graphGrowthRate(5.0).replanCount(1).build());
+            .graphGrowthRate(0.1).replanCount(1).build());
         assertEquals(plan.getChannelBudgets(), second.getChannelBudgets());
         assertEquals(plan.getMaxHop(), second.getMaxHop());
+
+        // An exhausted budget still has to honour a measured stop signal. It bounds reallocation,
+        // not the decision to stop expanding.
+        RetrievalPlan stopped = policy.replan(context, RetrievalProgress.builder().boundary("AFTER_TEXT")
+            .firstStageScoreGap(0.9).anchorCount(9).anchorConfidence(0.99)
+            .graphGrowthRate(5.0).replanCount(1).build());
+        assertFalse(stopped.getChannelBudgets().containsKey("GRAPH"),
+            "a measured growth violation must stop the graph channel even with no replan budget left");
+        assertTrue(stopped.getReasons().contains("GRAPH_STOPPED_GROWTH"));
     }
 
     @Test
@@ -275,42 +286,82 @@ class AdaptiveRoutingTest {
 
     @Test
     void weakTextSignalRoutesToGraphDominantFusion() {
-        // No lexical confidence and a short query is the case the measured runs expose: neither text
-        // channel has signal, so the graph channel must lead both the fusion weights and the order.
+        // No lexical confidence and a short query selects the graph-expansion branch. The branch
+        // still funds the graph channel; what the weight sweep changed is that its rank contribution
+        // no longer outweighs the text channels that retrieve better on the measured corpora.
         DeterministicRulePolicy policy = new DeterministicRulePolicy();
         RetrievalPlan plan = policy.plan(context(100, RoutingFeatures.builder()
             .averageIdf(0.5).queryLength(3).anchorCount(1).anchorConfidence(0.9)
             .candidateDegree(4).build()));
 
         assertEquals("GRAPH_DOMINANT_FUSION", plan.getReasons().get(0));
-        assertTrue(plan.getGraphWeight() > plan.getBm25Weight(),
-            "graph weight must exceed BM25 weight without lexical confidence");
-        assertTrue(plan.getGraphWeight() > plan.getVectorWeight(),
-            "graph weight must exceed vector weight without lexical confidence");
+        assertTrue(plan.getGraphWeight() < plan.getBm25Weight(),
+            "the swept default keeps the graph rank contribution below the stronger text channels");
+        assertTrue(plan.getGraphWeight() < plan.getVectorWeight(),
+            "the swept default keeps the graph rank contribution below the stronger text channels");
         assertEquals(Arrays.asList("BM25", "VECTOR", "GRAPH"), plan.getChannelOrder());
     }
 
     @Test
     void anchoredQueryLetsGraphLeadEvenWhenTheQueryHasRareTerms() {
         // The measured failure mode: a rare-term query that also resolves a confident anchor used to
-        // be routed to BM25-first fusion, demoting the only channel that supplied evidence.
+        // be routed to BM25-first fusion, dropping the graph expansion the anchor makes possible.
         DeterministicRulePolicy policy = new DeterministicRulePolicy();
         RetrievalPlan plan = policy.plan(context(100, RoutingFeatures.builder()
             .averageIdf(2.0).anchorCount(1).anchorConfidence(0.9).candidateDegree(4).build()));
 
         assertEquals("GRAPH_DOMINANT_FUSION", plan.getReasons().get(0));
-        assertTrue(plan.getGraphWeight() > plan.getBm25Weight(),
-            "an anchored query must not demote the graph channel");
+        assertEquals(0.25, plan.getGraphWeight(),
+            "an anchored query keeps the swept graph weight rather than the lexical branch's 1.0");
         // The graph channel also keeps the largest candidate budget.
         assertTrue(plan.getChannelBudgets().get("GRAPH") > plan.getChannelBudgets().get("BM25"));
     }
 
     @Test
+    void decoupledRoutingLetsLexicalConfidenceActOnAnchoredQueries() {
+        // With the coupled structure an anchored query never reaches the lexical branch at all,
+        // which is why no-idf-trigger measured nothing. Decoupled, the two signals govern separate
+        // knobs: the text balance follows the IDF, and the anchor still funds graph expansion.
+        DeterministicRulePolicy policy = new DeterministicRulePolicy(4.0D, 0.0005D, 12, 0.75D, 1,
+            32, 2.0D, 0.0D, 16, 0.25D, 1.0D, 0.4D, 1.25D, 0.85D, 0.85D, 1.25D, true);
+        RoutingContext context = context(100, RoutingFeatures.builder()
+            .averageIdf(4.5).queryLength(6).anchorCount(1).anchorConfidence(0.9).candidateDegree(4)
+            .build());
+
+        RetrievalPlan plan = policy.plan(context);
+
+        assertTrue(plan.getReasons().contains("LEXICAL_CONFIDENCE"), plan.getReasons().toString());
+        assertTrue(plan.getReasons().contains("GRAPH_ANCHORED_EXPANSION"), plan.getReasons().toString());
+        assertEquals(1.25, plan.getBm25Weight(), "lexical confidence now acts on anchored queries");
+        assertEquals(0.85, plan.getVectorWeight());
+        assertEquals(0.25, plan.getGraphWeight(), "no branch may multiply the swept graph weight");
+        assertEquals("v2", plan.getPolicyVersion(), "the changed structure is versioned in the trace");
+        assertTrue(plan.getChannelBudgets().get("GRAPH") > plan.getChannelBudgets().get("BM25"),
+            "the anchor still funds graph expansion");
+    }
+
+    @Test
+    void coupledRoutingRemainsTheDefault() {
+        // Same query, switch off: the anchored branch wins and the lexical rule stays shadowed.
+        DeterministicRulePolicy policy = new DeterministicRulePolicy(4.0D, 0.0005D, 12, 0.75D, 1,
+            32, 2.0D, 0.0D, 16, 0.25D, 1.0D, 0.4D, 1.25D, 0.85D, 0.85D, 1.25D, false);
+        RetrievalPlan plan = policy.plan(context(100, RoutingFeatures.builder()
+            .averageIdf(4.5).queryLength(6).anchorCount(1).anchorConfidence(0.9).candidateDegree(4)
+            .build()));
+
+        assertFalse(plan.getReasons().contains("LEXICAL_CONFIDENCE"));
+        assertEquals(1.0, plan.getBm25Weight());
+        assertEquals("v1", plan.getPolicyVersion());
+    }
+
+    @Test
     void weakAnchorFallsBackToTextChannels() {
-        // Without a confident anchor there is no seed to expand, so BM25 may lead again.
+        // Without a confident anchor there is no seed to expand, so BM25 may lead again. The IDF
+        // input is above the recalibrated default of 4.0; at 2.0 this query would no longer qualify
+        // as lexically confident at all.
         DeterministicRulePolicy policy = new DeterministicRulePolicy();
         RetrievalPlan plan = policy.plan(context(100, RoutingFeatures.builder()
-            .averageIdf(2.0).anchorCount(1).anchorConfidence(0.2).candidateDegree(4).build()));
+            .averageIdf(4.5).anchorCount(1).anchorConfidence(0.2).candidateDegree(4).build()));
 
         assertTrue(plan.getReasons().contains("LEXICAL_CONFIDENCE"), plan.getReasons().toString());
         assertTrue(plan.getBm25Weight() > plan.getGraphWeight());

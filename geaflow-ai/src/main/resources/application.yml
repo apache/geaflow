@@ -58,6 +58,7 @@ retrieval:
   artifact-vector-version: ${GEAFLOW_RETRIEVAL_ARTIFACT_VECTOR_VERSION:}
   routing-policy-id: ${GEAFLOW_RETRIEVAL_ROUTING_POLICY_ID:deterministic-rule}
   max-replan-count: ${GEAFLOW_RETRIEVAL_MAX_REPLAN_COUNT:1}
+  max-hop: ${GEAFLOW_RETRIEVAL_MAX_HOP:1}
   strict-plan-validation: ${GEAFLOW_RETRIEVAL_STRICT_PLAN_VALIDATION:true}
   reranker-id: ${GEAFLOW_RETRIEVAL_RERANKER_ID:deterministic-reranker-v1}
   token-estimator-id: ${GEAFLOW_RETRIEVAL_TOKEN_ESTIMATOR_ID:chars4-v1}
@@ -68,7 +69,8 @@ retrieval:
     min-association-survival-rate: ${GEAFLOW_RETRIEVAL_GRAPH_MIN_ASSOCIATION_SURVIVAL_RATE:0.1}
     relation-priorities: ${GEAFLOW_RETRIEVAL_GRAPH_RELATION_PRIORITIES:mentions:1.0,cooccurs:1.0}
   deterministic-rule:
-    high-average-idf: ${GEAFLOW_RETRIEVAL_HIGH_AVERAGE_IDF:1.5}
+    high-average-idf: ${GEAFLOW_RETRIEVAL_HIGH_AVERAGE_IDF:4.0}
+    decouple-text-routing: ${GEAFLOW_RETRIEVAL_DECOUPLE_TEXT_ROUTING:false}
     # Reciprocal-rank scores stay inside [0, 0.003]; a 0.20 threshold could never be met.
     high-score-gap: ${GEAFLOW_RETRIEVAL_HIGH_SCORE_GAP:0.0005}
     long-query-length: ${GEAFLOW_RETRIEVAL_LONG_QUERY_LENGTH:12}
@@ -80,8 +82,8 @@ retrieval:
   # Fusion weights and the probe share decide how much of the fused score and candidate budget the
   # graph channel receives. They were constants in the routing policy before.
   graph-fusion:
-    graph-weight: ${GEAFLOW_RETRIEVAL_GRAPH_FUSION_GRAPH_WEIGHT:2.0}
-    text-weight: ${GEAFLOW_RETRIEVAL_GRAPH_FUSION_TEXT_WEIGHT:0.25}
+    graph-weight: ${GEAFLOW_RETRIEVAL_GRAPH_FUSION_GRAPH_WEIGHT:0.25}
+    text-weight: ${GEAFLOW_RETRIEVAL_GRAPH_FUSION_TEXT_WEIGHT:1.0}
     probe-share: ${GEAFLOW_RETRIEVAL_GRAPH_PROBE_SHARE:0.4}
     lexical-bm25-weight: ${GEAFLOW_RETRIEVAL_LEXICAL_BM25_WEIGHT:1.25}
     lexical-vector-weight: ${GEAFLOW_RETRIEVAL_LEXICAL_VECTOR_WEIGHT:0.85}

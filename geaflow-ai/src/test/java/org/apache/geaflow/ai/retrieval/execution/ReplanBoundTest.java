@@ -19,6 +19,7 @@
 package org.apache.geaflow.ai.retrieval.execution;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -55,8 +56,8 @@ class ReplanBoundTest {
 
         assertNotEquals(null, initial);
         assertNotEquals(null, firstReplan);
-        // Once the configured maximum is reached the policy stops merging measured features and
-        // falls back to the initial decision, so the plan stops moving.
+        // Once the configured maximum is reached the policy stops reallocating the candidate
+        // budget, so the allocation stops moving even though measured features are still merged.
         assertEquals(initial.getChannelBudgets().keySet(), beyondBound.getChannelBudgets().keySet());
     }
 
@@ -113,6 +114,79 @@ class ReplanBoundTest {
             "one initial plan plus exactly maxReplanCount replans must be requested");
         // The nth replan sees replanCount = n - 1, which is the value the policy bounds itself on.
         assertEquals("STEP_" + (maxReplanCount - 1), plan.getReasons().get(0));
+    }
+
+    @Test
+    void exhaustedBudgetStillHonoursMeasuredStopSignals() {
+        // Regression test for the post-hop boundary never stopping expansion. The default
+        // maxReplanCount = 1 is spent at the text-probe boundary, so the post-hop boundary always
+        // ran exhausted - and the exhausted path used to skip merging the measured features. That
+        // reset graphGrowthRate to the pre-execution zero, so a frontier that had already grown
+        // past the limit was scheduled for another hop instead of being stopped.
+        DeterministicRulePolicy policy = new DeterministicRulePolicy();
+        RoutingContext context = routingContext(1);
+        RetrievalProgress spent = RetrievalProgress.builder().boundary("AFTER_GRAPH_HOP")
+            .remainingCandidates(48).remainingTokens(900).remainingLatencyNanos(1_000_000L)
+            .firstStageScoreGap(0.001D).anchorCount(2).anchorConfidence(0.9D)
+            .candidateDegree(4).graphGrowthRate(9.0D).graphMarginalYield(0.13D)
+            .replanCount(1).build();
+
+        RetrievalPlan replanned = policy.replan(context, spent);
+
+        assertFalse(replanned.getChannelBudgets().containsKey("GRAPH"),
+            "a spent replan budget must not resurrect a channel that measured growth has stopped");
+        assertTrue(replanned.getReasons().contains("GRAPH_STOPPED_GROWTH"));
+    }
+
+    @Test
+    void postHopReplanCannotReallocateTheCompletedTextChannels() {
+        // Regression test for the replan round trip: the probe boundary moved the whole candidate
+        // budget to the graph channel and the hop boundary moved it straight back, so replanning
+        // fired on nearly every request without changing the result. The text channels have
+        // already run at this boundary, so their allocation is no longer a decision.
+        RetrievalPlan previous = hopPlan(2, 1, 1, 98);
+        RetrievalPlan reverted = hopPlan(2, 20, 20, 60);
+
+        RetrievalPlan constrained = RetrievalExecutor.constrainPostHopPlan(previous, reverted);
+
+        assertEquals(previous.getChannelBudgets(), constrained.getChannelBudgets(),
+            "a post-hop replan must keep the allocation of the channels that already ran");
+        assertEquals(previous.getChannelOrder(), constrained.getChannelOrder());
+        assertTrue(RetrievalExecutor.sameRoutingDecision(previous, constrained),
+            "once the allocation is pinned, a pure reallocation replan is a no-op");
+    }
+
+    @Test
+    void postHopReplanKeepsContractionButRejectsExpansion() {
+        RetrievalPlan previous = hopPlan(2, 1, 1, 98);
+
+        // Stopping the graph channel is the decision the boundary exists for and must survive.
+        Map<String, Integer> textOnly = new java.util.LinkedHashMap<>();
+        textOnly.put("BM25", 1);
+        textOnly.put("VECTOR", 1);
+        RetrievalPlan stopped = RetrievalPlan.builder(hopPlan(2, 1, 1, 98))
+            .maxHop(0).channelBudgets(textOnly).channelOrder(Arrays.asList("BM25", "VECTOR"))
+            .build();
+        RetrievalPlan constrainedStop = RetrievalExecutor.constrainPostHopPlan(previous, stopped);
+        assertFalse(constrainedStop.getChannelBudgets().containsKey("GRAPH"));
+        assertEquals(0, constrainedStop.getMaxHop());
+
+        // Shrinking the hop ceiling is still allowed; growing it is not, because hops already
+        // executed cannot be unspent.
+        assertEquals(1, RetrievalExecutor.constrainPostHopPlan(previous, hopPlan(1, 20, 20, 60))
+            .getMaxHop());
+        assertEquals(1, RetrievalExecutor.constrainPostHopPlan(hopPlan(1, 1, 1, 98),
+            hopPlan(2, 20, 20, 60)).getMaxHop(), "a post-hop replan must not raise the hop ceiling");
+    }
+
+    private static RetrievalPlan hopPlan(int maxHop, int bm25, int vector, int graph) {
+        return RetrievalPlan.builder().selectedMode(RetrievalMode.HYBRID)
+            .executionMode(ExecutionMode.SEQUENTIAL).topK(5).candidateBudget(100)
+            .tokenBudget(1000).latencyBudgetNanos(1_000_000L)
+            .channelBudget("BM25", bm25).channelBudget("VECTOR", vector).channelBudget("GRAPH", graph)
+            .channelOrder(Arrays.asList("BM25", "VECTOR", "GRAPH"))
+            .maxHop(maxHop).neighborCap(16).maxDiffusionGrowth(2.0D)
+            .policyId("deterministic-rule").policyVersion("v1").build();
     }
 
     private static RoutingContext routingContext(int maxReplanCount) {

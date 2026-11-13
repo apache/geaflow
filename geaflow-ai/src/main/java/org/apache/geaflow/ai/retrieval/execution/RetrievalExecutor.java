@@ -129,6 +129,9 @@ public final class RetrievalExecutor {
     private final TokenEstimator tokenEstimator;
     private final Reranker reranker;
     private final AdaptivePolicy routingPolicy;
+    /** Stage boundary reached between two graph hops, where only contraction can still act. */
+    static final String BOUNDARY_AFTER_GRAPH_HOP = "AFTER_GRAPH_HOP";
+
     private final int maxReplanCount;
     private final boolean strictPlanValidation;
     private final RetrievalProperties properties;
@@ -264,7 +267,8 @@ public final class RetrievalExecutor {
             maxCandidates, budget.getTokenBudget(), budget.getPrimaryConstraint());
         RoutingContext context = RoutingContext.builder().query(command.getQuery()).features(features)
             .availableIndexes(available).budget(boundedBudget).requestedMode(command.getMode())
-            .executionMode(command.getExecutionMode()).maxHop(2).maxReplanCount(maxReplanCount)
+            .executionMode(command.getExecutionMode()).maxHop(properties.getMaxHop())
+            .maxReplanCount(maxReplanCount)
             .configVersion("v1").seed(DeterministicSeed.routingSeed(command.getQuery(), configSeed())).build();
         return new InitialRouting(context, notMeasured);
     }
@@ -349,7 +353,7 @@ public final class RetrievalExecutor {
      * True when two plans take the same routing decision, so replanning would not change execution.
      * The replan loop stops on this to avoid spending {@code maxReplanCount} on no-op rounds.
      */
-    private static boolean sameRoutingDecision(RetrievalPlan left, RetrievalPlan right) {
+    static boolean sameRoutingDecision(RetrievalPlan left, RetrievalPlan right) {
         if (left == right) {
             return true;
         }
@@ -892,7 +896,7 @@ public final class RetrievalExecutor {
                 }
                 // The hop that just completed is the first real evidence about diffusion cost.
                 StageReplan hopReplan = replanAtStageBoundary(routingPlan, routingContext, trace, deadline,
-                    plan, tokenLedger, merged, "AFTER_GRAPH_HOP");
+                    plan, tokenLedger, merged, BOUNDARY_AFTER_GRAPH_HOP);
                 if (hopReplan.count > 0) {
                     trace.setRoutingFeatures(
                         measuredFeatures(routingContext.getFeatures(), hopReplan.progress));
@@ -1293,6 +1297,9 @@ public final class RetrievalExecutor {
             RetrievalPlanValidator.Result candidate = RetrievalPlanValidator.validateAndAdjust(
                 routingPolicy.replan(routingContext, progress), routingContext);
             RetrievalPlan next = candidate.getPlan();
+            if (BOUNDARY_AFTER_GRAPH_HOP.equals(boundary)) {
+                next = constrainPostHopPlan(previous, next);
+            }
             if (!isDefaultFusionConfig()) {
                 next = RetrievalPlan.builder(next)
                     .bm25Weight(fusion.getConfig().getBm25Weight())
@@ -1315,6 +1322,43 @@ public final class RetrievalExecutor {
                 replanCount, boundary);
         }
         return new StageReplan(replanned, progress, replanCount);
+    }
+
+    /**
+     * Restricts a post-hop replan to decisions that can still change execution.
+     *
+     * <p>By the time a hop has run the text channels are complete, so re-slicing their candidate
+     * budget cannot produce any work - it only rewrites the trace and hands the graph stage an
+     * allocation that nothing consumes. With the default single replan the policy used to spend
+     * the hop boundary restoring the pre-probe split, which is why replanning fired on almost every
+     * request while leaving the result bit-identical. Keeping the previous allocation turns that
+     * round trip into a no-op the loop can stop on.
+     *
+     * <p>The two decisions that remain meaningful are kept: dropping the graph channel once growth
+     * or yield says expansion is not paying, and lowering the hop ceiling. Raising the ceiling is
+     * rejected because hops already executed cannot be unspent, so the ceiling is monotone.
+     */
+    static RetrievalPlan constrainPostHopPlan(RetrievalPlan previous, RetrievalPlan next) {
+        if (previous == null || next == null) {
+            return next;
+        }
+        RetrievalPlan.Builder builder = null;
+        if (next.getMaxHop() > previous.getMaxHop()) {
+            builder = RetrievalPlan.builder(next).maxHop(previous.getMaxHop());
+        }
+        // A plan that drops the graph channel is the stop decision itself and is left untouched.
+        if (previous.getChannelBudgets().containsKey("GRAPH")
+            && next.getChannelBudgets().containsKey("GRAPH")) {
+            if (!previous.getChannelBudgets().equals(next.getChannelBudgets())) {
+                builder = (builder == null ? RetrievalPlan.builder(next) : builder)
+                    .channelBudgets(previous.getChannelBudgets());
+            }
+            if (!previous.getChannelOrder().equals(next.getChannelOrder())) {
+                builder = (builder == null ? RetrievalPlan.builder(next) : builder)
+                    .channelOrder(previous.getChannelOrder());
+            }
+        }
+        return builder == null ? next : builder.build();
     }
 
     /** Result of one stage-boundary replanning pass. */

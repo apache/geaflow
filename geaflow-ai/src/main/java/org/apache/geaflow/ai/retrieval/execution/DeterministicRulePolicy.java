@@ -28,6 +28,8 @@ import org.apache.geaflow.ai.retrieval.api.model.RetrievalMode;
 public final class DeterministicRulePolicy implements AdaptivePolicy {
     public static final String POLICY_ID = "deterministic-rule";
     public static final String POLICY_VERSION = "v1";
+    /** Reported when the decoupled text/anchor routing is enabled, so traces stay comparable. */
+    public static final String POLICY_VERSION_DECOUPLED = "v2";
 
     /** Lexical-leaning fusion weights applied when BM25 looks confident for this query. */
     static final double LEXICAL_BM25_WEIGHT = 1.25D;
@@ -36,18 +38,30 @@ public final class DeterministicRulePolicy implements AdaptivePolicy {
     static final double SEMANTIC_BM25_WEIGHT = 0.85D;
     static final double SEMANTIC_VECTOR_WEIGHT = 1.25D;
     /**
-     * Fusion weights used when text channels show no reliable lexical or semantic signal.
+     * Default fusion weights for the anchored and no-confidence branches.
      *
-     * <p>The measured end-to-end runs put BM25 and vector Recall@10 at {@code 0.002}: text channels
-     * almost never surface the gold supporting chunk, while graph expansion supplies it. Weighting
-     * a channel that carries no signal still adds its rank term to every fused score, which is
-     * exactly what pushes correct graph evidence below noisy text evidence and collapses MRR. When
-     * the probe shows no lexical confidence the graph channel therefore leads and the text
-     * channels are demoted rather than promoted.
+     * <p>Only the ratio reaches reciprocal-rank fusion. It used to be 8:1 in favour of the graph
+     * channel, justified by runs whose text recall of {@code 0.002} came from scoring chunk ids
+     * that did not exist in the corpus. On the corrected bundles the text channels are the stronger
+     * ones (2Wiki BM25 MRR 0.7368 against graph 0.5260; HotpotQA 0.8254 against 0.3272), and the
+     * 8:1 prior cost 7.8% of MRR on 2Wiki and 15.0% on HotpotQA against fixed hybrid.
+     *
+     * <p>A 200-query sweep per dataset ({@code tools/graphrag/sweep_fusion.sh}) puts the optimum at
+     * 1:4 on both: adaptive MRR moves from 7.8% behind fixed hybrid to 2.6% ahead on 2Wiki, and
+     * from 15.0% behind to 0.1% behind on HotpotQA. Ratios in {@code [0, 1]} form a plateau within
+     * noise, so the graph channel still contributes rank evidence - it just no longer outweighs the
+     * channels that retrieve better. {@code GRAPH_DOMINANT_FUSION} is kept as the reason code of
+     * that branch so existing traces remain comparable; it no longer implies a dominant weight.
      */
-    static final double GRAPH_FIRST_GRAPH_WEIGHT = 2.0D;
-    static final double GRAPH_FIRST_TEXT_WEIGHT = 0.25D;
-    static final double DEFAULT_HIGH_AVERAGE_IDF = 1.5D;
+    static final double DEFAULT_GRAPH_FUSION_WEIGHT = 0.25D;
+    static final double DEFAULT_TEXT_FUSION_WEIGHT = 1.0D;
+    /**
+     * Default lexical-confidence threshold, matched to {@code RetrievalProperties}.
+     *
+     * <p>Set near the 90th percentile of the measured query-IDF distribution rather than below its
+     * minimum: the previous 1.5 admitted every 2Wiki query and so measured nothing.
+     */
+    static final double DEFAULT_HIGH_AVERAGE_IDF = 4.0D;
     /**
      * Default first-stage score-gap threshold.
      *
@@ -96,6 +110,7 @@ public final class DeterministicRulePolicy implements AdaptivePolicy {
     private final double lexicalVectorWeight;
     private final double semanticBm25Weight;
     private final double semanticVectorWeight;
+    private final boolean decoupleTextRouting;
     private final Map<String, String> parameters;
 
     public DeterministicRulePolicy() {
@@ -123,7 +138,7 @@ public final class DeterministicRulePolicy implements AdaptivePolicy {
                                    int baseNeighborCap) {
         this(highAverageIdf, highScoreGap, longQueryLength, strongAnchorConfidence, minimumAnchorCount,
             highCandidateDegree, highGrowthRate, minMarginalYield, baseNeighborCap,
-            GRAPH_FIRST_GRAPH_WEIGHT, GRAPH_FIRST_TEXT_WEIGHT, GRAPH_PROBE_SHARE,
+            DEFAULT_GRAPH_FUSION_WEIGHT, DEFAULT_TEXT_FUSION_WEIGHT, GRAPH_PROBE_SHARE,
             LEXICAL_BM25_WEIGHT, LEXICAL_VECTOR_WEIGHT, SEMANTIC_BM25_WEIGHT, SEMANTIC_VECTOR_WEIGHT);
     }
 
@@ -193,6 +208,28 @@ public final class DeterministicRulePolicy implements AdaptivePolicy {
                                    double graphWeight, double textWeight, double probeShare,
                                    double lexicalBm25Weight, double lexicalVectorWeight,
                                    double semanticBm25Weight, double semanticVectorWeight) {
+        this(highAverageIdf, highScoreGap, longQueryLength, strongAnchorConfidence, minimumAnchorCount,
+            highCandidateDegree, highGrowthRate, minMarginalYield, baseNeighborCap,
+            graphWeight, textWeight, probeShare, lexicalBm25Weight, lexicalVectorWeight,
+            semanticBm25Weight, semanticVectorWeight, false);
+    }
+
+    /**
+     * Creates a policy with every threshold and fusion weight supplied by configuration, plus the
+     * text/anchor decoupling switch.
+     *
+     * @param decoupleTextRouting when true, lexical and semantic features set the text-channel
+     *        weights while the anchor only governs graph expansion, instead of the anchored branch
+     *        short-circuiting both decisions
+     */
+    public DeterministicRulePolicy(double highAverageIdf, double highScoreGap, int longQueryLength,
+                                   double strongAnchorConfidence, int minimumAnchorCount,
+                                   int highCandidateDegree, double highGrowthRate, double minMarginalYield,
+                                   int baseNeighborCap,
+                                   double graphWeight, double textWeight, double probeShare,
+                                   double lexicalBm25Weight, double lexicalVectorWeight,
+                                   double semanticBm25Weight, double semanticVectorWeight,
+                                   boolean decoupleTextRouting) {
         if (!finiteNonNegative(highAverageIdf) || !finiteNonNegative(highScoreGap)
             || longQueryLength < 1 || !finiteRange(strongAnchorConfidence)
             || minimumAnchorCount < 1 || highCandidateDegree < 1
@@ -223,6 +260,7 @@ public final class DeterministicRulePolicy implements AdaptivePolicy {
         this.lexicalVectorWeight = lexicalVectorWeight;
         this.semanticBm25Weight = semanticBm25Weight;
         this.semanticVectorWeight = semanticVectorWeight;
+        this.decoupleTextRouting = decoupleTextRouting;
         Map<String, String> values = new LinkedHashMap<>();
         values.put("highAverageIdf", Double.toString(highAverageIdf));
         values.put("highScoreGap", Double.toString(highScoreGap));
@@ -241,6 +279,8 @@ public final class DeterministicRulePolicy implements AdaptivePolicy {
         values.put("lexicalVectorWeight", Double.toString(lexicalVectorWeight));
         values.put("semanticBm25Weight", Double.toString(semanticBm25Weight));
         values.put("semanticVectorWeight", Double.toString(semanticVectorWeight));
+        // Recorded so a replayed plan can tell which routing structure produced it.
+        values.put("decoupleTextRouting", Boolean.toString(decoupleTextRouting));
         parameters = Collections.unmodifiableMap(values);
     }
 
@@ -259,7 +299,7 @@ public final class DeterministicRulePolicy implements AdaptivePolicy {
 
     @Override
     public String getPolicyVersion() {
-        return POLICY_VERSION;
+        return decoupleTextRouting ? POLICY_VERSION_DECOUPLED : POLICY_VERSION;
     }
 
     @Override
@@ -298,7 +338,12 @@ public final class DeterministicRulePolicy implements AdaptivePolicy {
         }
         boolean replanExhausted = progress != null && context.getMaxReplanCount() > 0
             && progress.getReplanCount() >= context.getMaxReplanCount();
-        RoutingFeatures features = progress == null || replanExhausted ? context.getFeatures()
+        // Measured features are merged whenever a stage has run, including once the replan budget
+        // is spent. The budget bounds how often the allocation may move; it must not blind the
+        // policy to the stop signals. Falling back to the pre-execution snapshot here made the
+        // post-hop boundary re-plan from graphGrowthRate = 0, so a frontier that had already grown
+        // past highGrowthRate was scheduled for another hop instead of being stopped.
+        RoutingFeatures features = progress == null ? context.getFeatures()
             : mergedFeatures(context, progress);
         RetrievalBudget budget = context.getBudget();
         boolean bm25 = context.hasIndex("BM25");
@@ -326,7 +371,7 @@ public final class DeterministicRulePolicy implements AdaptivePolicy {
                 .maxHop("GRAPH".equals(channel) ? Math.min(1, context.getMaxHop()) : 0)
                 .maxDiffusionGrowth(highGrowthRate)
                 .neighborCap(neighborCap(candidates, features.getCandidateDegree()))
-                .policyId(POLICY_ID).policyVersion(POLICY_VERSION)
+                .policyId(POLICY_ID).policyVersion(getPolicyVersion())
                 .reason("FALLBACK_MISSING_HYBRID_INDEX").build();
         }
         RetrievalPlan.Builder builder = RetrievalPlan.builder()
@@ -334,10 +379,10 @@ public final class DeterministicRulePolicy implements AdaptivePolicy {
             .topK(budget.getTopK()).candidateBudget(budget.getMaxCandidates())
             .tokenBudget(budget.getTokenBudget())
             .latencyBudgetNanos(budget.getTimeoutMs().longValue() * 1_000_000L)
-            .maxHop(graph ? graphMaxHop(context, features, progress) : 0)
+            .maxHop(graph ? graphMaxHop(context, features, progress, replanExhausted) : 0)
             .neighborCap(neighborCap(budget.getMaxCandidates(), features.getCandidateDegree()))
             .maxDiffusionGrowth(highGrowthRate)
-            .policyId(POLICY_ID).policyVersion(POLICY_VERSION)
+            .policyId(POLICY_ID).policyVersion(getPolicyVersion())
             .hardUpperBound("candidates", budget.getMaxCandidates())
             .hardUpperBound("tokens", budget.getTokenBudget());
         if (!bm25 || !vector) {
@@ -371,19 +416,24 @@ public final class DeterministicRulePolicy implements AdaptivePolicy {
         // absence of an anchor falls back to the text channels.
         boolean anchored = features.getAnchorCount() >= minimumAnchorCount
             && features.getAnchorConfidence() >= strongAnchorConfidence;
-        if (anchored) {
+        if (decoupleTextRouting) {
+            applyDecoupledFusion(builder, features, anchored);
+        } else if (anchored) {
             // A grounded entity is the strongest available retrieval signal: let graph expansion
             // lead the fusion while the text channels supply corroborating rank evidence.
             builder.bm25Weight(textWeight).vectorWeight(textWeight)
                 .graphWeight(graphWeight)
                 .reason("GRAPH_DOMINANT_FUSION");
         } else if (features.getAverageIdf() >= highAverageIdf) {
+            // These branches re-balance the two text channels; they must not also raise the graph
+            // weight. The hard-coded 1.0 quadrupled the graph rank contribution relative to the
+            // swept default, so a rule that fired would have undone the fusion correction.
             builder.bm25Weight(lexicalBm25Weight).vectorWeight(lexicalVectorWeight)
-                .graphWeight(1.0D)
+                .graphWeight(graphWeight)
                 .reason("LEXICAL_CONFIDENCE");
         } else if (features.getQueryLength() >= longQueryLength) {
             builder.bm25Weight(semanticBm25Weight).vectorWeight(semanticVectorWeight)
-                .graphWeight(1.0D)
+                .graphWeight(graphWeight)
                 .reason("SEMANTIC_QUERY");
         } else {
             builder.bm25Weight(textWeight).vectorWeight(textWeight)
@@ -454,7 +504,7 @@ public final class DeterministicRulePolicy implements AdaptivePolicy {
             .neighborCap(neighborCap(budget.getMaxCandidates(), context.getFeatures().getCandidateDegree()))
             .channelBudget(channel, budget.getMaxCandidates()).channelOrder(Collections.singletonList(channel))
             .fallbackMode(requested == context.getRequestedMode().canonical() ? null : requested)
-            .policyId(POLICY_ID).policyVersion(POLICY_VERSION).reason("EXPLICIT_MODE").build();
+            .policyId(POLICY_ID).policyVersion(getPolicyVersion()).reason("EXPLICIT_MODE").build();
     }
 
     private void addChannels(RetrievalPlan.Builder builder, boolean bm25, boolean vector, boolean graph,
@@ -580,8 +630,15 @@ public final class DeterministicRulePolicy implements AdaptivePolicy {
         return Math.max(selectedCount, Math.max(1, graphBudget));
     }
 
-    private int graphMaxHop(RoutingContext context, RoutingFeatures features, RetrievalProgress progress) {
+    private int graphMaxHop(RoutingContext context, RoutingFeatures features, RetrievalProgress progress,
+                            boolean replanExhausted) {
         int ceiling = context.getMaxHop();
+        if (replanExhausted) {
+            // A spent replan budget may still stop or shrink expansion, but it must not fund extra
+            // hops. Otherwise a late anchor measurement could grow the plan after the bound that
+            // keeps replanning predictable had already been reached.
+            return Math.min(1, ceiling);
+        }
         boolean strong = features.getAnchorCount() >= minimumAnchorCount
             && features.getAnchorConfidence() >= strongAnchorConfidence
             && features.getCandidateDegree() <= highCandidateDegree;
@@ -599,6 +656,30 @@ public final class DeterministicRulePolicy implements AdaptivePolicy {
             return Math.max(1, Math.min(baseNeighborCap, candidateBudget / 2));
         }
         return Math.max(1, Math.min(baseNeighborCap, candidateBudget));
+    }
+
+    /**
+     * Sets the fusion weights when the text balance is decoupled from the anchor decision.
+     *
+     * <p>Lexical and semantic features choose between the two text channels; the anchor only
+     * decides whether graph expansion is funded. With the coupled structure the anchored branch
+     * won first, so those rules had no decision domain at all: they fired on 1 of 200 measured
+     * queries. The graph weight is the configured one in every branch, so no branch can
+     * accidentally multiply it.
+     */
+    private void applyDecoupledFusion(RetrievalPlan.Builder builder, RoutingFeatures features,
+                                      boolean anchored) {
+        if (features.getAverageIdf() >= highAverageIdf) {
+            builder.bm25Weight(lexicalBm25Weight).vectorWeight(lexicalVectorWeight)
+                .reason("LEXICAL_CONFIDENCE");
+        } else if (features.getQueryLength() >= longQueryLength) {
+            builder.bm25Weight(semanticBm25Weight).vectorWeight(semanticVectorWeight)
+                .reason("SEMANTIC_QUERY");
+        } else {
+            builder.bm25Weight(textWeight).vectorWeight(textWeight);
+        }
+        builder.graphWeight(graphWeight)
+            .reason(anchored ? "GRAPH_ANCHORED_EXPANSION" : "GRAPH_BOUNDED_ANCHOR_FALLBACK");
     }
 
     private RoutingFeatures mergedFeatures(RoutingContext context, RetrievalProgress progress) {

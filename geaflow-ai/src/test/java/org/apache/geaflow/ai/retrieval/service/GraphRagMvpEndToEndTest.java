@@ -565,6 +565,28 @@ class GraphRagMvpEndToEndTest {
     }
 
     @Test
+    void defaultSingleHopPlanningEmitsNoPostHopReplan() throws Exception {
+        // The graph retriever already stops itself on diffusion growth, so a planned second hop
+        // never executed and the post-hop boundary only duplicated that stop. With max-hop = 1 the
+        // boundary is gone entirely; setting max-hop back to 2 restores it.
+        Fixture fixture = fixture();
+        RecallService service = new RecallService(fixture.registry, WeightedRrfConfig.DEFAULT,
+            System::nanoTime, new org.apache.geaflow.ai.retrieval.execution.DeterministicTokenEstimator(),
+            new org.apache.geaflow.ai.retrieval.execution.DeterministicReranker(),
+            new org.apache.geaflow.ai.retrieval.execution.DeterministicRulePolicy(), 2);
+
+        RetrievalResponse response = service.retrieve(request("ADAPTIVE_HYBRID", Arrays.asList(1.0, 0.0)));
+
+        assertFalse(response.getEvidence().isEmpty());
+        assertTrue(response.getTrace().getReplanEvents().stream()
+                .noneMatch(event -> "AFTER_GRAPH_HOP".equals(event.getBoundary())),
+            "a single-hop plan must not emit post-hop replan events");
+        assertTrue(response.getTrace().getReplanEvents().stream()
+                .anyMatch(event -> "AFTER_TEXT".equals(event.getBoundary())),
+            "the text-stage boundary still applies");
+    }
+
+    @Test
     void replanCountStaysBoundedByConfiguredMaximum() throws Exception {
         Fixture fixture = fixture();
         RecallService noReplan = new RecallService(fixture.registry, WeightedRrfConfig.DEFAULT,

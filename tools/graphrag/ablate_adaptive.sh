@@ -36,6 +36,7 @@ RUNS_ROOT="${GEAFLOW_RUNS_ROOT:-${DATA_ROOT}/runs}"
 DATASET="2wikimultihopqa"
 LIMIT="200"
 PORT="18090"
+MAX_CANDIDATES="100"
 OUT_DIR=""
 CONDITIONS=""
 
@@ -50,6 +51,8 @@ FIXED_HYBRID and ADAPTIVE_HYBRID over the same query slice.
 Options:
   --dataset <name>    2wikimultihopqa (default) or hotpotqa
   --limit <n>         queries per condition (default 200)
+  --max-candidates <n> pre-ablation candidate window (default 100; use 200 to match the
+                      500-query report, since multi-hop halves it)
   --port <port>       service port (default 18090)
   --conditions <list> comma-separated subset; default is all of them
   --out <dir>         output directory (default under runs/ablations-component/)
@@ -76,6 +79,7 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --dataset) DATASET="$2"; shift 2 ;;
         --limit) LIMIT="$2"; shift 2 ;;
+        --max-candidates) MAX_CANDIDATES="$2"; shift 2 ;;
         --port) PORT="$2"; shift 2 ;;
         --conditions) CONDITIONS="$2"; shift 2 ;;
         --out) OUT_DIR="$2"; shift 2 ;;
@@ -96,10 +100,19 @@ condition_env() {
         no-router)           echo "GEAFLOW_RETRIEVAL_GRAPH_FUSION_GRAPH_WEIGHT=1.0 GEAFLOW_RETRIEVAL_GRAPH_FUSION_TEXT_WEIGHT=1.0" ;;
         no-replan)           echo "GEAFLOW_RETRIEVAL_MAX_REPLAN_COUNT=0" ;;
         no-probe-share)      echo "GEAFLOW_RETRIEVAL_GRAPH_PROBE_SHARE=0.5" ;;
-        no-graph-fusion)     echo "GEAFLOW_RETRIEVAL_GRAPH_FUSION_GRAPH_WEIGHT=0.25" ;;
+        # Zero, not 0.25: the shipped default is already 0.25 against a text weight of 1.0, so
+        # setting 0.25 here would reproduce the baseline instead of ablating anything. Removing the
+        # graph rank term entirely is the remaining meaningful question.
+        no-graph-fusion)     echo "GEAFLOW_RETRIEVAL_GRAPH_FUSION_GRAPH_WEIGHT=0.0" ;;
         no-idf-trigger)      echo "GEAFLOW_RETRIEVAL_HIGH_AVERAGE_IDF=1000.0" ;;
         no-degree-trigger)   echo "GEAFLOW_RETRIEVAL_HIGH_CANDIDATE_DEGREE=1000000" ;;
         no-cascade-gate)     echo "GEAFLOW_RETRIEVAL_CASCADE_MIN_PROBE_SCORE_GAP=0.0 GEAFLOW_RETRIEVAL_CASCADE_MIN_PROBE_EVIDENCE=1" ;;
+        # Diffusion-ceiling probes rather than component ablations: with the shipped growth limit
+        # the graph retriever stops itself after the first hop (96 of 96 post-hop traces end with
+        # DIFFUSION_GROWTH_LIMIT), so the second hop the policy plans never executes. These
+        # conditions test whether the hop-boundary rules have any work once that ceiling is raised.
+        growth-4)           echo "GEAFLOW_RETRIEVAL_HIGH_GROWTH_RATE=4.0" ;;
+        growth-8)           echo "GEAFLOW_RETRIEVAL_HIGH_GROWTH_RATE=8.0" ;;
         *) return 1 ;;
     esac
 }
@@ -144,12 +157,18 @@ log "conditions: ${CONDITIONS}"
 CLASSPATH_FILE="${OUT_DIR}/classpath.txt"
 # A non-empty file is required: a build interrupted by a signal leaves a zero-byte
 # classpath behind, and reusing it fails later with a confusing NoClassDefFoundError.
+# The offline dependency:build-classpath goal can also succeed while writing nothing, so an
+# existing non-empty classpath can be supplied explicitly and the result is verified either way.
+if [[ -n "${GEAFLOW_CLASSPATH:-}" && -s "${GEAFLOW_CLASSPATH}" ]]; then
+    cp "${GEAFLOW_CLASSPATH}" "${CLASSPATH_FILE}"
+fi
 if [[ ! -s "${CLASSPATH_FILE}" ]]; then
     log "building service classpath"
     ( cd "${ROOT}" && mvn -o -q -pl geaflow-ai -am -DskipTests -Dmaven.javadoc.skip=true \
         -Djacoco.skip=true -Drat.skip=true dependency:build-classpath \
         -Dmdep.outputFile="${CLASSPATH_FILE}" >/dev/null )
 fi
+[[ -s "${CLASSPATH_FILE}" ]] || { log "empty classpath: ${CLASSPATH_FILE}; set GEAFLOW_CLASSPATH to a known-good one"; exit 2; }
 SERVICE_CLASSPATH="${ROOT}/geaflow-ai/target/classes:$(cat "${CLASSPATH_FILE}")"
 
 GRAPH_NAME="$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['graph_name'])" "${BUNDLE}/READY.json")"
@@ -201,7 +220,7 @@ for condition in "${CONDITION_LIST[@]}"; do
     # not reshaped because apply_ablation only halves the budget, which would confound a component
     # comparison. The component difference comes from the service environment above, not from here.
     bench_args=(--url "http://127.0.0.1:${PORT}/api/v1/retrievals"
-                --limit "${LIMIT}" --ablation multi-hop
+                --limit "${LIMIT}" --ablation multi-hop --max-candidates "${MAX_CANDIDATES}"
                 --graph-name "${GRAPH_NAME}" --graph-version "${GRAPH_VERSION}"
                 --index-version "${GRAPH_VERSION}"
                 --output "${cond_dir}/${DATASET}-${condition}.csv"

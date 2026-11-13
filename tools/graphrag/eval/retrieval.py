@@ -123,6 +123,76 @@ def load_supporting_targets(gold_path, chunks_path=None):
     return result
 
 
+class EvidenceNamespaceError(ValueError):
+    """A response's evidence ids do not belong to the corpus the gold targets were scored against."""
+
+
+def load_chunk_ids(path):
+    """Return every chunk id of a canonical chunks JSONL, for corpus-namespace validation."""
+    ids = set()
+    with Path(path).open(encoding='utf-8') as stream:
+        for line in stream:
+            if not line.strip():
+                continue
+            chunk_id = json.loads(line).get('chunk_id')
+            if not chunk_id:
+                raise ValueError('chunks record without chunk_id: %s' % path)
+            ids.add(str(chunk_id))
+    if not ids:
+        raise ValueError('no chunk ids found in %s' % path)
+    return ids
+
+
+def unknown_evidence_ids(evidence_ids, chunk_ids):
+    """Return the distinct returned ids that the scored corpus does not contain, in order."""
+    return [value for value in dict.fromkeys(evidence_ids) if value not in chunk_ids]
+
+
+def assert_evidence_in_corpus(evidence_ids, chunk_ids, chunks_path=None, context=''):
+    """Fail fast instead of scoring a response against a corpus the service is not serving.
+
+    ``unresolvedSupportingFacts`` cannot detect this failure: gold sentences still resolve against
+    whatever chunks file was supplied, so a run can report full gold coverage while every returned
+    id comes from a different corpus. That is exactly how the 20261104 run produced a 0.002 text
+    recall next to an unchanged graph-only recall, and why the graph-dominant fusion prior was
+    derived from an artefact rather than from measurement.
+    """
+    unknown = unknown_evidence_ids(evidence_ids, chunk_ids)
+    if not unknown:
+        return
+    raise EvidenceNamespaceError(
+        'evidence id namespace mismatch%s: %d of %d returned chunk ids are absent from %s '
+        '(%d known ids). Examples: %s. Every quality metric in this run would be scored against a '
+        'corpus the service is not serving. Use the chunks.jsonl of the bundle the service actually '
+        'loaded (compare READY.json version and dataset_release), or pass '
+        '--allow-unknown-evidence-ids if the service legitimately returns ids outside that file.'
+        % (context, len(unknown), len(evidence_ids), chunks_path or '<chunks>',
+           len(chunk_ids), ', '.join(unknown[:3])))
+
+
+class GoldResolutionError(ValueError):
+    """Gold supporting facts mostly fail to resolve against the supplied chunks file."""
+
+
+def assert_gold_resolved(gold_targets, query_ids, chunks_path=None, max_unresolved_ratio=0.5):
+    """Reject a run whose gold mostly fails to resolve, instead of reporting empty quality columns.
+
+    A small number of unresolved supporting facts is normal (2Wiki has 28 in 500 queries); a
+    majority means the gold and the chunks file describe different corpora.
+    """
+    if not query_ids:
+        return
+    unresolved = [query_id for query_id in query_ids
+                  if (gold_targets.get(str(query_id), {}).get('unresolvedSupportingFacts') or 0) > 0]
+    ratio = len(unresolved) / len(query_ids)
+    if ratio > max_unresolved_ratio:
+        raise GoldResolutionError(
+            'gold does not resolve against %s: %d of %d queries (%.1f%%) have supporting facts that '
+            'match no chunk. Quality columns would be near-empty for every method. Check that --gold '
+            'and --chunks come from the same corpus and release.'
+            % (chunks_path or '<chunks>', len(unresolved), len(query_ids), 100.0 * ratio))
+
+
 def _relation_targets(record):
     """Returns the ordered relation labels a gold answer is expected to traverse.
 

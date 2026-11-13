@@ -12,8 +12,10 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from tools.graphrag.eval.metrics import exact_match, f1, percentile
-from tools.graphrag.eval.retrieval import (load_query_vectors, load_supporting_targets,
-                                           score_evidence)
+from tools.graphrag.eval.retrieval import (EvidenceNamespaceError, GoldResolutionError,
+                                           assert_evidence_in_corpus, assert_gold_resolved,
+                                           load_chunk_ids, load_query_vectors,
+                                           load_supporting_targets, score_evidence)
 
 
 METHODS = ('BM25_ONLY', 'VECTOR_ONLY', 'VECTOR_OVERFETCH', 'GRAPH_ONLY',
@@ -260,6 +262,13 @@ def run(args):
     output.parent.mkdir(parents=True, exist_ok=True)
     rows = []
     selected_queries = queries[:args.limit] if args.limit else queries
+    # The corpus guard belongs before any request is sent: a chunks file from a different release
+    # still resolves gold sentences, so nothing downstream would otherwise reveal that the returned
+    # evidence ids live in another namespace.
+    chunk_ids = load_chunk_ids(args.chunks) if args.chunks else None
+    if args.gold and args.chunks:
+        assert_gold_resolved(gold_targets, [str(query['id']) for query in selected_queries],
+                             chunks_path=args.chunks)
     active = METHODS if not getattr(args, 'ablation', None) else ABLATION_METHODS
     assert_equal_budget(active)
     assert_single_primary_constraint(active, getattr(args, 'primary_constraint', 'CANDIDATES'))
@@ -287,6 +296,10 @@ def run(args):
                     evidence.append(chunk['chunkId'])
                 if chunk.get('documentId'):
                     documents.append(chunk['documentId'])
+        if chunk_ids is not None and not getattr(args, 'allow_unknown_evidence_ids', False):
+            assert_evidence_in_corpus(
+                evidence, chunk_ids, chunks_path=args.chunks,
+                context=' on %s/%s (query %s)' % (method, body.get('mode'), query.get('id')))
         target = gold_targets.get(str(query['id']), {})
         scored = score_evidence(response, target.get('supportingSentences'),
                                 target.get('relevantChunkIds') if args.chunks else None,
@@ -560,6 +573,10 @@ if __name__ == '__main__':
     parser.add_argument('--vectors')
     parser.add_argument('--gold', help='Generic JSONL gold records')
     parser.add_argument('--chunks', help='Canonical chunks JSONL used to map gold facts to evidence IDs')
+    parser.add_argument('--allow-unknown-evidence-ids', action='store_true',
+                        help='Disable the corpus-namespace guard. By default a single returned '
+                             'evidence id that is absent from --chunks aborts the run, because '
+                             'scoring it would silently produce near-zero recall for every method.')
     parser.add_argument('--answers-url',
                         help='Answer endpoint (POST /api/v1/answers). When set, each retrieval is '
                              'followed by an answer request so EM/F1 are actually produced; when '
@@ -593,4 +610,9 @@ if __name__ == '__main__':
                         help='retrieval configuration version recorded with every result row')
     parser.add_argument('--retries', type=int, default=2,
                         help='retry failed HTTP requests this many times')
-    run(parser.parse_args())
+    try:
+        run(parser.parse_args())
+    except (EvidenceNamespaceError, GoldResolutionError) as error:
+        # These are operator errors with an actionable fix, not engine failures. Printing the
+        # diagnosis without a worker-thread traceback keeps it readable.
+        raise SystemExit(str(error))

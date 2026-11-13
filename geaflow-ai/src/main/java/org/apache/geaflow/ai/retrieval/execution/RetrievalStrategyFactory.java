@@ -81,7 +81,7 @@ public final class RetrievalStrategyFactory {
                 properties.getGraphFusionGraphWeight(), properties.getGraphFusionTextWeight(),
                 properties.getGraphProbeShare(), properties.getLexicalBm25Weight(),
                 properties.getLexicalVectorWeight(), properties.getSemanticBm25Weight(),
-                properties.getSemanticVectorWeight());
+                properties.getSemanticVectorWeight(), properties.isDecoupleTextRouting());
         }
         throw unsupported("routing policy", id);
     }

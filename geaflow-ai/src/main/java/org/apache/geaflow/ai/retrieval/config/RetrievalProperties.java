@@ -96,14 +96,44 @@ public class RetrievalProperties {
     private String routingPolicyId = "deterministic-rule";
     @Inject("${retrieval.max-replan-count:1}")
     private int maxReplanCount = 1;
+    /**
+     * Hop ceiling offered to the adaptive policy.
+     *
+     * <p>Default 1 because the graph retriever already stops itself on diffusion growth
+     * ({@code DIFFUSION_GROWTH_LIMIT} on 96 of 96 post-hop traces), so the second hop the policy
+     * planned never executed and the hop-boundary replan duplicated the retriever's own stop.
+     * A single hop removes that duplicate decision without removing the capability: setting this
+     * back to 2 restores multi-hop planning, including the post-hop contraction rules.
+     */
+    @Inject("${retrieval.max-hop:1}")
+    private int maxHop = 1;
     @Inject("${retrieval.strict-plan-validation:true}")
     private boolean strictPlanValidation = true;
     @Inject("${retrieval.reranker-id:deterministic-reranker-v1}")
     private String rerankerId = "deterministic-reranker-v1";
     @Inject("${retrieval.token-estimator-id:chars4-v1}")
     private String tokenEstimatorId = "chars4-v1";
-    @Inject("${retrieval.deterministic-rule.high-average-idf:1.5}")
-    private double highAverageIdf = 1.5D;
+    /**
+     * Average query IDF above which the lexical branch re-balances the text channels.
+     *
+     * <p>The previous default of {@code 1.5} was below the measured minimum on 2Wiki (1.56, median
+     * 3.01, p90 4.18), so it had no discriminating power at all: every query qualified. {@code 4.0}
+     * sits near the 90th percentile, which is what "high lexical confidence" is supposed to mean.
+     * Note that the anchored branch currently takes precedence over this one, so on anchor-rich
+     * corpora the rule stays unreachable regardless of the threshold.
+     */
+    @Inject("${retrieval.deterministic-rule.high-average-idf:4.0}")
+    private double highAverageIdf = 4.0D;
+    /**
+     * Decouple the text-channel balance from the anchor decision.
+     *
+     * <p>Off by default. When off, an anchored query short-circuits the lexical and semantic
+     * branches, which leaves those rules without any decision domain (they fired on 1 of 200
+     * measured queries). When on, lexical/semantic features set the text weights and the anchor
+     * only governs graph expansion, so the two signals no longer exclude each other.
+     */
+    @Inject("${retrieval.deterministic-rule.decouple-text-routing:false}")
+    private boolean decoupleTextRouting = false;
     /**
      * Threshold on the first-stage score gap, in the units of the fusion score it is compared with.
      *
@@ -130,17 +160,22 @@ public class RetrievalProperties {
     /**
      * Fusion weight given to the graph channel when a confident anchor makes it the lead channel.
      *
-     * <p>The measured end-to-end runs put BM25 and vector recall at {@code 0.002} while graph
-     * expansion supplies the evidence, so the graph channel must be able to outweigh the text
-     * channels in the fused score. Raising the graph weight from {@code 1.0} to {@code 2.0} while
-     * demoting text to {@code 0.25} moved 2Wiki MRR from {@code 0.1019} to {@code 0.4747}. Keeping
-     * this configurable is the point: it is a quality-sensitive parameter, not a constant.
+     * <p>The earlier 8:1 graph-to-text ratio rested on runs whose text recall of {@code 0.002} came
+     * from scoring chunk ids absent from the corpus. On the corrected bundles the text channels
+     * retrieve better, and that ratio cost 7.8% (2Wiki) and 15.0% (HotpotQA) of MRR against fixed
+     * hybrid. The 200-query-per-dataset sweep in {@code tools/graphrag/sweep_fusion.sh} puts the
+     * optimum at a 1:4 ratio on both datasets, so the default graph weight is now {@code 0.25}
+     * against a text weight of {@code 1.0}.
+     *
+     * <p>Only the ratio matters to reciprocal-rank fusion. Keeping this configurable is the point:
+     * it is a quality-sensitive parameter, and a corpus where the graph channel is the stronger one
+     * should raise it again.
      */
-    @Inject("${retrieval.graph-fusion.graph-weight:2.0}")
-    private double graphFusionGraphWeight = 2.0D;
+    @Inject("${retrieval.graph-fusion.graph-weight:0.25}")
+    private double graphFusionGraphWeight = 0.25D;
     /** Fusion weight given to each text channel when an anchor makes the graph channel lead. */
-    @Inject("${retrieval.graph-fusion.text-weight:0.25}")
-    private double graphFusionTextWeight = 0.25D;
+    @Inject("${retrieval.graph-fusion.text-weight:1.0}")
+    private double graphFusionTextWeight = 1.0D;
     /**
      * Largest share of the candidate budget the text probe may take before graph expansion.
      *
@@ -292,6 +327,9 @@ public class RetrievalProperties {
         }
         if (maxReplanCount < 0 || maxReplanCount > 4) {
             throw invalid("max-replan-count must be between 0 and 4");
+        }
+        if (maxHop < 1 || maxHop > 4) {
+            throw invalid("max-hop must be between 1 and 4");
         }
         if (rerankerId == null || !"deterministic-reranker-v1".equals(rerankerId.trim())) {
             throw invalid("reranker-id is unsupported: " + rerankerId);
@@ -580,6 +618,22 @@ public class RetrievalProperties {
 
     public void setMaxReplanCount(int maxReplanCount) {
         this.maxReplanCount = maxReplanCount;
+    }
+
+    public boolean isDecoupleTextRouting() {
+        return decoupleTextRouting;
+    }
+
+    public void setDecoupleTextRouting(boolean decoupleTextRouting) {
+        this.decoupleTextRouting = decoupleTextRouting;
+    }
+
+    public int getMaxHop() {
+        return maxHop;
+    }
+
+    public void setMaxHop(int maxHop) {
+        this.maxHop = maxHop;
     }
 
     public boolean isStrictPlanValidation() {
