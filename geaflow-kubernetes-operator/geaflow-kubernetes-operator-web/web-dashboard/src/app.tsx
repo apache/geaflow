@@ -18,6 +18,7 @@
  */
 
 import Footer from '@/components/Footer';
+import OperatorAccess from '@/components/OperatorAccess';
 import {Question, SelectLang} from '@/components/RightContent';
 import {LinkOutlined} from '@ant-design/icons';
 import type {Settings as LayoutSettings} from '@ant-design/pro-components';
@@ -43,7 +44,7 @@ export async function getInitialState(): Promise<{
 }> {
   const fetchUserInfo = async () => {
     return {
-      name: 'Admin',
+      name: 'Operator',
       avatar: 'https://gw.alipayobjects.com/zos/antfincdn/XAosXuNZyF/BiazfanxmamNRoxxVxka.png',
     };
   };
@@ -109,7 +110,7 @@ export const layout: RunTimeLayoutConfig = ({ initialState, setInitialState }) =
       // if (initialState?.loading) return <PageLoading />;
       return (
         <>
-          {children}
+          <OperatorAccess>{children}</OperatorAccess>
           {isDev ? <SettingDrawer
             disableUrlParams
             enableDarkTheme

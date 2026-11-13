@@ -24,6 +24,8 @@ metadata:
   labels:
     {{- include "geaflow-operator.labels" . | nindent 4 }}
 spec:
+  strategy:
+    {{- toYaml .Values.strategy | nindent 4 }}
   {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
   {{- end }}
@@ -50,7 +52,7 @@ spec:
         - name: {{ .Chart.Name }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          image: "{{ .Values.image.repository }}:{{ required "image.tag must identify an image built with operator web authentication" .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - name: http
@@ -73,10 +75,21 @@ spec:
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           env:
-            - name: USE_LOCAL_K8S
-              value: "true"
+            - name: IS_LOCAL_MODE
+              value: "false"
             - name: HTTP_SERVER_PORT
               value: "{{ .Values.container.httpPort }}"
+            - name: GEAFLOW_OPERATOR_ADMIN_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ required "webSecurity.existingSecret must reference a Secret containing the admin token" .Values.webSecurity.existingSecret | quote }}
+                  key: {{ required "webSecurity.adminTokenKey must not be empty" .Values.webSecurity.adminTokenKey | quote }}
+            - name: GEAFLOW_OPERATOR_VIEWER_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.webSecurity.existingSecret | quote }}
+                  key: {{ required "webSecurity.viewerTokenKey must not be empty" .Values.webSecurity.viewerTokenKey | quote }}
+                  optional: true
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

@@ -43,6 +43,7 @@
         <commons-collections.version>3.2.2</commons-collections.version>
         <fastjson.version>2.0.29</fastjson.version>
         <guava.version>20.0</guava.version>
+        <geaflow.version>0.8.0-SNAPSHOT</geaflow.version>
         <java.version>11</java.version>
         <maven.compiler.source>11</maven.compiler.source>
         <maven.compiler.target>11</maven.compiler.target>
@@ -108,12 +109,6 @@
             </dependency>
 
             <dependency>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-starter-test</artifactId>
-                <scope>test</scope>
-            </dependency>
-
-            <dependency>
                 <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-kubernetes-operator-bootstrap</artifactId>
                 <version>${project.version}</version>
@@ -146,7 +141,7 @@
             <dependency>
                 <groupId>org.apache.geaflow</groupId>
                 <artifactId>geaflow-on-k8s</artifactId>
-                <version>${project.version}</version>
+                <version>${geaflow.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
@@ -157,12 +152,12 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-checkstyle-plugin</artifactId>
-                <version>2.17</version>
+                <version>3.3.0</version>
                 <dependencies>
                     <dependency>
                         <artifactId>checkstyle</artifactId>
                         <groupId>com.puppycrawl.tools</groupId>
-                        <version>7.1</version>
+                        <version>8.45</version>
                     </dependency>
                 </dependencies>
                 <executions>
@@ -212,11 +207,6 @@
                         <groupId>org.apache.maven.surefire</groupId>
                         <version>2.20</version>
                     </dependency>
-                    <dependency>
-                        <artifactId>surefire-testng</artifactId>
-                        <groupId>org.apache.maven.surefire</groupId>
-                        <version>2.20</version>
-                    </dependency>
                 </dependencies>
                 <configuration>
                     <excludes>
@@ -226,9 +216,6 @@
                         <include>**/*Tests.java</include>
                         <include>**/*Test.java</include>
                     </includes>
-                    <properties>
-                        <junit>false</junit>
-                    </properties>
                     <threadCount>1</threadCount>
                 </configuration>
             </plugin>

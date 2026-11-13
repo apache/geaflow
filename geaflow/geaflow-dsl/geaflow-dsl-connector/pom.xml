@@ -54,6 +54,11 @@
         <module>geaflow-dsl-connector-clickhouse</module>
     </modules>
 
+    <properties>
+        <!-- Keep the Java 8-compatible client aligned with current Docker Engine APIs. -->
+        <testcontainers.version>1.21.4</testcontainers.version>
+    </properties>
+
     <dependencyManagement>
         <dependencies>
             <dependency>

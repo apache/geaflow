@@ -24,17 +24,39 @@ import java.util.List;
 public class RetrievalRequest {
 
     private String graphName;
+    private String requestId;
     private String query;
     private List<Double> queryVector;
     private String mode;
     private String executionMode;
     private RetrievalBudget budget;
+    private String graphVersion;
+    private String indexVersion;
+    private String vectorVersion;
+    private String vectorSource;
+    private boolean allowPartialResults;
 
     public RetrievalRequest() {
     }
 
     public String getGraphName() {
         return graphName;
+    }
+
+    public String getRequestId() {
+        return requestId;
+    }
+
+    public void setRequestId(String requestId) {
+        this.requestId = requestId;
+    }
+
+    public boolean isAllowPartialResults() {
+        return allowPartialResults;
+    }
+
+    public void setAllowPartialResults(boolean allowPartialResults) {
+        this.allowPartialResults = allowPartialResults;
     }
 
     public void setGraphName(String graphName) {
@@ -79,5 +101,37 @@ public class RetrievalRequest {
 
     public void setBudget(RetrievalBudget budget) {
         this.budget = budget;
+    }
+
+    public String getGraphVersion() {
+        return graphVersion;
+    }
+
+    public void setGraphVersion(String graphVersion) {
+        this.graphVersion = graphVersion;
+    }
+
+    public String getIndexVersion() {
+        return indexVersion;
+    }
+
+    public void setIndexVersion(String indexVersion) {
+        this.indexVersion = indexVersion;
+    }
+
+    public String getVectorVersion() {
+        return vectorVersion;
+    }
+
+    public void setVectorVersion(String vectorVersion) {
+        this.vectorVersion = vectorVersion;
+    }
+
+    public String getVectorSource() {
+        return vectorSource;
+    }
+
+    public void setVectorSource(String vectorSource) {
+        this.vectorSource = vectorSource;
     }
 }

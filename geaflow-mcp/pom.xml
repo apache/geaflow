@@ -130,11 +130,6 @@
             <artifactId>geaflow-api</artifactId>
             <version>${project.version}</version>
         </dependency>
-        <dependency>
-            <groupId>org.apache.geaflow</groupId>
-            <artifactId>geaflow-cluster</artifactId>
-            <version>${project.version}</version>
-        </dependency>
 
         <dependency>
             <groupId>org.apache.geaflow</groupId>

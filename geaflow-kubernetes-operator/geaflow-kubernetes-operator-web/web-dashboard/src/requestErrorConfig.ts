@@ -1,4 +1,4 @@
-﻿/*
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -20,14 +20,7 @@
 import type { RequestOptions } from '@@/plugin-request/request';
 import type { RequestConfig } from '@umijs/max';
 import { message, notification } from 'antd';
-
-function getRealRequestUrl(url: string | undefined) {
-  let pathname = window.location.pathname;
-  if (pathname.endsWith("/")) {
-    pathname = pathname.substring(0, pathname.length - 1);
-  }
-  return pathname + url;
-}
+import { operatorApiUrl, operatorAuthHeaders, setOperatorToken } from './operatorAuth';
 
 // 错误处理方案： 错误类型
 enum ErrorShowType {
@@ -99,6 +92,9 @@ export const errorConfig: RequestConfig = {
       } else if (error.response) {
         // Axios 的错误
         // 请求成功发出且服务器也响应了状态码，但状态代码超出了 2xx 的范围
+        if (error.response.status === 401) {
+          setOperatorToken();
+        }
         message.error(`Response status:${error.response.status}`);
       } else if (error.request) {
         // 请求已经成功发起，但没有收到响应
@@ -116,8 +112,8 @@ export const errorConfig: RequestConfig = {
   requestInterceptors: [
     (config: RequestOptions) => {
       // 拦截请求配置，进行个性化处理。
-      const url = getRealRequestUrl(config?.url);
-      return { ...config, url };
+      const url = operatorApiUrl(config.url || '');
+      return { ...config, url, headers: { ...config.headers, ...operatorAuthHeaders(url) } };
     },
   ],
 

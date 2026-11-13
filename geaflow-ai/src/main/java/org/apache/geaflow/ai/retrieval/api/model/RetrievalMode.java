@@ -20,5 +20,15 @@ package org.apache.geaflow.ai.retrieval.api.model;
 
 /** Retrieval modes understood by the versioned API. */
 public enum RetrievalMode {
-    KEYWORD
+    /** Legacy keyword mode, equivalent to BM25_ONLY. */
+    KEYWORD,
+    BM25_ONLY,
+    VECTOR_ONLY,
+    GRAPH_ONLY,
+    HYBRID;
+
+    /** Returns the canonical MVP mode while preserving KEYWORD compatibility. */
+    public RetrievalMode canonical() {
+        return this == KEYWORD ? BM25_ONLY : this;
+    }
 }

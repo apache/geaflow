@@ -1,0 +1,18 @@
+# Golden output of SearchUtils.formatQuery, the query-side pre-processing that
+# runs before the query string reaches the Lucene QueryParser.
+# One case per line: <input> => <output>
+#
+# Facts pinned here:
+#  - every character in EXCLUDED_CHARS becomes a space;
+#  - the lower-case substring "http" is erased wherever it appears: URLs are
+#    reduced to their host/path words, and "https" loses its "http" prefix and
+#    becomes "s" (the erase is a plain substring replace, case-sensitive);
+#  - CJK characters pass through untouched.
+alpaca => alpaca
+alpaca.lama => alpaca lama
+a-b_c => a b_c
+what? (graph) [v2] => what   graph   v2 
+http://example.com/x =>    example com x
+https://example.com/x => s   example com x
+学习 => 学习
+ => 

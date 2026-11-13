@@ -94,4 +94,20 @@ public class RetrievalPropertiesTest {
             properties::validateConfiguration);
         Assertions.assertEquals(RetrievalErrorCode.INVALID_REQUEST, exception.getCode());
     }
+
+    @Test
+    public void remoteBindingRequiresOptInAndToken() {
+        RetrievalProperties properties = new RetrievalProperties();
+        Assertions.assertEquals("127.0.0.1", properties.getServerHost());
+        properties.setServerHost("0.0.0.0");
+        assertInvalid(properties);
+        properties.setRemoteAccessEnabled(true);
+        assertInvalid(properties);
+        properties.setApiToken("test-token");
+        properties.validateConfiguration();
+        properties.setServerHost("::");
+        properties.validateConfiguration();
+        properties.setRemoteAccessEnabled(false);
+        assertInvalid(properties);
+    }
 }

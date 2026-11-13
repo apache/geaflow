@@ -17,34 +17,15 @@
 # under the License.
 #
 
-# base image
-FROM docker.io/library/centos:7@sha256:9d4bcbbb213dfd745b58be38b13b996ebb5ac315fe75711bd618426a630e0987
+# Java 11 runtime; the operator does not execute job JVMs in its own container.
+FROM docker.io/library/eclipse-temurin:11-jre-jammy@sha256:0c567a8bd671331808b89a96976fabb305d57b123dec4fa62a20bfb89f2b32b9
 
 VOLUME /tmp
 
 ENV GEAFLOW_INSTALL_PATH=/opt
 ENV GEAFLOW_HOME=$GEAFLOW_INSTALL_PATH/geaflow
 
-# base packages
-RUN yum -y install wget ps vim curl
-
-# jdk11
-RUN yum -y install java-11-openjdk java-11-openjdk-devel \
-    && echo "export JAVA_HOME=/usr/lib/jvm/java-11-openjdk" >> /etc/profile \
-    && echo "export JRE_HOME=\${JAVA_HOME}/jre" >> /etc/profile \
-    && echo "export CLASSPATH=.:\${JAVA_HOME}/lib:\${JRE_HOME}/lib:\$CLASSPATH" >> /etc/profile \
-    && echo "export JAVA_PATH=\${JAVA_HOME}/bin:\${JRE_HOME}/bin" >> /etc/profile \
-    && echo "export PATH=\$PATH:\${JAVA_PATH}" >> /etc/profile \
-    && source /etc/profile
-
-# jdk8
-RUN yum -y install java-1.8.0-openjdk java-1.8.0-openjdk-devel \
-    && echo "export JAVA_8_HOME=/usr/lib/jvm/java-1.8.0-openjdk" >> /etc/profile \
-    && source /etc/profile
-
-ENV JAVA_HOME=/usr/lib/jvm/java-11-openjdk
-ENV JAVA_8_HOME=/usr/lib/jvm/java-1.8.0-openjdk
-ENV USE_LOCAL_K8S=false
+ENV IS_LOCAL_MODE=false
 ENV K8S_MASTER_URL=http://127.0.0.1:8000/
 ENV HTTP_SERVER_PORT=8080
 

@@ -20,10 +20,16 @@
 /**
  * Versioned retrieval API contract for Java and HTTP clients.
  *
- * <p>Version {@code v1} supports {@code KEYWORD} retrieval with {@code SEQUENTIAL} execution.
- * {@code PARALLEL}, {@code CASCADED}, and non-empty query vectors are reserved and must be
- * reported as {@code UNSUPPORTED_OPTION}. Unknown JSON fields are accepted for additive wire
- * compatibility; duplicate fields are rejected. Response collections are always JSON arrays.</p>
+ * <p>The core version {@code v1} facade supports {@code BM25_ONLY}, {@code VECTOR_ONLY},
+ * {@code GRAPH_ONLY}, and fixed {@code HYBRID} retrieval with {@code SEQUENTIAL} execution.
+ * {@code KEYWORD} is retained as an alias for {@code BM25_ONLY}. A non-empty query vector is
+ * required by {@code VECTOR_ONLY} and {@code HYBRID}; it is unsupported for the other modes.
+ * {@code PARALLEL} and {@code CASCADED} execution are reserved and reported as
+ * {@code UNSUPPORTED_OPTION}. The HTTP endpoint currently exposes {@code KEYWORD} only.
+ * Unknown JSON fields are accepted for additive wire compatibility; duplicate fields are
+ * rejected. Response collections are always JSON arrays. Hybrid responses include selected
+ * channels, channel budgets and statuses, evaluated counts, versions, and stop/degradation
+ * reasons in the trace.</p>
  *
  * <p>Error codes map to HTTP status as follows: {@code INVALID_REQUEST}=400,
  * {@code UNSUPPORTED_OPTION}=400, {@code GRAPH_NOT_FOUND}=404,

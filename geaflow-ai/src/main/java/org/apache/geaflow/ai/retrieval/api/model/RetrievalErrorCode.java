@@ -22,6 +22,8 @@ package org.apache.geaflow.ai.retrieval.api.model;
 public enum RetrievalErrorCode {
     INVALID_REQUEST(400, false),
     UNSUPPORTED_OPTION(400, false),
+    AUTHENTICATION_REQUIRED(401, false),
+    FORBIDDEN(403, false),
     GRAPH_NOT_FOUND(404, false),
     INDEX_NOT_READY(503, true),
     RETRIEVAL_TIMEOUT(504, true),

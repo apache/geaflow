@@ -72,6 +72,12 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
+      - name: Verify Docker environment
+        timeout-minutes: 2
+        run: |
+          python3 tools/ci/test_check_docker.py
+          bash tools/ci/check-docker.sh
+
       - name: Setup Protoc
         uses: arduino/setup-protoc@v2
         with:

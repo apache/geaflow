@@ -33,7 +33,6 @@
 
     <properties>
         <mongodb-driver.version>4.11.1</mongodb-driver.version>
-        <testcontainers.version>1.19.8</testcontainers.version>
     </properties>
 
     <dependencies>

@@ -33,7 +33,6 @@
 
     <properties>
         <doris.httpclient.version>4.5.13</doris.httpclient.version>
-        <testcontainers.version>1.19.7</testcontainers.version>
     </properties>
 
     <dependencies>

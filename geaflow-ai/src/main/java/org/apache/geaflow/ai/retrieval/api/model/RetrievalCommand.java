@@ -18,6 +18,10 @@
 
 package org.apache.geaflow.ai.retrieval.api.model;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
 /** Immutable request passed beyond the validation boundary. */
 public final class RetrievalCommand {
 
@@ -26,15 +30,24 @@ public final class RetrievalCommand {
     private final RetrievalMode mode;
     private final ExecutionMode executionMode;
     private final RetrievalBudget budget;
+    private final List<Double> queryVector;
 
     public RetrievalCommand(String graphName, String query, RetrievalMode mode,
                             ExecutionMode executionMode, RetrievalBudget budget) {
+        this(graphName, query, mode, executionMode, budget, Collections.<Double>emptyList());
+    }
+
+    public RetrievalCommand(String graphName, String query, RetrievalMode mode,
+                            ExecutionMode executionMode, RetrievalBudget budget,
+                            List<Double> queryVector) {
         this.graphName = graphName;
         this.query = query;
         this.mode = mode;
         this.executionMode = executionMode;
         this.budget = new RetrievalBudget(budget.getTopK(), budget.getTimeoutMs(),
             budget.getMaxCandidates(), budget.getTokenBudget());
+        this.queryVector = queryVector == null ? Collections.<Double>emptyList()
+            : Collections.unmodifiableList(new ArrayList<>(queryVector));
     }
 
     public String getGraphName() {
@@ -56,5 +69,10 @@ public final class RetrievalCommand {
     public RetrievalBudget getBudget() {
         return new RetrievalBudget(budget.getTopK(), budget.getTimeoutMs(),
             budget.getMaxCandidates(), budget.getTokenBudget());
+    }
+
+    /** Returns the caller-supplied, precomputed query vector. */
+    public List<Double> getQueryVector() {
+        return queryVector;
     }
 }

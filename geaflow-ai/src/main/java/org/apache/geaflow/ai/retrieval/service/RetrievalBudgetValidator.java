@@ -38,10 +38,6 @@ public final class RetrievalBudgetValidator {
             }
             return defaults(properties);
         }
-        if (requireAllValues && (budget.getTopK() == null || budget.getTimeoutMs() == null
-            || budget.getMaxCandidates() == null || budget.getTokenBudget() == null)) {
-            throw invalid("all budget values are required");
-        }
         Integer topK = valueOrDefault(budget.getTopK(), properties.getDefaultTopK());
         Integer timeoutMs = valueOrDefault(budget.getTimeoutMs(), properties.getDefaultTimeoutMs());
         Integer maxCandidates = valueOrDefault(budget.getMaxCandidates(),
