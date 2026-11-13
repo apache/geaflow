@@ -41,6 +41,19 @@
         <gson.version>2.2.4</gson.version>
     </properties>
 
+    <dependencyManagement>
+        <dependencies>
+            <!-- Keep individual Netty modules binary-compatible with GeaFlow's netty-all. -->
+            <dependency>
+                <groupId>io.netty</groupId>
+                <artifactId>netty-bom</artifactId>
+                <version>4.1.51.Final</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
     <dependencies>
         <dependency>
             <groupId>org.slf4j</groupId>
@@ -84,6 +97,13 @@
             <version>${lucene.version}</version>
         </dependency>
 
+        <!-- Lucene English analysis -->
+        <dependency>
+            <groupId>org.apache.lucene</groupId>
+            <artifactId>lucene-analyzers-common</artifactId>
+            <version>${lucene.version}</version>
+        </dependency>
+
         <!-- Lucene Query Parser -->
         <dependency>
             <groupId>org.apache.lucene</groupId>
@@ -121,8 +141,28 @@
         <artifactId>geaflow-api</artifactId>
         <version>${project.version}</version>
       </dependency>
+      <dependency>
+        <groupId>org.apache.geaflow</groupId>
+        <artifactId>geaflow-dsl-common</artifactId>
+        <version>${project.version}</version>
+      </dependency>
 
         <!-- test -->
+        <dependency>
+            <groupId>org.apache.geaflow</groupId>
+            <artifactId>geaflow-pipeline</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.geaflow</groupId>
+            <artifactId>geaflow-on-local</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.geaflow</groupId>
+            <artifactId>geaflow-dsl-runtime</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
@@ -147,6 +187,45 @@
   <build>
     <plugins>
       <plugin>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>default-test</id>
+            <configuration>
+              <excludedGroups>udga-packaged</excludedGroups>
+            </configuration>
+          </execution>
+          <execution>
+            <id>udga-packaged</id>
+            <phase>verify</phase>
+            <goals><goal>test</goal></goals>
+            <configuration>
+              <argLine>${coverageAgent} ${extraJavaTestArgs}</argLine>
+              <includes>
+                <include>**/TemporalUdgaIntegrationTest.java</include>
+              </includes>
+              <groups>udga-packaged</groups>
+              <failIfNoSpecifiedTests>true</failIfNoSpecifiedTests>
+              <reportsDirectory>${project.build.directory}/packaged-reports</reportsDirectory>
+              <systemPropertyVariables>
+                <temporal.udga.jar>${project.build.directory}/${project.build.finalName}-jar-with-dependencies.jar</temporal.udga.jar>
+              </systemPropertyVariables>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.rat</groupId>
+        <artifactId>apache-rat-plugin</artifactId>
+        <configuration>
+          <excludes combine.children="append">
+            <!-- Executable JSONL examples cannot contain comment headers. -->
+            <exclude>src/main/resources/temporal/example-events.jsonl</exclude>
+            <exclude>src/main/resources/temporal/example-queries.jsonl</exclude>
+          </excludes>
+        </configuration>
+      </plugin>
+      <plugin>
         <artifactId>maven-assembly-plugin</artifactId>
         <configuration>
           <archive>
@@ -154,9 +233,9 @@
               <mainClass>org.apache.geaflow.ai.client.GeaFlowMemoryClientCLI</mainClass>
             </manifest>
           </archive>
-          <descriptorRefs>
-            <descriptorRef>jar-with-dependencies</descriptorRef>
-          </descriptorRefs>
+          <descriptors>
+            <descriptor>src/assembly/jar-with-dependencies.xml</descriptor>
+          </descriptors>
         </configuration>
         <executions>
           <execution>

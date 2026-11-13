@@ -89,3 +89,12 @@ jobs:
             -pl !geaflow/geaflow-plugins/geaflow-store/geaflow-store-vector \
             -Duser.timezone=Asia/Shanghai \
             -Dlog4j.configuration="log4j .rootLogger=WARN, stdout"
+
+      - name: Verify packaged temporal recovery on JDK 8
+        timeout-minutes: 15
+        run: |
+          mvn -B -e -nsu verify -Pjdk8 -pl geaflow-ai -am \
+            -Dmaven.javadoc.skip=true -Dmaven.source.skip=true \
+            -Dtest=TemporalUdgaIntegrationTest#packagedApplicationContinuesCommittedStateInIndependentJvms \
+            -Dsurefire.failIfNoSpecifiedTests=false \
+            -Duser.timezone=Asia/Shanghai
