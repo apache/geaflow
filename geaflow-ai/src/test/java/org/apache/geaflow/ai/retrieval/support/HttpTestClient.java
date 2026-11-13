@@ -56,6 +56,13 @@ public final class HttpTestClient implements AutoCloseable {
         return execute(new Request.Builder().url(url(path, parameters)).get().build());
     }
 
+    public HttpTestResponse getWithHeaders(String path, Map<String, String> headers) {
+        Request.Builder builder = new Request.Builder().url(url(path, Collections.emptyMap())).get();
+        (headers == null ? Collections.<String, String>emptyMap() : headers)
+            .forEach(builder::header);
+        return execute(builder.build());
+    }
+
     public HttpTestResponse post(String path, String body, Map<String, String> parameters) {
         return execute(new Request.Builder().url(url(path, parameters)).post(
             RequestBody.create(MediaType.parse("application/json; charset=utf-8"),

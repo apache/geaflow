@@ -1,0 +1,30 @@
+{
+  "dataset": "2wikimultihopqa",
+  "dataset_release": "official",
+  "split": "dev",
+  "source_uri": "https://www.dropbox.com/s/npidmtadreo6df2/data.zip?dl=1",
+  "cache_path": "${GRAPH_RAG_CACHE}/2wikimultihopqa-dev.zip",
+  "sha256": "e8e57c0aafc4a26d41131e320ebb5afb6f2aca86b8a6e6611b08f52033cb7d04",
+  "parser_version": "2wikimultihopqa-parser-v1",
+  "preprocessing_version": "unicode-nfc-whitespace-v1",
+  "chunk_size": 1200,
+  "overlap": 120,
+  "entity_schema_version": "chunk-entity-cooccurrence-v2",
+  "entity_extractor_version": "text-cooccurrence-entity-v2",
+  "vector_source": "iic/nlp_gte_sentence-embedding_english-small",
+  "vector_version": "v1.0.0",
+  "random_seed": 0,
+  "budget_configuration": {
+    "primary_constraint": "candidates",
+    "max_candidates": 100,
+    "timeout_ms": 10000,
+    "token_budget": 4096,
+    "max_edge_scans": 100
+  },
+  "license": {
+    "url": "https://github.com/Alab-NII/2wikimultihop",
+    "declared": "Apache-2.0",
+    "status": "pending-review",
+    "note": "Declared licence recorded for release review; approval is a manual action."
+  }
+}

@@ -30,6 +30,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.apache.geaflow.ai.retrieval.api.model.RetrievalMode;
 import org.apache.geaflow.ai.retrieval.model.document.SourceDocument;
 import org.apache.geaflow.ai.retrieval.model.document.SourceRef;
 import org.apache.geaflow.ai.retrieval.model.document.TextChunk;
@@ -96,27 +97,37 @@ public final class RetrievalModelJson {
                 requiredInt(object, "startOffset"), requiredInt(object, "endOffset"),
                 requiredInt(object, "tokenEstimate"), requiredString(object, "text"),
                 optionalString(object, "policyVersion"), optionalString(object, "textHash"),
-                optionalString(object, "sourceUri"));
+                optionalString(object, "sourceUri"), optionalString(object, "dataset"),
+                optionalString(object, "datasetVersion"), optionalString(object, "split"),
+                optionalString(object, "sourceHash"));
         } else if (type == EntityRef.class) {
             return new EntityRef(requiredString(object, "entityId"),
                 requiredString(object, "canonicalName"), strings(object, "aliases"),
-                requiredString(object, "type"), strings(object, "sourceChunkIds"));
+                requiredString(object, "type"), strings(object, "sourceChunkIds"),
+                optionalString(object, "dataset"), optionalString(object, "datasetVersion"),
+                optionalString(object, "split"), optionalString(object, "sourceHash"));
         } else if (type == GraphVertexRef.class) {
             return new GraphVertexRef(requiredString(object, "label"),
-                requiredString(object, "vertexId"), requiredString(object, "entityId"));
+                requiredString(object, "vertexId"), requiredString(object, "entityId"),
+                optionalString(object, "dataset"), optionalString(object, "datasetVersion"),
+                optionalString(object, "split"), optionalString(object, "sourceHash"));
         } else if (type == GraphEdgeRef.class) {
             return new GraphEdgeRef(requiredString(object, "edgeId"),
                 requiredString(object, "label"), requiredString(object, "sourceEntityId"),
                 requiredString(object, "targetEntityId"),
-                strings(object, "sourceChunkIds"));
+                strings(object, "sourceChunkIds"), optionalString(object, "dataset"),
+                optionalString(object, "datasetVersion"), optionalString(object, "split"),
+                optionalString(object, "sourceHash"));
         } else if (type == GraphPathRef.class) {
-            return new GraphPathRef(strings(object, "vertexIds"),
-                strings(object, "edgeIds"), requiredInt(object, "hop"),
+            return new GraphPathRef(models(object, "vertices", GraphVertexRef.class),
+                models(object, "edges", GraphEdgeRef.class),
                 requiredBoolean(object, "sampled"));
         } else if (type == SourceRef.class) {
             return new SourceRef(requiredString(object, "documentId"),
                 requiredString(object, "sourceUri"), optionalInt(object, "startOffset"),
-                optionalInt(object, "endOffset"));
+                optionalInt(object, "endOffset"), optionalString(object, "dataset"),
+                optionalString(object, "datasetVersion"), optionalString(object, "split"),
+                optionalString(object, "sourceHash"));
         } else if (type == ChannelScore.class) {
             return new ChannelScore(requiredString(object, "channel"),
                 requiredDouble(object, "rawScore"), optionalDouble(object, "normalizedScore"),
@@ -130,16 +141,21 @@ public final class RetrievalModelJson {
         } else if (type == Evidence.class) {
             return new Evidence(optionalString(object, "evidenceId"), kind(object),
                 optionalString(object, "text"), models(object, "chunks", TextChunk.class),
-                models(object, "entities", EntityRef.class), models(object, "paths", GraphPathRef.class),
-                models(object, "sources", SourceRef.class), scores(object),
+                models(object, "entities", EntityRef.class), models(object, "sources", SourceRef.class), scores(object),
                 optionalDouble(object, "fusedScore"), optionalDouble(object, "finalScore"),
-                optionalInt(object, "rank"), models(object, "graphTraces", GraphEvidenceTrace.class));
+                optionalInt(object, "rank"), models(object, "graphTraces", GraphEvidenceTrace.class),
+                requiredInt(object, "schemaVersion"),
+                optionalString(object, "dataset"), optionalString(object, "datasetVersion"),
+                optionalString(object, "split"), optionalString(object, "graphVersion"),
+                optionalString(object, "indexVersion"));
         } else if (type == GraphEvidenceTrace.class) {
             JsonObject path = object.getAsJsonObject("path");
             return new GraphEvidenceTrace(requiredString(object, "queryId"),
-                requiredString(object, "graphVersion"), requiredString(object, "anchorEntityId"),
-                requiredString(object, "anchorMatchType"), requiredDouble(object, "anchorConfidence"),
-                (GraphPathRef) parse(path, GraphPathRef.class), strings(object, "supportingChunkIds"));
+                enumValue(requiredString(object, "selectedMode"), RetrievalMode.class),
+                requiredString(object, "anchorMatchType"),
+                requiredDouble(object, "anchorConfidence"), requiredString(object, "graphVersion"),
+                (GraphPathRef) parse(path, GraphPathRef.class),
+                strings(object, "supportingChunkIds"));
         }
         throw new JsonParseException("unsupported retrieval model: " + type.getName());
     }
@@ -187,6 +203,14 @@ public final class RetrievalModelJson {
             result.add(fromElement(item, type));
         }
         return result;
+    }
+
+    private static <T extends Enum<T>> T enumValue(String value, Class<T> type) {
+        try {
+            return Enum.valueOf(type, value);
+        } catch (IllegalArgumentException e) {
+            throw new JsonParseException("unknown enum value: " + value);
+        }
     }
 
     private static List<String> strings(JsonObject object, String name) {

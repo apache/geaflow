@@ -22,7 +22,6 @@ import java.util.ArrayList;
 import java.util.List;
 import org.apache.geaflow.ai.retrieval.model.document.SourceRef;
 import org.apache.geaflow.ai.retrieval.model.evidence.Evidence;
-import org.apache.geaflow.ai.retrieval.model.graph.GraphPathRef;
 
 /** Wire success response DTO. */
 public class RetrievalResponse {
@@ -31,11 +30,22 @@ public class RetrievalResponse {
     private String graphName;
     private String graphVersion;
     private List<Evidence> evidence = new ArrayList<>();
-    private List<GraphPathRef> paths = new ArrayList<>();
     private List<SourceRef> sources = new ArrayList<>();
     private RetrievalTrace trace;
     private RetrievalBudget effectiveBudget;
     private List<String> degradedChannels = new ArrayList<>();
+    /**
+     * Extractive answer drawn verbatim from the returned evidence, or null when the result abstains.
+     *
+     * <p>The design lists extractive answer EM/F1 as a required metric. That metric is only
+     * computable when the retrieval response itself carries a predicted answer, so the answer is
+     * produced by the offline extractive consumer rather than by any generative model.
+     */
+    private String answer;
+    /**
+     * Why no answer was produced, or null when {@link #answer} is present.
+     */
+    private String answerAbstentionReason;
 
     public RetrievalResponse() {
     }
@@ -72,14 +82,6 @@ public class RetrievalResponse {
         this.evidence = evidence == null ? new ArrayList<Evidence>() : new ArrayList<>(evidence);
     }
 
-    public List<GraphPathRef> getPaths() {
-        return paths;
-    }
-
-    public void setPaths(List<GraphPathRef> paths) {
-        this.paths = paths == null ? new ArrayList<GraphPathRef>() : new ArrayList<>(paths);
-    }
-
     public List<SourceRef> getSources() {
         return sources;
     }
@@ -102,6 +104,22 @@ public class RetrievalResponse {
 
     public void setEffectiveBudget(RetrievalBudget effectiveBudget) {
         this.effectiveBudget = effectiveBudget;
+    }
+
+    public String getAnswer() {
+        return answer;
+    }
+
+    public void setAnswer(String answer) {
+        this.answer = answer;
+    }
+
+    public String getAnswerAbstentionReason() {
+        return answerAbstentionReason;
+    }
+
+    public void setAnswerAbstentionReason(String answerAbstentionReason) {
+        this.answerAbstentionReason = answerAbstentionReason;
     }
 
     public List<String> getDegradedChannels() {

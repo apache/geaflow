@@ -21,29 +21,55 @@ package org.apache.geaflow.ai.retrieval.channel.graph;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.function.LongSupplier;
+import org.apache.geaflow.ai.retrieval.execution.BudgetLedger;
+import org.apache.geaflow.ai.retrieval.execution.DeterministicTokenEstimator;
 import org.apache.geaflow.ai.retrieval.execution.RecallStopReason;
+import org.apache.geaflow.ai.retrieval.execution.TokenEstimator;
 import org.apache.geaflow.ai.retrieval.model.document.TextChunk;
 import org.apache.geaflow.ai.retrieval.model.graph.EntityRef;
 import org.apache.geaflow.ai.retrieval.model.graph.GraphEdgeRef;
 import org.apache.geaflow.ai.retrieval.model.graph.GraphPathRef;
+import org.apache.geaflow.ai.retrieval.model.graph.GraphVertexRef;
 
 /** Bounded deterministic one-hop graph expansion over fixture graph records. */
 public final class GraphRetriever {
+
+    /**
+     * Source relevance when an edge and its anchor share no source chunk.
+     *
+     * <p>Now supplied by {@link GraphRetrievalConfig} so the value is recorded in build metadata
+     * instead of being a constant that made a published association score impossible to reproduce.
+     * This constant remains only as the documented default.
+     */
+    private static final double UNRELATED_SOURCE_RELEVANCE = 0.5D;
+    /**
+     * Documented default base source-relevance score; see {@link GraphRetrievalConfig}.
+     */
+    private static final double ANCHOR_HIT_BASE_SCORE = 1.0D;
     private final EntityAnchorResolver resolver;
+    private final TokenEstimator tokenEstimator;
     private GraphStats lastStats = new GraphStats();
 
     public GraphRetriever() {
-        this(new EntityAnchorResolver());
+        this(new EntityAnchorResolver(), new DeterministicTokenEstimator());
     }
 
     public GraphRetriever(EntityAnchorResolver resolver) {
+        this(resolver, new DeterministicTokenEstimator());
+    }
+
+    public GraphRetriever(EntityAnchorResolver resolver, TokenEstimator tokenEstimator) {
         this.resolver = resolver;
+        this.tokenEstimator = java.util.Objects.requireNonNull(tokenEstimator, "tokenEstimator");
     }
 
     public List<GraphHit> retrieve(String query, List<EntityRef> entities, List<GraphEdgeRef> edges,
@@ -103,10 +129,10 @@ public final class GraphRetriever {
                     return result;
                 }
                 if (lastStats.edgesExamined >= edgeCap) {
-                    lastStats.stopReason = RecallStopReason.EDGE_SCAN_LIMIT;
+                    stopForBudget(RecallStopReason.EDGE_SCAN_LIMIT);
                     return result;
                 }
-                GraphEdgeRef edge = iterator.next();
+                final GraphEdgeRef edge = iterator.next();
                 lastStats.neighborsSampled++;
                 lastStats.edgesExamined++;
                 if (edge == null) {
@@ -166,21 +192,23 @@ public final class GraphRetriever {
                 }
                 if (boundedSources.isEmpty()) {
                     if (provenanceLimitReached) {
-                        lastStats.stopReason = RecallStopReason.CANDIDATE_LIMIT;
+                        stopForBudget(RecallStopReason.CANDIDATE_LIMIT);
                         return result;
                     }
                     continue;
                 }
                 producedChunks.addAll(newCandidates);
-                GraphPathRef path = new GraphPathRef(
-                    java.util.Arrays.asList(anchor.getEntity().getEntityId(), target),
-                    Collections.singletonList(edge.getEdgeId()), 1, false);
-                result.add(new GraphHit(anchor, edge, path, boundedSources,
+                GraphVertexRef sourceVertex = provider.vertex(anchor.getEntity());
+                GraphVertexRef targetVertex = provider.vertex(entityMap.get(target));
+                List<GraphVertexRef> pathVertices = java.util.Arrays.asList(sourceVertex, targetVertex);
+                GraphPathRef path = new GraphPathRef(pathVertices,
+                    Collections.singletonList(edge), false);
+                result.add(new GraphHit(anchor, path, boundedSources,
                     1.0 / (1.0 + result.size())));
                 lastStats.verticesReached++;
                 lastStats.candidatesProduced = producedChunks.size();
                 if (producedChunks.size() >= candidateCap || provenanceLimitReached) {
-                    lastStats.stopReason = RecallStopReason.CANDIDATE_LIMIT;
+                    stopForBudget(RecallStopReason.CANDIDATE_LIMIT);
                     return result;
                 }
             }
@@ -191,8 +219,623 @@ public final class GraphRetriever {
         return result;
     }
 
+    /** Executes a deterministic, bounded frontier expansion. */
+    public List<GraphHit> retrieve(String query, List<EntityRef> entities, GraphNeighborProvider provider,
+                                   Map<String, TextChunk> chunks, GraphRetrievalConfig config,
+                                   long deadlineNanos, LongSupplier clock) {
+        return retrieve(query, entities, provider, chunks, config, deadlineNanos, clock, null);
+    }
+
+    /** Executes graph expansion while charging unique source chunks to a request ledger. */
+    public List<GraphHit> retrieve(String query, List<EntityRef> entities, GraphNeighborProvider provider,
+                                   Map<String, TextChunk> chunks, GraphRetrievalConfig config,
+                                   long deadlineNanos, LongSupplier clock, BudgetLedger ledger) {
+        return retrieve(query, entities, provider, chunks, config, deadlineNanos, clock, ledger,
+            Collections.emptyList());
+    }
+
+    /** Uses bounded text-channel candidates to resolve anchors when the question has no direct mention. */
+    public List<GraphHit> retrieve(String query, List<EntityRef> entities, GraphNeighborProvider provider,
+                                   Map<String, TextChunk> chunks, GraphRetrievalConfig config,
+                                   long deadlineNanos, LongSupplier clock, BudgetLedger ledger,
+                                   List<String> candidateChunkIds) {
+        ExpansionSession session = beginRetrieval(query, entities, provider, chunks, config, deadlineNanos,
+            clock, ledger, candidateChunkIds);
+        lastStats = session.getStats();
+        if (session.isTerminal()) {
+            return session.getHits();
+        }
+        // One call per hop: the loop is the single-shot equivalent of the split adaptive path, so
+        // both entry points run the same expansion code and cannot drift apart.
+        while (!session.isExhausted()) {
+            expandOneHop(session, config, deadlineNanos, clock);
+            if (session.isTerminal()) {
+                break;
+            }
+        }
+        return session.finish();
+    }
+
+    /**
+     * Resolves anchors and seeds the frontier without expanding a single hop.
+     *
+     * <p>The adaptive path needs the frontier to exist before it knows how many hops it can afford,
+     * so seeding is separated from expansion. The returned session is the only mutable state of one
+     * request; {@link #expandOneHop} advances it one hop at a time and never exceeds hop boundaries.
+     */
+    public ExpansionSession beginRetrieval(String query, List<EntityRef> entities,
+                                           GraphNeighborProvider provider, Map<String, TextChunk> chunks,
+                                           GraphRetrievalConfig config, long deadlineNanos, LongSupplier clock,
+                                           BudgetLedger ledger, List<String> candidateChunkIds) {
+        GraphStats stats = new GraphStats();
+        lastStats = stats;
+        ExpansionSession session = new ExpansionSession(this, stats);
+        if (config == null || entities == null || provider == null || chunks == null) {
+            session.terminal = true;
+            return session;
+        }
+        session.query = query;
+        session.config = config;
+        session.provider = provider;
+        session.chunks = chunks;
+        session.ledger = ledger;
+        if (expired(deadlineNanos, clock)) {
+            session.terminal = true;
+            return session;
+        }
+        List<EntityAnchorResolver.Anchor> anchors = resolver.resolveFromCandidates(query, entities,
+            candidateChunkIds, Math.min(config.getNeighborCap(), config.getCandidateBudget()),
+            deadlineNanos, clock);
+        if (expired(deadlineNanos, clock)) {
+            session.terminal = true;
+            return session;
+        }
+        stats.anchorsConsidered = anchors.size();
+        if (anchors.isEmpty()) {
+            stats.stopReason = RecallStopReason.NO_RELIABLE_ANCHOR;
+            session.terminal = true;
+            return session;
+        }
+        Map<String, EntityRef> entityMap = new HashMap<>();
+        for (EntityRef entity : entities) {
+            if (entity != null) {
+                entityMap.put(entity.getEntityId(), entity);
+            }
+        }
+        session.entityMap = entityMap;
+        for (EntityAnchorResolver.Anchor anchor : anchors) {
+            String entityId = anchor.getEntity().getEntityId();
+            session.visitedVertices.add(entityId);
+            session.frontier.add(ExpansionState.seed(anchor, provider.vertex(anchor.getEntity()),
+                anchor.getConfidence() * config.getAnchorScoreWeight()));
+        }
+        stats.verticesReached = session.visitedVertices.size();
+        stats.uniqueVertices = session.visitedVertices.size();
+        session.frontierSizes.put(0, anchors.size());
+        return session;
+    }
+
+    /**
+     * Expands every frontier state whose hop equals the session's current hop, then returns.
+     *
+     * <p>States created by this hop are queued but not polled, so the caller sees exactly one hop of
+     * progress and can re-plan before spending the next one. All budget, association and diffusion
+     * stops of the single-shot path are evaluated at the same points as before.
+     *
+     * @return the session, for call chaining; the caller reads its stats and hits afterwards
+     */
+    public ExpansionSession expandOneHop(ExpansionSession session, GraphRetrievalConfig config,
+                                         long deadlineNanos, LongSupplier clock) {
+        if (session == null || config == null || session.terminal || session.exhausted) {
+            return session;
+        }
+        int hopInProgress = session.currentHop;
+        while (!session.terminal && !session.frontier.isEmpty()
+            && session.frontier.peek().hop == hopInProgress) {
+            if (expired(deadlineNanos, clock)) {
+                session.terminal = true;
+                break;
+            }
+            ExpansionState state = session.frontier.poll();
+            expandState(session, state, config, deadlineNanos, clock);
+        }
+        if (session.frontier.isEmpty()) {
+            session.exhausted = true;
+        } else {
+            session.currentHop = session.frontier.peek().hop;
+        }
+        return session;
+    }
+
+    /**
+     * Expands the neighbours of one frontier state.
+     *
+     * <p>Extracted from the original single loop so {@link #expandOneHop} and the single-shot path
+     * execute identical logic.
+     */
+    private void expandState(ExpansionSession session, ExpansionState state, GraphRetrievalConfig config,
+                             long deadlineNanos, LongSupplier clock) {
+        if (expired(deadlineNanos, clock)) {
+            session.terminal = true;
+            return;
+        }
+        if (state.hop >= config.getMaxHop()) {
+            session.reachedMaxHop = true;
+            return;
+        }
+        if (state.hop > 0 && session.getStats().growthRate > config.getMaxDiffusionGrowth()) {
+            stopWithValidation(session, RecallStopReason.DIFFUSION_GROWTH_LIMIT);
+            return;
+        }
+        int remainingEdgeBudget = config.getEdgeScanBudget() - session.getStats().edgesExamined;
+        GraphNeighborProvider.NeighborBatch batch = session.provider.prioritizedNeighbors(state.entityId,
+            edgeComparator(session.query, state, config), config.getNeighborCap(), remainingEdgeBudget);
+        if (expired(deadlineNanos, clock)) {
+            session.terminal = true;
+            return;
+        }
+        int examined = batch.getExamined();
+        session.getStats().edgesExamined += examined;
+        increment(session.edgesExaminedByHop, state.hop + 1, examined);
+        int scoredThisHop = 0;
+        int survivedThisHop = 0;
+        boolean associationTerminated = false;
+        for (GraphEdgeRef edge : batch.getEdges()) {
+            if (expired(deadlineNanos, clock)) {
+                session.terminal = true;
+                return;
+            }
+            if (!sampled(session.query, state, edge, config)) {
+                continue;
+            }
+            session.getStats().neighborsSampled++;
+            if (!session.scannedEdges.add(edge.getEdgeId())) {
+                continue;
+            }
+            String targetId = otherEndpoint(state.entityId, edge);
+            if (targetId == null || !session.entityMap.containsKey(targetId)) {
+                session.getStats().validationErrors.add("edge " + edge.getEdgeId()
+                    + " references an unknown entity");
+                continue;
+            }
+            if (state.pathEntityIds.contains(targetId)) {
+                continue;
+            }
+            double score = associationScore(state, edge, targetId, session.provider, config);
+            scoredThisHop++;
+            if (score < config.getMinAssociationScore()) {
+                session.getStats().filteredByAssociation++;
+                associationTerminated = exceedsAssociationFloor(
+                    survivedThisHop, scoredThisHop, config);
+                if (associationTerminated) {
+                    break;
+                }
+                continue;
+            }
+            survivedThisHop++;
+            List<String> sourceIds = sourceIds(state, edge, session.entityMap);
+            if (sourceIds.isEmpty()) {
+                session.getStats().validationErrors.add("edge " + edge.getEdgeId()
+                    + " references an unknown chunk");
+                continue;
+            }
+            int remainingCandidates = config.getCandidateBudget() - session.producedChunks.size();
+            if (remainingCandidates <= 0) {
+                stopForBudget(session, RecallStopReason.CANDIDATE_LIMIT);
+                return;
+            }
+            int newChunks = 0;
+            long addedTokens = 0L;
+            boolean invalidSource = false;
+            Set<String> edgeSources = new LinkedHashSet<>();
+            List<String> boundedSourceIds = new ArrayList<>();
+            for (String sourceId : sourceIds) {
+                if (!edgeSources.add(sourceId)) {
+                    continue;
+                }
+                TextChunk chunk = session.chunks.get(sourceId);
+                if (chunk == null) {
+                    invalidSource = true;
+                    break;
+                }
+                if (!session.producedChunks.contains(sourceId)) {
+                    int estimate = tokenEstimator.estimate(chunk);
+                    if (estimate < 1) {
+                        session.getStats().validationErrors.add("token estimator returned a non-positive estimate");
+                        stopForBudget(session, RecallStopReason.TOKEN_BUDGET);
+                        return;
+                    }
+                    if (session.ledger != null) {
+                        if (!session.ledger.tryRetain(sourceId, chunk, tokenEstimator)) {
+                            stopForBudget(session, session.ledger.getStopReason());
+                            return;
+                        }
+                    } else {
+                        long projectedTokens = (long) session.getStats().tokensEstimated + addedTokens + estimate;
+                        if (projectedTokens > config.getTokenBudget()) {
+                            stopForBudget(session, RecallStopReason.TOKEN_BUDGET);
+                            return;
+                        }
+                    }
+                    addedTokens += estimate;
+                    newChunks++;
+                }
+                boundedSourceIds.add(sourceId);
+                if (newChunks >= remainingCandidates) {
+                    break;
+                }
+            }
+            if (invalidSource) {
+                session.getStats().validationErrors.add("edge " + edge.getEdgeId()
+                    + " references an unknown chunk");
+                continue;
+            }
+            sourceIds = boundedSourceIds;
+            GraphVertexRef targetVertex = session.provider.vertex(session.entityMap.get(targetId));
+            int hop = state.hop + 1;
+            Set<String> pathSources = new LinkedHashSet<>(state.sourceChunkIds);
+            pathSources.addAll(sourceIds);
+            List<String> orderedSources = new ArrayList<>(pathSources);
+            Collections.sort(orderedSources);
+            ExpansionState nextState = state.extend(targetId, targetVertex, edge, score,
+                orderedSources, config.getSampleRate() < 1.0);
+            GraphPathRef path = nextState.path;
+            if (!session.emittedPaths.add(pathKey(path))) {
+                continue;
+            }
+            session.producedChunks.addAll(sourceIds);
+            session.getStats().tokensEstimated += (int) addedTokens;
+            session.getStats().candidatesProduced = session.producedChunks.size();
+            session.getStats().evidenceYield += newChunks;
+            boolean newVertex = session.visitedVertices.add(targetId);
+            if (newVertex) {
+                session.getStats().verticesReached = session.visitedVertices.size();
+                session.getStats().uniqueVertices = session.visitedVertices.size();
+                increment(session.newVerticesByHop, hop);
+            }
+            increment(session.newEvidenceByHop, hop, newChunks);
+            session.getStats().growthRate = (double) session.newVerticesByHop.getOrDefault(hop, 0)
+                / Math.max(1, session.frontierSizes.getOrDefault(hop - 1, 1));
+            session.getStats().marginalYield = (double) session.newEvidenceByHop.getOrDefault(hop, 0)
+                / Math.max(1, session.edgesExaminedByHop.getOrDefault(hop, 0));
+            session.result.add(new GraphHit(state.anchor, path, orderedSources, score));
+            if (session.producedChunks.size() >= config.getCandidateBudget()) {
+                stopForBudget(session, RecallStopReason.CANDIDATE_LIMIT);
+                return;
+            }
+            if (session.getStats().growthRate > config.getMaxDiffusionGrowth()) {
+                stopWithValidation(session, RecallStopReason.DIFFUSION_GROWTH_LIMIT);
+                continue;
+            }
+            if (hop < config.getMaxHop()) {
+                increment(session.frontierSizes, hop);
+                session.frontier.add(nextState);
+            } else {
+                session.reachedMaxHop = true;
+            }
+            if (session.getStats().marginalYield < config.getMinMarginalYield()) {
+                stopWithValidation(session, RecallStopReason.MARGINAL_YIELD_LIMIT);
+                session.terminal = true;
+                return;
+            }
+        }
+        if (batch.hasMore()) {
+            stopForBudget(session, RecallStopReason.EDGE_SCAN_LIMIT);
+            return;
+        }
+        if (associationTerminated) {
+            session.getStats().terminatedHop = state.hop + 1;
+            stopWithValidation(session, RecallStopReason.LOW_ASSOCIATION_SCORE);
+            session.terminal = true;
+            return;
+        }
+
+    }
+
+    public List<GraphHit> retrieve(String query, List<EntityRef> entities, GraphNeighborProvider provider,
+                                   Map<String, TextChunk> chunks, GraphRetrievalConfig config,
+                                   long deadlineNanos) {
+        return retrieve(query, entities, provider, chunks, config, deadlineNanos, System::nanoTime);
+    }
+
+    /**
+     * Returns true when too few scored edges survived the association floor for this hop to keep
+     * consuming the edge-scan budget. A survival rate of 1.0 disables the early stop.
+     */
+    private static boolean exceedsAssociationFloor(int survived, int scored,
+                                                   GraphRetrievalConfig config) {
+        double floor = config.getMinAssociationSurvivalRate();
+        if (floor >= 1.0D || scored == 0) {
+            return false;
+        }
+        return (double) survived / (double) scored < floor;
+    }
+
+    private static boolean sampled(String query, ExpansionState state, GraphEdgeRef edge,
+                                   GraphRetrievalConfig config) {
+        return sampledEdge(query, state.anchor.getEntity().getEntityId(), state.entityId, edge, config);
+    }
+
+    private static boolean sampledEdge(String query, String anchorEntityId, String currentEntityId,
+                                       GraphEdgeRef edge, GraphRetrievalConfig config) {
+        if (config.getSampleRate() >= 1.0) {
+            return true;
+        }
+        String key = query + "\u001f" + anchorEntityId + "\u001f"
+            + currentEntityId + "\u001f" + otherEndpoint(currentEntityId, edge) + "\u001f"
+            + config.getSamplingSeed();
+        long value = Long.parseUnsignedLong(GraphSnapshot.sha256(key).substring(0, 16), 16);
+        double normalized = (value >>> 1) / (double) Long.MAX_VALUE;
+        return normalized < config.getSampleRate();
+    }
+
+    private static Comparator<GraphEdgeRef> edgeComparator(String query, ExpansionState state,
+                                                            GraphRetrievalConfig config) {
+        return Comparator.comparingDouble((GraphEdgeRef edge) ->
+                config.relationPriority(edge.getLabel())).reversed()
+            .thenComparing(edge -> edgeOrderKey(query, state, edge, config))
+            .thenComparing(GraphEdgeRef::getEdgeId);
+    }
+
+    private static String edgeOrderKey(String query, ExpansionState state, GraphEdgeRef edge,
+                                       GraphRetrievalConfig config) {
+        String target = otherEndpoint(state.entityId, edge);
+        return GraphSnapshot.sha256(query + "\u001f" + state.anchor.getEntity().getEntityId()
+            + "\u001f" + state.entityId + "\u001f" + target + "\u001f"
+            + config.getSamplingSeed());
+    }
+
+    private static String otherEndpoint(String current, GraphEdgeRef edge) {
+        if (current.equals(edge.getSourceEntityId())) {
+            return edge.getTargetEntityId();
+        }
+        if (current.equals(edge.getTargetEntityId())) {
+            return edge.getSourceEntityId();
+        }
+        return null;
+    }
+
+    private static double associationScore(ExpansionState state, GraphEdgeRef edge, String targetId,
+                                           GraphNeighborProvider provider, GraphRetrievalConfig config) {
+        double edgeStrength = EdgeStrength.of(config.relationPriority(edge.getLabel()),
+            reinforcementCount(provider, edge), ageMillis(provider, edge),
+            config.getTimeDecayWeight(), config.getTimeDecayHalfLifeMillis())
+            * config.getEdgeStrengthWeight();
+        double relevance = sourceRelevance(state.anchor.getEntity(), edge, config)
+            * config.getSourceRelevanceWeight();
+        GraphStatistics statistics = provider.getStatistics();
+        int degree = statistics == null ? 0 : statistics.getDegree(targetId);
+        // The first edge is hop one and therefore has no decay: the state at hop n enters hop n + 1.
+        return AssociationScore.score(state.score, state.hop + 1, edgeStrength, degree,
+            config.getDegreePenalty(), config.getHopDecay(), relevance);
+    }
+
+    private static int reinforcementCount(GraphNeighborProvider provider, GraphEdgeRef edge) {
+        return provider instanceof EdgeReinforcementSource
+            ? ((EdgeReinforcementSource) provider).getReinforcementCount(edge) : 0;
+    }
+
+    private static long ageMillis(GraphNeighborProvider provider, GraphEdgeRef edge) {
+        return provider instanceof EdgeReinforcementSource
+            ? ((EdgeReinforcementSource) provider).getAgeMillis(edge) : 0L;
+    }
+
+    private static double sourceRelevance(EntityRef anchor, GraphEdgeRef edge,
+                                          GraphRetrievalConfig config) {
+        if (anchor.getSourceChunkIds().isEmpty() || edge.getSourceChunkIds().isEmpty()) {
+            return 1.0;
+        }
+        Set<String> anchorSources = new HashSet<>(anchor.getSourceChunkIds());
+        int overlap = 0;
+        for (String source : edge.getSourceChunkIds()) {
+            if (anchorSources.contains(source)) {
+                overlap++;
+            }
+        }
+        return overlap == 0 ? config.getUnrelatedSourceRelevance()
+            : config.getAnchorHitBaseScore() + (double) overlap / anchorSources.size();
+    }
+
+    private static List<String> sourceIds(ExpansionState state, GraphEdgeRef edge,
+                                          Map<String, EntityRef> entityMap) {
+        if (!edge.getSourceChunkIds().isEmpty()) {
+            return edge.getSourceChunkIds();
+        }
+        EntityRef entity = entityMap.get(state.entityId);
+        return entity == null ? Collections.emptyList() : entity.getSourceChunkIds();
+    }
+
+    private static String pathKey(GraphPathRef path) {
+        return path.getVertexIds().toString() + "\u001f" + path.getEdgeIds();
+    }
+
+    private static void increment(Map<Integer, Integer> counters, int key) {
+        increment(counters, key, 1);
+    }
+
+    private static void increment(Map<Integer, Integer> counters, int key, int amount) {
+        counters.put(key, counters.getOrDefault(key, 0) + amount);
+    }
+
+    private static final class ExpansionState {
+        private static final Comparator<ExpansionState> ORDER = Comparator
+            .comparingInt((ExpansionState value) -> value.hop)
+            .thenComparing(Comparator.comparingDouble((ExpansionState value) -> value.score).reversed())
+            .thenComparing(value -> value.entityId)
+            .thenComparing(value -> value.path.getEdgeIds().toString());
+        private final EntityAnchorResolver.Anchor anchor;
+        private final String entityId;
+        private final int hop;
+        private final double score;
+        private final GraphPathRef path;
+        private final Set<String> pathEntityIds;
+        private final List<String> sourceChunkIds;
+
+        private ExpansionState(EntityAnchorResolver.Anchor anchor, String entityId,
+                               int hop, double score, GraphPathRef path, Set<String> pathEntityIds,
+                               List<String> sourceChunkIds) {
+            this.anchor = anchor;
+            this.entityId = entityId;
+            this.hop = hop;
+            this.score = score;
+            this.path = path;
+            this.pathEntityIds = pathEntityIds;
+            this.sourceChunkIds = sourceChunkIds;
+        }
+
+        private static ExpansionState seed(EntityAnchorResolver.Anchor anchor, GraphVertexRef vertex,
+                                           double score) {
+            Set<String> entityIds = new LinkedHashSet<>();
+            entityIds.add(anchor.getEntity().getEntityId());
+            return new ExpansionState(anchor, anchor.getEntity().getEntityId(), 0, score,
+                new GraphPathRef(Collections.singletonList(vertex), Collections.emptyList(), false),
+                entityIds, new ArrayList<>());
+        }
+
+        private ExpansionState extend(String targetId, GraphVertexRef vertex, GraphEdgeRef edge,
+                                      double nextScore, List<String> sources, boolean sampled) {
+            List<GraphVertexRef> vertices = new ArrayList<>(path.getVertices());
+            vertices.add(vertex);
+            List<GraphEdgeRef> edges = new ArrayList<>(path.getEdges());
+            edges.add(edge);
+            Set<String> entityIds = new LinkedHashSet<>(pathEntityIds);
+            entityIds.add(targetId);
+            List<String> allSources = new ArrayList<>(sourceChunkIds);
+            allSources.addAll(sources);
+            return new ExpansionState(anchor, targetId, hop + 1, nextScore,
+                new GraphPathRef(vertices, edges, sampled || path.isSampled()), entityIds, allSources);
+        }
+    }
+
     public GraphStats getLastStats() {
         return lastStats;
+    }
+
+    private static void stopForBudget(ExpansionSession session, RecallStopReason budgetReason) {
+        stopWithValidation(session, budgetReason);
+        session.terminal = true;
+    }
+
+    private static void stopWithValidation(ExpansionSession session, RecallStopReason reason) {
+        GraphStats stats = session.getStats();
+        stats.stopReason = stats.validationErrors.isEmpty()
+            ? reason : RecallStopReason.TRACE_VALIDATION_ERROR;
+    }
+
+    /**
+     * Mutable state of one bounded expansion, advanced one hop at a time.
+     *
+     * <p>It exists so the transaction can be split across a routing boundary: the executor seeds the
+     * frontier, expands the first hop, lets the policy read the measured growth and marginal yield,
+     * and then decides whether the second hop is worth funding. Nothing here is visible to the
+     * routing policy - the policy only ever sees the derived {@code RetrievalProgress} snapshot, so
+     * it stays a pure decision component.
+     */
+    public static final class ExpansionSession {
+        private final GraphRetriever owner;
+        private final GraphStats stats;
+        private final PriorityQueue<ExpansionState> frontier = new PriorityQueue<>(ExpansionState.ORDER);
+        private final Set<String> visitedVertices = new LinkedHashSet<>();
+        private final Set<String> scannedEdges = new HashSet<>();
+        private final Set<String> producedChunks = new LinkedHashSet<>();
+        private final Set<String> emittedPaths = new HashSet<>();
+        private final List<GraphHit> result = new ArrayList<>();
+        private final Map<Integer, Integer> frontierSizes = new HashMap<>();
+        private final Map<Integer, Integer> edgesExaminedByHop = new HashMap<>();
+        private final Map<Integer, Integer> newVerticesByHop = new HashMap<>();
+        private final Map<Integer, Integer> newEvidenceByHop = new HashMap<>();
+        private String query;
+        private GraphRetrievalConfig config;
+        private GraphNeighborProvider provider;
+        private Map<String, TextChunk> chunks;
+        private BudgetLedger ledger;
+        private Map<String, EntityRef> entityMap = Collections.emptyMap();
+        private int currentHop;
+        private boolean reachedMaxHop;
+        private boolean exhausted;
+        private boolean terminal;
+        private boolean finished;
+
+        private ExpansionSession(GraphRetriever owner, GraphStats stats) {
+            this.owner = owner;
+            this.stats = stats;
+        }
+
+        /**
+         * Hop that the next {@code expandOneHop} call would process.
+         */
+        public int getCurrentHop() {
+            return currentHop;
+        }
+
+        /** True when seeding ended the request early (no anchors, deadline, missing inputs). */
+        public boolean isTerminal() {
+            return terminal;
+        }
+
+        /** True when no frontier state is left to expand. */
+        public boolean isExhausted() {
+            return exhausted || terminal || frontier.isEmpty();
+        }
+
+        /** True when a hop stopped early on a budget, diffusion or association limit. */
+        public boolean isStopped() {
+            return terminal;
+        }
+
+        public GraphStats getStats() {
+            return stats;
+        }
+
+        /**
+         * Evidence produced so far, in expansion order.
+         *
+         * <p>Expansion order is a traversal artefact: it follows the frontier, whose second sort key
+         * is a deterministic hash used for sampling. It is not a relevance order, so callers that
+         * rank notice must use {@link #finish()}, which orders by association score.
+         */
+        public List<GraphHit> getHits() {
+            return Collections.unmodifiableList(new ArrayList<>(result));
+        }
+
+        /**
+         * Finalises stop reasons that depend on how the whole expansion ended and orders the hits
+         * by descending association score.
+         *
+         * <p>Called by the single-shot path; the split path calls it after its last hop so both
+         * report the same reason for the same work.
+         *
+         * <p>Fusion turns each channel's position into a reciprocal-rank term. Returning traversal
+         * order made the graph channel's rank noise, which mattered most because that channel also
+         * carries the largest fusion weight. Ties break on the path so the order stays deterministic.
+         */
+        public List<GraphHit> finish() {
+            if (!finished) {
+                finished = true;
+                if (stats.stopReason == RecallStopReason.COMPLETED && !stats.validationErrors.isEmpty()) {
+                    stats.stopReason = RecallStopReason.TRACE_VALIDATION_ERROR;
+                } else if (stats.stopReason == RecallStopReason.COMPLETED && reachedMaxHop) {
+                    stats.stopReason = RecallStopReason.MAX_HOP_REACHED;
+                }
+                owner.lastStats = stats;
+            }
+            // Retention used the candidate budget, so the surviving set is unchanged; only the
+            // order used for ranking is corrected here.
+            List<GraphHit> ranked = new ArrayList<>(result);
+            ranked.sort(Comparator.comparingDouble(GraphHit::getScore).reversed()
+                .thenComparing(hit -> pathKey(hit.getPath()))
+                .thenComparing(hit -> hit.getAnchor().getEntity().getEntityId()));
+            return Collections.unmodifiableList(ranked);
+        }
+    }
+
+    private void stopForBudget(RecallStopReason budgetReason) {
+        stopWithValidation(budgetReason);
+    }
+
+    private void stopWithValidation(RecallStopReason reason) {
+        lastStats.stopReason = lastStats.validationErrors.isEmpty()
+            ? reason : RecallStopReason.TRACE_VALIDATION_ERROR;
     }
 
     private boolean expired(long deadline, LongSupplier clock) {
@@ -206,15 +849,13 @@ public final class GraphRetriever {
     /** Graph candidate with path and source provenance. */
     public static final class GraphHit {
         private final EntityAnchorResolver.Anchor anchor;
-        private final GraphEdgeRef edge;
         private final GraphPathRef path;
         private final List<String> sourceChunkIds;
         private final double score;
 
-        private GraphHit(EntityAnchorResolver.Anchor anchor, GraphEdgeRef edge, GraphPathRef path,
+        private GraphHit(EntityAnchorResolver.Anchor anchor, GraphPathRef path,
                          List<String> sourceChunkIds, double score) {
             this.anchor = anchor;
-            this.edge = edge;
             this.path = path;
             this.sourceChunkIds = new ArrayList<>(sourceChunkIds);
             this.score = score;
@@ -224,8 +865,8 @@ public final class GraphRetriever {
             return anchor;
         }
 
-        public GraphEdgeRef getEdge() {
-            return edge;
+        public GraphVertexRef getSeed() {
+            return path.getVertices().get(0);
         }
 
         public GraphPathRef getPath() {
@@ -247,9 +888,25 @@ public final class GraphRetriever {
         private int edgesExamined;
         private int neighborsSampled;
         private int verticesReached;
+        private int uniqueVertices;
         private int candidatesProduced;
+        private int tokensEstimated;
+        private int evidenceYield;
+        private double growthRate;
+        private double marginalYield;
+        private int filteredByAssociation;
+        private int terminatedHop = -1;
         private RecallStopReason stopReason = RecallStopReason.COMPLETED;
         private final List<String> validationErrors = new ArrayList<>();
+
+        public int getFilteredByAssociation() {
+            return filteredByAssociation;
+        }
+
+        /** Hop index that was abandoned because too few edges passed the association floor. */
+        public int getTerminatedHop() {
+            return terminatedHop;
+        }
 
         public int getAnchorsConsidered() {
             return anchorsConsidered;
@@ -267,8 +924,36 @@ public final class GraphRetriever {
             return verticesReached;
         }
 
+        public int getUniqueVertices() {
+            return uniqueVertices;
+        }
+
         public int getCandidatesProduced() {
             return candidatesProduced;
+        }
+
+        public int getTokensEstimated() {
+            return tokensEstimated;
+        }
+
+        public int getEdgesScanned() {
+            return edgesExamined;
+        }
+
+        public int getNeighborsSampledCount() {
+            return neighborsSampled;
+        }
+
+        public int getEvidenceYield() {
+            return evidenceYield;
+        }
+
+        public double getGrowthRate() {
+            return growthRate;
+        }
+
+        public double getMarginalYield() {
+            return marginalYield;
         }
 
         public RecallStopReason getStopReason() {

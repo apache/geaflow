@@ -1,4 +1,4 @@
-"""Manifest-driven readers for the Week 2 public datasets.
+"""Manifest-driven readers for public GraphRAG datasets.
 
 The reader intentionally depends only on the Python standard library.  It accepts JSON arrays,
 JSONL files, and gzip-compressed variants, while yielding canonical records in bounded batches.
@@ -11,11 +11,14 @@ import hashlib
 import json
 import os
 import tempfile
+import urllib.parse
 import urllib.request
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, Iterator, List, Optional
+
+from ..digests import sha256_file
 
 
 class SourceError(ValueError):
@@ -31,6 +34,8 @@ class SourceManifest:
     cache_path: Optional[str]
     sha256: str
     parser_version: str
+    license_url: Optional[str] = None
+    license_status: str = "pending-review"
 
     @classmethod
     def from_file(cls, path: Path) -> "SourceManifest":
@@ -51,8 +56,14 @@ class SourceManifest:
         checksum = str(raw["sha256"]).lower()
         if len(checksum) != 64 or any(char not in "0123456789abcdef" for char in checksum):
             raise SourceError("manifest %s has invalid sha256" % path)
-        if raw.get("dataset") == "2wikimultihopqa" and raw.get("split") not in ("train", "dev", "test"):
-            raise SourceError("2wikimultihopqa manifest split must be train, dev or test")
+        license_data = raw.get("license")
+        if not isinstance(license_data, dict):
+            raise SourceError("manifest %s requires license metadata" % path)
+        license_url = str(license_data.get("url", "")).strip()
+        license_status = str(license_data.get("status", "")).strip()
+        parsed_license_url = urllib.parse.urlparse(license_url)
+        if not license_url or parsed_license_url.scheme not in ("http", "https") or not license_status:
+            raise SourceError("manifest %s has incomplete license metadata" % path)
         return cls(
             dataset=str(raw["dataset"]),
             dataset_release=str(raw["dataset_release"]),
@@ -61,6 +72,8 @@ class SourceManifest:
             cache_path=raw.get("cache_path"),
             sha256=checksum,
             parser_version=str(raw["parser_version"]),
+            license_url=license_url,
+            license_status=license_status,
         )
 
 
@@ -90,6 +103,8 @@ class SourceLoader:
             raise SourceError("source exceeds configured size limit: %s" % path)
         for number, raw in enumerate(self._records(path, self.max_uncompressed_bytes,
                                                    self.max_zip_entries, manifest.split), start=1):
+            if path.suffix == ".parquet":
+                raw = self._hotpot_parquet_record(raw, manifest, number)
             record = self._canonical_record(manifest, number, raw)
             record["source_uri"] = manifest.source_uri or path.resolve().as_uri()
             batch.append(record)
@@ -146,15 +161,11 @@ class SourceLoader:
 
     @staticmethod
     def _verify_checksum(path: Path, manifest: SourceManifest) -> None:
-        digest = hashlib.sha256()
         try:
-            with path.open("rb") as stream:
-                for block in iter(lambda: stream.read(1024 * 1024), b""):
-                    digest.update(block)
+            actual = sha256_file(path)
         except OSError as exc:
             raise SourceError("cannot read %s/%s source %s: %s" % (
                 manifest.dataset, manifest.split, path, exc)) from exc
-        actual = digest.hexdigest()
         if actual != manifest.sha256:
             raise SourceError(
                 "%s/%s checksum mismatch for %s: expected %s, got %s"
@@ -225,6 +236,19 @@ class SourceLoader:
                 raise SourceError("cannot parse gzip source %s: %s" % (path, exc)) from exc
             finally:
                 extracted.unlink(missing_ok=True)
+            return
+        if path.suffix == ".parquet":
+            try:
+                import pyarrow.parquet as parquet
+            except ImportError as exc:
+                raise SourceError("reading Parquet sources requires pyarrow") from exc
+            try:
+                parquet_file = parquet.ParquetFile(path)
+                for batch in parquet_file.iter_batches(batch_size=256):
+                    for row in batch.to_pylist():
+                        yield row
+            except (OSError, ValueError) as exc:
+                raise SourceError("cannot parse Parquet source %s: %s" % (path, exc)) from exc
             return
         try:
             if path.stat().st_size > max_uncompressed_bytes:
@@ -311,6 +335,37 @@ class SourceLoader:
                 raise SourceError("unterminated JSON array in %s" % path)
 
     @staticmethod
+    def _hotpot_parquet_record(raw: Dict[str, Any], manifest: SourceManifest,
+                               number: int) -> Dict[str, Any]:
+        if manifest.dataset != "hotpotqa":
+            raise SourceError("Parquet input is only supported for HotpotQA")
+        context = raw.get("context")
+        if not isinstance(context, dict):
+            raise SourceError("hotpotqa/%s record %d has invalid Parquet context" %
+                              (manifest.split, number))
+        titles = context.get("title") or []
+        sentences = context.get("sentences") or []
+        if len(titles) != len(sentences):
+            raise SourceError("hotpotqa/%s record %d has mismatched context columns" %
+                              (manifest.split, number))
+        supporting = raw.get("supporting_facts") or {}
+        supporting_titles = supporting.get("title", []) if isinstance(supporting, dict) else []
+        supporting_indices = supporting.get("sent_id", []) if isinstance(supporting, dict) else []
+        if len(supporting_titles) != len(supporting_indices):
+            raise SourceError("hotpotqa/%s record %d has mismatched supporting facts" %
+                              (manifest.split, number))
+        return {
+            "_id": raw.get("id"),
+            "question": raw.get("question"),
+            "answer": raw.get("answer"),
+            "type": raw.get("type"),
+            "level": raw.get("level"),
+            "context": [[title, values] for title, values in zip(titles, sentences)],
+            "supporting_facts": [[title, index] for title, index in
+                                 zip(supporting_titles, supporting_indices)],
+        }
+
+    @staticmethod
     def _canonical_record(manifest: SourceManifest, number: int, raw: Any) -> Dict[str, Any]:
         if not isinstance(raw, dict):
             raise SourceError("%s/%s record %d must be an object" % (
@@ -323,13 +378,13 @@ class SourceLoader:
         if not isinstance(question, str) or not question.strip():
             raise SourceError("%s/%s record %d field question is required" % (
                 manifest.dataset, manifest.split, number))
-        context = raw.get("context") or raw.get("passages")
+        context = raw.get("paragraphs") or raw.get("context") or raw.get("passages")
         if not isinstance(context, list) or not context:
             raise SourceError("%s/%s record %d field context must be a non-empty list" % (
                 manifest.dataset, manifest.split, number))
         paragraphs = []
         for index, item in enumerate(context):
-            if isinstance(item, list) and len(item) == 2 and isinstance(item[1], list):
+            if isinstance(item, (list, tuple)) and len(item) == 2 and isinstance(item[1], list):
                 title, sentences = item
                 text = " ".join(str(sentence) for sentence in sentences)
             elif isinstance(item, dict):
@@ -360,9 +415,21 @@ class SourceLoader:
             "question": question,
             "answers": answers,
             "paragraphs": paragraphs,
-            "supporting_facts": raw.get("supporting_facts") or raw.get("evidence") or [],
-            "evidences": raw.get("evidences") or [],
+            "annotations": raw.get("annotations") or {},
         }
+        if isinstance(raw.get("supporting_facts"), list):
+            canonical["annotations"]["supporting_facts"] = raw["supporting_facts"]
+            canonical["supporting_facts"] = raw["supporting_facts"]
+        if isinstance(raw.get("evidences"), list):
+            canonical["annotations"]["evidences"] = raw["evidences"]
+            canonical["evidences"] = raw["evidences"]
+        for field in ("type", "level", "question_type"):
+            if isinstance(raw.get(field), str) and raw[field].strip():
+                canonical["annotations"][field] = raw[field].strip()
+        if "question_type" in canonical["annotations"]:
+            canonical["question_type"] = canonical["annotations"]["question_type"]
+        elif "type" in canonical["annotations"]:
+            canonical["question_type"] = canonical["annotations"]["type"]
         canonical["source_hash"] = hashlib.sha256(
             json.dumps(canonical, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
         ).hexdigest()

@@ -35,6 +35,8 @@ import org.apache.geaflow.ai.retrieval.api.model.TraceStage;
 import org.apache.geaflow.ai.retrieval.config.RetrievalProperties;
 import org.apache.geaflow.ai.retrieval.execution.RecallStageStatus;
 import org.apache.geaflow.ai.retrieval.execution.RecallStopReason;
+import org.apache.geaflow.ai.retrieval.execution.RetrievalReplanEvent;
+import org.apache.geaflow.ai.retrieval.execution.RoutingFeatures;
 
 /** Validates the complete success response before it crosses the API boundary. */
 public final class RetrievalResponseValidator {
@@ -63,9 +65,10 @@ public final class RetrievalResponseValidator {
         if (trace.getSelectedMode() == null) {
             throw unsupported("unsupported retrieval mode in trace");
         }
-        if (trace.getExecutionMode() != ExecutionMode.SEQUENTIAL) {
+        if (trace.getExecutionMode() == null) {
             throw unsupported("unsupported execution mode in trace");
         }
+        validateAnswer(response);
         List<TraceStage> stages = trace.getStages();
         if (stages == null) {
             throw invalid("stages is required");
@@ -77,8 +80,8 @@ public final class RetrievalResponseValidator {
             required(stage.getName(), "stage.name");
             required(stage.getStatus(), "stage.status");
         }
-        if (response.getEvidence() == null || response.getPaths() == null
-            || response.getSources() == null || response.getDegradedChannels() == null) {
+        if (response.getEvidence() == null || response.getSources() == null
+            || response.getDegradedChannels() == null) {
             throw invalid("response collections are required");
         }
         if (trace.getGraphVersion() != null
@@ -87,13 +90,72 @@ public final class RetrievalResponseValidator {
         }
         RetrievalBudget effectiveBudget = response.getEffectiveBudget();
         RetrievalBudgetValidator.validate(effectiveBudget, properties, true);
+        required(trace.getPrimaryConstraint(), "trace.primaryConstraint");
+        try {
+            if (org.apache.geaflow.ai.retrieval.execution.BudgetConstraint.parse(
+                trace.getPrimaryConstraint()) != effectiveBudget.getPrimaryConstraint()) {
+                throw invalid("trace.primaryConstraint must match effectiveBudget.primaryConstraint");
+            }
+        } catch (IllegalArgumentException error) {
+            throw invalid("unsupported trace.primaryConstraint: " + trace.getPrimaryConstraint());
+        }
+        validateEffectiveBudget(trace, effectiveBudget, properties);
+        validateAdaptiveTrace(trace);
         if (trace.getSelectedMode().canonical() == RetrievalMode.HYBRID) {
-            validateHybridTrace(trace, effectiveBudget);
+            validateHybridTrace(trace, effectiveBudget, properties);
         }
         return response;
     }
 
-    private static void validateHybridTrace(RetrievalTrace trace, RetrievalBudget effectiveBudget) {
+    private static void validateAdaptiveTrace(RetrievalTrace trace) {
+        boolean adaptive = trace.getPolicyId() != null || trace.getPolicyVersion() != null
+            || trace.getFeatureSchemaVersion() != null || !trace.getReplanEvents().isEmpty();
+        if (!adaptive) {
+            if (!trace.getPolicyParameters().isEmpty() || !trace.getRoutingFeatures().isEmpty()
+                || !trace.getRoutingReasons().isEmpty()) {
+                throw invalid("adaptive trace fields require policy metadata");
+            }
+            return;
+        }
+        required(trace.getPolicyId(), "trace.policyId");
+        required(trace.getPolicyVersion(), "trace.policyVersion");
+        required(trace.getFeatureSchemaVersion(), "trace.featureSchemaVersion");
+        if (!RoutingFeatures.SCHEMA_VERSION.equals(trace.getFeatureSchemaVersion())) {
+            throw invalid("unsupported trace.featureSchemaVersion");
+        }
+        Set<String> featureNames = RoutingFeatures.empty().asMap().keySet();
+        if (!featureNames.equals(trace.getRoutingFeatures().keySet())) {
+            throw invalid("trace.routingFeatures does not match feature schema");
+        }
+        for (Map.Entry<String, Double> feature : trace.getRoutingFeatures().entrySet()) {
+            if (feature.getValue() == null || !Double.isFinite(feature.getValue())
+                || feature.getValue() < 0.0D) {
+                throw invalid("invalid routing feature: " + feature.getKey());
+            }
+        }
+        Double confidence = trace.getRoutingFeatures().get("anchor_confidence");
+        if (confidence == null || confidence > 1.0D || trace.getPolicyParameters().isEmpty()
+            || trace.getRoutingReasons().isEmpty()) {
+            throw invalid("adaptive policy parameters and routing reasons are required");
+        }
+        for (RetrievalReplanEvent event : trace.getReplanEvents()) {
+            if (event == null || !hasText(event.getBoundary()) || !hasText(event.getReason())
+                || event.getOldPlan() == null || event.getNewPlan() == null
+                || event.getRemainingCandidates() < 0 || event.getRemainingTokens() < 0
+                || event.getRemainingLatencyNanos() < 0L || event.getUnusedCandidates() < 0
+                || event.getUnusedTokens() < 0 || !Double.isFinite(event.getFirstStageScoreGap())
+                || event.getFirstStageScoreGap() < 0.0D || event.getAnchorCount() < 0
+                || !Double.isFinite(event.getAnchorConfidence()) || event.getAnchorConfidence() < 0.0D
+                || event.getAnchorConfidence() > 1.0D || event.getCandidateDegree() < 0
+                || !Double.isFinite(event.getGraphGrowthRate()) || event.getGraphGrowthRate() < 0.0D
+                || !Double.isFinite(event.getGraphMarginalYield()) || event.getGraphMarginalYield() < 0.0D) {
+                throw invalid("invalid adaptive replan event");
+            }
+        }
+    }
+
+    private static void validateHybridTrace(RetrievalTrace trace, RetrievalBudget effectiveBudget,
+                                            RetrievalProperties properties) {
         required(trace.getGraphVersion(), "trace.graphVersion");
         required(trace.getIndexVersion(), "trace.indexVersion");
         required(trace.getStopReason(), "trace.stopReason");
@@ -140,12 +202,17 @@ public final class RetrievalResponseValidator {
             if (channelBudget == null || channelBudget < 1) {
                 throw invalid("channel budget must be positive: " + channel);
             }
-            if (evaluated == null || evaluated < 0 || evaluated > channelBudget) {
+            if (evaluated == null || evaluated < 0) {
                 throw invalid("invalid evaluated count: " + channel);
             }
-            if (candidates == null || candidates < 0
-                || candidates > ("GRAPH".equals(channel) ? channelBudget : evaluated)) {
+            // ``evaluated`` reports how many candidates a channel scored; ``candidates`` reports
+            // how many it retained. Only the retained count is bounded by the channel budget, so a
+            // channel that ranked a large index legitimately scores more than it keeps.
+            if (candidates == null || candidates < 0 || candidates > channelBudget) {
                 throw invalid("invalid candidate count: " + channel);
+            }
+            if (candidates > evaluated) {
+                throw invalid("candidate count exceeds evaluated count: " + channel);
             }
             if (trace.getChannelStatuses().get(channel) == null
                 || trace.getChannelStopReasons().get(channel) == null) {
@@ -175,9 +242,85 @@ public final class RetrievalResponseValidator {
             throw invalid("degradationReasons must contain exactly degraded channels");
         }
         if (trace.getEffectiveCandidateBudget() != budgetSum
-            || trace.getEffectiveCandidateBudget() != effectiveBudget.getMaxCandidates()
-            || trace.getEffectiveTopK() != effectiveBudget.getTopK()) {
+            || trace.getEffectiveTopK() != effectiveBudget.getTopK()
+            || trace.getEffectiveCandidateBudget() > properties.getMaxCandidates()
+            || trace.getEffectiveCandidateBudget() != executionCandidateBudget(effectiveBudget, properties)) {
             throw invalid("invalid effective trace budget");
+        }
+        if (trace.getExecutionMode() == ExecutionMode.CASCADED) {
+            required(trace.getCascadeDecision(), "trace.cascadeDecision");
+            if (!"RUN_GRAPH".equals(trace.getCascadeDecision())
+                && !"RUN_GRAPH_FALLBACK_NO_ANCHOR".equals(trace.getCascadeDecision())
+                && !"SKIP_DEADLINE".equals(trace.getCascadeDecision())
+                && !"SKIP_NO_EVIDENCE".equals(trace.getCascadeDecision())
+                && !"SKIP_INSUFFICIENT_EVIDENCE".equals(trace.getCascadeDecision())
+                && !"SKIP_NO_ANCHOR".equals(trace.getCascadeDecision())
+                && !"SKIP_LOW_SCORE_GAP".equals(trace.getCascadeDecision())) {
+                throw invalid("unsupported trace.cascadeDecision: " + trace.getCascadeDecision());
+            }
+            if (!Double.isFinite(trace.getCascadeProbeScoreGap())
+                || trace.getCascadeProbeScoreGap() < 0.0) {
+                throw invalid("trace.cascadeProbeScoreGap must be finite and non-negative");
+            }
+            validateCascadeState(trace);
+        } else if (trace.getCascadeDecision() != null) {
+            throw invalid("trace.cascadeDecision is only valid for CASCADED execution");
+        }
+    }
+
+    private static int executionCandidateBudget(RetrievalBudget budget, RetrievalProperties properties) {
+        return budget.getPrimaryConstraint()
+            == org.apache.geaflow.ai.retrieval.execution.BudgetConstraint.CANDIDATES
+            ? budget.getMaxCandidates() : properties.getMaxCandidates();
+    }
+
+    private static void validateEffectiveBudget(RetrievalTrace trace, RetrievalBudget budget,
+                                                 RetrievalProperties properties) {
+        if (trace.getEffectiveTopK() != budget.getTopK()
+            || trace.getEffectiveCandidateBudget() != executionCandidateBudget(budget, properties)) {
+            throw invalid("trace effective budget does not match effectiveBudget");
+        }
+    }
+
+    private static void validateCascadeState(RetrievalTrace trace) {
+        RecallStageStatus graphStatus = trace.getChannelStatuses().get("GRAPH");
+        RecallStopReason graphReason = trace.getChannelStopReasons().get("GRAPH");
+        String decision = trace.getCascadeDecision();
+        TraceStage graphStage = null;
+        for (TraceStage stage : trace.getStages()) {
+            if ("GRAPH".equals(stage.getName())) {
+                graphStage = stage;
+                break;
+            }
+        }
+        if (graphStatus == null || graphStage == null || !graphStatus.name().equals(graphStage.getStatus())) {
+            throw invalid("Graph trace stage must match channel status");
+        }
+        if ("RUN_GRAPH".equals(decision) || "RUN_GRAPH_FALLBACK_NO_ANCHOR".equals(decision)) {
+            if (graphStatus == null || graphStatus == RecallStageStatus.NOT_RUN
+                || graphReason == RecallStopReason.NO_RESULT
+                || graphReason == RecallStopReason.NO_RELIABLE_ANCHOR
+                || graphReason == RecallStopReason.LOW_SCORE_GAP) {
+                throw invalid("graph run decision requires an executed graph stage");
+            }
+            return;
+        }
+        if (graphStatus != RecallStageStatus.NOT_RUN) {
+            throw invalid("cascade skip decision requires graph stage NOT_RUN");
+        }
+        RecallStopReason expected;
+        if ("SKIP_DEADLINE".equals(decision)) {
+            expected = RecallStopReason.DEADLINE;
+        } else if ("SKIP_NO_EVIDENCE".equals(decision)
+            || "SKIP_INSUFFICIENT_EVIDENCE".equals(decision)) {
+            expected = RecallStopReason.NO_RESULT;
+        } else if ("SKIP_NO_ANCHOR".equals(decision)) {
+            expected = RecallStopReason.NO_RELIABLE_ANCHOR;
+        } else {
+            expected = RecallStopReason.LOW_SCORE_GAP;
+        }
+        if (graphReason != expected) {
+            throw invalid("cascade decision does not match graph stop reason");
         }
     }
 
@@ -194,8 +337,6 @@ public final class RetrievalResponseValidator {
     public static RetrievalResponse normalizeCollections(RetrievalResponse response) {
         response.setEvidence(response.getEvidence() == null
             ? Collections.emptyList() : response.getEvidence());
-        response.setPaths(response.getPaths() == null
-            ? Collections.emptyList() : response.getPaths());
         response.setSources(response.getSources() == null
             ? Collections.emptyList() : response.getSources());
         response.setDegradedChannels(response.getDegradedChannels() == null
@@ -207,6 +348,31 @@ public final class RetrievalResponseValidator {
         if (value == null || value.trim().isEmpty()) {
             throw invalid(name + " is required");
         }
+    }
+
+
+    /**
+     * Enforces that a response either presents an answered result or an explicit abstention.
+     *
+     * <p>The extractive answer is what the EM/F1 metric reads, so an ambiguous response — an answer
+     * with no evidence, or a non-empty answer that also claims abstention — would silently corrupt
+     * an evaluation run rather than fail loudly.
+     */
+    private static void validateAnswer(RetrievalResponse response) {
+        String answer = response.getAnswer();
+        String abstention = response.getAnswerAbstentionReason();
+        boolean hasEvidence = response.getEvidence() != null && !response.getEvidence().isEmpty();
+        if (answer != null && answer.trim().isEmpty()) {
+            throw invalid("answer must be null or non-blank");
+        }
+        if (answer != null && abstention != null) {
+            throw invalid("a response must not both answer and abstain");
+        }
+        if (answer != null && !hasEvidence) {
+            throw invalid("an answered response must carry evidence to support it");
+        }
+        // A response that carries neither field is a legacy or hand-built response; absence is
+        // allowed so older clients keep working. Only contradictory combinations are rejected.
     }
 
     private static RetrievalException invalid(String message) {

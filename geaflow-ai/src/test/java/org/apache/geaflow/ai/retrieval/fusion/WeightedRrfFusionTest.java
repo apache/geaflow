@@ -20,10 +20,12 @@ package org.apache.geaflow.ai.retrieval.fusion;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import org.apache.geaflow.ai.retrieval.model.evidence.ChannelScore;
 import org.apache.geaflow.ai.retrieval.model.evidence.Evidence;
@@ -72,6 +74,35 @@ class WeightedRrfFusionTest {
             new WeightedRrfFusion(new WeightedRrfConfig(1, 0, Integer.MAX_VALUE)).score(evidence("a", 1, 0)), 1.0e-20);
     }
 
+    @Test
+    void preservesBestGraphEvidenceInsideTopKWithoutChangingCandidateCount() {
+        WeightedRrfFusion fusion = new WeightedRrfFusion(WeightedRrfConfig.DEFAULT);
+        Evidence graph = evidenceWithGraph("graph", 100, 100, 100);
+        List<Evidence> ranked = fusion.sort(Arrays.asList(evidence("a", 1, 1),
+            evidence("b", 2, 2), evidence("c", 3, 3), graph));
+
+        List<Evidence> selected = fusion.preserveTopKChannel(ranked, 2, "GRAPH", 1);
+
+        assertEquals(4, selected.size());
+        assertTrue(selected.subList(0, 2).stream()
+            .anyMatch(value -> value.getStageScores().containsKey("GRAPH")));
+        assertEquals(2, fusion.preserveTopKChannel(ranked, 2, "GRAPH", 1).subList(0, 2).size());
+    }
+
+    @Test
+    void honorsMultipleGraphSlotsWithoutExceedingTopK() {
+        WeightedRrfFusion fusion = new WeightedRrfFusion(WeightedRrfConfig.DEFAULT);
+        List<Evidence> ranked = fusion.sort(Arrays.asList(evidence("a", 1, 1),
+            evidenceWithGraph("g1", 100, 100, 1), evidence("b", 2, 2),
+            evidenceWithGraph("g2", 100, 100, 2), evidence("c", 3, 3)));
+
+        List<Evidence> selected = fusion.preserveTopKChannel(ranked, 3, "GRAPH", 2);
+
+        assertEquals(5, selected.size());
+        assertEquals(2, selected.subList(0, 3).stream()
+            .filter(value -> value.getStageScores().containsKey("GRAPH")).count());
+    }
+
     private static Evidence evidence(String id, int bm25Rank, int vectorRank) {
         Map<String, ChannelScore> scores = new LinkedHashMap<>();
         if (bm25Rank > 0) {
@@ -83,8 +114,18 @@ class WeightedRrfFusionTest {
         double fused = (bm25Rank == 0 ? 0 : 1.0 / (60 + bm25Rank))
             + (vectorRank == 0 ? 0 : 1.0 / (60 + vectorRank));
         return new Evidence(id, EvidenceKind.CHUNK, id, Collections.emptyList(),
-            Collections.emptyList(), Collections.emptyList(), Collections.emptyList(), scores,
-            fused, 1);
+            Collections.emptyList(), Collections.emptyList(), scores, fused, null, 1,
+            Collections.emptyList(), Evidence.CURRENT_SCHEMA_VERSION, null, null, null, null, null);
+    }
+
+    private static Evidence evidenceWithGraph(String id, int bm25Rank, int vectorRank, int graphRank) {
+        Map<String, ChannelScore> scores = new LinkedHashMap<>();
+        scores.put("BM25", new ChannelScore("BM25", 1.0, null, bm25Rank));
+        scores.put("VECTOR", new ChannelScore("VECTOR", 1.0, null, vectorRank));
+        scores.put("GRAPH", new ChannelScore("GRAPH", 1.0, null, graphRank));
+        return new Evidence(id, EvidenceKind.CHUNK, id, Collections.emptyList(),
+            Collections.emptyList(), Collections.emptyList(), scores, 0.0, null, 1,
+            Collections.emptyList(), Evidence.CURRENT_SCHEMA_VERSION, null, null, null, null, null);
     }
 
     private static java.util.List<String> ids(java.util.List<Evidence> values) {

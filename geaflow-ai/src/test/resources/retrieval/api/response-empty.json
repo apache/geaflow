@@ -3,7 +3,6 @@
   "graphName": "week1-keyword-graph",
   "graphVersion": "v1",
   "evidence": [],
-  "paths": [],
   "sources": [],
   "trace": {
     "traceVersion": "v1",
@@ -11,6 +10,9 @@
     "originalQuery": "unknown",
     "selectedMode": "KEYWORD",
     "executionMode": "SEQUENTIAL",
+    "primaryConstraint": "CANDIDATES",
+    "effectiveTopK": 10,
+    "effectiveCandidateBudget": 100,
     "stages": [],
     "stopReason": "NO_EVIDENCE"
   },
