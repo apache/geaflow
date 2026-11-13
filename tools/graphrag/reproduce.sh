@@ -151,9 +151,18 @@ if [[ "${SKIP_SERVICE}" == "1" ]]; then
 else
     log "building service classpath"
     CLASSPATH_FILE="${RUN_DIR}/classpath.txt"
-    mvn -o -q -pl geaflow-ai -am -DskipTests -Dmaven.javadoc.skip=true \
-        -Djacoco.skip=true -Drat.skip=true \
-        dependency:build-classpath -Dmdep.outputFile="${CLASSPATH_FILE}" >/dev/null
+    # Offline dependency:build-classpath can succeed while writing a zero-byte file, which then
+    # fails at service start with a confusing NoClassDefFoundError. Reuse a known-good classpath
+    # when one is supplied, and never continue with an empty one.
+    if [[ -n "${GEAFLOW_CLASSPATH:-}" && -s "${GEAFLOW_CLASSPATH}" ]]; then
+        cp "${GEAFLOW_CLASSPATH}" "${CLASSPATH_FILE}"
+    fi
+    if [[ ! -s "${CLASSPATH_FILE}" ]]; then
+        mvn -o -q -pl geaflow-ai -am -DskipTests -Dmaven.javadoc.skip=true \
+            -Djacoco.skip=true -Drat.skip=true \
+            dependency:build-classpath -Dmdep.outputFile="${CLASSPATH_FILE}" >/dev/null
+    fi
+    [[ -s "${CLASSPATH_FILE}" ]] || fail "empty service classpath at ${CLASSPATH_FILE}; set GEAFLOW_CLASSPATH to a known-good classpath file"
     SERVICE_CLASSPATH="${ROOT}/geaflow-ai/target/classes:$(cat "${CLASSPATH_FILE}")"
     SERVICE_LOG="${RUN_DIR}/service.log"
     GEAFLOW_RETRIEVAL_ARTIFACT_BUNDLE_ROOT="${BUNDLE}" \
