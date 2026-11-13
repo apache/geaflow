@@ -34,7 +34,7 @@
     <properties>
         <clickhouse-jdbc.version>0.6.5</clickhouse-jdbc.version>
         <httpclient5.version>5.2.1</httpclient5.version>
-        <testcontainers.version>1.19.8</testcontainers.version>
+        <testcontainers.version>1.21.4</testcontainers.version>
     </properties>
 
     <dependencies>
