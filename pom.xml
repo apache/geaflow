@@ -341,6 +341,9 @@
                         <exclude>**/resources/zip_test2.txt</exclude>
                         <exclude>**/resources/zip_test.txt</exclude>
                         <exclude>**/resources/demo/demo_job_data.txt</exclude>
+                        <!-- Executable JSONL examples cannot contain comment headers. -->
+                        <exclude>geaflow-ai/src/main/resources/temporal/example-events.jsonl</exclude>
+                        <exclude>geaflow-ai/src/main/resources/temporal/example-queries.jsonl</exclude>
                         <exclude>**/resources/input/**</exclude>
                         <exclude>**/resources/i18n/**</exclude>
                         <exclude>**/resources/public/**</exclude>
