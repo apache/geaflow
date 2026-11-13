@@ -286,8 +286,11 @@ public class TemporalMemoryCliTest {
         command.addAll(Arrays.asList(arguments));
         Path out = Files.createTempFile(directory, "child-", ".out");
         Path err = Files.createTempFile(directory, "child-", ".err");
-        Process process = new ProcessBuilder(command).redirectOutput(out.toFile())
-            .redirectError(err.toFile()).start();
+        ProcessBuilder builder = new ProcessBuilder(command).redirectOutput(out.toFile())
+            .redirectError(err.toFile());
+        // The JVM prints inherited JAVA_TOOL_OPTIONS before the CLI's JSON error.
+        builder.environment().remove("JAVA_TOOL_OPTIONS");
+        Process process = builder.start();
         boolean finished = process.waitFor(30, TimeUnit.SECONDS);
         if (!finished) {
             process.destroyForcibly();
