@@ -13,8 +13,9 @@
 
 | 项 | 值 |
 | --- | --- |
-| 分支 | `codex/graphrag-adaptive-hybrid-retrieval` |
-| 复现所用提交 | `fee160853`（含修复提交 `dbaa0929a`） |
+| 分支 | `codex/graphrag-adaptive-hybrid-retrieval`（使用最新提交即可） |
+| 性能数字的产生提交 | `fee160853`（含修复提交 `dbaa0929a`） |
+| 如何确认自己跑的是同一份代码 | 每条运行记录的 `codeRevision` 字段；与上表不一致时数字不可直接比较 |
 | 基线代码修订 | `589341fc2`（早期报告所用，仅供对照） |
 
 **注意默认值已变更。** 本指南复现的是**修复后**的数字：融合权重 `0.25 / 1.0`（1:4）、
@@ -35,7 +36,7 @@
 | 文件大小 | 246,135,840 字节 |
 | SHA-256 | `e8e57c0aafc4a26d41131e320ebb5afb6f2aca86b8a6e6611b08f52033cb7d04` |
 | 使用划分 | `dev` 前 500 条（`--limit 500`，确定性前缀） |
-| 许可 | 数据集作者条款；manifest 标记 `pending-review` |
+| 许可 | **Apache-2.0**，上游仓库 `https://github.com/Alab-NII/2wikimultihop` 的 LICENSE；manifest 标记 `confirmed-upstream` |
 
 ### HotpotQA（distractor）
 
@@ -46,7 +47,7 @@
 | 文件大小 | 45,938,749 字节 |
 | 文件 SHA-256 | `810332ac58d1f5862e20e25825e8b455e92df5965f7bf719878756f2ccd460f7` |
 | 使用划分 | distractor `validation` 前 500 条 |
-| 许可 | 上游 CC BY-SA 4.0；manifest 标记 `pending-review` |
+| 许可 | **CC BY-SA 4.0**，`https://hotpotqa.github.io/` 页面以 `rel=license` 链至 `creativecommons.org/licenses/by-sa/4.0/`；manifest 标记 `confirmed-upstream` |
 
 下载后**先校验再运行**：
 
@@ -57,16 +58,59 @@ sha256sum tmp/graphrag/data/cache/2wikimultihopqa-dev.zip \
 
 校验和不一致请停止。语料不同，产出的分数就不同，第 7 节的对比也随之失效。
 
-### 预计算向量
+### 两种向量输入（已分离，不可混用）
 
-向量不重新训练、不在线计算，使用已发布的 `gte` 向量文件：
+本模块有**两种格式不同、用途不同**的向量输入。早期版本共用一个 `GEAFLOW_VECTORS`，
+会把查询 NPZ 递给按行读取 JSONL 的发布桥接器，现已拆开：
 
-| 数据集 | 文件 |
+| 输入 | 环境变量 | 格式 | 用途 |
+| --- | --- | --- | --- |
+| chunk 向量 | `GEAFLOW_CHUNK_VECTORS` | JSONL，每行一个 `chunk_id` + 向量 | **构建向量索引**（发布 bundle 时） |
+| 查询向量 | `GEAFLOW_QUERY_VECTORS` | NPZ，含 `ids` 与 `vectors` 两个数组 | **基准评测**（`--vectors`） |
+
+`GEAFLOW_VECTORS` 仅作为查询向量的**废弃别名**保留，不要再用于 chunk 向量。
+
+参考运行使用的文件：
+
+| 数据集 | chunk 向量（JSONL） | 查询向量（NPZ） |
+| --- | --- | --- |
+| 2WikiMultiHopQA | 由第 4.2 节命令生成 | `tmp/graphrag/data/runs/2wikimultihopqa-query-vectors-gte.npz` |
+| HotpotQA | `tmp/graphrag/data/runs/hotpotqa-chunk-vectors-gte.jsonl` | `tmp/graphrag/data/runs/hotpotqa-query-vectors-gte.npz` |
+
+缺少查询向量文件时，向量通道会**静默退化**为接近零的召回，这是最常见的假阴性之一。
+
+### 向量生成步骤（含确切模型版本）
+
+向量**可以重新生成**，不依赖任何预上传的文件：
+
+| 项 | 值 |
 | --- | --- |
-| 2WikiMultiHopQA | `tmp/graphrag/data/runs/2wikimultihopqa-query-vectors-gte.npz` |
-| HotpotQA | `tmp/graphrag/data/runs/hotpotqa-query-vectors-gte.npz` |
+| 模型 | `iic/nlp_gte_sentence-embedding_english-small`（GTE 英文 small） |
+| 向量版本标记 | `v1.0.0`（写入 manifest 与 bundle 的 `vector_version`） |
+| 模型来源 | `https://modelscope.cn/models/iic/nlp_gte_sentence-embedding_english-small` |
+| 维度 | 384（由生成脚本输出校验） |
+| 运行方式 | 本地加载（`local_files_only=True`），CPU 或 `--device cuda` |
+| 池化/截断 | 见 `tools/graphrag/embedding.py`；`--max-length 512` |
 
-缺少向量文件时，向量通道会**静默退化**为接近零的召回，这是最常见的假阴性之一。
+```bash
+pip install -r tools/graphrag/requirements-embedding.txt
+
+# 1) chunk 向量：输入是 build_release.py 产出的 chunks.jsonl
+PYTHONPATH=. python3 tools/graphrag/embed_chunks.py \
+  --chunks <release目录>/chunks.jsonl \
+  --model ~/.cache/modelscope/iic/nlp_gte_sentence-embedding_english-small \
+  --device cpu --batch-size 32 --max-length 512 \
+  --output tmp/graphrag/data/runs/<数据集>-chunk-vectors-gte.jsonl
+
+# 2) 查询向量：输入是查询 JSONL（每条含 id 与 question）
+PYTHONPATH=. python3 tools/graphrag/embed_queries.py \
+  --queries tmp/graphrag/data/queries/<数据集>.jsonl \
+  --model ~/.cache/modelscope/iic/nlp_gte_sentence-embedding_english-small \
+  --device cpu --batch-size 32 --max-length 512 \
+  --output tmp/graphrag/data/runs/<数据集>-query-vectors-gte.npz
+```
+
+模型只需从 ModelScope 下载一次，之后离线可用。嵌入只在这两步发生，**检索服务本身不加载模型**。
 
 ## 3. 环境要求
 
@@ -74,16 +118,24 @@ sha256sum tmp/graphrag/data/cache/2wikimultihopqa-dev.zip \
 | --- | --- | --- |
 | JDK | 21（17+ 亦可） | CI 同时构建 source/target 8 与 11 |
 | Maven | 3.8.8 | 离线构建使用 `-o` |
-| Python | 3.11 | 基准工具仅用标准库；向量读取需要 `numpy` |
+| Python | 3.11 | 依赖按用途拆成三个文件，见下方安装命令 |
 | 操作系统 | Linux x86_64 | |
 | 网络 | 数据下载完成后不再需要 | 向量已预计算 |
 
-构建与测试：
+Python 依赖按用途安装（不是只有一个摄取依赖文件）：
 
 ```bash
-mvn -pl geaflow-ai -o -am -DskipTests -Drat.skip=true -Djacoco.skip=true package
-mvn -pl geaflow-ai -o test -Drat.skip=true -Djacoco.skip=true   # 470 个测试
-python3 -m pytest tools/graphrag/tests/ -q                       # 118 个测试
+pip install -r tools/graphrag/requirements.txt             # 基准、评估、测试：numpy/pyarrow/pytest
+pip install -r tools/graphrag/requirements-ingest.txt      # 摄取 parquet 语料时需要
+pip install -r tools/graphrag/requirements-embedding.txt   # 仅重新生成向量时需要 torch/transformers
+```
+
+构建与测试（**不需要跳过检查**；许可证检查已修复，见第 4.4 节）：
+
+```bash
+mvn -pl geaflow-ai -o -am -DskipTests -Dmaven.javadoc.skip=true package
+mvn -pl geaflow-ai -o test                                 # 470 个测试，含 checkstyle 与 RAT
+python3 -m pytest tools/graphrag/tests/ -q                 # 118 个测试
 ```
 
 ## 4. 复现报告中的分数
@@ -105,8 +157,42 @@ export GEAFLOW_BUNDLE=tmp/graphrag/data/runs/hotpotqa-bundle-gte
 tools/graphrag/reproduce.sh --dataset hotpotqa --skip-build --limit 500
 ```
 
-`--skip-build` 复用已有 bundle。没有 bundle 时去掉该参数，脚本会先摄取、嵌入并发布；
-2WikiMultiHopQA 预计约一小时。
+`--skip-build` 复用已有 bundle。
+
+**没有预构建 bundle 时，可以从数据集完整构建**，不需要任何预上传的索引包。
+嵌入是独立步骤（chunk 向量依赖摄取产出的 chunks.jsonl），因此完整流程分四段：
+
+```bash
+# 0) 依赖
+pip install -r tools/graphrag/requirements.txt -r tools/graphrag/requirements-ingest.txt
+pip install -r tools/graphrag/requirements-embedding.txt   # 仅生成向量时需要
+
+# 1) 摄取：从下载并校验过的语料生成 release（含 chunks.jsonl、实体与图数据）
+PYTHONPATH=. python3 tools/graphrag/build_release.py \
+  --manifest tools/graphrag/manifests/<数据集>-v2.json \
+  --output-root tmp/graphrag/data/release
+#    输出中的 version 字段决定 release 子目录名
+
+# 2) 生成两种向量（命令见第 2 节）
+#    chunk 向量读 <release>/<version>/chunks.jsonl；查询向量读查询 JSONL
+
+# 3) 发布 READY bundle（chunk 向量 JSONL 在这里被构建成向量索引）
+PYTHONPATH=. python3 tools/graphrag/publish_bundle.py \
+  --manifest tools/graphrag/manifests/<数据集>-v2.json \
+  --vectors tmp/graphrag/data/runs/<数据集>-chunk-vectors-gte.jsonl \
+  --output tmp/graphrag/data/runs/<数据集>-bundle
+
+# 4) 启动服务并运行六方法基准
+export GEAFLOW_BUNDLE=tmp/graphrag/data/runs/<数据集>-bundle
+export GEAFLOW_QUERY_VECTORS=tmp/graphrag/data/runs/<数据集>-query-vectors-gte.npz
+tools/graphrag/reproduce.sh --dataset <数据集> --skip-build --limit 500
+```
+
+`reproduce.sh` 在不带 `--skip-build` 时会自行执行第 1、3 段，**但必须先用
+`GEAFLOW_CHUNK_VECTORS` 提供 chunk 向量 JSONL**；查询向量 NPZ 不参与索引构建。
+2WikiMultiHopQA 全量摄取约一小时，嵌入耗时取决于是否有 GPU。
+
+上述分阶段流程已在本仓库做过端到端验证（第 4.5 节）。
 
 每次运行打印运行目录，汇总文件为 `<运行目录>/<数据集>-six-methods.csv`，
 逐请求记录为同名 `.jsonl.gz`。参考机器上每数据集 500 查询 × 6 方法（3000 次请求）
@@ -150,11 +236,34 @@ tools/graphrag/sweep_fusion.sh --dataset 2wikimultihopqa --limit 200
 ### 4.4 classpath 与服务进程
 
 三个脚本都支持 `GEAFLOW_CLASSPATH` 指向一份已有的非空 classpath 文件。
-离线环境下 `dependency:build-classpath` 可能**静默产出空文件**；脚本现在会直接报错，
-而不是带着空 classpath 启动服务再报 `NoClassDefFoundError`。
+
+**此前“空 classpath”的真正原因已查明并修复**：Maven 会把相对的 `-Dmdep.outputFile`
+解析到**模块目录**，于是正确的 classpath 被写进 `geaflow-ai/tmp/...`，
+脚本随后读到的目标文件却是空的。这与离线构建无关。脚本现在把输出目录统一转为绝对路径，
+并在 classpath 为空时直接报错，而不是启动服务再报 `NoClassDefFoundError`。
+
+这些误入模块目录的产物还曾导致 **RAT 许可证检查失败**（默认构建因此失败）。
+根 `pom.xml` 的 RAT 排除现已加入 `**/tmp/**`：运行产物是生成输出，不是需要许可证头的源码。
+修复后 `mvn -pl geaflow-ai -o test` 在不跳过任何检查的情况下通过（470 个测试）。
 
 若服务启动失败而端口被上一次运行占用，先清理残留进程再重跑，
 否则基准可能打到旧服务上而得到看似合理但属于另一配置的数字。
+扫描脚本已检查 ready 响应是否来自本次启动的 JVM。
+
+### 4.5 从零构建的端到端验证记录
+
+为证明上述流程不需要任何预上传产物，用 2WikiMultiHopQA dev 的前 12 条构造了一个小型真实子集，
+完整跑通“摄取 → 嵌入 → 发布 → 服务 → 六方法基准”：
+
+| 步骤 | 结果 |
+| --- | --- |
+| `build_release.py` | 生成 release（171 个顶点、52 个 chunk） |
+| `embed_chunks.py` / `embed_queries.py` | 52 条 chunk 向量（JSONL）、12 条查询向量（NPZ，384 维） |
+| `publish_bundle.py` | `state=READY`，`vector_source=iic/nlp_gte_sentence-embedding_english-small`、`vector_version=v1.0.0` |
+| 六方法基准 | 全部 12/12 请求成功且有证据；`VECTOR_ONLY` 评估了全部 52 个 chunk 向量 |
+
+该验证只证明**管线连通与索引确实由 chunk 向量建立**，不产出可与第 5 节比较的质量分数。
+验证产物在 `tmp/graphrag/_work/mini/`。
 
 ## 5. 预期结果
 

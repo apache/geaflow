@@ -80,6 +80,39 @@ BM25 单路的 MRR 与召回仍然更高。修复消除的是**配置造成的�
 基线与第二轮完全一致，而 replan 计数从 1.28 降到 0.80：
 **hop 边界的空转事件被移除，检索结果不变。**
 
+### 3.3 HotpotQA 完整组件消融（本次补齐）
+
+此前组件消融只在 2Wiki 上进行。现已在 HotpotQA distractor 上以同一协议跑完全部 8 个条件
+（200 条、`candidateLimit=100`、默认 1:4、`max-hop=1`）。
+
+FIXED 对照 MRR 0.7907、Recall 0.9558、NDCG 0.7938、边扫描 36.025；
+仅 `no-cascade-gate` 例外（MRR 0.7740、边扫描 43.285），因为级联门控也作用于固定混合路径。
+
+| 条件 | MRR | 相对基线 | Recall@10 | NDCG@10 | 边扫描 |
+| --- | --- | --- | --- | --- | --- |
+| baseline | 0.7884 | — | 0.9358 | 0.7871 | 30.84 |
+| no-router（1:1） | 0.7585 | **-3.8%** | 0.9333 | 0.7649 | 30.84 |
+| **no-graph-fusion（图权重=0）** | **0.8397** | **+6.5%** | 0.9333 | **0.8130** | 30.84 |
+| no-replan | 0.7884 | 0 | 0.9358 | 0.7871 | 30.84 |
+| no-probe-share | 0.7865 | -0.2% | 0.9317 | 0.7827 | 30.84 |
+| no-idf-trigger | 0.7884 | 0 | 0.9358 | 0.7871 | 30.84 |
+| no-degree-trigger | 0.7884 | 0 | 0.9358 | 0.7871 | 30.84 |
+| no-cascade-gate | 0.7767 | -1.5% | 0.9358 | 0.7791 | **35.795（+16%）** |
+
+**最重要的新发现：在 HotpotQA 上，把图证据的排名贡献完全置零反而使 MRR 提升 6.5%。**
+这与 2Wiki 上同一操作使 MRR 下降 0.39% **方向相反**：
+
+| 语料 | 图排名权重置零的影响 | 含义 |
+| --- | --- | --- |
+| 2WikiMultiHopQA | -0.39% | 图排名贡献有少量正面价值 |
+| HotpotQA | **+6.5%** | 图排名贡献是**负价值**，图证据在该语料上是排序噪声 |
+
+这说明**不存在一个对所有语料都正确的全局融合权重**：2Wiki 需要保留少量图权重，
+HotpotQA 最好置零。全局常量只能取折中，这正是第 6.1 节开放问题的实测依据。
+
+其余条件与 2Wiki 上的结论一致：重规划与两条阈值规则零差异（归因相同）；
+放宽级联门控多扫 16% 的边而 MRR 下降；把图权重提高到 1:1（no-router）使 MRR 下降 3.8%。
+
 ## 4. 三个零差异条件的归因
 
 这些实验本身有效——覆盖确实生效（`no-replan` 把 replan 计数降到 0），
@@ -191,11 +224,14 @@ else if (queryLength >= 12) { SEMANTIC_QUERY }          // 0 条
 
 按可研究性排序，每条都附带已有的实测约束，避免后来者重复无效尝试。
 
-### 6.1 全局常量权重已到天花板
+### 6.1 全局常量权重已到天花板，且不存在跨语料最优值
 
-1:4 在 2Wiki 上领先固定混合 2.6%，在 HotpotQA 上仅追平（-0.1%）。
-**单一全局值的上限大致就在这里。** 下一步是按查询加权，例如用锚点置信度、
-文本探测分数差或第一跳产出率来缩放图权重。
+1:4 在 2Wiki 上领先固定混合 2.1%，在 HotpotQA 上领先 0.7%。
+但更关键的证据来自第 3.3 节：**图排名权重置零在 HotpotQA 上反而提升 MRR 6.5%，
+在 2Wiki 上却下降 0.39%**。两个语料对同一旋钮的最优方向相反，
+因此任何单一全局值都只能是折中。
+下一步是按查询加权或按语料标定，例如用锚点置信度、文本探测分数差、
+第一跳产出率或图文本证据重叠度来缩放图权重。
 
 ### 6.2 缺乏"图何时有帮助"的预测特征
 
@@ -228,8 +264,8 @@ else if (queryLength >= 12) { SEMANTIC_QUERY }          // 0 条
 
 ### 6.7 结论的外推性有限
 
-所有数字来自两个英文多跳基准的确定性前缀切片，未做参数搜索之外的语料验证，
-未做并发压力测试。组件消融在 HotpotQA 上仍未完整重跑（该处只做了权重扫描与 max-hop 对照）。
+所有数字来自两个英文多跳基准的确定性前缀切片，未做并发压力测试。
+HotpotQA 的完整组件消融已在第 3.3 节补齐；两语料之外的验证仍未做。
 
 ## 7. 后续规划建议
 
@@ -238,7 +274,7 @@ else if (queryLength >= 12) { SEMANTIC_QUERY }          // 0 条
 | 1 | 按查询加权的融合（替代全局常量） | 权重扫描脚本与两数据集基线已就绪 |
 | 2 | 在预算紧张场景下重测重规划 | `max-replan-count`、主约束均可配置 |
 | 3 | 清理词法/语义分支与高点度规则 | 第 4、5.4 节已给出删除依据 |
-| 4 | 在 HotpotQA 上补完整组件消融 | 管线支持 `--dataset hotpotqa` |
+| 4 | ~~在 HotpotQA 上补完整组件消融~~ 已完成（第 3.3 节） | 图权重置零在 HotpotQA 上有益的发现改变了优先级 |
 | 5 | 接入生成式答案层并重测 F1/EM | 当前抽取式消费者的局限已量化 |
 
 ## 8. 数据来源与复现
@@ -249,6 +285,7 @@ else if (queryLength >= 12) { SEMANTIC_QUERY }          // 0 条
 | 最终配置验证 | `tmp/graphrag/data/runs/ablations-component/2wikimultihopqa-final-20261113T053204Z` |
 | 第三轮结构修复后复核 | `tmp/graphrag/data/runs/ablations-component/2wikimultihopqa-post-structure-20261113T075854Z` |
 | 权重扫描（2Wiki 7 比值、HotpotQA 4 比值） | `tmp/graphrag/data/runs/fusion-sweep/` |
+| HotpotQA 完整组件消融（8 条件） | `tmp/graphrag/data/runs/ablations-component/hotpotqa-full-20261116T024423Z`（以实际目录名为准） |
 | 逐条 trace（重规划、点度规则、max-hop 对照） | `tmp/graphrag/data/runs/ablations-component/2wikimultihopqa-replan-fix-20261112T140652Z`、`tmp/graphrag/data/runs/trace-checks/` |
 | 解耦开关对照 | 同上目录下 `p2-single-hop.csv`、`p1-decoupled.csv`；`fusion-sweep/hotpotqa-p2-baseline`、`fusion-sweep/hotpotqa-decoupled` |
 

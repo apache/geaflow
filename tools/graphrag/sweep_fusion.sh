@@ -41,6 +41,9 @@ WEIGHTS="0.25,0.5,1.0,2.0,4.0,8.0"
 TEXT_WEIGHT="1.0"
 MAX_CANDIDATES="200"
 OUT_DIR=""
+# Query embeddings (NPZ) are the only vector input a benchmark consumes; chunk embeddings (JSONL)
+# belong to the publish stage. GEAFLOW_VECTORS is kept as a deprecated alias.
+QUERY_VECTORS="${GEAFLOW_QUERY_VECTORS:-${GEAFLOW_VECTORS:-}}"
 
 usage() {
     cat <<'EOF'
@@ -60,7 +63,7 @@ Options:
   --out <dir>             output directory (default under runs/fusion-sweep/)
 
 Environment (optional, as in reproduce.sh):
-  GEAFLOW_VECTORS, GEAFLOW_BUNDLE, GEAFLOW_QUERIES, GEAFLOW_GOLD, GEAFLOW_CLASSPATH
+  GEAFLOW_QUERY_VECTORS (or the deprecated GEAFLOW_VECTORS), GEAFLOW_BUNDLE, GEAFLOW_QUERIES, GEAFLOW_GOLD, GEAFLOW_CLASSPATH
 
 Nothing is uploaded and nothing outside the run directory is written.
 EOF
@@ -84,6 +87,9 @@ log() { echo "[sweep] $*" >&2; }
 
 [[ -n "${OUT_DIR}" ]] || OUT_DIR="${RUNS_ROOT}/fusion-sweep/${DATASET}-$(date -u +%Y%m%dT%H%M%SZ)"
 mkdir -p "${OUT_DIR}"
+# See ablate_adaptive.sh: a relative output directory makes Maven write the classpath into the
+# module directory, leaving an empty file here and build artifacts where RAT scans them.
+OUT_DIR="$(cd "${OUT_DIR}" && pwd)"
 
 BUNDLE="${GEAFLOW_BUNDLE:-${RUNS_ROOT}/${DATASET}-bundle}"
 [[ -d "${BUNDLE}" ]] || { log "missing bundle: ${BUNDLE}"; exit 2; }
@@ -178,7 +184,7 @@ for weight in "${WEIGHT_LIST[@]}"; do
         --index-version "${GRAPH_VERSION}" \
         --output "${cond_dir}/${DATASET}-graph-${weight}.csv" \
         --answers-url "http://127.0.0.1:${PORT}/api/v1/answers" \
-        ${GEAFLOW_VECTORS:+--vectors "${GEAFLOW_VECTORS}"} \
+        ${QUERY_VECTORS:+--vectors "${QUERY_VECTORS}"} \
         ${GEAFLOW_QUERIES:+--queries "${GEAFLOW_QUERIES}"} \
         ${GOLD:+--gold "${GOLD}"} \
         $([[ -f "${BUNDLE}/chunks.jsonl" ]] && echo --chunks "${BUNDLE}/chunks.jsonl") \

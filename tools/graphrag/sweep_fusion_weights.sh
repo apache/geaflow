@@ -52,7 +52,7 @@ Options:
   --out <dir>       output directory (default under runs/weight-sweep/)
   -h, --help        show this help
 
-Environment: GEAFLOW_VECTORS, GEAFLOW_BUNDLE, GEAFLOW_QUERIES, GEAFLOW_GOLD as in
+Environment: GEAFLOW_QUERY_VECTORS (or the deprecated GEAFLOW_VECTORS), GEAFLOW_BUNDLE, GEAFLOW_QUERIES, GEAFLOW_GOLD as in
 reproduce.sh. Nothing is uploaded; only the run directory is written.
 EOF
 }
@@ -152,7 +152,8 @@ for gw in ${GRAPH_WEIGHTS}; do
                     --index-version "${GRAPH_VERSION}"
                     --output "${cell_dir}/${DATASET}-${cell}.csv"
                     --answers-url "http://127.0.0.1:${PORT}/api/v1/answers")
-        [[ -n "${GEAFLOW_VECTORS:-}" ]] && bench_args+=(--vectors "${GEAFLOW_VECTORS}")
+        query_vectors="${GEAFLOW_QUERY_VECTORS:-${GEAFLOW_VECTORS:-}}"
+        [[ -n "${query_vectors}" ]] && bench_args+=(--vectors "${query_vectors}")
         [[ -n "${GEAFLOW_QUERIES:-}" ]] && bench_args+=(--queries "${GEAFLOW_QUERIES}")
         [[ -n "${GOLD}" ]] && bench_args+=(--gold "${GOLD}")
         [[ -f "${BUNDLE}/chunks.jsonl" ]] && bench_args+=(--chunks "${BUNDLE}/chunks.jsonl")

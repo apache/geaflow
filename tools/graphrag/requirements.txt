@@ -1,0 +1,6 @@
+# Runtime and evaluation dependencies for tools/graphrag.
+# benchmark_http.py loads query vectors with numpy; the HotpotQA gold reader also accepts
+# parquet, which needs pyarrow. pytest runs tools/graphrag/tests.
+numpy>=1.24,<3
+pyarrow>=14,<22
+pytest>=7,<9

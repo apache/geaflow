@@ -24,7 +24,7 @@
   "license": {
     "url": "https://hotpotqa.github.io/",
     "declared": "CC BY-SA 4.0",
-    "status": "pending-review",
-    "note": "Declared licence recorded for release review; approval is a manual action."
+    "status": "confirmed-upstream",
+    "note": "The HotpotQA project page links rel=license to creativecommons.org/licenses/by-sa/4.0 and labels the dataset CC BY-SA 4.0. The dataset is not redistributed here; reviewers download it from the documented source and verify the SHA-256 above."
   }
 }

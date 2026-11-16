@@ -69,7 +69,7 @@ Conditions:
                       almost always runs (min-probe-evidence cannot be 0: it is validated)
 
 Environment (optional, as in reproduce.sh):
-  GEAFLOW_VECTORS, GEAFLOW_BUNDLE, GEAFLOW_QUERIES, GEAFLOW_GOLD
+  GEAFLOW_QUERY_VECTORS (or the deprecated GEAFLOW_VECTORS), GEAFLOW_BUNDLE, GEAFLOW_QUERIES, GEAFLOW_GOLD
 
 Nothing is uploaded and nothing outside the run directory is written.
 EOF
@@ -92,6 +92,10 @@ log() { echo "[ablate] $*" >&2; }
 
 [[ -n "${OUT_DIR}" ]] || OUT_DIR="${RUNS_ROOT}/ablations-component/${DATASET}-$(date -u +%Y%m%dT%H%M%SZ)"
 mkdir -p "${OUT_DIR}"
+# Maven resolves -Dmdep.outputFile against the module directory, so a relative output directory
+# would write the classpath into geaflow-ai/tmp/... and leave the intended file empty. It also
+# dropped build artifacts where the RAT licence check scans them.
+OUT_DIR="$(cd "${OUT_DIR}" && pwd)"
 
 # Each condition is a single environment override. Empty means "use the shipped default".
 condition_env() {
@@ -225,7 +229,8 @@ for condition in "${CONDITION_LIST[@]}"; do
                 --index-version "${GRAPH_VERSION}"
                 --output "${cond_dir}/${DATASET}-${condition}.csv"
                 --answers-url "http://127.0.0.1:${PORT}/api/v1/answers")
-    [[ -n "${GEAFLOW_VECTORS:-}" ]] && bench_args+=(--vectors "${GEAFLOW_VECTORS}")
+    query_vectors="${GEAFLOW_QUERY_VECTORS:-${GEAFLOW_VECTORS:-}}"
+    [[ -n "${query_vectors}" ]] && bench_args+=(--vectors "${query_vectors}")
     [[ -n "${GEAFLOW_QUERIES:-}" ]] && bench_args+=(--queries "${GEAFLOW_QUERIES}")
     [[ -n "${GOLD}" ]] && bench_args+=(--gold "${GOLD}")
     [[ -f "${BUNDLE}/chunks.jsonl" ]] && bench_args+=(--chunks "${BUNDLE}/chunks.jsonl")

@@ -59,7 +59,9 @@ Options:
 
 Environment (all optional; conventional locations are discovered automatically):
   GEAFLOW_DATA_ROOT   dataset/data root (default tmp/graphrag/data)
-  GEAFLOW_VECTORS     precomputed query vectors .npz (required for vector methods)
+  GEAFLOW_CHUNK_VECTORS  chunk embeddings JSONL, one vector per chunk; builds the vector index
+  GEAFLOW_QUERY_VECTORS  query embeddings .npz, one vector per query id; used by the benchmark
+                         (GEAFLOW_VECTORS is accepted as a deprecated alias for this one)
   GEAFLOW_BUNDLE      existing READY bundle to reuse with --skip-build
   GEAFLOW_QUERIES     query JSONL for the dataset
   GEAFLOW_GOLD        gold JSONL/zip/parquet; enables Recall/MRR/NDCG/EM-F1 scoring
@@ -124,19 +126,21 @@ if [[ "${SKIP_BUILD}" == "1" ]]; then
         || fail "--skip-build requires GEAFLOW_BUNDLE pointing at a READY bundle (got '${BUNDLE}')"
     log "reusing READY bundle: ${BUNDLE}"
 else
-    # Convention: tmp/graphrag/data/runs/<dataset>-query-vectors*.npz, else an explicit export.
-    VECTORS="${GEAFLOW_VECTORS:-}"
+    # Chunk embeddings (JSONL, one vector per chunk) build the vector index; query embeddings
+    # (NPZ, one vector per query id) drive the benchmark. They are different formats and used to
+    # share GEAFLOW_VECTORS, which could hand the query NPZ to a bridge that reads JSONL lines.
+    VECTORS="${GEAFLOW_CHUNK_VECTORS:-}"
     if [[ -z "${VECTORS}" ]]; then
-        VECTORS="$(ls -1 "${DATA_ROOT}"/runs/"${DATASET}"-query-vectors*.npz \
-            "${DATA_ROOT}"/runs/"${DATASET}"*-vectors*.npz 2>/dev/null | head -1 || true)"
+        VECTORS="$(ls -1 "${DATA_ROOT}"/runs/"${DATASET}"-chunk-vectors*.jsonl 2>/dev/null | head -1 || true)"
     fi
     if [[ -z "${VECTORS}" ]]; then
-        fail "no precomputed query vectors found for dataset '${DATASET}'.
-       Looked under: ${DATA_ROOT}/runs/${DATASET}-query-vectors*.npz
-       Set GEAFLOW_VECTORS to point at the .npz file; the vector channel and the
-       equal-budget Vector Overfetch baseline cannot be reproduced without it."
+        fail "no chunk embedding JSONL found for dataset '${DATASET}'.
+       Looked under: ${DATA_ROOT}/runs/${DATASET}-chunk-vectors*.jsonl
+       Generate them with tools/graphrag/embed_chunks.py and set GEAFLOW_CHUNK_VECTORS.
+       Query embeddings are a separate input: GEAFLOW_QUERY_VECTORS points at the NPZ
+       used for benchmarking, not for building the index."
     fi
-    [[ -f "${VECTORS}" ]] || fail "vector file not found: ${VECTORS}"
+    [[ -f "${VECTORS}" ]] || fail "chunk vector file not found: ${VECTORS}"
     log "publishing READY bundle from ${MANIFEST}"
     PYTHONPATH="${ROOT}" python3 "${ROOT}/tools/graphrag/publish_bundle.py" \
         --manifest "${MANIFEST}" \
@@ -212,7 +216,7 @@ BENCH_ARGS=(
     --graph-name "$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['graph_name'])" "${BUNDLE}/READY.json")" \
     --graph-version "$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['version'])" "${BUNDLE}/READY.json")" \
     --index-version "$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['version'])" "${BUNDLE}/READY.json")" \
-    --vectors "${GEAFLOW_VECTORS:-}" \
+    --vectors "${GEAFLOW_QUERY_VECTORS:-${GEAFLOW_VECTORS:-}}" \
     --seed 0
 )
 [[ -n "${LIMIT}" ]] && BENCH_ARGS+=(--limit "${LIMIT}")

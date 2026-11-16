@@ -24,7 +24,7 @@
   "license": {
     "url": "https://github.com/Alab-NII/2wikimultihop",
     "declared": "Apache-2.0",
-    "status": "pending-review",
-    "note": "Declared licence recorded for release review; approval is a manual action."
+    "status": "confirmed-upstream",
+    "note": "Upstream repository Alab-NII/2wikimultihop carries an Apache-2.0 LICENSE on its main branch, verified via the GitHub repository API and the raw LICENSE file. The dataset itself is not redistributed here; reviewers download it from source_uri and verify the SHA-256 above."
   }
 }
