@@ -49,6 +49,18 @@
 | 使用划分 | distractor `validation` 前 500 条 |
 | 许可 | **CC BY-SA 4.0**，`https://hotpotqa.github.io/` 页面以 `rel=license` 链至 `creativecommons.org/licenses/by-sa/4.0/`；manifest 标记 `confirmed-upstream` |
 
+### 缓存目录与 `GRAPH_RAG_CACHE`（必须设置）
+
+manifest 中的 `cache_path` 写作 `${GRAPH_RAG_CACHE}/<文件名>`，由 `os.path.expandvars` 展开。
+**不设置该变量时占位符会原样保留，摄取直接报 `cache is missing`**，因此先导出：
+
+```bash
+export GRAPH_RAG_CACHE="$(pwd)/tmp/graphrag/data/cache"
+```
+
+下载后的数据集就放在该目录下（HotpotQA 放在其子目录 `hotpotqa-hf/`）。
+只用现成 bundle 复现分数时不需要它，**从零构建时必需**。
+
 下载后**先校验再运行**：
 
 ```bash
@@ -163,9 +175,10 @@ tools/graphrag/reproduce.sh --dataset hotpotqa --skip-build --limit 500
 嵌入是独立步骤（chunk 向量依赖摄取产出的 chunks.jsonl），因此完整流程分四段：
 
 ```bash
-# 0) 依赖
+# 0) 依赖与缓存目录
 pip install -r tools/graphrag/requirements.txt -r tools/graphrag/requirements-ingest.txt
 pip install -r tools/graphrag/requirements-embedding.txt   # 仅生成向量时需要
+export GRAPH_RAG_CACHE="$(pwd)/tmp/graphrag/data/cache"    # 不设置会在摄取时报 cache is missing
 
 # 1) 摄取：从下载并校验过的语料生成 release（含 chunks.jsonl、实体与图数据）
 PYTHONPATH=. python3 tools/graphrag/build_release.py \
@@ -264,6 +277,33 @@ tools/graphrag/sweep_fusion.sh --dataset 2wikimultihopqa --limit 200
 
 该验证只证明**管线连通与索引确实由 chunk 向量建立**，不产出可与第 5 节比较的质量分数。
 验证产物在 `tmp/graphrag/_work/mini/`。
+
+### 4.6 从零重建与参考 bundle 的一致性（实测，含限制）
+
+为回答“不依赖现成 bundle 能否复现”，已用当前代码对全部 48,851 个 chunk 重新嵌入并重建 2Wiki bundle，
+再与参考 bundle 在同一批 100 条查询上对比：
+
+| 对比项 | 结果 |
+| --- | --- |
+| 文档数 / chunk 数 / 随机种子 | 完全一致（12,576 / 48,851 / 0） |
+| `chunk_id`、文本、偏移量 | 前 3001 条**零差异**（仅 `source_hash` 元数据不同） |
+| BM25_ONLY / VECTOR_ONLY / VECTOR_OVERFETCH | 召回、MRR、NDCG **逐位相同** |
+| **图边数** | **参考 640,275，重建 834,797（+30.4%）** |
+| GRAPH_ONLY / 混合方法的图相关指标 | **不一致**（GRAPH_ONLY MRR 0.5386 → 0.5186） |
+
+根因是**构建代码在参考 bundle 生成之后发生过变更**（参考 bundle 生成于 10 月 15 日，
+其后 `ingest` 与 `graph` 目录有 `55f5fdf52`、`3779d6b15` 等提交），而不是数据或模型不同。
+
+**因此复现分两种口径，不能混为一谈：**
+
+1. **精确复现报告分数**：请使用随报告发布的参考 bundle（`2wikimultihopqa-bundle` 等），
+   按第 4.1 节命令运行。此路径已实测，单路方法与固定混合在两次运行间逐位相同。
+2. **从零重建**：管线可用，文本通道结果一致，但**图快照随构建代码版本漂移**，
+   图相关分数会不同。若必须从零复现图相关分数，需要使用与参考 bundle **相同的构建代码修订**，
+   而不是仅使用最新的检索代码。
+
+后续应在 `READY.json` 中显式记录**构建代码修订**，使复现者能检出同一版本重建；
+在此之前，以参考 bundle 为准。
 
 ## 5. 预期结果
 
