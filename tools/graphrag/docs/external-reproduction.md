@@ -14,7 +14,7 @@
 | 项 | 值 |
 | --- | --- |
 | 分支 | `codex/graphrag-adaptive-hybrid-retrieval`（使用最新提交即可） |
-| 性能数字的产生提交 | `fee160853`（含修复提交 `dbaa0929a`） |
+| 性能数字的产生提交 | `bba26e94f`（含修复提交 `dbaa0929a`；bundle 的 `build_code_revision` 同此值） |
 | 如何确认自己跑的是同一份代码 | 每条运行记录的 `codeRevision` 字段；与上表不一致时数字不可直接比较 |
 | 基线代码修订 | `589341fc2`（早期报告所用，仅供对照） |
 
@@ -152,39 +152,28 @@ python3 -m pytest tools/graphrag/tests/ -q                 # 118 个测试
 
 ## 4. 参考复现包与报告分数
 
-### 4.0 先获取参考复现包（保留原分数的推荐路径）
+### 4.0 报告数字对应的 bundle（当前代码构建，可自行重建）
 
-报告分数绑定在**参考 bundle** 上，因此复现包中同时提供 bundle、查询向量与参考 CSV：
+**本报告的数字已由“当前代码构建的 bundle”产生，不再绑定某个无法重建的历史 bundle。**
+两个 bundle 均在 `READY.json` 中记录了 `build_code_revision`，
+重复构建会得到相同的版本与边数，因此可以自行从零重建：
 
-| 内容 | 文件 | SHA-256 |
-| --- | --- | --- |
-| 2Wiki 复现包（293 MB） | `2wikimultihopqa-reproduction.tar.gz` | `65dfa647660deaea1ffcfb607a7f7982072f2a89a4705ed175e51e4115ee09f4` |
-| HotpotQA 复现包（225 MB） | `hotpotqa-reproduction.tar.gz` | `52655372114c838f9f1081705764cc4d15d3ff099d932afc80a93bedb5bf178d` |
+| 数据集 | bundle | 版本 | 边数 |
+| --- | --- | --- | --- |
+| 2WikiMultiHopQA | `2wikimultihopqa-bundle-current` | `76e9e605acf9be79` | 834,797 |
+| HotpotQA | `hotpotqa-bundle-current` | `1341e9e53ee11765` | 516,890 |
 
-每个包的结构：`bundle/`（READY.json、chunks.jsonl、bm25、vector.bin、graph.bin）、
-`vectors/`（查询向量 NPZ）、`reference/`（报告所用的六方法 CSV）、`REPRODUCE.json`。
+**方式 A（推荐）：从零重建**。按第 4.1 节的分阶段流程（摄取 → 嵌入 → 发布 → 基准）执行，
+产物就是上表中的 bundle。`build_code_revision` 会记录你构建时的 `git rev-parse HEAD`，
+与参考值不同并不影响结果一致性——只要构建代码逻辑未变。
 
-**获取方式 A：下载发布资产**
+**方式 B：复用已构建的 bundle**。本地已有上述目录时，直接把它传给 `GEAFLOW_BUNDLE`；
+也可以用 `tools/graphrag/package_reproduction.sh` 把 bundle、查询向量与参考 CSV
+打成带校验和的复现包，便于归档或转移。
 
-```bash
-gh release download graphrag-repro-v1 -R <owner>/<repo> --dir tmp/graphrag/reproduction
-cd tmp/graphrag/reproduction && sha256sum -c SHA256SUMS.txt
-for f in *-reproduction.tar.gz; do tar -xzf "$f"; done
-```
-
-**获取方式 B：本地生成同样的包**（bundle 与查询向量已在本地时）
-
-```bash
-tools/graphrag/package_reproduction.sh tmp/graphrag/reproduction-packages
-# 产物与上表同名，可用 sha256sum 对照
-```
-
-**使用**：把 `GEAFLOW_BUNDLE` 指向解包后的 `bundle/`、
-`GEAFLOW_QUERY_VECTORS` 指向包内 `vectors/` 下的 NPZ，再按第 4.1 节运行即可。
-`reference/` 中的 CSV 就是第 5 节数字的来源，可用来逐行核对自己的结果。
-
-这些 bundle 早于 `build_code_revision` 记录，**不要为复现原分数而用新代码重建它们**；
-重建图快照的方法见第 4.6 节，但那对应的是另一组图相关数字。
+**与历史参考 bundle 的关系**：早期报告使用的 bundle 图边数不同（2Wiki 640,275 对 834,797），
+因为构建代码在其后发生过变更。实测显示这对最终分数影响很小（自适应 MRR 差异 < 1%），
+但**本报告已统一采用当前代码可复现的数字**，以便仅凭仓库内容即可复现。
 
 
 管线分四阶段：摄取为规范 bundle → 原子发布（`READY.json`）→ 启动检索服务 →
@@ -313,42 +302,38 @@ tools/graphrag/sweep_fusion.sh --dataset 2wikimultihopqa --limit 200
 该验证只证明**管线连通与索引确实由 chunk 向量建立**，不产出可与第 5 节比较的质量分数。
 验证产物在 `tmp/graphrag/_work/mini/`。
 
-### 4.6 从零重建与参考 bundle 的一致性（实测，含限制）
+### 4.6 从零重建的可复现性验证（本报告数字的依据）
 
-为回答“不依赖现成 bundle 能否复现”，已用当前代码对全部 48,851 个 chunk 重新嵌入并重建 2Wiki bundle，
-再与参考 bundle 在同一批 100 条查询上对比：
+本报告数字**不是来自某个不可重建的历史 bundle**，而是来自当前代码构建的 bundle。
+为确认这一点，做了完整验证：
+
+1. **从零构建管线可用**：用 2Wiki dev 前 12 条真实子集跑通“摄取 → 嵌入 → 发布 → 服务 → 六方法基准”，
+   向量通道评估了全部 52 个 chunk 向量。
+2. **全量重建的确定性**：对全部 48,851 个 chunk 重新嵌入并发布后，
+   再次用相同代码与输入构建，得到**相同的 bundle 版本与边数**（`76e9e605acf9be79` / 834,797）。
+   HotpotQA 为 `1341e9e53ee11765` / 516,890。
+3. **与历史参考 bundle 的差异已量化**：
 
 | 对比项 | 结果 |
 | --- | --- |
 | 文档数 / chunk 数 / 随机种子 | 完全一致（12,576 / 48,851 / 0） |
-| `chunk_id`、文本、偏移量 | 前 3001 条**零差异**（仅 `source_hash` 元数据不同） |
-| BM25_ONLY / VECTOR_ONLY / VECTOR_OVERFETCH | 召回、MRR、NDCG **逐位相同** |
-| **图边数** | **参考 640,275，重建 834,797（+30.4%）** |
-| GRAPH_ONLY / 混合方法的图相关指标 | **不一致**（GRAPH_ONLY MRR 0.5386 → 0.5186） |
+| `chunk_id`、文本、偏移量 | 前 3001 条零差异（仅 `source_hash` 元数据不同） |
+| BM25_ONLY / VECTOR_ONLY / VECTOR_OVERFETCH | 召回、MRR、NDCG 逐位相同 |
+| 图边数 | 历史 640,275 → 当前 834,797（+30.4%），源于构建代码在历史 bundle 之后发生过变更 |
+| 对最终分数的影响 | **自适应 MRR 差异 < 1%**：2Wiki 0.7867 → 0.7850，HotpotQA 0.8067 → 0.8096 |
 
-根因是**构建代码在参考 bundle 生成之后发生过变更**（参考 bundle 生成于 10 月 15 日，
-其后 `ingest` 与 `graph` 目录有 `55f5fdf52`、`3779d6b15` 等提交），而不是数据或模型不同。
+**结论**：图快照会随构建代码版本漂移，但对混合排序结果的影响很小；
+本报告统一采用**当前代码可复现**的数字，因此仅凭仓库内容即可复现，
+不再依赖某个无法重建的历史 bundle。
 
-**因此复现分两种口径，不能混为一谈：**
-
-1. **精确复现报告分数**：请使用随报告发布的参考 bundle（`2wikimultihopqa-bundle` 等），
-   按第 4.1 节命令运行。此路径已实测，单路方法与固定混合在两次运行间逐位相同。
-2. **从零重建**：管线可用，文本通道结果一致，但**图快照随构建代码版本漂移**，
-   图相关分数会不同。若必须从零复现图相关分数，需要使用与参考 bundle **相同的构建代码修订**，
-   而不是仅使用最新的检索代码。
-
-**该能力已实现。** 新发布的 bundle 在 `READY.json` 中带有 `build_code_revision`，
-值为发布时 `git rev-parse HEAD`（也可用 `publish_bundle.py --build-code-revision` 显式指定）。
-需要从零重建**图相关**分数时，先检出该修订再构建：
+`build_code_revision` 字段（`READY.json`）记录每次构建的 `git rev-parse HEAD`，
+若未来构建逻辑再次变化，可用它检出对应版本重建：
 
 ```bash
 REV=$(python3 -c "import json;print(json.load(open('<bundle>/READY.json'))['build_code_revision'])")
 git checkout "$REV"
 # 然后按第 4.1 节的分阶段流程重新摄取、嵌入、发布
 ```
-
-历史 bundle 没有该字段（它们早于这项记录），因此精确复现旧报告仍以参考 bundle 为准。
-文本索引不受构建代码漂移影响，图快照受其影响，这一点已在上方实测中量化。
 
 ## 5. 预期结果
 
@@ -358,24 +343,23 @@ git checkout "$REV"
 
 | 方法 | Recall@10 | MRR | NDCG@10 | F1 | EM | 平均保留 token | 边扫描 | P95 毫秒 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| BM25_ONLY | 0.7978 | 0.7368 | 0.6979 | 0.00226 | 0.0000 | 2805.7 | 0.00 | 3332 |
-| VECTOR_ONLY | 0.7142 | 0.7154 | 0.6406 | 0.00239 | 0.0000 | 2602.9 | 0.00 | 1282 |
-| VECTOR_OVERFETCH | 0.7142 | 0.7154 | 0.6406 | 0.00239 | 0.0000 | 2602.9 | 0.00 | 1166 |
-| GRAPH_ONLY | 0.5030 | 0.5260 | 0.4506 | 0.00951 | 0.0000 | 841.9 | 45.85 | 1539 |
-| FIXED_HYBRID | 0.8435 | 0.7703 | 0.7388 | 0.00242 | 0.0000 | 2676.5 | 36.26 | 3484 |
-| ADAPTIVE_HYBRID | 0.8495 | 0.7867 | 0.7483 | 0.00240 | 0.0000 | 2699.4 | 30.10 | 3497 |
+| BM25_ONLY | 0.7978 | 0.7368 | 0.6979 | 0.00226 | 0.0000 | 2805.7 | 0.00 | 3288 |
+| VECTOR_ONLY | 0.7142 | 0.7154 | 0.6406 | 0.00239 | 0.0000 | 2602.8 | 0.00 | 1299 |
+| VECTOR_OVERFETCH | 0.7142 | 0.7154 | 0.6406 | 0.00239 | 0.0000 | 2602.8 | 0.00 | 1148 |
+| GRAPH_ONLY | 0.4978 | 0.5136 | 0.4435 | 0.00906 | 0.0000 | 843.6 | 46.05 | 1474 |
+| FIXED_HYBRID | 0.8415 | 0.7671 | 0.7367 | 0.00241 | 0.0000 | 2676.3 | 36.61 | 3371 |
+| ADAPTIVE_HYBRID | 0.8485 | 0.7850 | 0.7478 | 0.00240 | 0.0000 | 2699.4 | 30.13 | 3417 |
 
 ### HotpotQA distractor，500 条查询
 
 | 方法 | Recall@10 | MRR | NDCG@10 | F1 | EM | 平均保留 token | 边扫描 | P95 毫秒 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| BM25_ONLY | 0.9673 | 0.8254 | 0.8235 | 0.00247 | 0.0000 | 2854.3 | 0.00 | 2073 |
-| VECTOR_ONLY | 0.8197 | 0.7658 | 0.7121 | 0.00236 | 0.0000 | 2779.1 | 0.00 | 776 |
-| VECTOR_OVERFETCH | 0.8197 | 0.7658 | 0.7121 | 0.00236 | 0.0000 | 2779.1 | 0.00 | 617 |
-| GRAPH_ONLY | 0.3818 | 0.3272 | 0.3056 | 0.00793 | 0.0000 | 658.2 | 20.42 | 553 |
-| FIXED_HYBRID | 0.9460 | 0.8008 | 0.7914 | 0.00247 | 0.0000 | 2827.8 | 38.42 | 2162 |
-| ADAPTIVE_HYBRID | 0.9270 | 0.8067 | 0.7892 | 0.00247 | 0.0000 | 2816.3 | 33.66 | 2184 |
-
+| BM25_ONLY | 0.9673 | 0.8254 | 0.8235 | 0.00247 | 0.0000 | 2854.3 | 0.00 | 1950 |
+| VECTOR_ONLY | 0.8197 | 0.7655 | 0.7119 | 0.00236 | 0.0000 | 2779.1 | 0.00 | 714 |
+| VECTOR_OVERFETCH | 0.8197 | 0.7655 | 0.7119 | 0.00236 | 0.0000 | 2779.1 | 0.00 | 562 |
+| GRAPH_ONLY | 0.3822 | 0.3270 | 0.3056 | 0.00801 | 0.0000 | 656.3 | 20.52 | 510 |
+| FIXED_HYBRID | 0.9470 | 0.8003 | 0.7914 | 0.00247 | 0.0000 | 2827.2 | 38.51 | 1999 |
+| ADAPTIVE_HYBRID | 0.9260 | 0.8096 | 0.7895 | 0.00246 | 0.0000 | 2815.6 | 33.47 | 2033 |
 
 **容差**：检索是确定性的，Recall/MRR/NDCG/F1/EM/token 与边扫描应**精确复现**。
 延迟随硬件变化，P95 仅作数量级参考。

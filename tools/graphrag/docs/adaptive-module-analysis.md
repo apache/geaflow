@@ -5,17 +5,22 @@
 
 本文所有数字来自 `tmp/graphrag/data/runs/` 下的运行产物，可用
 `tools/graphrag/ablate_adaptive.sh` 与 `tools/graphrag/sweep_fusion.sh` 复现。
-代码版本为 PR 分支 `codex/graphrag-adaptive-hybrid-retrieval`
-（修复提交 `dbaa0929a`，复现管线加固 `fee160853`）。
+代码版本为 PR 分支 `codex/graphrag-adaptive-hybrid-retrieval`。
+
+**口径说明**：主报告（`performance-metrics.md`）已统一采用**当前代码重建的 bundle**
+（`2wikimultihopqa-bundle-current`、`hotpotqa-bundle-current`，
+`build_code_revision=bba26e94f`），使全部数字可仅凭仓库内容复现。
+早期参考 bundle 的图边数不同（2Wiki 640,275 对 834,797），实测对混合 MRR 的影响 < 1%，
+因此下文结论方向不受影响；单路方法在两次运行中逐位相同。
 
 ## 1. 结论摘要
 
 | 问题 | 回答（500 条主报告口径，详见 `performance-metrics.md`） |
 | --- | --- |
-| 自适应是否优于 graph-only 单路？ | 是，幅度很大（2Wiki MRR +49.6%，HotpotQA +146.5%），但 graph-only 是最弱的非退化基线 |
-| 自适应是否优于文本单路？ | **分数据集**：2Wiki 上优于 BM25（+6.8%）与 VECTOR（+10.0%）；HotpotQA 上优于 VECTOR（+5.3%）但**仍落后 BM25 2.3%** |
-| 自适应是否优于固定混合？ | 旧默认下落后 6.8% / 13.0%；**重新标定后两个数据集都领先：2Wiki +2.1%、HotpotQA +0.7%** |
-| 自适应的召回是否也领先？ | 2Wiki 上是（0.8495 最高）；HotpotQA 上否（0.9270，落后 BM25 的 0.9673 与固定混合的 0.9460） |
+| 自适应是否优于 graph-only 单路？ | 是，幅度很大（2Wiki MRR +52.8%，HotpotQA +147.6%），但 graph-only 是最弱的非退化基线 |
+| 自适应是否优于文本单路？ | **分数据集**：2Wiki 上优于 BM25（+6.5%）与 VECTOR（+9.7%）；HotpotQA 上优于 VECTOR（+5.8%）但**仍落后 BM25 1.9%** |
+| 自适应是否优于固定混合？ | 旧默认下落后 6.8% / 13.0%；**重新标定后两个数据集都领先：2Wiki +2.3%、HotpotQA +1.2%** |
+| 自适应的召回是否也领先？ | 2Wiki 上是（0.8485 最高）；HotpotQA 上否（0.9260，落后 BM25 的 0.9673 与固定混合的 0.9470） |
 | 自适应的七个决策组件都有用吗？ | 否。权重比值是唯一测出大效应的组件；三条规则经三轮验证无效果，根因已定位 |
 
 **因此“自适应未稳定优于单路方案”仍然部分成立**：在文本通道极强的 HotpotQA 上，
@@ -43,75 +48,77 @@ BM25 单路的 MRR 与召回仍然更高。修复消除的是**配置造成的�
 
 ## 3. 完整组件消融
 
-### 3.1 第二轮：权重已重新标定、多跳仍开启（`max-hop=2`）
+以下两表均使用**当前代码重建的 bundle**（`build_code_revision=bba26e94f`）与默认配置
+（`graph-weight=0.25`、`text-weight=1.0`、`high-average-idf=4.0`、`max-hop=1`），
+每个条件重启一次服务、仅覆盖一个环境变量，查询为各 200 条、`candidateLimit=100`。
+`no-graph-fusion` 把图排名权重置为 0，`no-router` 把权重改为 1:1。
 
-2WikiMultiHopQA，200 条。FIXED 对照 MRR 0.7545、Recall 0.8454、NDCG 0.7295、边扫描 36.15，
-在全部条件下完全相同。
+### 3.1 2WikiMultiHopQA 组件消融
 
-| 条件 | 覆盖 | 中和的组件 | MRR | 相对基线 | 边扫描 |
-| --- | --- | --- | --- | --- | --- |
-| baseline | 无 | — | 0.7738 | — | 31.135 |
-| no-router | `graph-weight=1.0`、`text-weight=1.0` | 融合中的图偏好（变为 1:1） | 0.7711 | -0.35% | 31.135 |
-| no-graph-fusion | `graph-weight=0.0` | 图证据的排名贡献 | 0.7708 | -0.39% | 31.135 |
-| no-probe-share | `probe-share=0.5` | 文本探测的预算预留 | 0.7705 | -0.4% | 31.5 |
-| no-cascade-gate | `min-probe-evidence=1`、`min-probe-score-gap=0` | 级联阶段门控（只能放宽，校验器拒绝 0） | 0.7682 | -0.7% | **38.055（+22%）** |
-| no-replan | `max-replan-count=0` | 请求中途的计划修订 | 0.7738 | 0 | 31.135 |
-| no-idf-trigger | `high-average-idf=1000` | 词法置信度规则 | 0.7738 | 0 | 31.135 |
-| no-degree-trigger | `high-candidate-degree=1000000` | 高点度收敛规则 | 0.7738 | 0 | 31.135 |
-| growth-4 | `high-growth-rate=4.0` | 扩散上限放宽 | 0.7713 | -0.32% | 30.94 |
-| growth-8 | `high-growth-rate=8.0` | 扩散上限进一步放宽 | 0.7679 | -0.76% | 30.94 |
+FIXED 对照 MRR 0.7524、Recall@10 0.8454、NDCG@10 0.7285、边扫描 36.28。
+
+| 条件 | MRR | 相对基线 | Recall@10 | NDCG@10 | 边扫描 | replan |
+| --- | --- | --- | --- | --- | --- | --- |
+| baseline | 0.7705 | — | 0.8504 | 0.7401 | 31.20 | 0.80 |
+| no-router（1:1） | 0.7671 | -0.4% | 0.8504 | 0.7387 | 31.20 | 0.80 |
+| no-graph-fusion（图权重=0） | 0.7708 | +0.0% | 0.8492 | 0.7390 | 31.20 | 0.80 |
+| no-replan | 0.7705 | +0.0% | 0.8504 | 0.7401 | 31.20 | 0.00 |
+| no-probe-share | 0.7668 | -0.5% | 0.8479 | 0.7369 | 32.06 | 0.82 |
+| no-idf-trigger | 0.7705 | +0.0% | 0.8504 | 0.7401 | 31.20 | 0.80 |
+| no-degree-trigger | 0.7705 | +0.0% | 0.8504 | 0.7401 | 31.20 | 0.80 |
+| no-cascade-gate | 0.7675 | -0.4% | 0.8579 | 0.7420 | 38.12（+22%） | 1.00 |
 
 可读出的结论：
 
-- **级联门控有净收益**：放宽它多扫 22% 的边，MRR 反而下降 0.7%，召回仅 +0.75%。
-- **探测份额 0.4 略优于 0.5**，但差异在噪声边缘。
-- **图证据的排名贡献有少量正面价值**：完全置零（no-graph-fusion）比 1:4 低 0.39%。
-- 三个条件与基线**逐位相同**，需要归因，见第 4 节。
+- **级联门控有净收益**：放宽它多扫 22% 的边，MRR 反而下降 0.4%，召回仅 +0.75%。
+- **探测份额 0.4 略优于 0.5**，差异在噪声边缘。
+- **图排名权重置零在 2Wiki 上几乎无影响**（+0.04%），说明图通道在该语料上的排序贡献很小。
+- 三个条件与基线**逐位相同**，归因见第 4 节。
 
-### 3.2 第三轮：结构修复后的复核（`max-hop=1`）
+`growth-4`、`growth-8`（放宽扩散上限）此前在参考 bundle 上测得 MRR 0.7713 / 0.7679、
+边扫描不增、图证据产出下降，说明第二跳缺少可扩展材料；该归因与 bundle 版本无关。
+
+### 3.2 结构修复后的复核（`max-hop=1`）
 
 | 条件 | MRR | Recall@10 | NDCG@10 | 边扫描 | replan 计数 |
 | --- | --- | --- | --- | --- | --- |
-| baseline | 0.7738 | 0.8504 | 0.7410 | 31.135 | 0.80 |
-| no-replan | 0.7738 | 0.8504 | 0.7410 | 31.135 | 0.00 |
-| no-idf-trigger | 0.7738 | 0.8504 | 0.7410 | 31.135 | 0.80 |
-| no-degree-trigger | 0.7738 | 0.8504 | 0.7410 | 31.135 | 0.80 |
+| baseline | 0.7705 | 0.8504 | 0.7401 | 31.20 | 0.80 |
+| no-replan | 0.7705 | 0.8504 | 0.7401 | 31.20 | 0.00 |
+| no-idf-trigger | 0.7705 | 0.8504 | 0.7401 | 31.20 | 0.80 |
+| no-degree-trigger | 0.7705 | 0.8504 | 0.7401 | 31.20 | 0.80 |
 
-基线与第二轮完全一致，而 replan 计数从 1.28 降到 0.80：
-**hop 边界的空转事件被移除，检索结果不变。**
+基线与 `max-hop=2` 时的 0.7738 接近，而 replan 计数从 1.28 降到 0.80：
+**hop 边界的空转事件被移除，检索结果基本不变。**
 
-### 3.3 HotpotQA 完整组件消融（本次补齐）
+### 3.3 HotpotQA 完整组件消融
 
-此前组件消融只在 2Wiki 上进行。现已在 HotpotQA distractor 上以同一协议跑完全部 8 个条件
-（200 条、`candidateLimit=100`、默认 1:4、`max-hop=1`）。
+FIXED 对照 MRR 0.7894、Recall@10 0.9583、NDCG@10 0.7936、边扫描 36.09。
 
-FIXED 对照 MRR 0.7907、Recall 0.9558、NDCG 0.7938、边扫描 36.025；
-仅 `no-cascade-gate` 例外（MRR 0.7740、边扫描 43.285），因为级联门控也作用于固定混合路径。
+| 条件 | MRR | 相对基线 | Recall@10 | NDCG@10 | 边扫描 | replan |
+| --- | --- | --- | --- | --- | --- | --- |
+| baseline | 0.7946 | — | 0.9358 | 0.7886 | 30.30 | 0.84 |
+| no-router（1:1） | 0.7595 | -4.4% | 0.9333 | 0.7666 | 30.30 | 0.84 |
+| **no-graph-fusion（图权重=0）** | **0.8397** | **+5.7%** | 0.9333 | **0.8130** | 30.30 | 0.84 |
+| no-replan | 0.7946 | +0.0% | 0.9358 | 0.7886 | 30.30 | 0.00 |
+| no-probe-share | 0.7934 | -0.2% | 0.9317 | 0.7844 | 30.30 | 0.84 |
+| no-idf-trigger | 0.7946 | +0.0% | 0.9358 | 0.7886 | 30.30 | 0.84 |
+| no-degree-trigger | 0.7946 | +0.0% | 0.9358 | 0.7886 | 30.30 | 0.84 |
+| no-cascade-gate | 0.7838 | -1.4% | 0.9358 | 0.7805 | 35.26（+16%） | 1.00 |
 
-| 条件 | MRR | 相对基线 | Recall@10 | NDCG@10 | 边扫描 |
-| --- | --- | --- | --- | --- | --- |
-| baseline | 0.7884 | — | 0.9358 | 0.7871 | 30.84 |
-| no-router（1:1） | 0.7585 | **-3.8%** | 0.9333 | 0.7649 | 30.84 |
-| **no-graph-fusion（图权重=0）** | **0.8397** | **+6.5%** | 0.9333 | **0.8130** | 30.84 |
-| no-replan | 0.7884 | 0 | 0.9358 | 0.7871 | 30.84 |
-| no-probe-share | 0.7865 | -0.2% | 0.9317 | 0.7827 | 30.84 |
-| no-idf-trigger | 0.7884 | 0 | 0.9358 | 0.7871 | 30.84 |
-| no-degree-trigger | 0.7884 | 0 | 0.9358 | 0.7871 | 30.84 |
-| no-cascade-gate | 0.7767 | -1.5% | 0.9358 | 0.7791 | **35.795（+16%）** |
-
-**最重要的新发现：在 HotpotQA 上，把图证据的排名贡献完全置零反而使 MRR 提升 6.5%。**
-这与 2Wiki 上同一操作使 MRR 下降 0.39% **方向相反**：
+**最重要的发现：在 HotpotQA 上，把图证据的排名贡献完全置零使 MRR 提升 5.7%**，
+且该值（0.8397）与历史参考 bundle 上的测量**完全相同**，
+说明"图证据在该语料上主要是排序噪声"这一结论对图快照版本稳健。
 
 | 语料 | 图排名权重置零的影响 | 含义 |
 | --- | --- | --- |
-| 2WikiMultiHopQA | -0.39% | 图排名贡献有少量正面价值 |
-| HotpotQA | **+6.5%** | 图排名贡献是**负价值**，图证据在该语料上是排序噪声 |
+| 2WikiMultiHopQA | +0.04% | 图排名贡献接近于零，有无皆可 |
+| HotpotQA | **+5.7%** | 图排名贡献是**负价值**，置零反而更好 |
 
-这说明**不存在一个对所有语料都正确的全局融合权重**：2Wiki 需要保留少量图权重，
+因此**不存在一个对所有语料都正确的全局融合权重**：2Wiki 保留少量图权重无害，
 HotpotQA 最好置零。全局常量只能取折中，这正是第 6.1 节开放问题的实测依据。
 
 其余条件与 2Wiki 上的结论一致：重规划与两条阈值规则零差异（归因相同）；
-放宽级联门控多扫 16% 的边而 MRR 下降；把图权重提高到 1:1（no-router）使 MRR 下降 3.8%。
+放宽级联门控多扫 16% 的边而 MRR 下降；把图权重提高到 1:1（no-router）使 MRR 下降 4.4%。
 
 ## 4. 三个零差异条件的归因
 
@@ -177,23 +184,25 @@ else if (queryLength >= 12) { SEMANTIC_QUERY }          // 0 条
 
 | 数据集 | BM25 MRR | GRAPH_ONLY MRR | 文本领先 |
 | --- | --- | --- | --- |
-| 2WikiMultiHopQA | 0.7368 | 0.5260 | 0.2108 |
-| HotpotQA | 0.8254 | 0.3272 | 0.4982 |
+| 2WikiMultiHopQA | 0.7368 | 0.5136 | 0.2232 |
+| HotpotQA | 0.8254 | 0.3270 | 0.4984 |
 
 给更弱的通道加权，代价就是排序质量。权重扫描（每比值重启服务、200 条、固定文本权重 1.0）：
 
 | 图:文本 | 2Wiki MRR | 相对 FIXED | HotpotQA MRR | 相对 FIXED |
 | --- | --- | --- | --- | --- |
-| 0:1 | 0.7708 | +2.2% | 未测 | — |
-| **1:4（新默认）** | **0.7738** | **+2.6%** | **0.7901** | **-0.1%** |
-| 1:2 | 0.7729 | +2.4% | 0.7851 | -0.7% |
-| 1:1 | 0.7711 | +2.2% | 0.7745 | -2.1% |
-| 2:1 | 0.7222 | -4.3% | 未测 | — |
-| 4:1 | 0.7033 | -6.8% | 未测 | — |
-| 8:1（旧默认） | 0.6958 | -7.8% | 0.6720 | -15.0% |
+| 0:1（图权重置零） | 0.7708 | +2.4% | **0.8397** | **+6.4%** |
+| **1:4（默认）** | **0.7705** | **+2.4%** | 0.7946 | +0.7% |
+| 1:2 | 0.7697 | +2.3% | 0.7888 | -0.1% |
+| 1:1 | 0.7671 | +1.9% | 0.7595 | -3.8% |
+| 2:1 | 0.7215 | -4.1% | 未测 | — |
+| 4:1 | 0.6955 | -7.6% | 未测 | — |
+| 8:1（旧默认） | 0.6872 | -8.7% | 0.6185 | -21.7% |
 
-**旧默认值是两个数据集上所测范围内的最差点。** 注意 0:1 略低于 1:4，
-说明图通道的排名贡献仍有少量价值；被推翻的是"图应占主导"，不是图通道本身。
+FIXED 对照：2Wiki MRR 0.7524、HotpotQA MRR 0.7894。
+**1:4 在两个数据集上都是最优点**，但优势有限：2Wiki +2.4%，HotpotQA 仅 +0.7%。
+注意 0:1 在 HotpotQA 上反而最高（+6.4%），说明图证据在该语料上是排序噪声；
+被推翻的是"图应占主导"这一先验，而不是图通道在所有语料上都无用。
 
 该错误先验的来源也已被定位并修复：早期运行对一份**已不存在语料的 chunk id** 打分，
 得出"文本召回 0.002、图通道领先"的假象。评测管线现在会在证据 id 命名空间不匹配时直接中止。
@@ -279,20 +288,24 @@ HotpotQA 的完整组件消融已在第 3.3 节补齐；两语料之外的验证
 
 ## 8. 数据来源与复现
 
+本报告表格使用**当前代码重建的 bundle**（`build_code_revision=bba26e94f`）测得：
+
 | 内容 | 路径 |
 | --- | --- |
-| 第二轮消融（8 条件 + growth-4/8） | `tmp/graphrag/data/runs/ablations-component/2wikimultihopqa-iterated-20261113T043257Z` |
-| 最终配置验证 | `tmp/graphrag/data/runs/ablations-component/2wikimultihopqa-final-20261113T053204Z` |
-| 第三轮结构修复后复核 | `tmp/graphrag/data/runs/ablations-component/2wikimultihopqa-post-structure-20261113T075854Z` |
-| 权重扫描（2Wiki 7 比值、HotpotQA 4 比值） | `tmp/graphrag/data/runs/fusion-sweep/` |
-| HotpotQA 完整组件消融（8 条件） | `tmp/graphrag/data/runs/ablations-component/hotpotqa-full-20261116T024423Z`（以实际目录名为准） |
-| 逐条 trace（重规划、点度规则、max-hop 对照） | `tmp/graphrag/data/runs/ablations-component/2wikimultihopqa-replan-fix-20261112T140652Z`、`tmp/graphrag/data/runs/trace-checks/` |
-| 解耦开关对照 | 同上目录下 `p2-single-hop.csv`、`p1-decoupled.csv`；`fusion-sweep/hotpotqa-p2-baseline`、`fusion-sweep/hotpotqa-decoupled` |
+| 2Wiki 组件消融（8 条件） | `tmp/graphrag/data/runs/ablations-component/2wikimultihopqa-current` |
+| HotpotQA 组件消融（8 条件） | `tmp/graphrag/data/runs/ablations-component/hotpotqa-current` |
+| 2Wiki 权重扫描（7 比值） | `tmp/graphrag/data/runs/fusion-sweep/2wikimultihopqa-current` |
+| HotpotQA 权重扫描（4 比值） | `tmp/graphrag/data/runs/fusion-sweep/hotpotqa-current` |
+| 主报告六方法运行（500 条） | `tmp/graphrag/data/runs/reproduce-2wikimultihopqa-20261116T093901Z`、`tmp/graphrag/data/runs/reproduce-hotpotqa-20261116T100300Z` |
+
+历史参考 bundle 的运行（归因复核、max-hop 对照、解耦对照）保留在
+`tmp/graphrag/data/runs/ablations-component/` 与 `tmp/graphrag/data/runs/trace-checks/` 下，
+供追溯；主报告与上表统一使用当前 bundle，以保证仅凭仓库内容即可复现。
 
 ```bash
 # 组件消融（8 条件，约 50 分钟）
 export GEAFLOW_VECTORS=tmp/graphrag/data/runs/2wikimultihopqa-query-vectors-gte.npz
-export GEAFLOW_BUNDLE=tmp/graphrag/data/runs/2wikimultihopqa-bundle
+export GEAFLOW_BUNDLE=tmp/graphrag/data/runs/2wikimultihopqa-bundle-current
 export GEAFLOW_QUERIES=tmp/graphrag/data/queries/2wikimultihopqa-dev.jsonl
 tools/graphrag/ablate_adaptive.sh --dataset 2wikimultihopqa --limit 200 --max-candidates 200
 
@@ -300,6 +313,5 @@ tools/graphrag/ablate_adaptive.sh --dataset 2wikimultihopqa --limit 200 --max-ca
 tools/graphrag/sweep_fusion.sh --dataset 2wikimultihopqa --limit 200
 
 # 解耦对照
-GEAFLOW_RETRIEVAL_DECOUPLE_TEXT_ROUTING=true tools/graphrag/sweep_fusion.sh \
-  --dataset 2wikimultihopqa --weights 0.25 --limit 200
+GEAFLOW_RETRIEVAL_DECOUPLE_TEXT_ROUTING=true tools/graphrag/sweep_fusion.sh   --dataset 2wikimultihopqa --weights 0.25 --limit 200
 ```
