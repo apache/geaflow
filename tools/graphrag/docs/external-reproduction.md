@@ -150,7 +150,42 @@ mvn -pl geaflow-ai -o test                                 # 470 个测试，含
 python3 -m pytest tools/graphrag/tests/ -q                 # 118 个测试
 ```
 
-## 4. 复现报告中的分数
+## 4. 参考复现包与报告分数
+
+### 4.0 先获取参考复现包（保留原分数的推荐路径）
+
+报告分数绑定在**参考 bundle** 上，因此复现包中同时提供 bundle、查询向量与参考 CSV：
+
+| 内容 | 文件 | SHA-256 |
+| --- | --- | --- |
+| 2Wiki 复现包（293 MB） | `2wikimultihopqa-reproduction.tar.gz` | `65dfa647660deaea1ffcfb607a7f7982072f2a89a4705ed175e51e4115ee09f4` |
+| HotpotQA 复现包（225 MB） | `hotpotqa-reproduction.tar.gz` | `52655372114c838f9f1081705764cc4d15d3ff099d932afc80a93bedb5bf178d` |
+
+每个包的结构：`bundle/`（READY.json、chunks.jsonl、bm25、vector.bin、graph.bin）、
+`vectors/`（查询向量 NPZ）、`reference/`（报告所用的六方法 CSV）、`REPRODUCE.json`。
+
+**获取方式 A：下载发布资产**
+
+```bash
+gh release download graphrag-repro-v1 -R <owner>/<repo> --dir tmp/graphrag/reproduction
+cd tmp/graphrag/reproduction && sha256sum -c SHA256SUMS.txt
+for f in *-reproduction.tar.gz; do tar -xzf "$f"; done
+```
+
+**获取方式 B：本地生成同样的包**（bundle 与查询向量已在本地时）
+
+```bash
+tools/graphrag/package_reproduction.sh tmp/graphrag/reproduction-packages
+# 产物与上表同名，可用 sha256sum 对照
+```
+
+**使用**：把 `GEAFLOW_BUNDLE` 指向解包后的 `bundle/`、
+`GEAFLOW_QUERY_VECTORS` 指向包内 `vectors/` 下的 NPZ，再按第 4.1 节运行即可。
+`reference/` 中的 CSV 就是第 5 节数字的来源，可用来逐行核对自己的结果。
+
+这些 bundle 早于 `build_code_revision` 记录，**不要为复现原分数而用新代码重建它们**；
+重建图快照的方法见第 4.6 节，但那对应的是另一组图相关数字。
+
 
 管线分四阶段：摄取为规范 bundle → 原子发布（`READY.json`）→ 启动检索服务 →
 对服务运行六方法基准。`reproduce.sh` 驱动这四个阶段。
