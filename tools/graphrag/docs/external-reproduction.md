@@ -302,8 +302,18 @@ tools/graphrag/sweep_fusion.sh --dataset 2wikimultihopqa --limit 200
    图相关分数会不同。若必须从零复现图相关分数，需要使用与参考 bundle **相同的构建代码修订**，
    而不是仅使用最新的检索代码。
 
-后续应在 `READY.json` 中显式记录**构建代码修订**，使复现者能检出同一版本重建；
-在此之前，以参考 bundle 为准。
+**该能力已实现。** 新发布的 bundle 在 `READY.json` 中带有 `build_code_revision`，
+值为发布时 `git rev-parse HEAD`（也可用 `publish_bundle.py --build-code-revision` 显式指定）。
+需要从零重建**图相关**分数时，先检出该修订再构建：
+
+```bash
+REV=$(python3 -c "import json;print(json.load(open('<bundle>/READY.json'))['build_code_revision'])")
+git checkout "$REV"
+# 然后按第 4.1 节的分阶段流程重新摄取、嵌入、发布
+```
+
+历史 bundle 没有该字段（它们早于这项记录），因此精确复现旧报告仍以参考 bundle 为准。
+文本索引不受构建代码漂移影响，图快照受其影响，这一点已在上方实测中量化。
 
 ## 5. 预期结果
 

@@ -14,7 +14,17 @@ ROOT = Path(__file__).resolve().parents[2]
 MAIN_CLASS = "org.apache.geaflow.ai.retrieval.ingest.CanonicalJsonlArtifactBridgeCli"
 
 
-def publish(manifest_path, vectors_path, output, allow_download=False, parent_bundle=None):
+def _build_code_revision():
+    """Return the git revision the bundle is being built from, or 'unknown' outside a checkout."""
+    try:
+        return subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True,
+                                       stderr=subprocess.DEVNULL).strip()
+    except (subprocess.SubprocessError, OSError):
+        return "unknown"
+
+
+def publish(manifest_path, vectors_path, output, allow_download=False, parent_bundle=None,
+            build_code_revision=None):
     manifest_path = Path(manifest_path).resolve()
     vectors_path = Path(vectors_path).resolve()
     output = Path(output).resolve()
@@ -48,6 +58,7 @@ def publish(manifest_path, vectors_path, output, allow_download=False, parent_bu
             "--index-version", release["version"],
             "--vector-source", release["vector_source"],
             "--vector-version", release["vector_version"],
+            "--build-code-revision", build_code_revision or _build_code_revision(),
         ] + (["--parent-bundle", str(Path(parent_bundle).resolve())]
              if parent_bundle is not None else []))
         ready = json.loads((output / "READY.json").read_text(encoding="utf-8"))
@@ -108,11 +119,14 @@ def main():
     parser.add_argument("--vectors", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--allow-download", action="store_true")
+    parser.add_argument("--build-code-revision",
+                        help="Git revision recorded in READY.json so a rebuild can use the same "
+                             "build code. Defaults to `git rev-parse HEAD`.")
     parser.add_argument("--parent-bundle", type=Path,
                         help="READY bundle whose graph snapshot is the parent of this graph delta")
     args = parser.parse_args()
     ready = publish(args.manifest, args.vectors, args.output, args.allow_download,
-                    args.parent_bundle)
+                    args.parent_bundle, build_code_revision=args.build_code_revision)
     print(json.dumps(ready, sort_keys=True, indent=2))
 
 

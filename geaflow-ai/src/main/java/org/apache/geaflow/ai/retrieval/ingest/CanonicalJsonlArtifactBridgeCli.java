@@ -72,8 +72,12 @@ public final class CanonicalJsonlArtifactBridgeCli {
                 new GraphVersion(graphName, graphVersion), indexVersion, vectors,
                 required(options, "vector-source"), required(options, "vector-version"));
             String parentBundle = options.get("parent-bundle");
+            // Recorded so a reviewer can check out the same build code when a from-scratch rebuild
+            // must match the graph snapshot, not merely the text index.
+            String buildCodeRevision = options.getOrDefault("build-code-revision", "unknown");
             assembleBundle(release, work, staging, graphName, graphVersion, indexVersion,
-                parentBundle == null ? null : Path.of(parentBundle).toAbsolutePath().normalize());
+                parentBundle == null ? null : Path.of(parentBundle).toAbsolutePath().normalize(),
+                buildCodeRevision);
             publish(staging, output);
         } finally {
             ArtifactIntegrity.deleteTree(work);
@@ -106,7 +110,8 @@ public final class CanonicalJsonlArtifactBridgeCli {
 
     private static void assembleBundle(Path release, Path work, Path staging,
                                        String graphName, String graphVersion,
-                                       String indexVersion, Path parentBundle) throws IOException {
+                                       String indexVersion, Path parentBundle,
+                                       String buildCodeRevision) throws IOException {
         copyTree(release, staging);
         copy(find(work, "graph-", graphVersion), staging.resolve("graph.bin"));
         copy(find(work, "vector-", indexVersion), staging.resolve("vector.bin"));
@@ -119,6 +124,7 @@ public final class CanonicalJsonlArtifactBridgeCli {
         ready.addProperty("graph_artifact", "graph.bin");
         ready.addProperty("vector_artifact", "vector.bin");
         ready.addProperty("bm25_artifact", "bm25");
+        ready.addProperty("build_code_revision", buildCodeRevision);
         Path qualityPath = ArtifactIntegrity.resolveInside(staging,
             ready.get("quality_report").getAsString());
         JsonObject quality = new JsonParser().parse(Files.readString(qualityPath,

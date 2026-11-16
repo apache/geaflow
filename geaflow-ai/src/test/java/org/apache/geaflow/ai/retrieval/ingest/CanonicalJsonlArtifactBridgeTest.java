@@ -109,7 +109,8 @@ class CanonicalJsonlArtifactBridgeTest {
         String[] args = {"--release", release.toString(), "--output", output.toString(),
             "--manifest", manifest.toString(), "--vectors", vectors.toString(),
             "--graph-name", "graph", "--graph-version", "g1", "--index-version", "index-1",
-            "--vector-source", "fixture", "--vector-version", "v1"};
+            "--vector-source", "fixture", "--vector-version", "v1",
+            "--build-code-revision", "test-revision-123"};
 
         CanonicalJsonlArtifactBridgeCli.main(args);
 
@@ -118,6 +119,9 @@ class CanonicalJsonlArtifactBridgeTest {
         JsonObject quality = new JsonParser().parse(Files.readString(output.resolve("quality-report.json"),
             StandardCharsets.UTF_8)).getAsJsonObject();
         org.junit.jupiter.api.Assertions.assertEquals("READY", ready.get("state").getAsString());
+        // The build revision is what lets a reviewer rebuild the same graph snapshot later.
+        org.junit.jupiter.api.Assertions.assertEquals("test-revision-123",
+            ready.get("build_code_revision").getAsString());
         org.junit.jupiter.api.Assertions.assertEquals(1.0,
             quality.getAsJsonObject("index_coverage").getAsJsonObject("vector")
                 .get("ratio").getAsDouble());
