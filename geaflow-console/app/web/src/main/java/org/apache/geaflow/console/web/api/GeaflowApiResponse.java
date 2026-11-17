@@ -57,7 +57,8 @@ public abstract class GeaflowApiResponse<T> {
             response.setCharacterEncoding(StandardCharsets.UTF_8.toString());
             response.setStatus(GeaflowApiResponseCode.SUCCESS.getHttpCode());
             PrintWriter out = response.getWriter();
-            JSON.writeJSONString(out, this);
+            response.setHeader("Cache-Control", "no-store");
+            out.write(JSON.toJSONString(this, new ConfigViewFilter()));
             out.flush();
 
         } catch (Exception e) {

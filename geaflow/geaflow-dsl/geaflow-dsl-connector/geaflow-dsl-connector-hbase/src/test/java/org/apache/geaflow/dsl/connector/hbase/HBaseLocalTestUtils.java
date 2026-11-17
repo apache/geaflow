@@ -56,7 +56,7 @@ public class HBaseLocalTestUtils {
             }
             LOGGER.info("Get connection from HBase local mini cluster");
         } catch (Exception e) {
-            throw new RuntimeException("Can not get connection from HBase local mini cluster.");
+            throw new RuntimeException("Can not get connection from HBase local mini cluster.", e);
         }
     }
 

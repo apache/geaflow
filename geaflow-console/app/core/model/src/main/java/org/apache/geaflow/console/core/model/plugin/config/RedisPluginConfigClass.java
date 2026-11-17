@@ -45,6 +45,8 @@ public class RedisPluginConfigClass extends PluginConfigClass {
     private String user;
 
     @GeaflowConfigKey(value = "geaflow.store.redis.password", comment = "i18n.key.password")
+    @GeaflowConfigValue(masked = true)
+    @ToString.Exclude
     private String password;
 
     @GeaflowConfigKey(value = "geaflow.store.redis.connection.timeout", comment = "i18n.key.connection.timeout")

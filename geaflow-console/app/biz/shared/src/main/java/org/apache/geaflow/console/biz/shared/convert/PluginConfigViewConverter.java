@@ -19,8 +19,12 @@
 
 package org.apache.geaflow.console.biz.shared.convert;
 
+import java.util.Objects;
 import java.util.Optional;
 import org.apache.geaflow.console.biz.shared.view.PluginConfigView;
+import org.apache.geaflow.console.common.util.exception.GeaflowIllegalException;
+import org.apache.geaflow.console.common.util.type.GeaflowPluginType;
+import org.apache.geaflow.console.core.model.config.ConfigRedactor;
 import org.apache.geaflow.console.core.model.plugin.config.GeaflowPluginConfig;
 import org.springframework.stereotype.Component;
 
@@ -30,9 +34,17 @@ public class PluginConfigViewConverter extends NameViewConverter<GeaflowPluginCo
     @Override
     public void merge(PluginConfigView view, PluginConfigView updateView) {
         super.merge(view, updateView);
-        Optional.ofNullable(updateView.getConfig()).ifPresent(view::setConfig);
+        boolean sameScope = (updateView.getType() == null || Objects.equals(view.getType(), updateView.getType()))
+            && (updateView.getCategory() == null || Objects.equals(view.getCategory(), updateView.getCategory()));
         Optional.ofNullable(updateView.getCategory()).ifPresent(view::setCategory);
         Optional.ofNullable(updateView.getType()).ifPresent(view::setType);
+        if (updateView.getConfig() != null) {
+            view.setConfig(ConfigRedactor.merge(updateView.getConfig(), sameScope ? view.getConfig() : null,
+                ConfigRedactor.pluginDesc(GeaflowPluginType.of(view.getType()))));
+        } else if (!sameScope) {
+            throw new GeaflowIllegalException(
+                "Changing plugin type or category requires a new configuration");
+        }
     }
 
     @Override
@@ -48,6 +60,7 @@ public class PluginConfigViewConverter extends NameViewConverter<GeaflowPluginCo
     protected GeaflowPluginConfig viewToModel(PluginConfigView view) {
         GeaflowPluginConfig model = super.viewToModel(view);
         model.setType(view.getType());
+        ConfigRedactor.rejectUnresolved(view.getConfig());
         model.setConfig(view.getConfig());
         model.setCategory(view.getCategory());
         return model;

@@ -52,7 +52,7 @@ export const getApiTasks = async (params: any) => {
  * 获取集群
  */
 export const getApiClusters = async () => {
-  const response = await request(`${HTTP_SERVICE_URL}/api/clusters`, {
+  const response = await request(`${HTTP_SERVICE_URL}/api/clusters/-/options`, {
     method: "get",
     credentials: "include",
     withCredentials: true,

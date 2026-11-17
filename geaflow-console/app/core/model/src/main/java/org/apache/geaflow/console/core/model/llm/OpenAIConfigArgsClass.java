@@ -29,7 +29,7 @@ import org.apache.geaflow.console.core.model.config.GeaflowConfigValue;
 public class OpenAIConfigArgsClass extends LLMConfigArgsClass {
 
     @GeaflowConfigKey(value = "apiKey")
-    @GeaflowConfigValue(required = true)
+    @GeaflowConfigValue(required = true, masked = true)
     private String apiKey;
 
 

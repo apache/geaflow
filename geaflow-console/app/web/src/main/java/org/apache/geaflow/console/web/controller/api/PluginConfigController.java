@@ -19,10 +19,13 @@
 
 package org.apache.geaflow.console.web.controller.api;
 
+import org.apache.geaflow.console.biz.shared.AuthorizationManager;
 import org.apache.geaflow.console.biz.shared.PluginConfigManager;
 import org.apache.geaflow.console.biz.shared.view.PluginConfigView;
 import org.apache.geaflow.console.common.dal.model.PageList;
 import org.apache.geaflow.console.common.dal.model.PluginConfigSearch;
+import org.apache.geaflow.console.common.util.context.ContextHolder;
+import org.apache.geaflow.console.core.model.security.GeaflowRole;
 import org.apache.geaflow.console.web.api.GeaflowApiResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -41,28 +44,42 @@ public class PluginConfigController {
     @Autowired
     private PluginConfigManager pluginConfigManager;
 
+    @Autowired
+    private AuthorizationManager authorizationManager;
+
+    private void authorizeSystemSession() {
+        if (ContextHolder.get().isSystemSession()) {
+            authorizationManager.hasRole(GeaflowRole.SYSTEM_ADMIN);
+        }
+    }
+
     @GetMapping
     public GeaflowApiResponse<PageList<PluginConfigView>> searchPluginConfigs(PluginConfigSearch searchView) {
+        authorizeSystemSession();
         return GeaflowApiResponse.success(pluginConfigManager.search(searchView));
     }
 
     @GetMapping("/{id}")
     public GeaflowApiResponse<PluginConfigView> getPluginConfig(@PathVariable String id) {
+        authorizeSystemSession();
         return GeaflowApiResponse.success(pluginConfigManager.get(id));
     }
 
     @PostMapping
     public GeaflowApiResponse<String> createPluginConfig(@RequestBody PluginConfigView view) {
+        authorizeSystemSession();
         return GeaflowApiResponse.success(pluginConfigManager.create(view));
     }
 
     @PutMapping("/{id}")
     public GeaflowApiResponse<Boolean> updatePluginConfig(@PathVariable String id, @RequestBody PluginConfigView view) {
+        authorizeSystemSession();
         return GeaflowApiResponse.success(pluginConfigManager.updateById(id, view));
     }
 
     @DeleteMapping("/{id}")
     public GeaflowApiResponse<Boolean> deletePluginConfig(@PathVariable String id) {
+        authorizeSystemSession();
         return GeaflowApiResponse.success(pluginConfigManager.drop(id));
     }
 

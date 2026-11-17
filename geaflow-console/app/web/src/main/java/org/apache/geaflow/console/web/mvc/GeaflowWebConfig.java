@@ -20,11 +20,13 @@
 package org.apache.geaflow.console.web.mvc;
 
 import com.alibaba.fastjson.support.spring.FastJsonHttpMessageConverter;
+import java.util.Collections;
 import org.apache.geaflow.console.common.util.context.GeaflowContext;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.http.HttpMessageConverters;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.MediaType;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.PathMatchConfigurer;
@@ -55,6 +57,8 @@ public class GeaflowWebConfig implements WebMvcConfigurer {
 
     @Bean
     public HttpMessageConverters fastJsonConfigure() {
-        return new HttpMessageConverters(new FastJsonHttpMessageConverter());
+        FastJsonHttpMessageConverter converter = new FastJsonHttpMessageConverter();
+        converter.setSupportedMediaTypes(Collections.singletonList(MediaType.APPLICATION_JSON));
+        return new HttpMessageConverters(converter);
     }
 }

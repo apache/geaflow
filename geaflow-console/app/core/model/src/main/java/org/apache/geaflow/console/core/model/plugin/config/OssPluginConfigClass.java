@@ -35,7 +35,7 @@ public class OssPluginConfigClass extends PersistentPluginConfigClass {
     private String endpoint;
 
     @GeaflowConfigKey(value = "geaflow.file.oss.access.id", comment = "i18n.key.access.id")
-    @GeaflowConfigValue(required = true)
+    @GeaflowConfigValue(required = true, masked = true)
     private String accessId;
 
     @GeaflowConfigKey(value = "geaflow.file.oss.secret.key", comment = "i18n.key.secret.key")

@@ -90,7 +90,7 @@
                     <nodeVersion>${build.node.version}</nodeVersion>
                     <npmVersion>${build.npm.version}</npmVersion>
                     <yarnVersion>${build.yarn.version}</yarnVersion>
-                    <nodeDownloadRoot>https://npm.taobao.org/mirrors/node/</nodeDownloadRoot>
+                    <nodeDownloadRoot>https://nodejs.org/dist/</nodeDownloadRoot>
                     <npmDownloadRoot>https://registry.npmmirror.com/npm/-/</npmDownloadRoot>
                     <yarnDownloadRoot>https://repo.huaweicloud.com/yarn/</yarnDownloadRoot>
                     <npmRegistryURL>https://registry.npmmirror.com</npmRegistryURL>

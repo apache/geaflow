@@ -19,9 +19,12 @@
 
 package org.apache.geaflow.console.biz.shared.convert;
 
+import java.util.Objects;
 import java.util.Optional;
 import org.apache.geaflow.console.biz.shared.view.ClusterView;
+import org.apache.geaflow.console.common.util.exception.GeaflowIllegalException;
 import org.apache.geaflow.console.core.model.cluster.GeaflowCluster;
+import org.apache.geaflow.console.core.model.config.ConfigRedactor;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -30,8 +33,15 @@ public class ClusterViewConverter extends NameViewConverter<GeaflowCluster, Clus
     @Override
     public void merge(ClusterView view, ClusterView updateView) {
         super.merge(view, updateView);
+        boolean sameType = updateView.getType() == null || Objects.equals(view.getType(), updateView.getType());
         Optional.ofNullable(updateView.getType()).ifPresent(view::setType);
-        Optional.ofNullable(updateView.getConfig()).ifPresent(view::setConfig);
+        if (updateView.getConfig() != null) {
+            view.setConfig(ConfigRedactor.merge(updateView.getConfig(), sameType ? view.getConfig() : null,
+                ConfigRedactor.pluginDesc(view.getType())));
+        } else if (!sameType) {
+            throw new GeaflowIllegalException(
+                "Changing cluster type requires a new configuration");
+        }
     }
 
     @Override
@@ -46,6 +56,7 @@ public class ClusterViewConverter extends NameViewConverter<GeaflowCluster, Clus
     protected GeaflowCluster viewToModel(ClusterView view) {
         GeaflowCluster model = super.viewToModel(view);
         model.setType(view.getType());
+        ConfigRedactor.rejectUnresolved(view.getConfig());
         model.setConfig(view.getConfig());
         return model;
     }

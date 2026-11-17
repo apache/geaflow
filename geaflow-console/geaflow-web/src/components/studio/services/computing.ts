@@ -363,7 +363,7 @@ export const DeleteChat = async (jobId: string) => {
   return response;
 };
 export const getllmsList = async () => {
-  const response = await request(`${HTTP_SERVICE_URL}/api/llms`, {
+  const response = await request(`${HTTP_SERVICE_URL}/api/llms/-/options`, {
     method: "get",
   });
 
