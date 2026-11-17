@@ -44,8 +44,8 @@ class LexicalStatisticsTest {
 
     @Test
     void emptyQueryOrIndexHasZeroAverageIdf() {
-        assertEquals(0.0D, LexicalStatistics.averageIdf(" ", Collections.emptyMap()));
-        assertEquals(0.0D, LexicalStatistics.averageIdf("query", Collections.emptyMap()));
+        assertEquals(0.0D, LexicalStatistics.averageIdf(" ", Collections.emptyMap()), 1.0e-9);
+        assertEquals(0.0D, LexicalStatistics.averageIdf("query", Collections.emptyMap()), 1.0e-9);
         assertEquals(Collections.emptyMap(), LexicalStatistics.buildIdfIndex(Collections.emptyList()));
     }
 

@@ -42,12 +42,16 @@
 
 | 字段 | 值 |
 | --- | --- |
-| 上游地址 | `https://hotpotqa.github.io/`，distractor 设置 |
-| 本地缓存 | `tmp/graphrag/data/cache/hotpotqa-hf/hotpotqa-distractor.json` |
-| 文件大小 | 45,938,749 字节 |
-| 文件 SHA-256 | `810332ac58d1f5862e20e25825e8b455e92df5965f7bf719878756f2ccd460f7` |
+| 上游数据集 | HuggingFace `hotpotqa/hotpot_qa`，distractor 的 `validation` 划分 |
+| 下载地址 | `https://hf-mirror.com/datasets/hotpotqa/hotpot_qa/resolve/1908d6afbbead072334abe2965f91bd2709910ab/distractor/validation-00000-of-00001.parquet` |
+| 本地缓存 | `tmp/graphrag/data/cache/hotpotqa-hf/distractor-validation.parquet` |
+| 文件大小 | 27,452,575 字节 |
+| 文件 SHA-256 | `c20b638ca82b21d04fe12e14ff417ad05153d4d215a65de54497fca4e972f7c6` |
 | 使用划分 | distractor `validation` 前 500 条 |
 | 许可 | **CC BY-SA 4.0**，`https://hotpotqa.github.io/` 页面以 `rel=license` 链至 `creativecommons.org/licenses/by-sa/4.0/`；manifest 标记 `confirmed-upstream` |
+
+**注意：本模块实际使用的是 parquet 缓存**（与 manifest 的 `cache_path`/`sha256` 完全一致），
+不是官网的 `hotpotqa-distractor.json`。早期文档写的是后者，会导致与 manifest 冲突。
 
 ### 缓存目录与 `GRAPH_RAG_CACHE`（必须设置）
 
@@ -64,11 +68,33 @@ export GRAPH_RAG_CACHE="$(pwd)/tmp/graphrag/data/cache"
 下载后**先校验再运行**：
 
 ```bash
-sha256sum tmp/graphrag/data/cache/2wikimultihopqa-dev.zip \
-          tmp/graphrag/data/cache/hotpotqa-hf/hotpotqa-distractor.json
+export GRAPH_RAG_CACHE="$(pwd)/tmp/graphrag/data/cache"
+sha256sum "$GRAPH_RAG_CACHE/2wikimultihopqa-dev.zip" \
+          "$GRAPH_RAG_CACHE/hotpotqa-hf/distractor-validation.parquet"
+# 期望分别为 e8e57c0aafc4a26d41131e320ebb5afb6f2aca86b8a6e6611b08f52033cb7d04
+#        与 c20b638ca82b21d04fe12e14ff417ad05153d4d215a65de54497fca4e972f7c6
 ```
 
-校验和不一致请停止。语料不同，产出的分数就不同，第 7 节的对比也随之失效。
+### 生成查询 JSONL（基准与查询向量的共同输入）
+
+基准脚本与 `embed_queries.py` 都消费**规范查询 JSONL**（每条含稳定的 `id`、`question`、`answer`），
+它由原始数据集生成，而不是手工提供：
+
+```bash
+# 2WikiMultiHopQA（zip 内含 data/dev.json）
+PYTHONPATH=. python3 tools/graphrag/materialize_queries.py \
+  --source "$GRAPH_RAG_CACHE/2wikimultihopqa-dev.zip" \
+  --output tmp/graphrag/data/queries/2wikimultihopqa-dev.jsonl
+
+# HotpotQA（parquet 缓存）
+PYTHONPATH=. python3 tools/graphrag/materialize_queries.py \
+  --source "$GRAPH_RAG_CACHE/hotpotqa-hf/distractor-validation.parquet" \
+  --output tmp/graphrag/data/queries/hotpotqa-distractor.jsonl
+```
+
+已验证：生成的 `id` 与 `question` 序列与本报告复现所用的查询文件完全一致
+（2Wiki 12,576 条、HotpotQA 7,405 条）；附加字段的差异不影响基准，
+因为基准只读取 `id`、`question` 与 `answer`。
 
 ### 两种向量输入（已分离，不可混用）
 
@@ -104,23 +130,8 @@ sha256sum tmp/graphrag/data/cache/2wikimultihopqa-dev.zip \
 | 运行方式 | 本地加载（`local_files_only=True`），CPU 或 `--device cuda` |
 | 池化/截断 | 见 `tools/graphrag/embedding.py`；`--max-length 512` |
 
-```bash
-pip install -r tools/graphrag/requirements-embedding.txt
-
-# 1) chunk 向量：输入是 build_release.py 产出的 chunks.jsonl
-PYTHONPATH=. python3 tools/graphrag/embed_chunks.py \
-  --chunks <release目录>/chunks.jsonl \
-  --model ~/.cache/modelscope/iic/nlp_gte_sentence-embedding_english-small \
-  --device cpu --batch-size 32 --max-length 512 \
-  --output tmp/graphrag/data/runs/<数据集>-chunk-vectors-gte.jsonl
-
-# 2) 查询向量：输入是查询 JSONL（每条含 id 与 question）
-PYTHONPATH=. python3 tools/graphrag/embed_queries.py \
-  --queries tmp/graphrag/data/queries/<数据集>.jsonl \
-  --model ~/.cache/modelscope/iic/nlp_gte_sentence-embedding_english-small \
-  --device cpu --batch-size 32 --max-length 512 \
-  --output tmp/graphrag/data/runs/<数据集>-query-vectors-gte.npz
-```
+两条命令的**完整可执行形式见第 4.1 节**（含具体路径与 release 目录的自动获取），
+不再使用任何占位符。
 
 模型只需从 ModelScope 下载一次，之后离线可用。嵌入只在这两步发生，**检索服务本身不加载模型**。
 
@@ -204,25 +215,55 @@ pip install -r tools/graphrag/requirements.txt -r tools/graphrag/requirements-in
 pip install -r tools/graphrag/requirements-embedding.txt   # 仅生成向量时需要
 export GRAPH_RAG_CACHE="$(pwd)/tmp/graphrag/data/cache"    # 不设置会在摄取时报 cache is missing
 
-# 1) 摄取：从下载并校验过的语料生成 release（含 chunks.jsonl、实体与图数据）
+以下命令以 2WikiMultiHopQA 为例，**可直接复制执行，没有占位符**：
+
+```bash
+export GRAPH_RAG_CACHE="$(pwd)/tmp/graphrag/data/cache"
+DATASET=2wikimultihopqa
+MANIFEST=tools/graphrag/manifests/2wikimultihopqa-dev-v2.json
+BUNDLE=tmp/graphrag/data/runs/2wikimultihopqa-bundle-current
+CV=tmp/graphrag/data/runs/2wikimultihopqa-chunk-vectors-gte.jsonl
+QV=tmp/graphrag/data/runs/2wikimultihopqa-query-vectors-gte.npz
+MODEL="$HOME/.cache/modelscope/iic/nlp_gte_sentence-embedding_english-small"
+
+# 1) 生成查询 JSONL（若已存在可跳过）
+PYTHONPATH=. python3 tools/graphrag/materialize_queries.py \
+  --source "$GRAPH_RAG_CACHE/2wikimultihopqa-dev.zip" \
+  --output tmp/graphrag/data/queries/2wikimultihopqa-dev.jsonl
+
+# 2) 摄取：生成 release（含 chunks.jsonl、实体与图数据）
 PYTHONPATH=. python3 tools/graphrag/build_release.py \
-  --manifest tools/graphrag/manifests/<数据集>-v2.json \
-  --output-root tmp/graphrag/data/release
-#    输出中的 version 字段决定 release 子目录名
+  --manifest "$MANIFEST" --output-root tmp/graphrag/data/release
+RELEASE_DIR=$(ls -d tmp/graphrag/data/release/*/ | head -1)
 
-# 2) 生成两种向量（命令见第 2 节）
-#    chunk 向量读 <release>/<version>/chunks.jsonl；查询向量读查询 JSONL
+# 3) 生成两种向量（chunk JSONL 建索引，查询 NPZ 做评测）
+PYTHONPATH=. python3 tools/graphrag/embed_chunks.py \
+  --chunks "$RELEASE_DIR/chunks.jsonl" --model "$MODEL" \
+  --device cpu --batch-size 32 --max-length 512 --output "$CV"
+PYTHONPATH=. python3 tools/graphrag/embed_queries.py \
+  --queries tmp/graphrag/data/queries/2wikimultihopqa-dev.jsonl --model "$MODEL" \
+  --device cpu --batch-size 32 --max-length 512 --output "$QV"
 
-# 3) 发布 READY bundle（chunk 向量 JSONL 在这里被构建成向量索引）
+# 4) 发布 READY bundle
 PYTHONPATH=. python3 tools/graphrag/publish_bundle.py \
-  --manifest tools/graphrag/manifests/<数据集>-v2.json \
-  --vectors tmp/graphrag/data/runs/<数据集>-chunk-vectors-gte.jsonl \
-  --output tmp/graphrag/data/runs/<数据集>-bundle
+  --manifest "$MANIFEST" --vectors "$CV" --output "$BUNDLE"
 
-# 4) 启动服务并运行六方法基准
-export GEAFLOW_BUNDLE=tmp/graphrag/data/runs/<数据集>-bundle
-export GEAFLOW_QUERY_VECTORS=tmp/graphrag/data/runs/<数据集>-query-vectors-gte.npz
-tools/graphrag/reproduce.sh --dataset <数据集> --skip-build --limit 500
+# 5) 启动服务并运行六方法基准
+GEAFLOW_BUNDLE="$BUNDLE" GEAFLOW_QUERY_VECTORS="$QV" \
+  tools/graphrag/reproduce.sh --dataset "$DATASET" --skip-build --limit 500
+```
+
+HotpotQA 只需替换以下值，其余命令不变：
+
+| 变量 | HotpotQA 的取值 |
+| --- | --- |
+| `DATASET` | `hotpotqa` |
+| `MANIFEST` | `tools/graphrag/manifests/hotpotqa-distractor-v2.json` |
+| `BUNDLE` | `tmp/graphrag/data/runs/hotpotqa-bundle-current` |
+| `CV` | `tmp/graphrag/data/runs/hotpotqa-chunk-vectors-gte.jsonl` |
+| `QV` | `tmp/graphrag/data/runs/hotpotqa-query-vectors-gte.npz` |
+| 查询 JSONL 来源 | `--source "$GRAPH_RAG_CACHE/hotpotqa-hf/distractor-validation.parquet"`，输出 `tmp/graphrag/data/queries/hotpotqa-distractor.jsonl` |
+
 ```
 
 `reproduce.sh` 在不带 `--skip-build` 时会自行执行第 1、3 段，**但必须先用
@@ -231,7 +272,8 @@ tools/graphrag/reproduce.sh --dataset <数据集> --skip-build --limit 500
 
 上述分阶段流程已在本仓库做过端到端验证（第 4.5 节）。
 
-每次运行打印运行目录，汇总文件为 `<运行目录>/<数据集>-six-methods.csv`，
+每次运行打印运行目录，汇总文件按数据集命名为
+`2wikimultihopqa-six-methods.csv` 或 `hotpotqa-six-methods.csv`，
 逐请求记录为同名 `.jsonl.gz`。参考机器上每数据集 500 查询 × 6 方法（3000 次请求）
 约 40 分钟。
 
@@ -346,7 +388,7 @@ HotpotQA 向量通道 0.04% 的 MRR 摆动即来源于此，属于允许的浮�
 若未来构建逻辑再次变化，可用它检出对应版本重建：
 
 ```bash
-REV=$(python3 -c "import json;print(json.load(open('<bundle>/READY.json'))['build_code_revision'])")
+REV=$(python3 -c "import json;print(json.load(open('tmp/graphrag/data/runs/2wikimultihopqa-bundle-current/READY.json'))['build_code_revision'])")
 git checkout "$REV"
 # 然后按第 4.1 节的分阶段流程重新摄取、嵌入、发布
 ```
@@ -433,8 +475,8 @@ chunks 文件时，第一个响应即被拦下。若服务确实会返回该文�
 
 可用的提示词（每条结论都必须对照 CSV 的某一列核实）：
 
-> 我有一个由 `reproduce.sh` 产生的运行目录。请读取 `<数据集>-six-methods.csv`，
-> 告诉我哪些列是空的、哪些列有值。**不要推断缺失值。**
+> 我有一个由 `reproduce.sh` 产生的运行目录。请读取 `2wikimultihopqa-six-methods.csv`
+> （HotpotQA 为 `hotpotqa-six-methods.csv`），告诉我哪些列是空的、哪些列有值。**不要推断缺失值。**
 
 > 请比较 ADAPTIVE_HYBRID 与 FIXED_HYBRID 的 `evidenceRecallAtK`，
 > 报告绝对差值与相对百分比，并**同时引用两个原始值**。

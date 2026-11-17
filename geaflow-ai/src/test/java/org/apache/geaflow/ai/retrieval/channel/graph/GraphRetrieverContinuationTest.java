@@ -109,7 +109,7 @@ class GraphRetrieverContinuationTest {
             fixture.entities, fixture.provider, fixture.chunks, fixture.config, 0L, System::nanoTime,
             null, Collections.singletonList("c1"));
 
-        assertEquals(0.0D, session.getStats().getGrowthRate());
+        assertEquals(0.0D, session.getStats().getGrowthRate(), 1.0e-9);
 
         retriever.expandOneHop(session, fixture.config, 0L, System::nanoTime);
 

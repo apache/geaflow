@@ -22,7 +22,7 @@ class EvaluationMetricsTest {
     @Test
     void normalizesAnswersAndComputesOverlap() {
         assertEquals("confucius teacher", AnswerMetrics.normalize("Confucius, TEACHER!"));
-        assertEquals(1.0D, AnswerMetrics.f1("A B", "b a"));
+        assertEquals(1.0D, AnswerMetrics.f1("A B", "b a"), 1.0e-9);
         org.junit.jupiter.api.Assertions.assertTrue(AnswerMetrics.exactMatch("Paris!", "paris"));
     }
 
@@ -30,11 +30,11 @@ class EvaluationMetricsTest {
     void computesRankingMetricsAndPathHits() {
         List<String> ranked = Arrays.asList("x", "gold", "other");
         HashSet<String> relevant = new HashSet<>(Arrays.asList("gold"));
-        assertEquals(1.0D, RankingMetrics.recallAtK(ranked, relevant, 2));
-        assertEquals(0.5D, RankingMetrics.reciprocalRank(ranked, relevant));
-        assertEquals(0.6309297535714574D, RankingMetrics.ndcgAtK(ranked, relevant, 3));
+        assertEquals(1.0D, RankingMetrics.recallAtK(ranked, relevant, 2), 1.0e-9);
+        assertEquals(0.5D, RankingMetrics.reciprocalRank(ranked, relevant), 1.0e-9);
+        assertEquals(0.6309297535714574D, RankingMetrics.ndcgAtK(ranked, relevant, 3), 1.0e-9);
         assertEquals(1.0D, RankingMetrics.relationPathHit(
-            new HashSet<>(Arrays.asList("a-b-c")), new HashSet<>(Arrays.asList("a-b-c"))));
+            new HashSet<>(Arrays.asList("a-b-c")), new HashSet<>(Arrays.asList("a-b-c"))), 1.0e-9);
     }
 
     @Test

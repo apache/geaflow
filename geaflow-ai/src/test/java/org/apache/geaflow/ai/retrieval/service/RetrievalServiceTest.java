@@ -84,8 +84,8 @@ class RetrievalServiceTest {
             .map(Collections.singletonList(
                 new org.apache.geaflow.ai.operator.GraphSearchStore.ScoredGraphEntity(vertex, 8.5f, 1)))
             .get(0);
-        assertEquals(8.5, evidence.getStageScores().get("keyword").getRawScore());
-        assertEquals(8.5, evidence.getFinalScore());
+        assertEquals(8.5, evidence.getStageScores().get("keyword").getRawScore(), 1.0e-9);
+        assertEquals(8.5, evidence.getFinalScore(), 1.0e-9);
         org.junit.jupiter.api.Assertions.assertNull(evidence.getFusedScore());
     }
 

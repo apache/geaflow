@@ -51,7 +51,7 @@ class WeightedRrfFusionTest {
         WeightedRrfFusion fusion = new WeightedRrfFusion(new WeightedRrfConfig(1.0, 0.0, 60));
         Evidence vectorOnly = evidence("a", 0, 1);
         Evidence bm25 = evidence("z", 3, 1);
-        assertEquals(0.0, fusion.score(vectorOnly));
+        assertEquals(0.0, fusion.score(vectorOnly), 1.0e-9);
         assertEquals("z", fusion.sort(Arrays.asList(vectorOnly, bm25)).get(0).getEvidenceId());
         assertThrows(IllegalArgumentException.class,
             () -> new WeightedRrfConfig(0.0, 0.0, 60));

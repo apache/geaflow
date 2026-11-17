@@ -174,7 +174,7 @@ public class VectorStoreTest {
         VectorRecord record = new VectorRecord("v1", v1, "chunk", "c1", Collections.emptyMap());
         VectorHit hit = new VectorHit("v1", 0.9, record);
         assertEquals("v1", hit.getVectorId());
-        assertEquals(0.9, hit.getScore());
+        assertEquals(0.9, hit.getScore(), 1.0e-9);
         assertEquals(record, hit.getRecord());
         
         VectorQuery query = new VectorQuery(v1, 5, Collections.emptyMap());

@@ -239,8 +239,8 @@ public class RetrievalApiJsonTest {
         Assertions.assertEquals(3, restored.getTrace().getUniqueVertices());
         Assertions.assertEquals(7, restored.getTrace().getGraphTokensEstimated());
         Assertions.assertEquals(2, restored.getTrace().getGraphEvidenceYield());
-        Assertions.assertEquals(0.5, restored.getTrace().getGraphGrowthRate());
-        Assertions.assertEquals(0.25, restored.getTrace().getGraphMarginalYield());
+        Assertions.assertEquals(0.5, restored.getTrace().getGraphGrowthRate(), 1.0e-9);
+        Assertions.assertEquals(0.25, restored.getTrace().getGraphMarginalYield(), 1.0e-9);
         Assertions.assertEquals(Integer.valueOf(9), restored.getTrace().getRawCandidatesScored().get("BM25"));
         Assertions.assertEquals(Long.valueOf(12L), restored.getTrace().getStageElapsedNanos().get("BM25"));
         Assertions.assertEquals(4, restored.getTrace().getUniqueEvidenceCandidates());

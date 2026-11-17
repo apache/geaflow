@@ -124,7 +124,7 @@ class CanonicalJsonlArtifactBridgeTest {
             ready.get("build_code_revision").getAsString());
         org.junit.jupiter.api.Assertions.assertEquals(1.0,
             quality.getAsJsonObject("index_coverage").getAsJsonObject("vector")
-                .get("ratio").getAsDouble());
+                .get("ratio").getAsDouble(), 1.0e-9);
         assertDoesNotThrow(() -> CanonicalJsonlArtifactBridgeCli.main(args));
 
         Files.writeString(output.resolve("chunks.jsonl"), "corrupt\n", StandardCharsets.UTF_8);

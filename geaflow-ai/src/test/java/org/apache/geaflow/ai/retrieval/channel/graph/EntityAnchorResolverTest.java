@@ -42,12 +42,12 @@ class EntityAnchorResolverTest {
             Arrays.asList(canonicalZ, alias, canonicalA));
         assertEquals(Arrays.asList("a", "z"), entityIds(anchors));
         assertEquals("CANONICAL", anchors.get(0).getMatchType());
-        assertEquals(1.0, anchors.get(0).getConfidence());
+        assertEquals(1.0, anchors.get(0).getConfidence(), 1.0e-9);
 
         anchors = resolver.resolve(" KONGZI ", Collections.singletonList(alias));
         assertEquals(Collections.singletonList("alias"), entityIds(anchors));
         assertEquals("ALIAS", anchors.get(0).getMatchType());
-        assertEquals(0.9, anchors.get(0).getConfidence());
+        assertEquals(0.9, anchors.get(0).getConfidence(), 1.0e-9);
     }
 
     @Test
@@ -82,7 +82,7 @@ class EntityAnchorResolverTest {
 
         assertEquals(Collections.singletonList("e1"), entityIds(anchors));
         assertEquals("TEXT_CANDIDATE", anchors.get(0).getMatchType());
-        assertEquals(0.35D, anchors.get(0).getConfidence());
+        assertEquals(0.35D, anchors.get(0).getConfidence(), 1.0e-9);
     }
 
     private static List<String> entityIds(List<EntityAnchorResolver.Anchor> anchors) {

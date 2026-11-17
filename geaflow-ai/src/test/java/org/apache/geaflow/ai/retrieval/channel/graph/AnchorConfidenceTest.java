@@ -30,9 +30,9 @@ class AnchorConfidenceTest {
 
     @Test
     void exposesOneNamedConfidencePerMatchType() {
-        assertEquals(1.0D, EntityAnchorResolver.CANONICAL_CONFIDENCE);
-        assertEquals(0.9D, EntityAnchorResolver.ALIAS_CONFIDENCE);
-        assertEquals(0.35D, EntityAnchorResolver.TEXT_CANDIDATE_CONFIDENCE);
+        assertEquals(1.0D, EntityAnchorResolver.CANONICAL_CONFIDENCE, 1.0e-9);
+        assertEquals(0.9D, EntityAnchorResolver.ALIAS_CONFIDENCE, 1.0e-9);
+        assertEquals(0.35D, EntityAnchorResolver.TEXT_CANDIDATE_CONFIDENCE, 1.0e-9);
     }
 
     @Test

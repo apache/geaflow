@@ -45,7 +45,7 @@ class AdaptiveRoutingTest {
         assertEquals(Arrays.asList("query_length", "average_idf", "first_stage_score_gap",
             "anchor_count", "anchor_confidence", "candidate_degree", "graph_growth_rate"),
             Arrays.asList(features.asMap().keySet().toArray(new String[0])));
-        assertEquals(2.0, features.get("average_idf"));
+        assertEquals(2.0, features.get("average_idf"), 1.0e-9);
         assertThrows(UnsupportedOperationException.class, () -> features.asMap().put("x", 1));
         assertThrows(IllegalArgumentException.class,
             () -> RoutingFeatures.builder().averageIdf(Double.NaN).build());
@@ -69,8 +69,8 @@ class AdaptiveRoutingTest {
         assertEquals(20, graphLed.getChannelBudgets().get("BM25"));
         assertEquals(20, graphLed.getChannelBudgets().get("VECTOR"));
         assertEquals(60, graphLed.getChannelBudgets().get("GRAPH"));
-        assertEquals(1.0, graphLed.getBm25Weight());
-        assertEquals(0.25, graphLed.getGraphWeight());
+        assertEquals(1.0, graphLed.getBm25Weight(), 1.0e-9);
+        assertEquals(0.25, graphLed.getGraphWeight(), 1.0e-9);
         assertEquals("GRAPH_DOMINANT_FUSION", graphLed.getReasons().get(0));
 
         // Without an anchor the text channels take over; the lexical branch needs rare terms.
@@ -78,15 +78,15 @@ class AdaptiveRoutingTest {
             .anchorCount(0).build());
         RetrievalPlan lexical = policy.plan(unanchored);
         assertTrue(lexical.getReasons().contains("LEXICAL_CONFIDENCE"), lexical.getReasons().toString());
-        assertEquals(1.25, lexical.getBm25Weight());
-        assertEquals(0.25, lexical.getGraphWeight(),
+        assertEquals(1.25, lexical.getBm25Weight(), 1.0e-9);
+        assertEquals(0.25, lexical.getGraphWeight(), 1.0e-9,
             "the lexical branch re-balances the text channels, not the graph weight");
 
         RoutingContext semanticContext = context(100, RoutingFeatures.builder().queryLength(8)
             .anchorCount(0).build());
         RetrievalPlan semantic = policy.plan(semanticContext);
         assertEquals("VECTOR", semantic.getChannelOrder().get(0));
-        assertEquals(1.25, semantic.getVectorWeight());
+        assertEquals(1.25, semantic.getVectorWeight(), 1.0e-9);
         // Without a confident anchor the planner keeps expansion to a single hop.
         assertEquals(1, semantic.getMaxHop());
         assertEquals(100, sum(semantic.getChannelBudgets()));
@@ -311,7 +311,7 @@ class AdaptiveRoutingTest {
             .averageIdf(2.0).anchorCount(1).anchorConfidence(0.9).candidateDegree(4).build()));
 
         assertEquals("GRAPH_DOMINANT_FUSION", plan.getReasons().get(0));
-        assertEquals(0.25, plan.getGraphWeight(),
+        assertEquals(0.25, plan.getGraphWeight(), 1.0e-9,
             "an anchored query keeps the swept graph weight rather than the lexical branch's 1.0");
         // The graph channel also keeps the largest candidate budget.
         assertTrue(plan.getChannelBudgets().get("GRAPH") > plan.getChannelBudgets().get("BM25"));
@@ -332,9 +332,9 @@ class AdaptiveRoutingTest {
 
         assertTrue(plan.getReasons().contains("LEXICAL_CONFIDENCE"), plan.getReasons().toString());
         assertTrue(plan.getReasons().contains("GRAPH_ANCHORED_EXPANSION"), plan.getReasons().toString());
-        assertEquals(1.25, plan.getBm25Weight(), "lexical confidence now acts on anchored queries");
-        assertEquals(0.85, plan.getVectorWeight());
-        assertEquals(0.25, plan.getGraphWeight(), "no branch may multiply the swept graph weight");
+        assertEquals(1.25, plan.getBm25Weight(), 1.0e-9, "lexical confidence now acts on anchored queries");
+        assertEquals(0.85, plan.getVectorWeight(), 1.0e-9);
+        assertEquals(0.25, plan.getGraphWeight(), 1.0e-9, "no branch may multiply the swept graph weight");
         assertEquals("v2", plan.getPolicyVersion(), "the changed structure is versioned in the trace");
         assertTrue(plan.getChannelBudgets().get("GRAPH") > plan.getChannelBudgets().get("BM25"),
             "the anchor still funds graph expansion");
@@ -350,7 +350,7 @@ class AdaptiveRoutingTest {
             .build()));
 
         assertFalse(plan.getReasons().contains("LEXICAL_CONFIDENCE"));
-        assertEquals(1.0, plan.getBm25Weight());
+        assertEquals(1.0, plan.getBm25Weight(), 1.0e-9);
         assertEquals("v1", plan.getPolicyVersion());
     }
 
@@ -376,9 +376,9 @@ class AdaptiveRoutingTest {
         RetrievalPlan plan = policy.plan(context(100, RoutingFeatures.builder()
             .anchorCount(1).anchorConfidence(0.9).candidateDegree(4).build()));
 
-        assertEquals(3.5D, plan.getGraphWeight());
-        assertEquals(0.1D, plan.getBm25Weight());
-        assertEquals(0.1D, plan.getVectorWeight());
+        assertEquals(3.5D, plan.getGraphWeight(), 1.0e-9);
+        assertEquals(0.1D, plan.getBm25Weight(), 1.0e-9);
+        assertEquals(0.1D, plan.getVectorWeight(), 1.0e-9);
         Map<String, String> parameters = policy.getParameters();
         assertEquals("3.5", parameters.get("graphFusionGraphWeight"));
         assertEquals("0.1", parameters.get("graphFusionTextWeight"));

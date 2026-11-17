@@ -743,8 +743,8 @@ class GraphRagMvpEndToEndTest {
         assertEquals(first.getTrace().getCandidateCounts(), second.getTrace().getCandidateCounts());
         assertEquals(first.getTrace().getStopReason(), second.getTrace().getStopReason());
         assertEquals(first.getTrace().getSelectedChannels(), second.getTrace().getSelectedChannels());
-        assertEquals(1.0, first.getTrace().getBm25Weight());
-        assertEquals(1.0, first.getTrace().getVectorWeight());
+        assertEquals(1.0, first.getTrace().getBm25Weight(), 1.0e-9);
+        assertEquals(1.0, first.getTrace().getVectorWeight(), 1.0e-9);
         assertEquals(60, first.getTrace().getRrfRankConstant());
     }
 
@@ -832,9 +832,9 @@ class GraphRagMvpEndToEndTest {
 
         RetrievalResponse defaultResponse = defaultService.retrieve(request);
         RetrievalResponse weightedResponse = vectorHeavy.retrieve(request);
-        assertEquals(1.0, defaultResponse.getTrace().getBm25Weight());
-        assertEquals(0.0, weightedResponse.getTrace().getBm25Weight());
-        assertEquals(1.0, weightedResponse.getTrace().getVectorWeight());
+        assertEquals(1.0, defaultResponse.getTrace().getBm25Weight(), 1.0e-9);
+        assertEquals(0.0, weightedResponse.getTrace().getBm25Weight(), 1.0e-9);
+        assertEquals(1.0, weightedResponse.getTrace().getVectorWeight(), 1.0e-9);
         assertEquals("5:doc-1c1", weightedResponse.getEvidence().get(0).getEvidenceId());
         assertEquals(1.0 / (60 + weightedResponse.getEvidence().get(0)
                 .getStageScores().get("VECTOR").getRank()),
