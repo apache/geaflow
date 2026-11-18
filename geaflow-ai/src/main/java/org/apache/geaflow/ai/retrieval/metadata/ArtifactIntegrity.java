@@ -75,7 +75,7 @@ public final class ArtifactIntegrity {
             throw new IOException("artifact root and relative path are required");
         }
         String portableRelative = relative.replace('\\', '/');
-        Path relativePath = Path.of(portableRelative);
+        Path relativePath = java.nio.file.Paths.get(portableRelative);
         Path absoluteRoot = root.toAbsolutePath().normalize();
         Path candidate = absoluteRoot.resolve(relativePath).normalize();
         if (relativePath.isAbsolute() || !candidate.startsWith(absoluteRoot)

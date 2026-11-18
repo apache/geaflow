@@ -57,7 +57,7 @@ public final class CanonicalJsonlArtifactBridgeCli {
         Path release = requiredPath(options, "release");
         Path output = requiredPath(options, "output");
         DatasetManifest manifest = MetadataJson.fromJson(
-            Files.readString(requiredPath(options, "manifest"), StandardCharsets.UTF_8),
+            org.apache.geaflow.ai.retrieval.metadata.Java8Files.readString(requiredPath(options, "manifest"), StandardCharsets.UTF_8),
             DatasetManifest.class);
         String graphName = required(options, "graph-name");
         String graphVersion = required(options, "graph-version");
@@ -76,7 +76,7 @@ public final class CanonicalJsonlArtifactBridgeCli {
             // must match the graph snapshot, not merely the text index.
             String buildCodeRevision = options.getOrDefault("build-code-revision", "unknown");
             assembleBundle(release, work, staging, graphName, graphVersion, indexVersion,
-                parentBundle == null ? null : Path.of(parentBundle).toAbsolutePath().normalize(),
+                parentBundle == null ? null : java.nio.file.Paths.get(parentBundle).toAbsolutePath().normalize(),
                 buildCodeRevision);
             publish(staging, output);
         } finally {
@@ -116,7 +116,7 @@ public final class CanonicalJsonlArtifactBridgeCli {
         copy(find(work, "graph-", graphVersion), staging.resolve("graph.bin"));
         copy(find(work, "vector-", indexVersion), staging.resolve("vector.bin"));
         copyTree(findDirectory(work, "bm25-", indexVersion), staging.resolve("bm25"));
-        JsonObject ready = new JsonParser().parse(Files.readString(
+        JsonObject ready = new JsonParser().parse(org.apache.geaflow.ai.retrieval.metadata.Java8Files.readString(
             ArtifactIntegrity.resolveInside(release, "READY.json"),
             StandardCharsets.UTF_8)).getAsJsonObject();
         ready.addProperty("graph_name", graphName);
@@ -127,14 +127,14 @@ public final class CanonicalJsonlArtifactBridgeCli {
         ready.addProperty("build_code_revision", buildCodeRevision);
         Path qualityPath = ArtifactIntegrity.resolveInside(staging,
             ready.get("quality_report").getAsString());
-        JsonObject quality = new JsonParser().parse(Files.readString(qualityPath,
+        JsonObject quality = new JsonParser().parse(org.apache.geaflow.ai.retrieval.metadata.Java8Files.readString(qualityPath,
             StandardCharsets.UTF_8)).getAsJsonObject();
         int chunks = ready.get("chunks").getAsInt();
         JsonObject coverage = new JsonObject();
         coverage.add("bm25", coverage(chunks));
         coverage.add("vector", coverage(chunks));
         quality.add("index_coverage", coverage);
-        Files.writeString(qualityPath, quality.toString() + "\n", StandardCharsets.UTF_8);
+        org.apache.geaflow.ai.retrieval.metadata.Java8Files.writeString(qualityPath, quality.toString() + "\n", StandardCharsets.UTF_8);
         if (parentBundle != null) {
             addDeltaBundle(parentBundle, staging, work, ready, graphName, graphVersion, indexVersion);
         }
@@ -150,13 +150,13 @@ public final class CanonicalJsonlArtifactBridgeCli {
                 ArtifactIntegrity.sha256(path));
         }
         ready.add("artifact_checksums", checksums);
-        Files.writeString(staging.resolve("READY.json"), ready.toString() + "\n", StandardCharsets.UTF_8);
+        org.apache.geaflow.ai.retrieval.metadata.Java8Files.writeString(staging.resolve("READY.json"), ready.toString() + "\n", StandardCharsets.UTF_8);
     }
 
     private static void addDeltaBundle(Path parentBundle, Path staging, Path work, JsonObject ready,
                                        String graphName, String graphVersion, String indexVersion)
         throws IOException {
-        JsonObject parentReady = new JsonParser().parse(Files.readString(
+        JsonObject parentReady = new JsonParser().parse(org.apache.geaflow.ai.retrieval.metadata.Java8Files.readString(
             ArtifactIntegrity.resolveInside(parentBundle, "READY.json"), StandardCharsets.UTF_8))
             .getAsJsonObject();
         if (!"READY".equals(parentReady.get("state").getAsString())
@@ -199,7 +199,7 @@ public final class CanonicalJsonlArtifactBridgeCli {
         Files.createDirectories(deltaPath.getParent());
         StringWriter serialized = new StringWriter();
         GraphDeltaJson.write(delta, serialized);
-        Files.writeString(deltaPath, serialized.toString(), StandardCharsets.UTF_8);
+        org.apache.geaflow.ai.retrieval.metadata.Java8Files.writeString(deltaPath, serialized.toString(), StandardCharsets.UTF_8);
 
         JsonObject snapshot = new JsonObject();
         snapshot.addProperty("version", parentVersion);
@@ -300,10 +300,10 @@ public final class CanonicalJsonlArtifactBridgeCli {
         if (Files.exists(output)) {
             Path ready = output.resolve("READY.json");
             if (Files.isRegularFile(ready)) {
-                JsonObject existing = new JsonParser().parse(Files.readString(
+                JsonObject existing = new JsonParser().parse(org.apache.geaflow.ai.retrieval.metadata.Java8Files.readString(
                     ArtifactIntegrity.resolveInside(output, "READY.json"), StandardCharsets.UTF_8))
                     .getAsJsonObject();
-                JsonObject candidate = new JsonParser().parse(Files.readString(
+                JsonObject candidate = new JsonParser().parse(org.apache.geaflow.ai.retrieval.metadata.Java8Files.readString(
                     ArtifactIntegrity.resolveInside(staging, "READY.json"), StandardCharsets.UTF_8))
                     .getAsJsonObject();
                 if (sameRelease(existing, candidate) && validateBundle(output, existing)) {
@@ -406,7 +406,7 @@ public final class CanonicalJsonlArtifactBridgeCli {
     }
 
     private static Path requiredPath(Map<String, String> options, String name) {
-        return Path.of(required(options, name));
+        return java.nio.file.Paths.get(required(options, name));
     }
 
     private static String required(Map<String, String> options, String name) {

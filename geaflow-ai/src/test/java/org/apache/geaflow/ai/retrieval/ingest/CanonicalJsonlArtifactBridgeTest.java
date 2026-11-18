@@ -68,14 +68,14 @@ class CanonicalJsonlArtifactBridgeTest {
     void rejectsChecksumTamperingAndGraphProvenanceMismatch() throws Exception {
         Path release = createRelease();
         Path output = Files.createTempDirectory("bridge-corrupt");
-        Files.writeString(release.resolve("chunks.jsonl"), "tampered\n", StandardCharsets.UTF_8);
+        org.apache.geaflow.ai.retrieval.metadata.Java8Files.writeString(release.resolve("chunks.jsonl"), "tampered\n", StandardCharsets.UTF_8);
         assertThrows(java.io.IOException.class, () -> CanonicalJsonlArtifactBridge.build(release, output,
             manifest(), new GraphVersion("graph", "g1"), "index-1",
             Collections.singletonMap(CHUNK_ID, new float[] {1.0F, 0.5F}), "fixture", "v1"));
 
         Path provenanceRelease = createRelease();
         Path vertex = provenanceRelease.resolve("graph/g1/vertices.jsonl");
-        Files.writeString(vertex, Files.readString(vertex).replace(SOURCE_HASH, SOURCE_HASH.substring(0, 63) + "0"),
+        org.apache.geaflow.ai.retrieval.metadata.Java8Files.writeString(vertex, org.apache.geaflow.ai.retrieval.metadata.Java8Files.readString(vertex).replace(SOURCE_HASH, SOURCE_HASH.substring(0, 63) + "0"),
             StandardCharsets.UTF_8);
         refreshChecksums(provenanceRelease);
         assertThrows(java.io.IOException.class, () -> CanonicalJsonlArtifactBridge.build(provenanceRelease, output,
@@ -87,7 +87,7 @@ class CanonicalJsonlArtifactBridgeTest {
     void rejectsChunkIdentityMismatchEvenWhenReleaseChecksumsAreUpdated() throws Exception {
         Path release = createRelease();
         Path chunk = release.resolve("chunks.jsonl");
-        Files.writeString(chunk, Files.readString(chunk).replace("\"dataset\":\"fixture\"",
+        org.apache.geaflow.ai.retrieval.metadata.Java8Files.writeString(chunk, org.apache.geaflow.ai.retrieval.metadata.Java8Files.readString(chunk).replace("\"dataset\":\"fixture\"",
             "\"dataset\":\"other\""), StandardCharsets.UTF_8);
         refreshChecksums(release);
 
@@ -102,9 +102,9 @@ class CanonicalJsonlArtifactBridgeTest {
         Path release = createRelease();
         Path output = Files.createTempDirectory("bridge-cli-parent").resolve("bundle");
         Path manifest = output.getParent().resolve("manifest.json");
-        Files.writeString(manifest, MetadataJson.toJson(manifest()), StandardCharsets.UTF_8);
+        org.apache.geaflow.ai.retrieval.metadata.Java8Files.writeString(manifest, MetadataJson.toJson(manifest()), StandardCharsets.UTF_8);
         Path vectors = output.getParent().resolve("vectors.jsonl");
-        Files.writeString(vectors, "{\"chunkId\":\"" + CHUNK_ID
+        org.apache.geaflow.ai.retrieval.metadata.Java8Files.writeString(vectors, "{\"chunkId\":\"" + CHUNK_ID
             + "\",\"vector\":[1.0,0.5]}\n", StandardCharsets.UTF_8);
         String[] args = {"--release", release.toString(), "--output", output.toString(),
             "--manifest", manifest.toString(), "--vectors", vectors.toString(),
@@ -114,9 +114,9 @@ class CanonicalJsonlArtifactBridgeTest {
 
         CanonicalJsonlArtifactBridgeCli.main(args);
 
-        JsonObject ready = new JsonParser().parse(Files.readString(output.resolve("READY.json"),
+        JsonObject ready = new JsonParser().parse(org.apache.geaflow.ai.retrieval.metadata.Java8Files.readString(output.resolve("READY.json"),
             StandardCharsets.UTF_8)).getAsJsonObject();
-        JsonObject quality = new JsonParser().parse(Files.readString(output.resolve("quality-report.json"),
+        JsonObject quality = new JsonParser().parse(org.apache.geaflow.ai.retrieval.metadata.Java8Files.readString(output.resolve("quality-report.json"),
             StandardCharsets.UTF_8)).getAsJsonObject();
         org.junit.jupiter.api.Assertions.assertEquals("READY", ready.get("state").getAsString());
         // The build revision is what lets a reviewer rebuild the same graph snapshot later.
@@ -127,7 +127,7 @@ class CanonicalJsonlArtifactBridgeTest {
                 .get("ratio").getAsDouble(), 1.0e-9);
         assertDoesNotThrow(() -> CanonicalJsonlArtifactBridgeCli.main(args));
 
-        Files.writeString(output.resolve("chunks.jsonl"), "corrupt\n", StandardCharsets.UTF_8);
+        org.apache.geaflow.ai.retrieval.metadata.Java8Files.writeString(output.resolve("chunks.jsonl"), "corrupt\n", StandardCharsets.UTF_8);
         assertThrows(java.io.IOException.class, () -> CanonicalJsonlArtifactBridgeCli.main(args));
     }
 
@@ -135,9 +135,9 @@ class CanonicalJsonlArtifactBridgeTest {
     void cliPublishesDeltaBundleAgainstReadyParentSnapshot() throws Exception {
         Path base = Files.createTempDirectory("bridge-delta");
         Path manifest = base.resolve("manifest.json");
-        Files.writeString(manifest, MetadataJson.toJson(manifest()), StandardCharsets.UTF_8);
+        org.apache.geaflow.ai.retrieval.metadata.Java8Files.writeString(manifest, MetadataJson.toJson(manifest()), StandardCharsets.UTF_8);
         Path vectors = base.resolve("vectors.jsonl");
-        Files.writeString(vectors, "{\"chunkId\":\"" + CHUNK_ID
+        org.apache.geaflow.ai.retrieval.metadata.Java8Files.writeString(vectors, "{\"chunkId\":\"" + CHUNK_ID
             + "\",\"vector\":[1.0,0.5]}\n", StandardCharsets.UTF_8);
         Path parentRelease = createRelease("g1");
         Path parentBundle = base.resolve("parent");
@@ -148,7 +148,7 @@ class CanonicalJsonlArtifactBridgeTest {
         CanonicalJsonlArtifactBridgeCli.main(cliArgs(childRelease, childBundle, manifest, vectors,
             "g2", "index-2", parentBundle));
 
-        JsonObject ready = new JsonParser().parse(Files.readString(childBundle.resolve("READY.json"),
+        JsonObject ready = new JsonParser().parse(org.apache.geaflow.ai.retrieval.metadata.Java8Files.readString(childBundle.resolve("READY.json"),
             StandardCharsets.UTF_8)).getAsJsonObject();
         org.junit.jupiter.api.Assertions.assertEquals("g1",
             ready.getAsJsonObject("graph_snapshot").get("version").getAsString());
@@ -227,27 +227,27 @@ class CanonicalJsonlArtifactBridgeTest {
         Path root = Files.createTempDirectory("python-release");
         Path graphRoot = root.resolve("graph").resolve(graphVersion);
         Files.createDirectories(graphRoot);
-        Files.writeString(root.resolve("documents.jsonl"), "{}\n", StandardCharsets.UTF_8);
-        Files.writeString(root.resolve("chunks.jsonl"), chunkJson(), StandardCharsets.UTF_8);
+        org.apache.geaflow.ai.retrieval.metadata.Java8Files.writeString(root.resolve("documents.jsonl"), "{}\n", StandardCharsets.UTF_8);
+        org.apache.geaflow.ai.retrieval.metadata.Java8Files.writeString(root.resolve("chunks.jsonl"), chunkJson(), StandardCharsets.UTF_8);
         String vertex = "{\"canonical_name\":\"Alpha\",\"dataset\":\"fixture\","
             + "\"dataset_release\":\"release\",\"entity_id\":\"entity-1\","
             + "\"entity_type\":\"CONCEPT\",\"source_chunk_ids\":[\""
             + CHUNK_ID + "\"],"
             + "\"source_document_ids\":[\"doc-1\"],\"source_hash\":\"" + SOURCE_HASH
             + "\",\"split\":\"dev\",\"vertex_id\":\"entity-1\",\"vertex_type\":\"ENTITY\"}\n";
-        Files.writeString(graphRoot.resolve("vertices.jsonl"), vertex, StandardCharsets.UTF_8);
-        Files.writeString(graphRoot.resolve("edges.jsonl"), "", StandardCharsets.UTF_8);
+        org.apache.geaflow.ai.retrieval.metadata.Java8Files.writeString(graphRoot.resolve("vertices.jsonl"), vertex, StandardCharsets.UTF_8);
+        org.apache.geaflow.ai.retrieval.metadata.Java8Files.writeString(graphRoot.resolve("edges.jsonl"), "", StandardCharsets.UTF_8);
         String verticesChecksum = sha256(graphRoot.resolve("vertices.jsonl"));
         String edgesChecksum = sha256(graphRoot.resolve("edges.jsonl"));
-        Files.writeString(graphRoot.resolve("manifest.json"),
+        org.apache.geaflow.ai.retrieval.metadata.Java8Files.writeString(graphRoot.resolve("manifest.json"),
             "{\"edge_count\":0,\"extractor_version\":\"extractor\","
                 + "\"graph_version\":\"" + graphVersion + "\",\"schema_version\":\"schema\","
                 + "\"vertex_count\":1,\"vertices_sha256\":\"" + verticesChecksum
                 + "\",\"edges_sha256\":\"" + edgesChecksum + "\"}\n",
             StandardCharsets.UTF_8);
-        Files.writeString(root.resolve("quality-report.json"), "{}\n", StandardCharsets.UTF_8);
-        Files.writeString(root.resolve("bm25.artifact"), "placeholder\n", StandardCharsets.UTF_8);
-        Files.writeString(root.resolve("vector.artifact"), "placeholder\n", StandardCharsets.UTF_8);
+        org.apache.geaflow.ai.retrieval.metadata.Java8Files.writeString(root.resolve("quality-report.json"), "{}\n", StandardCharsets.UTF_8);
+        org.apache.geaflow.ai.retrieval.metadata.Java8Files.writeString(root.resolve("bm25.artifact"), "placeholder\n", StandardCharsets.UTF_8);
+        org.apache.geaflow.ai.retrieval.metadata.Java8Files.writeString(root.resolve("vector.artifact"), "placeholder\n", StandardCharsets.UTF_8);
         writeReady(root, graphVersion);
         return root;
     }
@@ -298,14 +298,14 @@ class CanonicalJsonlArtifactBridgeTest {
             + "\"vector_source\":\"fixture\",\"vector_version\":\"v1\","
             + "\"bm25_artifact\":\"bm25.artifact\",\"vector_artifact\":\"vector.artifact\","
             + "\"quality_report\":\"quality-report.json\"}\n");
-        Files.writeString(root.resolve("READY.json"), json, StandardCharsets.UTF_8);
+        org.apache.geaflow.ai.retrieval.metadata.Java8Files.writeString(root.resolve("READY.json"), json, StandardCharsets.UTF_8);
     }
 
     private static void refreshChecksums(Path root) throws Exception {
-        JsonObject ready = new JsonParser().parse(Files.readString(root.resolve("READY.json"))).getAsJsonObject();
+        JsonObject ready = new JsonParser().parse(org.apache.geaflow.ai.retrieval.metadata.Java8Files.readString(root.resolve("READY.json"))).getAsJsonObject();
         JsonObject checksums = ready.getAsJsonObject("artifact_checksums");
         checksums.addProperty("graph/g1/vertices.jsonl", sha256(root.resolve("graph/g1/vertices.jsonl")));
-        Files.writeString(root.resolve("READY.json"), ready.toString() + "\n", StandardCharsets.UTF_8);
+        org.apache.geaflow.ai.retrieval.metadata.Java8Files.writeString(root.resolve("READY.json"), ready.toString() + "\n", StandardCharsets.UTF_8);
     }
 
     private static String sha256(Path path) throws Exception {

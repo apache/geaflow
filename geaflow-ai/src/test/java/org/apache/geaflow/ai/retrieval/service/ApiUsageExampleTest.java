@@ -39,7 +39,7 @@ class ApiUsageExampleTest {
             request.setQuery("Who directed the film written by the author of the novel?");
             request.setMode("ADAPTIVE_HYBRID");
             request.setExecutionMode("CASCADED");
-            request.setQueryVector(List.of(0.11, -0.04, 0.02));
+            request.setQueryVector(java.util.Arrays.asList(0.11, -0.04, 0.02));
             request.setBudget(new RetrievalBudget(10, 3000, 100, 4096,
                 org.apache.geaflow.ai.retrieval.execution.BudgetConstraint.CANDIDATES));
         });

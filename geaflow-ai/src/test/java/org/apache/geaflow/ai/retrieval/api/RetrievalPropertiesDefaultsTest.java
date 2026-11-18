@@ -205,7 +205,7 @@ public class RetrievalPropertiesDefaultsTest {
         try (InputStream stream = RetrievalPropertiesDefaultsTest.class
             .getResourceAsStream("/application.yml")) {
             Assertions.assertNotNull(stream, "application.yml must be on the test classpath");
-            return new String(stream.readAllBytes(), StandardCharsets.UTF_8);
+            return new String(org.apache.geaflow.ai.retrieval.metadata.Java8Files.readAllBytes(stream), StandardCharsets.UTF_8);
         } catch (java.io.IOException e) {
             throw new AssertionError("cannot read packaged application.yml", e);
         }

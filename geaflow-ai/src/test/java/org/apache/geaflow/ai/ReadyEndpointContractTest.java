@@ -166,7 +166,7 @@ class ReadyEndpointContractTest {
         Path bundle = buildReadyBundleThroughCli();
         RetrievalProperties properties = bundleProperties(bundle);
 
-        Files.writeString(bundle.resolve("vector.bin"), "corrupted\n", StandardCharsets.UTF_8);
+        org.apache.geaflow.ai.retrieval.metadata.Java8Files.writeString(bundle.resolve("vector.bin"), "corrupted\n", StandardCharsets.UTF_8);
 
         org.junit.jupiter.api.Assertions.assertThrows(
             org.apache.geaflow.ai.retrieval.api.model.RetrievalException.class,
@@ -209,30 +209,30 @@ class ReadyEndpointContractTest {
         Path release = root.resolve("release");
         Path graphRoot = release.resolve("graph").resolve(VERSION);
         Files.createDirectories(graphRoot);
-        Files.writeString(release.resolve("documents.jsonl"), "{}\n", StandardCharsets.UTF_8);
-        Files.writeString(release.resolve("chunks.jsonl"), chunkJson(), StandardCharsets.UTF_8);
+        org.apache.geaflow.ai.retrieval.metadata.Java8Files.writeString(release.resolve("documents.jsonl"), "{}\n", StandardCharsets.UTF_8);
+        org.apache.geaflow.ai.retrieval.metadata.Java8Files.writeString(release.resolve("chunks.jsonl"), chunkJson(), StandardCharsets.UTF_8);
         String vertex = "{\"canonical_name\":\"Alpha\",\"dataset\":\"fixture\","
             + "\"dataset_release\":\"release\",\"entity_id\":\"entity-1\","
             + "\"entity_type\":\"CONCEPT\",\"source_chunk_ids\":[\"" + chunkId() + "\"],"
             + "\"source_document_ids\":[\"doc-1\"],\"source_hash\":\"" + sourceHash() + "\","
             + "\"split\":\"dev\",\"vertex_id\":\"entity-1\",\"vertex_type\":\"ENTITY\"}\n";
-        Files.writeString(graphRoot.resolve("vertices.jsonl"), vertex, StandardCharsets.UTF_8);
-        Files.writeString(graphRoot.resolve("edges.jsonl"), "", StandardCharsets.UTF_8);
-        Files.writeString(graphRoot.resolve("manifest.json"),
+        org.apache.geaflow.ai.retrieval.metadata.Java8Files.writeString(graphRoot.resolve("vertices.jsonl"), vertex, StandardCharsets.UTF_8);
+        org.apache.geaflow.ai.retrieval.metadata.Java8Files.writeString(graphRoot.resolve("edges.jsonl"), "", StandardCharsets.UTF_8);
+        org.apache.geaflow.ai.retrieval.metadata.Java8Files.writeString(graphRoot.resolve("manifest.json"),
             "{\"edge_count\":0,\"extractor_version\":\"extractor\","
                 + "\"graph_version\":\"" + VERSION + "\",\"schema_version\":\"schema\","
                 + "\"vertex_count\":1,"
                 + "\"vertices_sha256\":\"" + sha256(graphRoot.resolve("vertices.jsonl")) + "\","
                 + "\"edges_sha256\":\"" + sha256(graphRoot.resolve("edges.jsonl")) + "\"}\n",
             StandardCharsets.UTF_8);
-        Files.writeString(release.resolve("quality-report.json"), "{}\n", StandardCharsets.UTF_8);
+        org.apache.geaflow.ai.retrieval.metadata.Java8Files.writeString(release.resolve("quality-report.json"), "{}\n", StandardCharsets.UTF_8);
         writeReleaseReady(release);
 
         Path manifest = root.resolve("manifest.json");
-        Files.writeString(manifest,
+        org.apache.geaflow.ai.retrieval.metadata.Java8Files.writeString(manifest,
             org.apache.geaflow.ai.retrieval.metadata.MetadataJson.toJson(manifest()), StandardCharsets.UTF_8);
         Path vectors = root.resolve("vectors.jsonl");
-        Files.writeString(vectors,
+        org.apache.geaflow.ai.retrieval.metadata.Java8Files.writeString(vectors,
             "{\"chunkId\":\"" + chunkId() + "\",\"vector\":[1.0,0.5]}\n", StandardCharsets.UTF_8);
 
         Path bundle = root.resolve("bundle");
@@ -282,7 +282,7 @@ class ReadyEndpointContractTest {
             + "\"bm25_artifact\":\"bm25.artifact\","
             + "\"vector_artifact\":\"vector.artifact\","
             + "\"quality_report\":\"quality-report.json\"}\n");
-        Files.writeString(release.resolve("READY.json"), json.toString(), StandardCharsets.UTF_8);
+        org.apache.geaflow.ai.retrieval.metadata.Java8Files.writeString(release.resolve("READY.json"), json.toString(), StandardCharsets.UTF_8);
     }
 
     private static void assertReadinessBodyIs503AndNames(

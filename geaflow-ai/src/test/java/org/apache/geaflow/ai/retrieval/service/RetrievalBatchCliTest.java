@@ -97,7 +97,7 @@ class RetrievalBatchCliTest {
 
     @Test
     void batchCliIsDiscoverableAsAJavaEntryPoint() {
-        List<String> mainClasses = List.of(RetrievalBatchCli.class.getName());
+        List<String> mainClasses = java.util.Arrays.asList(RetrievalBatchCli.class.getName());
         assertFalse(mainClasses.isEmpty());
         assertNotNull(RetrievalBatchCli.class.getDeclaredMethods().length > 0 ? "has main" : null,
             "the CLI must expose a main method");

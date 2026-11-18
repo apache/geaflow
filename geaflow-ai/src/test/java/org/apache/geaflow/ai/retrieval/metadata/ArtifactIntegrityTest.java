@@ -40,13 +40,13 @@ class ArtifactIntegrityTest {
     void validatesExactChecksumCoverageAndAllowsReadyMetadata() throws Exception {
         Path release = Files.createDirectory(temporaryDirectory.resolve("release"));
         Path artifact = Files.createDirectories(release.resolve("graph")).resolve("edges.jsonl");
-        Files.writeString(artifact, "edge\n", StandardCharsets.UTF_8);
-        Files.writeString(release.resolve("READY.json"), "{}\n", StandardCharsets.UTF_8);
+        org.apache.geaflow.ai.retrieval.metadata.Java8Files.writeString(artifact, "edge\n", StandardCharsets.UTF_8);
+        org.apache.geaflow.ai.retrieval.metadata.Java8Files.writeString(release.resolve("READY.json"), "{}\n", StandardCharsets.UTF_8);
 
         JsonObject checksums = checksums(release, "graph/edges.jsonl");
         assertDoesNotThrow(() -> ArtifactIntegrity.validateChecksums(release, checksums));
 
-        Files.writeString(release.resolve("untracked.bin"), "extra", StandardCharsets.UTF_8);
+        org.apache.geaflow.ai.retrieval.metadata.Java8Files.writeString(release.resolve("untracked.bin"), "extra", StandardCharsets.UTF_8);
         assertThrows(IOException.class,
             () -> ArtifactIntegrity.validateChecksums(release, checksums));
     }
@@ -54,16 +54,16 @@ class ArtifactIntegrityTest {
     @Test
     void rejectsMissingFilesAndDigestMismatches() throws Exception {
         Path release = Files.createDirectory(temporaryDirectory.resolve("release"));
-        Files.writeString(release.resolve("READY.json"), "{}\n", StandardCharsets.UTF_8);
+        org.apache.geaflow.ai.retrieval.metadata.Java8Files.writeString(release.resolve("READY.json"), "{}\n", StandardCharsets.UTF_8);
         JsonObject missing = new JsonObject();
-        missing.addProperty("missing.bin", "0".repeat(64));
+        missing.addProperty("missing.bin", String.join("", java.util.Collections.nCopies(64, "0")));
         assertThrows(IOException.class,
             () -> ArtifactIntegrity.validateChecksums(release, missing));
 
         Path artifact = release.resolve("artifact.bin");
-        Files.writeString(artifact, "contents", StandardCharsets.UTF_8);
+        org.apache.geaflow.ai.retrieval.metadata.Java8Files.writeString(artifact, "contents", StandardCharsets.UTF_8);
         JsonObject mismatch = new JsonObject();
-        mismatch.addProperty("artifact.bin", "0".repeat(64));
+        mismatch.addProperty("artifact.bin", String.join("", java.util.Collections.nCopies(64, "0")));
         assertThrows(IOException.class,
             () -> ArtifactIntegrity.validateChecksums(release, mismatch));
     }
@@ -72,7 +72,7 @@ class ArtifactIntegrityTest {
     void rejectsTraversalAndSymlinkTargetsOutsideTheBundle() throws Exception {
         Path root = Files.createDirectory(temporaryDirectory.resolve("bundle"));
         Path outside = temporaryDirectory.resolve("outside.bin");
-        Files.writeString(outside, "outside", StandardCharsets.UTF_8);
+        org.apache.geaflow.ai.retrieval.metadata.Java8Files.writeString(outside, "outside", StandardCharsets.UTF_8);
         assertThrows(IOException.class, () -> ArtifactIntegrity.resolveInside(root, "../outside.bin"));
 
         Path link = root.resolve("outside.bin");

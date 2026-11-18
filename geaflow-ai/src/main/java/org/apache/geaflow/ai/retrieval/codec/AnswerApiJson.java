@@ -83,7 +83,7 @@ public final class AnswerApiJson {
         object.add("traceIds", strings(response.getTraceIds()));
 
         JsonObject reasons = new JsonObject();
-        for (var entry : response.getSuppressReasons().entrySet()) {
+        for (java.util.Map.Entry<String, String> entry : response.getSuppressReasons().entrySet()) {
             reasons.addProperty(entry.getKey(), entry.getValue());
         }
         object.add("suppressReasons", reasons);

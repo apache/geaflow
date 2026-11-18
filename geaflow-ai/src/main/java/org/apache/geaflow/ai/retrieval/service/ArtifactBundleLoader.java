@@ -47,7 +47,7 @@ public final class ArtifactBundleLoader {
             return;
         }
         try {
-            load(Path.of(root.trim()));
+            load(java.nio.file.Paths.get(root.trim()));
         } catch (IOException | RuntimeException error) {
             throw new RetrievalException(RetrievalErrorCode.INDEX_NOT_READY,
                 "unable to load retrieval artifact bundle", error);
@@ -218,7 +218,7 @@ public final class ArtifactBundleLoader {
         if (!Files.isRegularFile(path)) {
             throw new IOException("missing bundle metadata: " + path);
         }
-        return new JsonParser().parse(Files.readString(path, StandardCharsets.UTF_8)).getAsJsonObject();
+        return new JsonParser().parse(new String(Files.readAllBytes(path), StandardCharsets.UTF_8)).getAsJsonObject();
     }
 
     private static String text(JsonObject object, String key) {

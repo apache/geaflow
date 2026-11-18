@@ -200,7 +200,7 @@ public final class RetrievalBatchCli {
     }
 
     private static Path requiredPath(Map<String, String> options, String name) {
-        return Path.of(required(options, name));
+        return java.nio.file.Paths.get(required(options, name));
     }
 
     /** One parsed input line: the caller-visible id plus the request to execute. */
