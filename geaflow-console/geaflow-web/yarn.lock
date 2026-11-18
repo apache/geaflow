@@ -3526,12 +3526,12 @@ ci-info@^3.2.0:
   integrity sha512-NIxF55hv4nSqQswkAeiOi1r83xy8JldOFDTWiug55KBu9Jnblncd2U6ViHmYgHf01TPZS77NJBhBMKdWj9HQMQ==
 
 cipher-base@^1.0.0, cipher-base@^1.0.1, cipher-base@^1.0.3:
-  version "1.0.4"
-  resolved "https://registry.npmmirror.com/cipher-base/-/cipher-base-1.0.4.tgz#8760e4ecc272f4c363532f926d874aae2c1397de"
-  integrity sha512-Kkht5ye6ZGmwv40uUDZztayT2ThLQGfnj/T71N/XzeZeo3nf8foyW7zGTsPYkEya3m5f3cAypH+qe7YOrM1U2Q==
+  version "1.0.6"
+  resolved "https://registry.npmmirror.com/cipher-base/-/cipher-base-1.0.6.tgz#8fe672437d01cd6c4561af5334e0cc50ff1955f7"
+  integrity sha512-3Ek9H3X6pj5TgenXYtNWdaBon1tgYCaebd+XPg0keyjEbEfkD4KkmAxkQ/i1vYvxdcT5nscLBfq9VJRmCBcFSw==
   dependencies:
-    inherits "^2.0.1"
-    safe-buffer "^5.0.1"
+    inherits "^2.0.4"
+    safe-buffer "^5.2.1"
 
 classnames@2.x, classnames@^2.2.1, classnames@^2.2.3, classnames@^2.2.5, classnames@^2.2.6, classnames@^2.3.1, classnames@^2.3.2:
   version "2.3.2"
@@ -4014,7 +4014,6 @@ dagre@^0.8.5:
 
 "dark@link:@/themes/dark":
   version "0.0.0"
-  uid ""
 
 data-uri-to-buffer@^4.0.0:
   version "4.0.1"
@@ -5979,7 +5978,6 @@ less@4.1.3:
 
 "light@link:@/themes/light":
   version "0.0.0"
-  uid ""
 
 lightningcss-darwin-arm64@1.19.0:
   version "1.19.0"
@@ -8464,7 +8462,6 @@ repeat-string@^1.5.2:
 
 "request@link:@/request":
   version "0.0.0"
-  uid ""
 
 requests@^0.3.0:
   version "0.3.0"
@@ -9177,7 +9174,6 @@ test-exclude@^6.0.0:
 
 "themes@link:@/themes":
   version "0.0.0"
-  uid ""
 
 thread-stream@^0.15.1:
   version "0.15.2"
