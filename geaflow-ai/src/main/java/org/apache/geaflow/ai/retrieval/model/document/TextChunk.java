@@ -47,6 +47,14 @@ public final class TextChunk {
     private final String textHash;
     @SerializedName("sourceUri")
     private final String sourceUri;
+    @SerializedName("dataset")
+    private final String dataset;
+    @SerializedName("datasetVersion")
+    private final String datasetVersion;
+    @SerializedName("split")
+    private final String split;
+    @SerializedName("sourceHash")
+    private final String sourceHash;
 
     public TextChunk(String chunkId, String documentId, int chunkIndex, int startOffset,
                      int endOffset, int tokenEstimate, String text) {
@@ -64,6 +72,14 @@ public final class TextChunk {
     public TextChunk(String chunkId, String documentId, int chunkIndex, int startOffset,
                      int endOffset, int tokenEstimate, String text,
                      String policyVersion, String textHash, String sourceUri) {
+        this(chunkId, documentId, chunkIndex, startOffset, endOffset, tokenEstimate, text,
+            policyVersion, textHash, sourceUri, null, null, null, null);
+    }
+
+    public TextChunk(String chunkId, String documentId, int chunkIndex, int startOffset,
+                     int endOffset, int tokenEstimate, String text, String policyVersion,
+                     String textHash, String sourceUri, String dataset, String datasetVersion,
+                     String split, String sourceHash) {
         this.chunkId = ModelValidation.required(chunkId, "chunkId");
         this.documentId = ModelValidation.required(documentId, "documentId");
         this.chunkIndex = ModelValidation.nonNegative(chunkIndex, "chunkIndex");
@@ -77,6 +93,11 @@ public final class TextChunk {
         this.policyVersion = ModelValidation.optionalNonBlank(policyVersion, "policyVersion");
         this.textHash = ModelValidation.optionalNonBlank(textHash, "textHash");
         this.sourceUri = ModelValidation.optionalNonBlank(sourceUri, "sourceUri");
+        this.dataset = ModelValidation.optionalNonBlank(dataset, "dataset");
+        this.datasetVersion = ModelValidation.optionalNonBlank(datasetVersion, "datasetVersion");
+        this.split = ModelValidation.optionalNonBlank(split, "split");
+        this.sourceHash = ModelValidation.optionalNonBlank(sourceHash, "sourceHash");
+        validateProvenance();
     }
 
     public String getChunkId() {
@@ -119,9 +140,49 @@ public final class TextChunk {
         return sourceUri;
     }
 
+    public String getDataset() {
+        return dataset;
+    }
+
+    public String getDatasetVersion() {
+        return datasetVersion;
+    }
+
+    public String getSplit() {
+        return split;
+    }
+
+    public String getSourceHash() {
+        return sourceHash;
+    }
+
     public TextChunk withSourceUri(String uri) {
         return new TextChunk(chunkId, documentId, chunkIndex, startOffset, endOffset,
-            tokenEstimate, text, policyVersion, textHash, ModelValidation.required(uri, "sourceUri"));
+            tokenEstimate, text, policyVersion, textHash, ModelValidation.required(uri, "sourceUri"),
+            dataset, datasetVersion, split, sourceHash);
+    }
+
+    /** Copies source URI and dataset provenance from the document after validating the link. */
+    public TextChunk withSourceDocument(SourceDocument document) {
+        Objects.requireNonNull(document, "document");
+        if (!documentId.equals(document.getDocumentId())) {
+            throw new RetrievalModelValidationException("chunk documentId does not match source document");
+        }
+        if (sourceUri != null && !RetrievalIds.normalizeSourceUri(sourceUri)
+            .equals(RetrievalIds.normalizeSourceUri(document.getSourceUri()))) {
+            throw new RetrievalModelValidationException("chunk source URI does not match its document");
+        }
+        if ((dataset != null || datasetVersion != null || split != null || sourceHash != null)
+            && (!Objects.equals(dataset, document.getDataset())
+            || !Objects.equals(datasetVersion, document.getDatasetVersion())
+            || !Objects.equals(split, document.getSplit())
+            || !Objects.equals(sourceHash, document.getSourceHash()))) {
+            throw new RetrievalModelValidationException("chunk provenance does not match its document");
+        }
+        return new TextChunk(chunkId, documentId, chunkIndex, startOffset, endOffset,
+            tokenEstimate, text, policyVersion, textHash, document.getSourceUri(),
+            document.getDataset(), document.getDatasetVersion(), document.getSplit(),
+            document.getSourceHash());
     }
 
     public boolean sameIdentityAs(TextChunk other) {
@@ -133,7 +194,12 @@ public final class TextChunk {
             && Objects.equals(text, other.text)
             && Objects.equals(policyVersion, other.policyVersion)
             && Objects.equals(textHash, other.textHash)
-            && Objects.equals(sourceUri, other.sourceUri);
+            && Objects.equals(RetrievalIds.normalizeSourceUri(sourceUri),
+                RetrievalIds.normalizeSourceUri(other.sourceUri))
+            && Objects.equals(dataset, other.dataset)
+            && Objects.equals(datasetVersion, other.datasetVersion)
+            && Objects.equals(split, other.split)
+            && Objects.equals(sourceHash, other.sourceHash);
     }
 
     @Override
@@ -152,12 +218,29 @@ public final class TextChunk {
             && Objects.equals(text, that.text)
             && Objects.equals(policyVersion, that.policyVersion)
             && Objects.equals(textHash, that.textHash)
-            && Objects.equals(sourceUri, that.sourceUri);
+            && Objects.equals(RetrievalIds.normalizeSourceUri(sourceUri),
+                RetrievalIds.normalizeSourceUri(that.sourceUri))
+            && Objects.equals(dataset, that.dataset)
+            && Objects.equals(datasetVersion, that.datasetVersion)
+            && Objects.equals(split, that.split)
+            && Objects.equals(sourceHash, that.sourceHash);
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(chunkId, documentId, chunkIndex, startOffset, endOffset,
-            tokenEstimate, text, policyVersion, textHash, sourceUri);
+            tokenEstimate, text, policyVersion, textHash, RetrievalIds.normalizeSourceUri(sourceUri),
+            dataset, datasetVersion, split, sourceHash);
+    }
+
+    private void validateProvenance() {
+        boolean allMissing = dataset == null && datasetVersion == null && split == null
+            && sourceHash == null;
+        boolean allPresent = dataset != null && datasetVersion != null && split != null
+            && sourceHash != null;
+        if (!allMissing && !allPresent) {
+            throw new RetrievalModelValidationException(
+                "chunk dataset, datasetVersion, split, and sourceHash must be provided together");
+        }
     }
 }

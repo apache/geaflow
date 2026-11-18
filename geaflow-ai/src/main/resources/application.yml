@@ -31,7 +31,8 @@ logging:
 
 retrieval:
   config-version: v1
-  ready-graph-name: Confucius
+  # Sample default; override per deployment. Validation rejects a blank value.
+  ready-graph-name: ${GEAFLOW_RETRIEVAL_READY_GRAPH_NAME:Confucius}
   default-mode: KEYWORD
   default-execution-mode: SEQUENTIAL
   default-top-k: 10
@@ -40,7 +41,62 @@ retrieval:
   max-timeout-ms: 10000
   default-max-candidates: 100
   max-candidates: 1000
+  default-max-edge-scans: ${GEAFLOW_RETRIEVAL_DEFAULT_MAX_EDGE_SCANS:100}
+  max-edge-scans: ${GEAFLOW_RETRIEVAL_MAX_EDGE_SCANS:5000}
   default-token-budget: 4096
   max-token-budget: 16384
   remote-access-enabled: ${GEAFLOW_REMOTE_ACCESS_ENABLED:false}
   api-token: ${GEAFLOW_RETRIEVAL_API_TOKEN:}
+  artifact-bundle-root: ${GEAFLOW_RETRIEVAL_ARTIFACT_BUNDLE_ROOT:}
+  artifact-graph-name: ${GEAFLOW_RETRIEVAL_ARTIFACT_GRAPH_NAME:}
+  artifact-graph-version: ${GEAFLOW_RETRIEVAL_ARTIFACT_GRAPH_VERSION:}
+  artifact-index-version: ${GEAFLOW_RETRIEVAL_ARTIFACT_INDEX_VERSION:}
+  artifact-graph-path: ${GEAFLOW_RETRIEVAL_ARTIFACT_GRAPH_PATH:graph.bin}
+  artifact-bm25-path: ${GEAFLOW_RETRIEVAL_ARTIFACT_BM25_PATH:bm25}
+  artifact-vector-path: ${GEAFLOW_RETRIEVAL_ARTIFACT_VECTOR_PATH:vector.bin}
+  artifact-vector-source: ${GEAFLOW_RETRIEVAL_ARTIFACT_VECTOR_SOURCE:}
+  artifact-vector-version: ${GEAFLOW_RETRIEVAL_ARTIFACT_VECTOR_VERSION:}
+  routing-policy-id: ${GEAFLOW_RETRIEVAL_ROUTING_POLICY_ID:deterministic-rule}
+  max-replan-count: ${GEAFLOW_RETRIEVAL_MAX_REPLAN_COUNT:1}
+  max-hop: ${GEAFLOW_RETRIEVAL_MAX_HOP:1}
+  strict-plan-validation: ${GEAFLOW_RETRIEVAL_STRICT_PLAN_VALIDATION:true}
+  reranker-id: ${GEAFLOW_RETRIEVAL_RERANKER_ID:deterministic-reranker-v1}
+  token-estimator-id: ${GEAFLOW_RETRIEVAL_TOKEN_ESTIMATOR_ID:chars4-v1}
+  graph:
+    sample-rate: ${GEAFLOW_RETRIEVAL_GRAPH_SAMPLE_RATE:1.0}
+    min-marginal-yield: ${GEAFLOW_RETRIEVAL_GRAPH_MIN_MARGINAL_YIELD:0.05}
+    min-association-score: ${GEAFLOW_RETRIEVAL_GRAPH_MIN_ASSOCIATION_SCORE:0.01}
+    min-association-survival-rate: ${GEAFLOW_RETRIEVAL_GRAPH_MIN_ASSOCIATION_SURVIVAL_RATE:0.1}
+    relation-priorities: ${GEAFLOW_RETRIEVAL_GRAPH_RELATION_PRIORITIES:mentions:1.0,cooccurs:1.0}
+  deterministic-rule:
+    high-average-idf: ${GEAFLOW_RETRIEVAL_HIGH_AVERAGE_IDF:4.0}
+    decouple-text-routing: ${GEAFLOW_RETRIEVAL_DECOUPLE_TEXT_ROUTING:false}
+    # Reciprocal-rank scores stay inside [0, 0.003]; a 0.20 threshold could never be met.
+    high-score-gap: ${GEAFLOW_RETRIEVAL_HIGH_SCORE_GAP:0.0005}
+    long-query-length: ${GEAFLOW_RETRIEVAL_LONG_QUERY_LENGTH:12}
+    strong-anchor-confidence: ${GEAFLOW_RETRIEVAL_STRONG_ANCHOR_CONFIDENCE:0.75}
+    minimum-anchor-count: ${GEAFLOW_RETRIEVAL_MINIMUM_ANCHOR_COUNT:1}
+    high-candidate-degree: ${GEAFLOW_RETRIEVAL_HIGH_CANDIDATE_DEGREE:32}
+    high-growth-rate: ${GEAFLOW_RETRIEVAL_HIGH_GROWTH_RATE:2.0}
+    base-neighbor-cap: ${GEAFLOW_RETRIEVAL_BASE_NEIGHBOR_CAP:16}
+  # Fusion weights and the probe share decide how much of the fused score and candidate budget the
+  # graph channel receives. They were constants in the routing policy before.
+  graph-fusion:
+    graph-weight: ${GEAFLOW_RETRIEVAL_GRAPH_FUSION_GRAPH_WEIGHT:0.25}
+    text-weight: ${GEAFLOW_RETRIEVAL_GRAPH_FUSION_TEXT_WEIGHT:1.0}
+    probe-share: ${GEAFLOW_RETRIEVAL_GRAPH_PROBE_SHARE:0.4}
+    lexical-bm25-weight: ${GEAFLOW_RETRIEVAL_LEXICAL_BM25_WEIGHT:1.25}
+    lexical-vector-weight: ${GEAFLOW_RETRIEVAL_LEXICAL_VECTOR_WEIGHT:0.85}
+    semantic-bm25-weight: ${GEAFLOW_RETRIEVAL_SEMANTIC_BM25_WEIGHT:0.85}
+    semantic-vector-weight: ${GEAFLOW_RETRIEVAL_SEMANTIC_VECTOR_WEIGHT:1.25}
+  # Sets the units of every fused score, and therefore the scale the routing thresholds compare to.
+  rrf-rank-constant: ${GEAFLOW_RETRIEVAL_RRF_RANK_CONSTANT:60}
+  # Gate that decides whether the cascaded graph stage runs at all.
+  cascade:
+    min-probe-score-gap: ${GEAFLOW_RETRIEVAL_CASCADE_MIN_PROBE_SCORE_GAP:0.0001}
+    min-probe-evidence: ${GEAFLOW_RETRIEVAL_CASCADE_MIN_PROBE_EVIDENCE:2}
+    min-budget: ${GEAFLOW_RETRIEVAL_CASCADE_MIN_BUDGET:5}
+    probe-max: ${GEAFLOW_RETRIEVAL_CASCADE_PROBE_MAX:10}
+    probe-min: ${GEAFLOW_RETRIEVAL_CASCADE_PROBE_MIN:2}
+    probe-divisor: ${GEAFLOW_RETRIEVAL_CASCADE_PROBE_DIVISOR:8}
+  reranker-graph-path-weight: ${GEAFLOW_RETRIEVAL_RERANKER_GRAPH_PATH_WEIGHT:0.0}

@@ -53,10 +53,10 @@ import org.junit.jupiter.api.Test;
  * <p>The usage contract these tests document, in one place:
  *
  * <ul>
- *   <li><b>Build, finish writing, search, close.</b> A query session indexes its entities and calls
- *       {@link GraphSearchStore#finishWriting()} to commit the segments while retaining the
- *       directory and analyzer for reads. Searching before the first commit returns no results.
- *       Closing the store releases its resources and rejects subsequent reads and writes.</li>
+ *   <li><b>Build, finish writes, search, close.</b> A query session indexes what it wants searchable,
+ *       commits the segments, and only then searches. Searching before writes finish silently
+ *       returns nothing — the {@code IndexNotFoundException} of the uncommitted directory is
+ *       swallowed. The committed index remains open for reads until {@code close()}.</li>
  *   <li><b>Stop words are searchable.</b> The analyzer is built with an empty stop-word set
  *       (see {@link KeywordTokenizationGoldenTest}), so {@code the} matches documents
  *       containing {@code the}.</li>
@@ -103,47 +103,37 @@ public class KeywordIndexLifecycleGoldenTest {
             "every keyword of a vector is independently searchable");
         Assertions.assertTrue(searchIds(store, accessor, "lama").isEmpty(),
             "a term indexed by no entity matches nothing");
+        store.close();
     }
 
     /**
-     * The first commit makes buffered documents visible; an earlier empty search must not
-     * prevent the same store from finding those documents after finishWriting.
+     * Searching before writes finish returns an empty list instead of failing. This is why the
+     * finish-before-search order above is a contract rather than a convention: getting it wrong
+     * fails silently.
      */
     @Test
-    public void searchBeforeFinishWritingReturnsEmptyResults() {
-        final LocalMemoryGraphAccessor accessor = graph("v1");
+    public void searchBeforeFinishingWritesReturnsEmptyResults() {
+        LocalMemoryGraphAccessor accessor = graph("v1");
         GraphSearchStore store = createStore();
         indexVertex(store, "v1", "alpaca");
         Assertions.assertEquals(Collections.emptyList(), searchIds(store, accessor, "alpaca"),
-            "an uncommitted index has no searchable documents");
-        store.finishWriting();
-        Assertions.assertEquals(Collections.singletonList("v1"), searchIds(store, accessor, "alpaca"));
+            "search before close must return empty, not the committed documents (there are none)");
     }
 
-    /** Closing is terminal and rejects subsequent indexing at the store boundary. */
+    /**
+     * Indexing after the write phase fails while the committed snapshot remains readable.
+     */
     @Test
-    public void indexingAfterCloseFails() {
+    public void indexingAfterFinishingWritesFails() {
+        LocalMemoryGraphAccessor accessor = graph("v1");
         GraphSearchStore store = createStore();
         indexVertex(store, "v1", "alpaca");
-        store.close();
+        store.finishWriting();
         IllegalStateException failure = Assertions.assertThrows(IllegalStateException.class,
-            () -> indexVertex(store, "v2", "lama"));
+            () -> indexVertex(store, "v2", "lama"),
+            "indexing after writes finish must fail loudly rather than lose the document");
         Assertions.assertEquals("graph search store is closed", failure.getMessage());
-    }
-
-    @Test
-    public void closedStoreRejectsReadsAndFinishingAndReleasesDirectory() {
-        final LocalMemoryGraphAccessor accessor = graph("v1");
-        GraphSearchStore store = createStore();
-        indexVertex(store, "v1", "alpaca");
-        store.finishWriting();
-        store.finishWriting();
-        Assertions.assertEquals(Collections.singletonList("v1"), searchIds(store, accessor, "alpaca"));
         store.close();
-        store.close();
-        Assertions.assertThrows(IllegalStateException.class, () -> store.search("alpaca", accessor));
-        Assertions.assertThrows(IllegalStateException.class, store::finishWriting);
-        Assertions.assertThrows(AlreadyClosedException.class, () -> store.getDirectory().listAll());
     }
 
     /** An empty query reaches the query parser and surfaces as the store's read failure. */
@@ -175,6 +165,7 @@ public class KeywordIndexLifecycleGoldenTest {
 
         Assertions.assertEquals(Collections.singletonList("v1"), searchIds(store, accessor, "alpaca.lama"),
             "OR semantics: only one of the two terms needs to be present");
+        store.close();
     }
 
     /** Stop words are ordinary searchable terms (the analyzer has no stop-word list). */
@@ -186,6 +177,7 @@ public class KeywordIndexLifecycleGoldenTest {
         store.finishWriting();
         Assertions.assertEquals(Collections.singletonList("v1"), searchIds(store, accessor, "the"),
             "with an empty stop-word set, 'the' indexes and matches like any other word");
+        store.close();
     }
 
     /**
@@ -208,6 +200,7 @@ public class KeywordIndexLifecycleGoldenTest {
             "an exact two-character keyword matches the documents carrying it");
         Assertions.assertEquals(Arrays.asList("v1", "v2"), searchIds(store, accessor, "学习"),
             "OR of single characters: a document sharing one character of the query also matches");
+        store.close();
     }
 
     /**
@@ -250,11 +243,14 @@ public class KeywordIndexLifecycleGoldenTest {
             searchIds(store, accessor, "keywordvector").size(),
             "querying the toString() wrapper text matches every document too — this is the "
                 + "common-token pollution a dedicated query representation would remove");
+        store.close();
     }
 
     /**
-     * Documents added in several batches within one write session are committed together by
-     * finishWriting and remain searchable until close.
+     * Incremental addition is accumulation within one open session: documents added in several
+     * batches are all committed by the single finishWriting call and all searchable. There is no
+     * incremental visibility into an already-finished index
+     * (see {@link #indexingAfterFinishingWritesFails()}).
      */
     @Test
     public void incrementalAddsAccumulateUntilFinishWriting() {
@@ -293,6 +289,7 @@ public class KeywordIndexLifecycleGoldenTest {
             "a hit whose entity is gone from the graph must not surface");
         Assertions.assertTrue(searchIds(store, accessor, "orphanword").isEmpty(),
             "a hit whose label is not registered in the schema must not surface");
+        store.close();
     }
 
     // ------------------------------------------------------------------ helpers

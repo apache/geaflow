@@ -1,0 +1,13 @@
+{
+  "description": "Normalized answer metric golden cases shared by the Java and Python evaluators.",
+  "cases": [
+    {"prediction": "The, Answer!", "answer": "the answer", "exactMatch": 1.0, "f1": 1.0},
+    {"prediction": "a b", "answer": "a c", "exactMatch": 0.0, "f1": 0.5},
+    {"prediction": "", "answer": "", "exactMatch": 1.0, "f1": 1.0},
+    {"prediction": "", "answer": "answer", "exactMatch": 0.0, "f1": 0.0},
+    {"prediction": "Paris", "answer": "paris", "exactMatch": 1.0, "f1": 1.0},
+    {"prediction": "New York City", "answer": "New York", "exactMatch": 0.0, "f1": 0.8},
+    {"prediction": "the quick brown fox", "answer": "quick brown fox", "exactMatch": 0.0, "f1": 0.8571428571428571},
+    {"prediction": "alpha beta gamma", "answer": "gamma beta alpha", "exactMatch": 0.0, "f1": 1.0}
+  ]
+}

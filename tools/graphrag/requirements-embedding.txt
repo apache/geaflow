@@ -1,0 +1,6 @@
+# Only needed to REGENERATE embeddings with embed_chunks.py / embed_queries.py.
+# The published bundles and the benchmark itself do not import torch or transformers.
+# CPU works; --device cuda is used when a GPU is available.
+torch>=2.0,<3
+transformers>=4.36,<5
+numpy>=1.24,<3

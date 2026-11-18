@@ -329,6 +329,10 @@
                         <exclude>geaflow-web/**/**</exclude>
                         <exclude>**/geaflow-web/**</exclude>
                         <exclude>**/target/**</exclude>
+                        <!-- Run artifacts (benchmarks, bundles, classpaths) are produced under
+                             tmp/ at whichever module a tool was invoked from. They are generated
+                             output, not sources, and must not fail the licence check. -->
+                        <exclude>**/tmp/**</exclude>
                         <exclude>**/docs/**</exclude>
                         <exclude>**/ci/**</exclude>
                         <exclude>**/web-dashboard/**</exclude>

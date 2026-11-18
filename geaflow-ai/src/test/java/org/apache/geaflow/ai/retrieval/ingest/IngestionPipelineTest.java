@@ -358,6 +358,68 @@ public class IngestionPipelineTest {
         return new IngestionContext(manifest, new GraphVersion("graph-1", "version-1"), "importer-1");
     }
 
+
+    @Test
+    public void bm25ReceivesDocumentTitlesAndEntityAliasesAsSurfaces() throws Exception {
+        IngestionContext context = context();
+        SourceDocument document = new SourceDocument("doc-1", "hotpotqa", "release-1", "train",
+            "Confucius", "uri:doc-1", SHA256);
+        TextChunk chunk = chunk();
+        EntityRef anchor = new EntityRef("entity-1", "Confucius", Arrays.asList("Kongzi"),
+            "person", Collections.singletonList("chunk-1"));
+        java.util.Map<String, List<String>> captured = new java.util.HashMap<>();
+        IngestionPipeline pipeline = new IngestionPipeline(
+            value -> Collections.singletonList(document),
+            (documents, value) -> Collections.singletonList(chunk),
+            (chunks, value) -> new ExtractionResult(Collections.singletonList(anchor),
+                Collections.emptyList()),
+            (value, documents, chunks, extraction) -> new TrackingGraphArtifact(
+                new java.util.ArrayList<>(), "graph"),
+            new org.apache.geaflow.ai.retrieval.index.Bm25IndexBuilder() {
+                @Override
+                public IndexArtifact build(IngestionContext value, List<TextChunk> chunks)
+                    throws java.io.IOException {
+                    return new TrackingIndexArtifact(new java.util.ArrayList<>(), "bm25");
+                }
+
+                @Override
+                public IndexArtifact build(IngestionContext value, List<TextChunk> chunks,
+                                           java.util.Map<String, List<String>> surfaces)
+                    throws java.io.IOException {
+                    captured.putAll(surfaces);
+                    return new TrackingIndexArtifact(new java.util.ArrayList<>(), "bm25");
+                }
+            },
+            (value, chunks) -> new TrackingIndexArtifact(new java.util.ArrayList<>(), "vector"),
+            new MetadataPublisher() {
+                @Override
+                public ImportAttempt begin(IngestionContext value) {
+                    return new ImportAttempt(value.getGraphVersion());
+                }
+
+                @Override
+                public ImportMetadata publish(IngestionContext value, ImportAttempt attempt,
+                                              GraphArtifact valueGraph,
+                                              List<IndexArtifact> indexes) {
+                    return null;
+                }
+
+                @Override
+                public void fail(IngestionContext value, ImportAttempt attempt, Exception failure) {
+                    throw new AssertionError("unexpected failure", failure);
+                }
+            });
+
+        pipeline.run(context);
+
+        List<String> surfaces = captured.get("chunk-1");
+        assertNotNull(surfaces, "the BM25 builder must receive surfaces for the chunk");
+        assertTrue(surfaces.contains("Confucius"),
+            "the document title must be indexed as a surface: " + surfaces);
+        assertTrue(surfaces.contains("Kongzi"),
+            "entity aliases must be indexed as a surface: " + surfaces);
+    }
+
     private static SourceDocument document() {
         return new SourceDocument("doc-1", "hotpotqa", "release-1", "train", "uri:doc-1", SHA256);
     }

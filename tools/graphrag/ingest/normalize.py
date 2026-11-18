@@ -104,6 +104,10 @@ def chunk_document(document: Dict[str, Any], config: ChunkingConfig) -> List[Dic
                 "text": chunk_text,
                 "policy_version": config.policy_version(),
                 "source_uri": document.get("source_uri"),
+                "dataset": document.get("dataset"),
+                "dataset_release": document.get("dataset_release"),
+                "split": document.get("split"),
+                "normalization_version": document.get("normalization_version", NORMALIZATION_VERSION),
                 "text_hash": digest,
                 "source_hash": document["source_hash"],
             })

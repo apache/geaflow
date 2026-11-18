@@ -35,6 +35,7 @@ public class RetrievalRequest {
     private String vectorVersion;
     private String vectorSource;
     private boolean allowPartialResults;
+    private boolean exactRanking;
 
     public RetrievalRequest() {
     }
@@ -57,6 +58,14 @@ public class RetrievalRequest {
 
     public void setAllowPartialResults(boolean allowPartialResults) {
         this.allowPartialResults = allowPartialResults;
+    }
+
+    public boolean isExactRanking() {
+        return exactRanking;
+    }
+
+    public void setExactRanking(boolean exactRanking) {
+        this.exactRanking = exactRanking;
     }
 
     public void setGraphName(String graphName) {

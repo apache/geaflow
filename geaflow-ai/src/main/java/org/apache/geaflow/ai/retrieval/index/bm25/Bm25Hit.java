@@ -18,8 +18,15 @@
  */
 package org.apache.geaflow.ai.retrieval.index.bm25;
 
+import java.util.Collections;
+import java.util.List;
+
 /**
  * A deterministic BM25 match returned by {@link Bm25IndexReader}.
+ *
+ * <p>The design requires the BM25 channel to return matched terms and IDF statistics alongside the
+ * score, so an adaptive router can reason about lexical confidence and an operator can explain a
+ * ranking. Both are captured at scoring time and exposed here.
  */
 public final class Bm25Hit {
     private final String chunkId;
@@ -27,13 +34,32 @@ public final class Bm25Hit {
     private final float score;
     private final int rank;
     private final String text;
+    private final List<String> matchedTerms;
+    private final double averageIdf;
 
     public Bm25Hit(String chunkId, String documentId, float score, int rank, String text) {
+        this(chunkId, documentId, score, rank, text, Collections.emptyList(), 0.0D);
+    }
+
+    /**
+     * Creates a hit that reports which query terms matched and how informative they are.
+     *
+     * @param matchedTerms query terms that actually matched this chunk, in query order
+     * @param averageIdf mean inverse document frequency of the matched terms
+     */
+    public Bm25Hit(String chunkId, String documentId, float score, int rank, String text,
+                   List<String> matchedTerms, double averageIdf) {
+        if (averageIdf < 0.0D || Double.isNaN(averageIdf)) {
+            throw new IllegalArgumentException("averageIdf must be finite and non-negative");
+        }
         this.chunkId = chunkId;
         this.documentId = documentId;
         this.score = score;
         this.rank = rank;
         this.text = text;
+        this.matchedTerms = matchedTerms == null ? Collections.emptyList()
+            : Collections.unmodifiableList(new java.util.ArrayList<>(matchedTerms));
+        this.averageIdf = averageIdf;
     }
 
     public String getChunkId() {
@@ -54,5 +80,13 @@ public final class Bm25Hit {
 
     public String getText() {
         return text;
+    }
+
+    public List<String> getMatchedTerms() {
+        return matchedTerms;
+    }
+
+    public double getAverageIdf() {
+        return averageIdf;
     }
 }

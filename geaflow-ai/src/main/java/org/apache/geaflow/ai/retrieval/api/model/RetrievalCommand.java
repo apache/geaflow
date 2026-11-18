@@ -31,6 +31,8 @@ public final class RetrievalCommand {
     private final ExecutionMode executionMode;
     private final RetrievalBudget budget;
     private final List<Double> queryVector;
+    private final int executionCandidateLimit;
+    private final boolean exactRanking;
 
     public RetrievalCommand(String graphName, String query, RetrievalMode mode,
                             ExecutionMode executionMode, RetrievalBudget budget) {
@@ -40,12 +42,29 @@ public final class RetrievalCommand {
     public RetrievalCommand(String graphName, String query, RetrievalMode mode,
                             ExecutionMode executionMode, RetrievalBudget budget,
                             List<Double> queryVector) {
+        this(graphName, query, mode, executionMode, budget, queryVector,
+            budget.getMaxCandidates(), false);
+    }
+
+    public RetrievalCommand(String graphName, String query, RetrievalMode mode,
+                            ExecutionMode executionMode, RetrievalBudget budget,
+                            List<Double> queryVector, int executionCandidateLimit) {
+        this(graphName, query, mode, executionMode, budget, queryVector, executionCandidateLimit, false);
+    }
+
+    public RetrievalCommand(String graphName, String query, RetrievalMode mode,
+                            ExecutionMode executionMode, RetrievalBudget budget,
+                            List<Double> queryVector, int executionCandidateLimit, boolean exactRanking) {
+        if (executionCandidateLimit < 1) {
+            throw new IllegalArgumentException("executionCandidateLimit must be positive");
+        }
         this.graphName = graphName;
         this.query = query;
         this.mode = mode;
         this.executionMode = executionMode;
-        this.budget = new RetrievalBudget(budget.getTopK(), budget.getTimeoutMs(),
-            budget.getMaxCandidates(), budget.getTokenBudget());
+        this.executionCandidateLimit = executionCandidateLimit;
+        this.exactRanking = exactRanking;
+        this.budget = budget.copy();
         this.queryVector = queryVector == null ? Collections.<Double>emptyList()
             : Collections.unmodifiableList(new ArrayList<>(queryVector));
     }
@@ -62,17 +81,30 @@ public final class RetrievalCommand {
         return mode;
     }
 
+    /** Returns the mode exactly as requested, before any channel-set canonicalisation. */
+    public RetrievalMode getRequestedMode() {
+        return mode;
+    }
+
     public ExecutionMode getExecutionMode() {
         return executionMode;
     }
 
     public RetrievalBudget getBudget() {
-        return new RetrievalBudget(budget.getTopK(), budget.getTimeoutMs(),
-            budget.getMaxCandidates(), budget.getTokenBudget());
+        return budget.copy();
     }
 
     /** Returns the caller-supplied, precomputed query vector. */
     public List<Double> getQueryVector() {
         return queryVector;
+    }
+
+    /** Returns the service-wide candidate safety ceiling, independent of the primary constraint. */
+    public int getExecutionCandidateLimit() {
+        return executionCandidateLimit;
+    }
+
+    public boolean isExactRanking() {
+        return exactRanking;
     }
 }

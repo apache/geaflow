@@ -90,7 +90,8 @@ public final class SourceDocument {
             && Objects.equals(dataset, other.dataset)
             && Objects.equals(datasetVersion, other.datasetVersion)
             && Objects.equals(split, other.split)
-            && Objects.equals(sourceUri, other.sourceUri)
+            && Objects.equals(RetrievalIds.normalizeSourceUri(sourceUri),
+                RetrievalIds.normalizeSourceUri(other.sourceUri))
             && Objects.equals(sourceHash, other.sourceHash);
     }
 

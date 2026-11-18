@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 import org.apache.geaflow.ai.retrieval.execution.RecallStageStatus;
 import org.apache.geaflow.ai.retrieval.execution.RecallStopReason;
+import org.apache.geaflow.ai.retrieval.execution.RetrievalReplanEvent;
 
 /** Stable minimum trace shape; future fields must be additive. */
 public class RetrievalTrace {
@@ -32,10 +33,16 @@ public class RetrievalTrace {
     private String requestId;
     private String originalQuery;
     private RetrievalMode selectedMode;
+    private RetrievalMode requestedMode;
     private ExecutionMode executionMode;
+    private boolean exactRanking;
     private List<TraceStage> stages = new ArrayList<>();
     private String stopReason;
     private String graphVersion;
+    private String visibleGraphVersion;
+    private String actualVisibleGraphVersion;
+    private String deltaDigest;
+    private String statisticsVersion;
     private String indexVersion;
     private String vectorVersion;
     private int effectiveCandidateBudget;
@@ -45,7 +52,12 @@ public class RetrievalTrace {
     private int edgesExamined;
     private int neighborsSampled;
     private int verticesReached;
+    private int uniqueVertices;
     private int graphCandidatesProduced;
+    private int graphTokensEstimated;
+    private int graphEvidenceYield;
+    private double graphGrowthRate;
+    private double graphMarginalYield;
     private List<String> degradedChannels = new ArrayList<>();
     private List<String> validationErrors = new ArrayList<>();
     private List<String> selectedChannels = new ArrayList<>();
@@ -60,6 +72,27 @@ public class RetrievalTrace {
     private Map<String, Integer> evaluatedCounts = new LinkedHashMap<>();
     private Map<String, RecallStageStatus> channelStatuses = new LinkedHashMap<>();
     private Map<String, RecallStopReason> channelStopReasons = new LinkedHashMap<>();
+    private Map<String, Integer> rawCandidatesScored = new LinkedHashMap<>();
+    private Map<String, Long> stageElapsedNanos = new LinkedHashMap<>();
+    private int uniqueEvidenceCandidates;
+    private long tokensRetained;
+    private String tokenEstimatorVersion;
+    private String rerankerVersion;
+    private String fusionVersion;
+    private String primaryConstraint;
+    private double cascadeProbeScoreGap;
+    /** Threshold the measured probe score gap was compared against, in fusion units. */
+    private double cascadeMinProbeScoreGap;
+    /** Evidence count the probe had to reach before the graph stage was allowed to run. */
+    private int cascadeMinProbeEvidence;
+    private String cascadeDecision;
+    private String policyId;
+    private String policyVersion;
+    private String featureSchemaVersion;
+    private Map<String, String> policyParameters = new LinkedHashMap<>();
+    private Map<String, Double> routingFeatures = new LinkedHashMap<>();
+    private List<String> routingReasons = new ArrayList<>();
+    private List<RetrievalReplanEvent> replanEvents = new ArrayList<>();
 
     public RetrievalTrace() {
     }
@@ -96,12 +129,36 @@ public class RetrievalTrace {
         this.selectedMode = selectedMode;
     }
 
+    /**
+     * Returns the mode the caller asked for.
+     *
+     * <p>Distinct from {@link #getSelectedMode()}: a fixed-hybrid request selects the hybrid channel
+     * set, while an adaptive-hybrid request additionally runs the routing policy. Recording the
+     * requested mode keeps an adaptive decision auditable even when the plan picks another channel
+     * set.
+     */
+    public RetrievalMode getRequestedMode() {
+        return requestedMode;
+    }
+
+    public void setRequestedMode(RetrievalMode requestedMode) {
+        this.requestedMode = requestedMode;
+    }
+
     public ExecutionMode getExecutionMode() {
         return executionMode;
     }
 
     public void setExecutionMode(ExecutionMode executionMode) {
         this.executionMode = executionMode;
+    }
+
+    public boolean isExactRanking() {
+        return exactRanking;
+    }
+
+    public void setExactRanking(boolean exactRanking) {
+        this.exactRanking = exactRanking;
     }
 
     public List<TraceStage> getStages() {
@@ -126,6 +183,47 @@ public class RetrievalTrace {
 
     public void setGraphVersion(String graphVersion) {
         this.graphVersion = graphVersion;
+    }
+
+    public String getVisibleGraphVersion() {
+        return visibleGraphVersion;
+    }
+
+    public void setVisibleGraphVersion(String visibleGraphVersion) {
+        this.visibleGraphVersion = visibleGraphVersion;
+    }
+
+    public String getActualVisibleGraphVersion() {
+        return actualVisibleGraphVersion;
+    }
+
+    public void setActualVisibleGraphVersion(String actualVisibleGraphVersion) {
+        this.actualVisibleGraphVersion = actualVisibleGraphVersion;
+    }
+
+    /** Alias for consumers that call the pinned version the effective version. */
+    public String getEffectiveGraphVersion() {
+        return actualVisibleGraphVersion == null ? visibleGraphVersion : actualVisibleGraphVersion;
+    }
+
+    public void setEffectiveGraphVersion(String effectiveGraphVersion) {
+        this.actualVisibleGraphVersion = effectiveGraphVersion;
+    }
+
+    public String getDeltaDigest() {
+        return deltaDigest;
+    }
+
+    public void setDeltaDigest(String deltaDigest) {
+        this.deltaDigest = deltaDigest;
+    }
+
+    public String getStatisticsVersion() {
+        return statisticsVersion;
+    }
+
+    public void setStatisticsVersion(String statisticsVersion) {
+        this.statisticsVersion = statisticsVersion;
     }
 
     public String getIndexVersion() {
@@ -200,12 +298,52 @@ public class RetrievalTrace {
         verticesReached = value;
     }
 
+    public int getUniqueVertices() {
+        return uniqueVertices;
+    }
+
+    public void setUniqueVertices(int value) {
+        uniqueVertices = value;
+    }
+
     public int getGraphCandidatesProduced() {
         return graphCandidatesProduced;
     }
 
     public void setGraphCandidatesProduced(int value) {
         graphCandidatesProduced = value;
+    }
+
+    public int getGraphTokensEstimated() {
+        return graphTokensEstimated;
+    }
+
+    public void setGraphTokensEstimated(int value) {
+        graphTokensEstimated = value;
+    }
+
+    public int getGraphEvidenceYield() {
+        return graphEvidenceYield;
+    }
+
+    public void setGraphEvidenceYield(int value) {
+        graphEvidenceYield = value;
+    }
+
+    public double getGraphGrowthRate() {
+        return graphGrowthRate;
+    }
+
+    public void setGraphGrowthRate(double value) {
+        graphGrowthRate = value;
+    }
+
+    public double getGraphMarginalYield() {
+        return graphMarginalYield;
+    }
+
+    public void setGraphMarginalYield(double value) {
+        graphMarginalYield = value;
     }
 
     public List<String> getDegradedChannels() {
@@ -318,5 +456,157 @@ public class RetrievalTrace {
 
     public void setChannelStopReasons(Map<String, RecallStopReason> value) {
         channelStopReasons = value == null ? new LinkedHashMap<>() : new LinkedHashMap<>(value);
+    }
+
+    public Map<String, Integer> getRawCandidatesScored() {
+        return rawCandidatesScored;
+    }
+
+    public void setRawCandidatesScored(Map<String, Integer> value) {
+        rawCandidatesScored = value == null ? new LinkedHashMap<>() : new LinkedHashMap<>(value);
+    }
+
+    public Map<String, Long> getStageElapsedNanos() {
+        return stageElapsedNanos;
+    }
+
+    public void setStageElapsedNanos(Map<String, Long> value) {
+        stageElapsedNanos = value == null ? new LinkedHashMap<>() : new LinkedHashMap<>(value);
+    }
+
+    public int getUniqueEvidenceCandidates() {
+        return uniqueEvidenceCandidates;
+    }
+
+    public void setUniqueEvidenceCandidates(int value) {
+        uniqueEvidenceCandidates = value;
+    }
+
+    public long getTokensRetained() {
+        return tokensRetained;
+    }
+
+    public void setTokensRetained(long value) {
+        tokensRetained = value;
+    }
+
+    public String getTokenEstimatorVersion() {
+        return tokenEstimatorVersion;
+    }
+
+    public void setTokenEstimatorVersion(String value) {
+        tokenEstimatorVersion = value;
+    }
+
+    public String getRerankerVersion() {
+        return rerankerVersion;
+    }
+
+    public String getFusionVersion() {
+        return fusionVersion;
+    }
+
+    public void setFusionVersion(String value) {
+        fusionVersion = value;
+    }
+
+    public void setRerankerVersion(String value) {
+        rerankerVersion = value;
+    }
+
+    public String getPrimaryConstraint() {
+        return primaryConstraint;
+    }
+
+    public void setPrimaryConstraint(String value) {
+        primaryConstraint = value;
+    }
+
+    public double getCascadeProbeScoreGap() {
+        return cascadeProbeScoreGap;
+    }
+
+    public void setCascadeProbeScoreGap(double value) {
+        cascadeProbeScoreGap = value;
+    }
+
+    public double getCascadeMinProbeScoreGap() {
+        return cascadeMinProbeScoreGap;
+    }
+
+    public void setCascadeMinProbeScoreGap(double value) {
+        cascadeMinProbeScoreGap = value;
+    }
+
+    public int getCascadeMinProbeEvidence() {
+        return cascadeMinProbeEvidence;
+    }
+
+    public void setCascadeMinProbeEvidence(int value) {
+        cascadeMinProbeEvidence = value;
+    }
+
+    public String getCascadeDecision() {
+        return cascadeDecision;
+    }
+
+    public void setCascadeDecision(String value) {
+        cascadeDecision = value;
+    }
+
+    public String getPolicyId() {
+        return policyId;
+    }
+
+    public void setPolicyId(String value) {
+        policyId = value;
+    }
+
+    public String getPolicyVersion() {
+        return policyVersion;
+    }
+
+    public void setPolicyVersion(String value) {
+        policyVersion = value;
+    }
+
+    public String getFeatureSchemaVersion() {
+        return featureSchemaVersion;
+    }
+
+    public void setFeatureSchemaVersion(String value) {
+        featureSchemaVersion = value;
+    }
+
+    public Map<String, String> getPolicyParameters() {
+        return policyParameters;
+    }
+
+    public void setPolicyParameters(Map<String, String> value) {
+        policyParameters = value == null ? new LinkedHashMap<>() : new LinkedHashMap<>(value);
+    }
+
+    public Map<String, Double> getRoutingFeatures() {
+        return routingFeatures;
+    }
+
+    public void setRoutingFeatures(Map<String, Double> value) {
+        routingFeatures = value == null ? new LinkedHashMap<>() : new LinkedHashMap<>(value);
+    }
+
+    public List<String> getRoutingReasons() {
+        return routingReasons;
+    }
+
+    public void setRoutingReasons(List<String> value) {
+        routingReasons = value == null ? new ArrayList<>() : new ArrayList<>(value);
+    }
+
+    public List<RetrievalReplanEvent> getReplanEvents() {
+        return replanEvents;
+    }
+
+    public void setReplanEvents(List<RetrievalReplanEvent> value) {
+        replanEvents = value == null ? new ArrayList<>() : new ArrayList<>(value);
     }
 }

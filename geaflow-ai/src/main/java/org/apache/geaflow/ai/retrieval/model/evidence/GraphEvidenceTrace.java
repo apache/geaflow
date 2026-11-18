@@ -23,17 +23,19 @@ import com.google.gson.annotations.SerializedName;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import org.apache.geaflow.ai.retrieval.api.model.RetrievalMode;
 import org.apache.geaflow.ai.retrieval.model.graph.GraphPathRef;
+import org.apache.geaflow.ai.retrieval.model.graph.GraphVertexRef;
 import org.apache.geaflow.ai.retrieval.validation.ModelValidation;
 
 /** Per-candidate graph provenance retained alongside a fused evidence item. */
 public final class GraphEvidenceTrace {
     @SerializedName("queryId")
     private final String queryId;
+    @SerializedName("selectedMode")
+    private final RetrievalMode selectedMode;
     @SerializedName("graphVersion")
     private final String graphVersion;
-    @SerializedName("anchorEntityId")
-    private final String anchorEntityId;
     @SerializedName("anchorMatchType")
     private final String anchorMatchType;
     @SerializedName("anchorConfidence")
@@ -45,39 +47,54 @@ public final class GraphEvidenceTrace {
 
     private GraphEvidenceTrace() {
         queryId = null;
+        selectedMode = null;
         graphVersion = null;
-        anchorEntityId = null;
         anchorMatchType = null;
-        anchorConfidence = 0.0;
+        anchorConfidence = 0.0D;
         path = null;
         supportingChunkIds = Collections.emptyList();
     }
 
-    public GraphEvidenceTrace(String queryId, String graphVersion, String anchorEntityId,
-                              String anchorMatchType, double anchorConfidence, GraphPathRef path,
+    public GraphEvidenceTrace(String queryId, RetrievalMode selectedMode, String anchorMatchType,
+                              double anchorConfidence, String graphVersion, GraphPathRef path,
                               List<String> supportingChunkIds) {
         this.queryId = ModelValidation.required(queryId, "queryId");
+        this.selectedMode = Objects.requireNonNull(selectedMode, "selectedMode");
         this.graphVersion = ModelValidation.required(graphVersion, "graphVersion");
-        this.anchorEntityId = ModelValidation.required(anchorEntityId, "anchorEntityId");
         this.anchorMatchType = ModelValidation.required(anchorMatchType, "anchorMatchType");
         this.anchorConfidence = ModelValidation.finite(anchorConfidence, "anchorConfidence");
-        if (anchorConfidence < 0.0 || anchorConfidence > 1.0) {
+        if (anchorConfidence < 0.0D || anchorConfidence > 1.0D) {
             throw new IllegalArgumentException("anchorConfidence must be in [0, 1]");
         }
         this.path = Objects.requireNonNull(path, "path");
-        this.supportingChunkIds = ModelValidation.sortedStrings(supportingChunkIds, "supportingChunkId");
+        if (path.getVertices().isEmpty()) {
+            throw new IllegalArgumentException("path must contain an anchor vertex");
+        }
+        this.supportingChunkIds = ModelValidation.sortedStrings(supportingChunkIds,
+            "supportingChunkId");
     }
 
     public String getQueryId() {
         return queryId;
     }
 
+    public RetrievalMode getSelectedMode() {
+        return selectedMode;
+    }
+
+    /** The seed is the first vertex in the canonical path. */
+    public GraphVertexRef getSeed() {
+        return path == null || path.getVertices().isEmpty() ? null : path.getVertices().get(0);
+    }
+
     public String getGraphVersion() {
         return graphVersion;
     }
 
+    /** The anchor identity is derived from the first path vertex. */
     public String getAnchorEntityId() {
-        return anchorEntityId;
+        GraphVertexRef seed = getSeed();
+        return seed == null ? null : seed.getEntityId();
     }
 
     public String getAnchorMatchType() {
@@ -93,7 +110,8 @@ public final class GraphEvidenceTrace {
     }
 
     public List<String> getSupportingChunkIds() {
-        return Collections.unmodifiableList(supportingChunkIds);
+        return Collections.unmodifiableList(supportingChunkIds == null
+            ? Collections.emptyList() : supportingChunkIds);
     }
 
     @Override
@@ -107,8 +125,8 @@ public final class GraphEvidenceTrace {
         GraphEvidenceTrace that = (GraphEvidenceTrace) object;
         return Double.compare(anchorConfidence, that.anchorConfidence) == 0
             && Objects.equals(queryId, that.queryId)
+            && selectedMode == that.selectedMode
             && Objects.equals(graphVersion, that.graphVersion)
-            && Objects.equals(anchorEntityId, that.anchorEntityId)
             && Objects.equals(anchorMatchType, that.anchorMatchType)
             && Objects.equals(path, that.path)
             && Objects.equals(supportingChunkIds, that.supportingChunkIds);
@@ -116,7 +134,7 @@ public final class GraphEvidenceTrace {
 
     @Override
     public int hashCode() {
-        return Objects.hash(queryId, graphVersion, anchorEntityId, anchorMatchType,
+        return Objects.hash(queryId, selectedMode, graphVersion, anchorMatchType,
             anchorConfidence, path, supportingChunkIds);
     }
 }

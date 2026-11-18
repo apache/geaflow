@@ -23,6 +23,7 @@ import org.apache.geaflow.ai.retrieval.api.model.RetrievalBudget;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalErrorCode;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalException;
 import org.apache.geaflow.ai.retrieval.config.RetrievalProperties;
+import org.apache.geaflow.ai.retrieval.execution.BudgetConstraint;
 
 /** Applies the same budget invariants at every API boundary. */
 public final class RetrievalBudgetValidator {
@@ -44,19 +45,30 @@ public final class RetrievalBudgetValidator {
             properties.getDefaultMaxCandidates());
         final Integer tokenBudget = valueOrDefault(budget.getTokenBudget(),
             properties.getDefaultTokenBudget());
+        final BudgetConstraint primaryConstraint = budget.getPrimaryConstraint() == null
+            ? BudgetConstraint.CANDIDATES : budget.getPrimaryConstraint();
         range("topK", topK, properties.getMaxTopK());
         range("timeoutMs", timeoutMs, properties.getMaxTimeoutMs());
         range("maxCandidates", maxCandidates, properties.getMaxCandidates());
         range("tokenBudget", tokenBudget, properties.getMaxTokenBudget());
-        if (topK > maxCandidates) {
+        if (primaryConstraint == BudgetConstraint.CANDIDATES && topK > maxCandidates) {
             throw invalid("topK must not exceed maxCandidates");
         }
-        return new RetrievalBudget(topK, timeoutMs, maxCandidates, tokenBudget);
+        Integer maxEdgeScans = valueOrDefault(budget.getMaxEdgeScans(),
+            properties.getDefaultMaxEdgeScans());
+        range("maxEdgeScans", maxEdgeScans, properties.getMaxEdgeScans());
+        RetrievalBudget validated = new RetrievalBudget(topK, timeoutMs, maxCandidates, tokenBudget,
+            primaryConstraint);
+        validated.setMaxEdgeScans(maxEdgeScans);
+        return validated;
     }
 
     private static RetrievalBudget defaults(RetrievalProperties properties) {
-        return new RetrievalBudget(properties.getDefaultTopK(), properties.getDefaultTimeoutMs(),
-            properties.getDefaultMaxCandidates(), properties.getDefaultTokenBudget());
+        RetrievalBudget defaults = new RetrievalBudget(properties.getDefaultTopK(),
+            properties.getDefaultTimeoutMs(), properties.getDefaultMaxCandidates(),
+            properties.getDefaultTokenBudget(), BudgetConstraint.CANDIDATES);
+        defaults.setMaxEdgeScans(properties.getDefaultMaxEdgeScans());
+        return defaults;
     }
 
     private static int valueOrDefault(Integer value, int defaultValue) {

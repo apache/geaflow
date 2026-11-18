@@ -1,15 +1,135 @@
 import hashlib
 import gzip
+import importlib.util
 import json
 import tempfile
 import unittest
 import zipfile
 from pathlib import Path
+from unittest import skipUnless
 
+from tools.graphrag.ingest.manifest_cli import dry_run_manifest, resolve_manifest
 from tools.graphrag.ingest.sources.source_loader import SourceError, SourceLoader, SourceManifest
 
 
 class SourceLoaderTest(unittest.TestCase):
+
+    @skipUnless(importlib.util.find_spec("pyarrow"), "pyarrow is optional")
+    def test_reads_hotpot_parquet_as_canonical_records(self):
+        import pyarrow as arrow
+        import pyarrow.parquet as parquet
+
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "hotpot.parquet"
+            table = arrow.Table.from_pylist([{
+                "id": "q1", "question": "Who?", "answer": "A", "type": "bridge",
+                "level": "easy",
+                "supporting_facts": {"title": ["Title"], "sent_id": [1]},
+                "context": {"title": ["Title"], "sentences": [["first", "answer"]]},
+            }])
+            parquet.write_table(table, source)
+            manifest = SourceManifest(
+                "hotpotqa", "official-distractor", "distractor", None, str(source),
+                hashlib.sha256(source.read_bytes()).hexdigest(), "hotpotqa-parquet-v1")
+
+            records = list(SourceLoader(batch_size=1).load(manifest))
+
+        self.assertEqual(1, len(records))
+        self.assertEqual("q1", records[0]["document_id"])
+        self.assertEqual("answer", records[0]["paragraphs"][0]["text"][-6:])
+        self.assertEqual([["Title", 1]], records[0]["supporting_facts"])
+        self.assertEqual("bridge", records[0]["question_type"])
+
+    def test_hotpot_annotations_are_canonical_and_validated(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "hotpot.json"
+            source.write_text(json.dumps([{
+                "_id": "q1", "question": "Who?", "answer": "A",
+                "context": [["Title", ["first", "answer"]]],
+                "supporting_facts": [["Title", 1]], "type": "bridge"
+            }]), encoding="utf-8")
+            manifest = SourceManifest("hotpotqa", "official-distractor", "distractor",
+                                     "https://official.example/hotpot.json", str(source),
+                                     hashlib.sha256(source.read_bytes()).hexdigest(), "hotpotqa-parser-v1")
+            record = next(SourceLoader().load(manifest))
+            self.assertEqual("q1", record["document_id"])
+            self.assertEqual([["Title", 1]], record["supporting_facts"])
+            self.assertEqual("bridge", record["question_type"])
+
+    def test_annotation_shape_is_preserved_for_adapter_audit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "hotpot.json"
+            source.write_text(json.dumps([{
+                "_id": "q1", "question": "Who?", "context": [["Title", ["first"]]],
+                "supporting_facts": [["Missing", 0]]
+            }]), encoding="utf-8")
+            manifest = SourceManifest("hotpotqa", "r", "distractor", None, str(source),
+                                     hashlib.sha256(source.read_bytes()).hexdigest(), "p")
+            record = next(SourceLoader().load(manifest))
+            self.assertEqual([["Missing", 0]], record["annotations"]["supporting_facts"])
+
+    def test_hotpot_out_of_range_annotation_is_preserved_for_evaluation_audit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "hotpot.json"
+            source.write_text(json.dumps([{
+                "_id": "q1", "question": "Who?", "context": [["Title", ["only sentence"]]],
+                "supporting_facts": [["Title", 902]]
+            }]), encoding="utf-8")
+            manifest = SourceManifest("hotpotqa", "r", "distractor", None, str(source),
+                                     hashlib.sha256(source.read_bytes()).hexdigest(), "p")
+            record = next(SourceLoader().load(manifest))
+            self.assertEqual([["Title", 902]], record["supporting_facts"])
+
+    def test_resolve_manifest_records_actual_cache_and_preserves_official_source(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "source.json"
+            source.write_text(json.dumps([{"_id": "q", "question": "q",
+                                          "context": [["T", ["text"]]]}]), encoding="utf-8")
+            manifest = root / "manifest.json"
+            manifest.write_text(json.dumps({
+                "dataset": "hotpotqa", "dataset_release": "official-distractor",
+                "split": "distractor", "source_uri": "https://official.example/data.json",
+                "cache_path": str(source),
+                "sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
+                "parser_version": "hotpotqa-parser-v1",
+                "license": {"url": "https://hotpotqa.github.io/", "status": "reviewed"}
+            }), encoding="utf-8")
+            resolved = root / "resolved-manifest.json"
+            result = resolve_manifest(manifest, resolved)
+            self.assertEqual("RESOLVED", result["state"])
+            self.assertEqual("https://official.example/data.json", result["source_uri"])
+            self.assertEqual(str(source.resolve()), result["resolved_cache_path"])
+            self.assertEqual(result["sha256"], hashlib.sha256(source.read_bytes()).hexdigest())
+            self.assertEqual(result, json.loads(resolved.read_text(encoding="utf-8")))
+
+    def test_manifest_dry_run_verifies_license_checksum_split_and_records(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "dev.jsonl"
+            source.write_text(json.dumps({"id": "a", "question": "q",
+                                          "context": [["T", ["text"]]]}) + "\n", encoding="utf-8")
+            manifest_path = root / "manifest.json"
+            manifest_path.write_text(json.dumps({
+                "dataset": "2wikimultihopqa", "dataset_release": "r", "split": "dev",
+                "cache_path": str(source), "sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
+                "parser_version": "p", "license": {"url": "https://example.test/terms",
+                                                        "status": "pending-review"}
+            }), encoding="utf-8")
+            result = dry_run_manifest(manifest_path)
+            self.assertEqual("VALIDATED", result["state"])
+            self.assertEqual(1, result["records"])
+            self.assertEqual("pending-review", result["license"]["status"])
+
+    def test_manifest_requires_explicit_license_metadata(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "manifest.json"
+            path.write_text(json.dumps({"dataset": "d", "dataset_release": "r", "split": "dev",
+                                        "source_uri": "https://example.test/data", "sha256": "0" * 64,
+                                        "parser_version": "p"}), encoding="utf-8")
+            with self.assertRaisesRegex(SourceError, "license metadata"):
+                SourceManifest.from_file(path)
 
     def test_loads_jsonl_in_stable_batches(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -89,8 +209,11 @@ class SourceLoaderTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             source = root / "data.zip"
-            payload = lambda value: json.dumps({"id": value, "question": "q",
-                                                 "context": [["T", ["text"]]]})
+
+            def payload(value):
+                return json.dumps({"id": value, "question": "q",
+                                   "context": [["T", ["text"]]]})
+
             with zipfile.ZipFile(source, "w") as archive:
                 archive.writestr("train.json", payload("train"))
                 archive.writestr("dev.json", payload("dev"))

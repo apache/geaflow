@@ -83,6 +83,23 @@ public class MetadataModelTest {
     }
 
     @Test
+    public void graphDeltaMetadataRoundTripsAndBindsParent() {
+        GraphVersion parent = new GraphVersion("graph", "g1");
+        GraphVersion version = new GraphVersion("graph", "g2");
+        GraphBuildMetadata metadata = new GraphBuildMetadata(version, parent, "snapshot:g1",
+            "delta:g2", "tombstone:g2", SHA256, "stats-v1", true,
+            Collections.emptyList());
+        GraphBuildMetadata restored = MetadataJson.fromJson(MetadataJson.toJson(metadata),
+            GraphBuildMetadata.class);
+        Assertions.assertEquals(metadata, restored);
+        Assertions.assertEquals(parent, restored.getParentVersion());
+        Assertions.assertTrue(restored.isDelta());
+        Assertions.assertThrows(MetadataException.class, () -> new GraphBuildMetadata(version,
+            new GraphVersion("other", "g1"), "snapshot:g1", "delta:g2", null, SHA256,
+            "stats-v1", true, Collections.emptyList()));
+    }
+
+    @Test
     public void importJsonIgnoresUnknownFieldsAndDefaultsOldIndexes() {
         DatasetManifest manifest = manifest();
         GraphBuildMetadata graph = new GraphBuildMetadata(new GraphVersion("graph", "g1"), null,

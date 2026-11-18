@@ -20,7 +20,6 @@ package org.apache.geaflow.ai.retrieval.service;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -28,91 +27,220 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.LongSupplier;
-import org.apache.geaflow.ai.retrieval.api.model.ExecutionMode;
+import java.util.regex.Pattern;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalBudget;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalCommand;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalErrorCode;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalException;
-import org.apache.geaflow.ai.retrieval.api.model.RetrievalMode;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalRequest;
 import org.apache.geaflow.ai.retrieval.api.model.RetrievalResponse;
-import org.apache.geaflow.ai.retrieval.api.model.RetrievalTrace;
-import org.apache.geaflow.ai.retrieval.api.model.TraceStage;
+import org.apache.geaflow.ai.retrieval.channel.graph.EntityAnchorResolver;
 import org.apache.geaflow.ai.retrieval.channel.graph.GraphNeighborProvider;
-import org.apache.geaflow.ai.retrieval.channel.graph.GraphRetriever;
 import org.apache.geaflow.ai.retrieval.channel.graph.InMemoryGraphNeighborProvider;
 import org.apache.geaflow.ai.retrieval.config.RetrievalProperties;
-import org.apache.geaflow.ai.retrieval.execution.RecallPlan;
-import org.apache.geaflow.ai.retrieval.execution.RecallStageStatus;
-import org.apache.geaflow.ai.retrieval.execution.RecallStopReason;
+import org.apache.geaflow.ai.retrieval.execution.AdaptivePolicy;
+import org.apache.geaflow.ai.retrieval.execution.BudgetConstraint;
+import org.apache.geaflow.ai.retrieval.execution.DeterministicReranker;
+import org.apache.geaflow.ai.retrieval.execution.DeterministicRulePolicy;
+import org.apache.geaflow.ai.retrieval.execution.DeterministicTokenEstimator;
+import org.apache.geaflow.ai.retrieval.execution.LexicalStatistics;
+import org.apache.geaflow.ai.retrieval.execution.Reranker;
+import org.apache.geaflow.ai.retrieval.execution.RetrievalExecutor;
+import org.apache.geaflow.ai.retrieval.execution.RetrievalStrategyFactory;
+import org.apache.geaflow.ai.retrieval.execution.TokenEstimator;
+import org.apache.geaflow.ai.retrieval.fusion.CandidateFusion;
 import org.apache.geaflow.ai.retrieval.fusion.WeightedRrfConfig;
 import org.apache.geaflow.ai.retrieval.fusion.WeightedRrfFusion;
-import org.apache.geaflow.ai.retrieval.index.ChannelSearchResult;
-import org.apache.geaflow.ai.retrieval.index.bm25.Bm25Hit;
 import org.apache.geaflow.ai.retrieval.index.bm25.Bm25IndexReader;
-import org.apache.geaflow.ai.retrieval.index.vector.VectorHit;
 import org.apache.geaflow.ai.retrieval.index.vector.VectorIndexReader;
-import org.apache.geaflow.ai.retrieval.model.document.SourceRef;
 import org.apache.geaflow.ai.retrieval.model.document.TextChunk;
-import org.apache.geaflow.ai.retrieval.model.evidence.ChannelScore;
 import org.apache.geaflow.ai.retrieval.model.evidence.Evidence;
-import org.apache.geaflow.ai.retrieval.model.evidence.EvidenceKind;
-import org.apache.geaflow.ai.retrieval.model.evidence.GraphEvidenceTrace;
 import org.apache.geaflow.ai.retrieval.model.graph.EntityRef;
 import org.apache.geaflow.ai.retrieval.model.graph.GraphEdgeRef;
-import org.apache.geaflow.ai.retrieval.model.graph.GraphPathRef;
 
 /** Session-free sequential recall; all execution state belongs to one request. */
 public final class RecallService {
+    /**
+     * Documented default probe gap; the effective value comes from {@link RetrievalProperties}.
+     */
+    private static final double CASCADE_MIN_PROBE_SCORE_GAP = 0.0001D;
+    private static final String UNMEASURED_SCORE_GAP_REASON = "FIRST_STAGE_SCORE_GAP_UNMEASURED";
+    private static final String UNKNOWN_GROWTH_REASON = "GRAPH_GROWTH_UNKNOWN_INITIAL";
+    private static final long DEFAULT_CONFIG_SEED = 0L;
+    private static final int DEFAULT_MAX_EDGE_SCANS = 100;
+    /** Token ceiling for the extractive answer when the request does not set a token budget. */
+    private static final int DEFAULT_ANSWER_TOKEN_BUDGET = 4096;
+    /**
+     * Association-score floor applied when no property overrides it.
+     *
+     * <p>The design lists "all remaining paths are below the minimum association score" as a
+     * diffusion stop. Leaving the floor at zero made that stop unreachable in production, so a
+     * weakly-related neighbourhood could consume the whole edge-scan budget. The score is
+     * multiplicative and hop-decayed, so the floor is expressed relative to the strongest path in
+     * the hop rather than as an absolute constant.
+     */
+    private static final double DEFAULT_MIN_ASSOCIATION_SCORE = 0.01D;
+    /**
+     * Fraction of scored edges that must survive the association floor for a hop to keep running.
+     *
+     * <p>Zero disabled the early stop entirely: every rejected edge still consumed scan budget.
+     */
+    private static final double DEFAULT_MIN_ASSOCIATION_SURVIVAL_RATE = 0.05D;
+    private static final Pattern QUERY_TOKEN = Pattern.compile("[\\p{L}\\p{N}]+", Pattern.UNICODE_CHARACTER_CLASS);
+
     private final Bm25IndexReader bm25;
     private final VectorIndexReader vector;
     private final List<TextChunk> chunks;
     private final Map<String, TextChunk> chunksById;
     private final List<EntityRef> entities;
+    private final EntityAnchorResolver anchorResolver;
+    private final Map<String, Double> idfByToken;
     private final List<GraphEdgeRef> edges;
     private final GraphNeighborProvider graphProvider;
-    private final RetrievalFixtureRegistry registry;
-    private final WeightedRrfFusion fusion;
+    private final RetrievalChannelRegistry registry;
+    private final CandidateFusion fusion;
     private final LongSupplier clock;
+    private final TokenEstimator tokenEstimator;
+    private final Reranker reranker;
+    private final AdaptivePolicy routingPolicy;
+    private final int maxReplanCount;
+    private final boolean strictPlanValidation;
+    private final RetrievalProperties properties;
+    private final RetrievalExecutor executor;
 
+    /**
+     * Builds an in-memory facade over channel readers and graph records without a registry.
+     *
+     * <p>Intended for tests and embedding, not for serving: it bypasses the registry's version
+     * checks, readiness reporting and lease tracking. Production code always goes through
+     * {@link #fromProperties}, which builds on a {@link RetrievalChannelRegistry}.
+     *
+     * @param bm25 BM25 reader, or null to omit the channel
+     * @param vector vector reader, or null to omit the channel
+     * @param chunks chunks the callers may query
+     * @param entities entities backing anchor resolution
+     * @param edges edges backing bounded expansion
+     */
     public RecallService(Bm25IndexReader bm25, VectorIndexReader vector, List<TextChunk> chunks,
                          List<EntityRef> entities, List<GraphEdgeRef> edges) {
-        this(bm25, vector, chunks, entities, edges, WeightedRrfConfig.DEFAULT);
+        this(bm25, vector, chunks, entities, edges, null, new InMemoryGraphNeighborProvider(edges),
+            WeightedRrfConfig.DEFAULT, System::nanoTime, new DeterministicTokenEstimator(),
+            new DeterministicReranker(), new DeterministicRulePolicy(), 1, true, null, null);
     }
 
-    public RecallService(Bm25IndexReader bm25, VectorIndexReader vector, List<TextChunk> chunks,
-                         List<EntityRef> entities, List<GraphEdgeRef> edges, WeightedRrfConfig config) {
-        this(bm25, vector, chunks, entities, edges, null, new InMemoryGraphNeighborProvider(edges), config,
-            System::nanoTime);
-    }
-
-    public RecallService(RetrievalFixtureRegistry registry) {
+    public RecallService(RetrievalChannelRegistry registry) {
         this(registry, WeightedRrfConfig.DEFAULT);
     }
 
-    public RecallService(RetrievalFixtureRegistry registry, WeightedRrfConfig config) {
+    public RecallService(RetrievalChannelRegistry registry, WeightedRrfConfig config) {
         this(registry, config, System::nanoTime);
     }
 
     /** Accepts a monotonic clock for reproducible deadline verification. */
-    public RecallService(RetrievalFixtureRegistry registry, WeightedRrfConfig config, LongSupplier clock) {
+    public RecallService(RetrievalChannelRegistry registry, WeightedRrfConfig config, LongSupplier clock) {
+        this(registry, config, clock, new DeterministicTokenEstimator(), new DeterministicReranker());
+    }
+
+    public RecallService(RetrievalChannelRegistry registry, WeightedRrfConfig config, LongSupplier clock,
+                         TokenEstimator tokenEstimator, Reranker reranker) {
+        this(registry, config, clock, tokenEstimator, reranker, new DeterministicRulePolicy(), 1);
+    }
+
+    /** Allows a routing policy and replan bound to be injected for replay and policy evaluation. */
+    public RecallService(RetrievalChannelRegistry registry, WeightedRrfConfig config, LongSupplier clock,
+                         TokenEstimator tokenEstimator, Reranker reranker,
+                         AdaptivePolicy routingPolicy, int maxReplanCount) {
+        this(registry, config, clock, tokenEstimator, reranker, routingPolicy, maxReplanCount, true);
+    }
+
+    /**
+     * Builds a service from configuration defaults, keeping request validation on the same values.
+     *
+     * <p>The supplied fusion config is re-based onto the configured rank constant so the score gap
+     * the routing thresholds compare against and the fusion that produces it stay in the same
+     * units. The rank constant sets the scale of every fused score, {@code w / (k + rank)}, and was
+     * a constant before; a threshold tuned against one scale silently misfires against another.
+     */
+    public static RecallService fromProperties(RetrievalChannelRegistry registry, WeightedRrfConfig config,
+                                               LongSupplier clock, RetrievalProperties properties) {
+        Objects.requireNonNull(properties, "properties");
+        properties.validateConfiguration();
+        WeightedRrfConfig effectiveConfig = config.getRankConstant() == properties.getRrfRankConstant()
+            ? config
+            : new WeightedRrfConfig(config.getBm25Weight(), config.getVectorWeight(),
+                config.getGraphWeight(), properties.getRrfRankConstant());
+        AdaptivePolicy policy = RetrievalStrategyFactory.adaptivePolicy(
+            properties.getRoutingPolicyId(), properties);
+        RecallService service = new RecallService(registry, effectiveConfig, clock,
+            RetrievalStrategyFactory.tokenEstimator(properties.getTokenEstimatorId()),
+            RetrievalStrategyFactory.reranker(properties.getRerankerId(),
+                properties.getRerankerGraphPathWeight()), policy,
+            properties.getMaxReplanCount(), properties.isStrictPlanValidation(), properties);
+        return service;
+    }
+
+    public RecallService(RetrievalChannelRegistry registry, WeightedRrfConfig config, LongSupplier clock,
+                         TokenEstimator tokenEstimator, Reranker reranker,
+                         AdaptivePolicy routingPolicy, int maxReplanCount, boolean strictPlanValidation) {
+        this(registry, config, clock, tokenEstimator, reranker, routingPolicy, maxReplanCount,
+            strictPlanValidation, null);
+    }
+
+    public RecallService(RetrievalChannelRegistry registry, WeightedRrfConfig config, LongSupplier clock,
+                         TokenEstimator tokenEstimator, Reranker reranker,
+                         AdaptivePolicy routingPolicy, int maxReplanCount, boolean strictPlanValidation,
+                         RetrievalProperties properties) {
         this(null, null, Collections.emptyList(), Collections.emptyList(), Collections.emptyList(),
-            Objects.requireNonNull(registry, "registry"), null, config, clock);
+            Objects.requireNonNull(registry, "registry"), null, config, clock, tokenEstimator, reranker,
+            routingPolicy, maxReplanCount, strictPlanValidation, properties, null);
+    }
+
+    /**
+     * Builds a service around a pluggable {@link CandidateFusion} strategy. The weighted RRF fusion stays
+     * the default; this overload lets a caller supply another implementation without changing the
+     * execution modes, budgets or trace shape.
+     */
+    public RecallService(RetrievalChannelRegistry registry, CandidateFusion fusion, LongSupplier clock,
+                         TokenEstimator tokenEstimator, Reranker reranker,
+                         AdaptivePolicy routingPolicy, int maxReplanCount,
+                         RetrievalProperties properties) {
+        this(null, null, Collections.emptyList(), Collections.emptyList(), Collections.emptyList(),
+            Objects.requireNonNull(registry, "registry"), null,
+            Objects.requireNonNull(fusion, "fusion").getConfig(), clock, tokenEstimator, reranker,
+            routingPolicy, maxReplanCount, true, properties, Objects.requireNonNull(fusion, "fusion"));
     }
 
     private RecallService(Bm25IndexReader bm25, VectorIndexReader vector, List<TextChunk> chunks,
-                          List<EntityRef> entities, List<GraphEdgeRef> edges, RetrievalFixtureRegistry registry,
-                          GraphNeighborProvider graphProvider, WeightedRrfConfig config, LongSupplier clock) {
+                          List<EntityRef> entities, List<GraphEdgeRef> edges, RetrievalChannelRegistry registry,
+                          GraphNeighborProvider graphProvider, WeightedRrfConfig config, LongSupplier clock,
+                          TokenEstimator tokenEstimator, Reranker reranker, AdaptivePolicy routingPolicy,
+                          int maxReplanCount, boolean strictPlanValidation, RetrievalProperties properties,
+                          CandidateFusion fusionOverride) {
+        if (maxReplanCount < 0) {
+            throw new IllegalArgumentException("maxReplanCount must be non-negative");
+        }
+        this.strictPlanValidation = strictPlanValidation;
+        this.properties = properties == null ? new RetrievalProperties() : properties;
         this.bm25 = bm25;
         this.vector = vector;
         this.chunks = immutable(chunks);
         this.chunksById = indexChunks(this.chunks);
         this.entities = immutable(entities);
+        this.anchorResolver = new EntityAnchorResolver(this.entities);
+        this.idfByToken = LexicalStatistics.buildIdfIndex(this.chunks);
         this.edges = immutable(edges);
         this.graphProvider = graphProvider;
         this.registry = registry;
-        this.fusion = new WeightedRrfFusion(config);
+        this.fusion = fusionOverride == null ? new WeightedRrfFusion(config) : fusionOverride;
         this.clock = Objects.requireNonNull(clock, "clock");
+        this.tokenEstimator = Objects.requireNonNull(tokenEstimator, "tokenEstimator");
+        this.reranker = Objects.requireNonNull(reranker, "reranker");
+        this.routingPolicy = Objects.requireNonNull(routingPolicy, "routingPolicy");
+        this.maxReplanCount = maxReplanCount;
+        this.executor = new RetrievalExecutor(this.bm25, this.vector, this.chunks, this.chunksById,
+            this.entities, this.anchorResolver, this.idfByToken, this.edges, this.graphProvider,
+            this.fusion, this.clock, this.tokenEstimator, this.reranker, this.routingPolicy,
+            this.maxReplanCount, this.strictPlanValidation, this.properties);
     }
 
     private static <T> List<T> immutable(List<T> values) {
@@ -127,32 +255,73 @@ public final class RecallService {
         return Collections.unmodifiableMap(indexed);
     }
 
-    private RecallService(RetrievalFixtureRegistry.Fixture fixture, WeightedRrfConfig config,
+    private RecallService(RetrievalChannelRegistry.Fixture fixture, WeightedRrfConfig config,
                           LongSupplier clock) {
+        this(fixture, config, clock, new DeterministicTokenEstimator(), new DeterministicReranker(),
+            new DeterministicRulePolicy(), 1, true, null);
+    }
+
+    private RecallService(RetrievalChannelRegistry.Fixture fixture, CandidateFusion fusion,
+                          LongSupplier clock, TokenEstimator tokenEstimator, Reranker reranker,
+                          AdaptivePolicy routingPolicy, int maxReplanCount, boolean strictPlanValidation,
+                          RetrievalProperties properties) {
+        this(fixture, fusion.getConfig(), clock, tokenEstimator, reranker, routingPolicy,
+            maxReplanCount, strictPlanValidation, properties, fusion);
+    }
+
+    private RecallService(RetrievalChannelRegistry.Fixture fixture, WeightedRrfConfig config,
+                          LongSupplier clock, TokenEstimator tokenEstimator, Reranker reranker,
+                          AdaptivePolicy routingPolicy, int maxReplanCount, boolean strictPlanValidation,
+                          RetrievalProperties properties) {
+        this(fixture, config, clock, tokenEstimator, reranker, routingPolicy, maxReplanCount,
+            strictPlanValidation, properties, null);
+    }
+
+    private RecallService(RetrievalChannelRegistry.Fixture fixture, WeightedRrfConfig config,
+                          LongSupplier clock, TokenEstimator tokenEstimator, Reranker reranker,
+                          AdaptivePolicy routingPolicy, int maxReplanCount, boolean strictPlanValidation,
+                          RetrievalProperties properties, CandidateFusion fusionOverride) {
+        this.strictPlanValidation = strictPlanValidation;
+        this.properties = properties == null ? new RetrievalProperties() : properties;
         this.bm25 = fixture.getBm25();
         this.vector = fixture.getVector();
         this.chunks = fixture.getChunks();
         this.chunksById = fixture.getChunksById();
         this.entities = fixture.getEntities();
+        this.anchorResolver = fixture.getAnchorResolver();
+        this.idfByToken = fixture.getIdfByToken();
         this.edges = fixture.getEdges();
         this.graphProvider = fixture.getGraphProvider();
         this.registry = null;
-        this.fusion = new WeightedRrfFusion(config);
+        this.fusion = fusionOverride == null ? new WeightedRrfFusion(config) : fusionOverride;
         this.clock = Objects.requireNonNull(clock, "clock");
+        this.tokenEstimator = Objects.requireNonNull(tokenEstimator, "tokenEstimator");
+        this.reranker = Objects.requireNonNull(reranker, "reranker");
+        this.routingPolicy = Objects.requireNonNull(routingPolicy, "routingPolicy");
+        this.maxReplanCount = maxReplanCount;
+        this.executor = new RetrievalExecutor(this.bm25, this.vector, this.chunks, this.chunksById,
+            this.entities, this.anchorResolver, this.idfByToken, this.edges, this.graphProvider,
+            this.fusion, this.clock, this.tokenEstimator, this.reranker, this.routingPolicy,
+            this.maxReplanCount, this.strictPlanValidation, this.properties);
     }
 
     public RetrievalResponse retrieve(RetrievalRequest request) {
+        return retrieve(request, null);
+    }
+
+    public RetrievalResponse retrieve(RetrievalRequest request, String requestIdOverride) {
         final long started = clock.getAsLong();
-        RetrievalCommand command = new RetrievalRequestValidator(new RetrievalProperties()).validate(request);
+        RetrievalCommand command = new RetrievalRequestValidator(properties).validate(request);
         requireStructuredVersions(request);
         if (registry == null) {
             throw notReady("fixture registry is required for structured retrieval");
         }
         RetrievalBudget budget = command.getBudget();
-        long deadline = started + budget.getTimeoutMs() * 1_000_000L;
-        try (RetrievalFixtureRegistry.Fixture.Lease lease = registry.acquire(command.getGraphName(),
+        long deadline = budget.getPrimaryConstraint() == BudgetConstraint.LATENCY
+            ? started + budget.getTimeoutMs() * 1_000_000L : 0L;
+        try (RetrievalChannelRegistry.Fixture.Lease lease = registry.acquire(command.getGraphName(),
             request.getGraphVersion(), request.getIndexVersion())) {
-            RetrievalFixtureRegistry.Fixture fixture = lease.getFixture();
+            RetrievalChannelRegistry.Fixture fixture = lease.getFixture();
             if (fixture.getVector() != null
                 && ((request.getVectorSource() != null
                     && !request.getVectorSource().equals(fixture.getVector().getVectorSource()))
@@ -160,9 +329,14 @@ public final class RecallService {
                     && !request.getVectorVersion().equals(fixture.getVector().getVectorVersion())))) {
                 throw notReady("vector source/version mismatch");
             }
-            RecallService delegate = new RecallService(fixture, fusion.getConfig(), clock);
-            String requestId = request.getRequestId() == null || request.getRequestId().trim().isEmpty()
-                ? UUID.randomUUID().toString() : request.getRequestId();
+            // Carry the configured fusion strategy across the registry delegation; otherwise a
+            // caller-supplied strategy would silently fall back to the default weighted RRF.
+            RecallService delegate = new RecallService(fixture, fusion, clock, tokenEstimator,
+                reranker, routingPolicy, maxReplanCount, strictPlanValidation, properties);
+            String requestId = requestIdOverride == null || requestIdOverride.trim().isEmpty()
+                ? request.getRequestId() == null || request.getRequestId().trim().isEmpty()
+                    ? UUID.randomUUID().toString() : request.getRequestId()
+                : requestIdOverride;
             RetrievalResponse response = delegate.execute(command, toFloat(command.getQueryVector()), deadline,
                 request.isAllowPartialResults(), started, fixture, requestId);
             response.setGraphName(fixture.getGraphName());
@@ -203,7 +377,8 @@ public final class RecallService {
         request.setGraphName("fixture");
         request.setQuery(query);
         request.setMode(mode == null ? "BM25_ONLY" : mode.trim().toUpperCase(Locale.ROOT));
-        request.setBudget(new RetrievalBudget(topK, 3000, maxCandidates, null));
+        request.setBudget(new RetrievalBudget(topK, 3000, maxCandidates, null,
+            BudgetConstraint.LATENCY));
         List<Double> values = new ArrayList<>();
         if (queryVector != null) {
             for (float value : queryVector) {
@@ -211,7 +386,7 @@ public final class RecallService {
             }
         }
         request.setQueryVector(values);
-        RetrievalCommand command = new RetrievalRequestValidator(new RetrievalProperties()).validate(request);
+        RetrievalCommand command = new RetrievalRequestValidator(properties).validate(request);
         if (registry != null) {
             throw notReady("registry retrieval requires a structured request with graph/index versions");
         }
@@ -220,234 +395,14 @@ public final class RecallService {
     }
 
     private RetrievalResponse execute(RetrievalCommand command, float[] queryVector, long deadline,
-                                       boolean partial, long started, RetrievalFixtureRegistry.Fixture fixture,
+                                       boolean partial, long started, RetrievalChannelRegistry.Fixture fixture,
                                        String requestId) {
-        RetrievalBudget budget = command.getBudget();
-        RecallPlan plan = new RecallPlan(command.getMode(), budget.getTopK(), budget.getMaxCandidates(), deadline,
-            fixture == null ? null : fixture.getGraphVersion(), fixture == null ? null : fixture.getIndexVersion(),
-            vector == null ? null : vector.getVectorVersion());
-        Map<String, RetrievalException> failures = fixture == null ? Collections.emptyMap() : fixture.getFailures();
-        if (plan.getChannelBudgets().containsKey("VECTOR")) {
-            VectorIndexReader.validateValues(queryVector);
-            if (vector != null) {
-                vector.validateQuery(queryVector);
-            }
-        }
-        Map<String, TextChunk> byId = chunksById;
-        Map<String, EvidenceBuilder> merged = new LinkedHashMap<>();
-        RetrievalTrace trace = new RetrievalTrace();
-        trace.setTraceVersion("v1");
-        trace.setGraphVersion(plan.getGraphVersion());
-        trace.setIndexVersion(plan.getIndexVersion());
-        trace.setVectorVersion(plan.getVectorVersion());
-        trace.setOriginalQuery(command.getQuery());
-        trace.setSelectedMode(plan.getMode());
-        trace.setExecutionMode(ExecutionMode.SEQUENTIAL);
-        trace.setSelectedChannels(new ArrayList<>(plan.getChannelBudgets().keySet()));
-        trace.setChannelBudgets(plan.getChannelBudgets());
-        trace.setEffectiveCandidateBudget(budget.getMaxCandidates());
-        trace.setEffectiveTopK(plan.getTopK());
-        trace.setBm25Weight(fusion.getConfig().getBm25Weight());
-        trace.setVectorWeight(fusion.getConfig().getVectorWeight());
-        trace.setGraphWeight(fusion.getConfig().getGraphWeight());
-        trace.setRrfRankConstant(fusion.getConfig().getRankConstant());
-        Map<String, Long> channelElapsedNanos = new LinkedHashMap<>();
-        for (Map.Entry<String, Integer> channel : plan.getChannelBudgets().entrySet()) {
-            String name = channel.getKey();
-            long channelStarted = clock.getAsLong();
-            trace.getEvaluatedCounts().put(name, 0);
-            trace.getCandidateCounts().put(name, 0);
-            if (expired(deadline)) {
-                timedOut(partial);
-                record(trace, name, RecallStageStatus.NOT_RUN, RecallStopReason.DEADLINE, "deadline reached before channel execution");
-                channelElapsedNanos.put(name, clock.getAsLong() - channelStarted);
-                continue;
-            }
-            try {
-                RetrievalException loadFailure = failures.get(name);
-                if (loadFailure != null) {
-                    throw loadFailure;
-                }
-                RecallStopReason reason;
-                if ("BM25".equals(name)) {
-                    if (bm25 == null) {
-                        throw notReady("artifact unavailable");
-                    }
-                    ChannelSearchResult<Bm25Hit> search = bm25.searchWithStats(command.getQuery(), channel.getValue(),
-                        plan.getTopK(), deadline, clock);
-                    trace.getEvaluatedCounts().put(name, search.getCandidatesEvaluated());
-                    trace.getCandidateCounts().put(name, search.getHits().size());
-                    for (Bm25Hit hit : search.getHits()) {
-                        EvidenceBuilder builder = builder(merged, byId, hit.getChunkId(), hit.getDocumentId(), EvidenceKind.CHUNK);
-                        if (!builder.chunk.getText().equals(hit.getText())) {
-                            throw notReady("BM25 text does not match fixture");
-                        }
-                        builder.scores.put(name, new ChannelScore(name, hit.getScore(), null, hit.getRank()));
-                    }
-                    reason = search.getStopReason();
-                } else if ("VECTOR".equals(name)) {
-                    if (vector == null) {
-                        throw notReady("artifact unavailable");
-                    }
-                    ChannelSearchResult<VectorHit> search = vector.searchWithStats(queryVector, channel.getValue(),
-                        plan.getTopK(), deadline, clock);
-                    trace.getEvaluatedCounts().put(name, search.getCandidatesEvaluated());
-                    trace.getCandidateCounts().put(name, search.getHits().size());
-                    for (VectorHit hit : search.getHits()) {
-                        EvidenceBuilder builder = builder(merged, byId, hit.getChunkId(), hit.getDocumentId(), EvidenceKind.CHUNK);
-                        builder.scores.put(name, new ChannelScore(name, hit.getSimilarity(), null, hit.getRank()));
-                    }
-                    reason = search.getStopReason();
-                } else {
-                    GraphRetriever retriever = new GraphRetriever();
-                    final List<GraphRetriever.GraphHit> hits = retriever.retrieve(command.getQuery(), entities, graphProvider, byId,
-                        channel.getValue(), channel.getValue(), deadline, clock);
-                    GraphRetriever.GraphStats stats = retriever.getLastStats();
-                    trace.setAnchorsConsidered(stats.getAnchorsConsidered());
-                    trace.setEdgesExamined(stats.getEdgesExamined());
-                    trace.setNeighborsSampled(stats.getNeighborsSampled());
-                    trace.setVerticesReached(stats.getVerticesReached());
-                    trace.setGraphCandidatesProduced(stats.getCandidatesProduced());
-                    trace.getValidationErrors().addAll(stats.getValidationErrors());
-                    trace.getEvaluatedCounts().put(name, stats.getEdgesExamined());
-                    trace.getCandidateCounts().put(name, stats.getCandidatesProduced());
-                    int rank = 0;
-                    for (GraphRetriever.GraphHit hit : hits) {
-                        for (String id : hit.getSourceChunkIds()) {
-                            EvidenceBuilder builder = builder(merged, byId, id, byId.get(id).getDocumentId(), EvidenceKind.GRAPH_PATH);
-                            if (!builder.entities.contains(hit.getAnchor().getEntity())) {
-                                builder.entities.add(hit.getAnchor().getEntity());
-                            }
-                            if (!builder.paths.contains(hit.getPath())) {
-                                builder.paths.add(hit.getPath());
-                            }
-                            builder.graphTraces.add(new GraphEvidenceTrace(requestId,
-                                plan.getGraphVersion() == null ? "fixture" : plan.getGraphVersion(),
-                                hit.getAnchor().getEntity().getEntityId(), hit.getAnchor().getMatchType(),
-                                hit.getAnchor().getConfidence(), hit.getPath(),
-                                hit.getSourceChunkIds()));
-                            if (!builder.scores.containsKey(name)) {
-                                builder.scores.put(name, new ChannelScore(name, hit.getScore(), null, ++rank));
-                            }
-                        }
-                    }
-                    reason = stats.getStopReason();
-                }
-                if (reason == RecallStopReason.DEADLINE) {
-                    timedOut(partial);
-                }
-                record(trace, name, reason == RecallStopReason.DEADLINE
-                        || reason == RecallStopReason.TRACE_VALIDATION_ERROR
-                        ? RecallStageStatus.DEGRADED : RecallStageStatus.SUCCESS,
-                    reason, null);
-                channelElapsedNanos.put(name, clock.getAsLong() - channelStarted);
-            } catch (RetrievalException error) {
-                if (!partial || error.getCode() != RetrievalErrorCode.INDEX_NOT_READY) {
-                    throw error;
-                }
-                for (EvidenceBuilder value : merged.values()) {
-                    value.scores.remove(name);
-                }
-                merged.values().removeIf(value -> value.scores.isEmpty());
-                record(trace, name, RecallStageStatus.DEGRADED, RecallStopReason.INDEX_NOT_READY, error.getMessage());
-                channelElapsedNanos.put(name, clock.getAsLong() - channelStarted);
-            }
-        }
-        List<Evidence> evidence = new ArrayList<>();
-        for (EvidenceBuilder value : merged.values()) {
-            evidence.add(value.build());
-        }
-        if (plan.getMode() == RetrievalMode.HYBRID) {
-            evidence = fusion.sort(evidence);
-        } else {
-            evidence.sort(Comparator.comparingDouble(Evidence::getFusedScore).reversed().thenComparing(Evidence::getEvidenceId));
-        }
-        boolean truncated = evidence.size() > plan.getTopK();
-        List<Evidence> ranked = new ArrayList<>();
-        for (Evidence value : evidence.subList(0, Math.min(plan.getTopK(), evidence.size()))) {
-            ranked.add(new Evidence(value.getEvidenceId(), value.getKind(), value.getText(), value.getChunks(),
-                value.getEntities(), value.getPaths(), value.getSources(), value.getStageScores(), value.getFusedScore(),
-                value.getFinalScore(), ranked.size() + 1, value.getGraphTraces()));
-        }
-        boolean deadlineReached = expired(deadline) || trace.getChannelStopReasons().containsValue(RecallStopReason.DEADLINE);
-        if (deadlineReached) {
-            timedOut(partial);
-        }
-        RecallStopReason stop = deadlineReached ? RecallStopReason.DEADLINE
-            : trace.getChannelStopReasons().containsValue(RecallStopReason.TRACE_VALIDATION_ERROR)
-                ? RecallStopReason.TRACE_VALIDATION_ERROR
-            : trace.getChannelStopReasons().containsValue(RecallStopReason.EDGE_SCAN_LIMIT)
-                ? RecallStopReason.EDGE_SCAN_LIMIT
-            : trace.getChannelStopReasons().containsValue(RecallStopReason.CANDIDATE_LIMIT)
-                ? RecallStopReason.CANDIDATE_LIMIT
-            : trace.getChannelStopReasons().containsValue(RecallStopReason.CANDIDATE_BUDGET)
-                ? RecallStopReason.CANDIDATE_BUDGET
-            : truncated ? RecallStopReason.TOP_K : ranked.isEmpty() ? RecallStopReason.NO_RESULT : RecallStopReason.COMPLETED;
-        trace.setStopReason(stop.name());
-        List<TraceStage> stages = new ArrayList<>();
-        int evaluated = 0;
-        for (String name : trace.getSelectedChannels()) {
-            evaluated += trace.getEvaluatedCounts().get(name);
-            stages.add(new TraceStage(name, trace.getChannelStatuses().get(name).name(),
-                "reason=" + trace.getChannelStopReasons().get(name) + ";evaluated=" + trace.getEvaluatedCounts().get(name)
-                    + ";candidates=" + trace.getCandidateCounts().get(name)
-                    + ";elapsedNanos=" + channelElapsedNanos.get(name)));
-        }
-        stages.add(new TraceStage("FUSION", deadlineReached ? "DEGRADED" : "SUCCESS",
-            "weighted_rrf_k=" + trace.getRrfRankConstant() + ";weights=bm25:" + trace.getBm25Weight()
-                + ",vector:" + trace.getVectorWeight() + ",graph:" + trace.getGraphWeight()));
-        trace.setStages(stages);
-        trace.setTotalCandidatesEvaluated(evaluated);
-        RetrievalResponse response = new RetrievalResponse();
-        response.setEvidence(ranked);
-        List<SourceRef> sources = new ArrayList<>();
-        List<GraphPathRef> paths = new ArrayList<>();
-        for (Evidence value : ranked) {
-            for (SourceRef source : value.getSources()) {
-                if (!sources.contains(source)) {
-                    sources.add(source);
-                }
-            }
-            for (GraphPathRef path : value.getPaths()) {
-                if (!paths.contains(path)) {
-                    paths.add(path);
-                }
-            }
-        }
-        response.setSources(sources);
-        response.setPaths(paths);
-        response.setRequestId(requestId);
-        trace.setRequestId(requestId);
-        trace.setElapsedNanos(clock.getAsLong() - started);
-        response.setTrace(trace);
-        response.setEffectiveBudget(budget);
-        response.setDegradedChannels(trace.getDegradedChannels());
-        return response;
+        RetrievalExecutor.RequestResources resources = fixture == null
+            ? RetrievalExecutor.RequestResources.empty()
+            : new RetrievalExecutor.RequestResources(fixture.getGraphVersion(), fixture.getIndexVersion(),
+                fixture.getFailures(), fixture.getGraphProvider(), fixture::acquireLease);
+        return executor.execute(command, queryVector, deadline, partial, started, resources, requestId);
     }
-
-    private boolean expired(long deadline) {
-        return deadline != 0L && clock.getAsLong() - deadline >= 0L;
-    }
-
-    private static void timedOut(boolean partial) {
-        if (!partial) {
-            throw new RetrievalException(RetrievalErrorCode.RETRIEVAL_TIMEOUT, "retrieval deadline exceeded");
-        }
-    }
-
-    private static void record(RetrievalTrace trace, String name, RecallStageStatus status, RecallStopReason reason, String message) {
-        trace.getChannelStatuses().put(name, status);
-        trace.getChannelStopReasons().put(name, reason);
-        if (status != RecallStageStatus.SUCCESS) {
-            trace.getDegradedChannels().add(name);
-            trace.getDegradationReasons().put(name, message == null ? reason.name() : message);
-        }
-    }
-
-    private static RetrievalException notReady(String message) {
-        return new RetrievalException(RetrievalErrorCode.INDEX_NOT_READY, message);
-    }
-
 
     private static void requireStructuredVersions(RetrievalRequest request) {
         if (request.getGraphVersion() == null || request.getGraphVersion().trim().isEmpty()
@@ -457,43 +412,9 @@ public final class RecallService {
         }
     }
 
-    private static EvidenceBuilder builder(Map<String, EvidenceBuilder> merged, Map<String, TextChunk> chunks,
-                                            String chunkId, String documentId, EvidenceKind kind) {
-        TextChunk chunk = chunks.get(chunkId);
-        if (chunk == null || !chunk.getDocumentId().equals(documentId)) {
-            throw notReady("channel chunk does not match fixture");
-        }
-        String id = documentId.length() + ":" + documentId + chunkId;
-        return merged.computeIfAbsent(id, key -> new EvidenceBuilder(id, chunk, kind));
+    private static RetrievalException notReady(String message) {
+        return new RetrievalException(RetrievalErrorCode.INDEX_NOT_READY, message);
     }
 
-    private static final class EvidenceBuilder {
-        private final String id;
-        private final TextChunk chunk;
-        private final EvidenceKind kind;
-        private final Map<String, ChannelScore> scores = new LinkedHashMap<>();
-        private final List<EntityRef> entities = new ArrayList<>();
-        private final List<GraphPathRef> paths = new ArrayList<>();
-        private final List<GraphEvidenceTrace> graphTraces = new ArrayList<>();
 
-        private EvidenceBuilder(String id, TextChunk chunk, EvidenceKind kind) {
-            this.id = id;
-            this.chunk = chunk;
-            this.kind = kind;
-        }
-
-        private Evidence build() {
-            double fused = 0.0;
-            for (ChannelScore score : scores.values()) {
-                fused += 1.0 / (60.0 + score.getRank());
-            }
-            if (chunk.getSourceUri() == null) {
-                throw notReady("chunk source URI is missing");
-            }
-            SourceRef source = new SourceRef(chunk.getDocumentId(), chunk.getSourceUri(),
-                chunk.getStartOffset(), chunk.getEndOffset());
-            return new Evidence(id, kind, chunk.getText(), Collections.singletonList(chunk), entities, paths,
-                Collections.singletonList(source), scores, fused, null, 1, graphTraces);
-        }
-    }
 }

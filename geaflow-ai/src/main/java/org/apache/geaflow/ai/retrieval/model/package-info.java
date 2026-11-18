@@ -34,14 +34,19 @@
  *
  * <p>Identity fields are documentId/dataset/datasetVersion/split/sourceUri/sourceHash for
  * {@code SourceDocument}; chunkId/documentId/chunkIndex/startOffset/endOffset/text/policyVersion/
- * textHash for {@code TextChunk}; entityId/canonicalName/type for {@code EntityRef}; all fields
+ * textHash plus optional dataset/version/split/source-hash scope for {@code TextChunk};
+ * entityId/canonicalName/type for {@code EntityRef}; all fields
  * for {@code GraphVertexRef}, {@code GraphVersion}, {@code IndexVersion}, {@code SourceRef},
  * {@code GraphPathRef}, and {@code ChannelScore}; and edgeId/label/sourceEntityId/targetEntityId
  * for {@code GraphEdgeRef}. Evidence compares kind and nested reference identities. Collection
  * order does not affect Evidence identity, while vertex and edge order inside one graph path does.
  * A graph path has exactly {@code hop + 1} vertices and {@code hop} edges. Evidence kind labels
  * the candidate payload (chunk, entity, path, or graph fact), while optional lists preserve the
- * supporting provenance and may be empty for compatibility.</p>
+ * supporting provenance and may be empty for compatibility. Evidence schema version 1 is the
+ * current wire contract; JSON without a schema version is treated as legacy version 0. Source URI
+ * identity normalization lowercases scheme and host, removes default ports, and normalizes dot
+ * segments. {@code RetrievalIds} exposes deterministic SHA-256 document/chunk identities and the
+ * length-prefixed chunk evidence identity.</p>
  */
 package org.apache.geaflow.ai.retrieval.model;
 

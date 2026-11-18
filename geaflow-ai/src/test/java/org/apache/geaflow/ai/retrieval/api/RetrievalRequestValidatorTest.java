@@ -85,14 +85,14 @@ public class RetrievalRequestValidatorTest {
     }
 
     @Test
-    public void rejectsUnsupportedModeExecutionAndVector() {
+    public void rejectsUnsupportedModeAndVector() {
         RetrievalRequest mode = request();
         mode.setMode("HYBRID");
         assertCode(mode, RetrievalErrorCode.INVALID_REQUEST);
 
         RetrievalRequest execution = request();
         execution.setExecutionMode("PARALLEL");
-        assertCode(execution, RetrievalErrorCode.UNSUPPORTED_OPTION);
+        Assertions.assertEquals(ExecutionMode.PARALLEL, validator().validate(execution).getExecutionMode());
 
         RetrievalRequest unknownExecution = request();
         unknownExecution.setExecutionMode("unknown");

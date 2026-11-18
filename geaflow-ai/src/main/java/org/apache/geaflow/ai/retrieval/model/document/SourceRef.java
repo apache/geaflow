@@ -35,12 +35,25 @@ public final class SourceRef {
     private final Integer startOffset;
     @SerializedName("endOffset")
     private final Integer endOffset;
+    @SerializedName("dataset")
+    private final String dataset;
+    @SerializedName("datasetVersion")
+    private final String datasetVersion;
+    @SerializedName("split")
+    private final String split;
+    @SerializedName("sourceHash")
+    private final String sourceHash;
 
     public SourceRef(String documentId, String sourceUri) {
         this(documentId, sourceUri, null, null);
     }
 
     public SourceRef(String documentId, String sourceUri, Integer startOffset, Integer endOffset) {
+        this(documentId, sourceUri, startOffset, endOffset, null, null, null, null);
+    }
+
+    public SourceRef(String documentId, String sourceUri, Integer startOffset, Integer endOffset,
+                     String dataset, String datasetVersion, String split, String sourceHash) {
         this.documentId = ModelValidation.required(documentId, "documentId");
         this.sourceUri = ModelValidation.required(sourceUri, "sourceUri");
         if ((startOffset == null) != (endOffset == null)) {
@@ -55,6 +68,19 @@ public final class SourceRef {
         }
         this.startOffset = startOffset;
         this.endOffset = endOffset;
+        this.dataset = ModelValidation.optionalNonBlank(dataset, "dataset");
+        this.datasetVersion = ModelValidation.optionalNonBlank(datasetVersion, "datasetVersion");
+        this.split = ModelValidation.optionalNonBlank(split, "split");
+        this.sourceHash = ModelValidation.optionalNonBlank(sourceHash, "sourceHash");
+        validateProvenance();
+    }
+
+    public static SourceRef fromDocument(SourceDocument document, Integer startOffset,
+                                         Integer endOffset) {
+        Objects.requireNonNull(document, "document");
+        return new SourceRef(document.getDocumentId(), document.getSourceUri(), startOffset,
+            endOffset, document.getDataset(), document.getDatasetVersion(), document.getSplit(),
+            document.getSourceHash());
     }
 
     public String getDocumentId() {
@@ -73,6 +99,22 @@ public final class SourceRef {
         return endOffset;
     }
 
+    public String getDataset() {
+        return dataset;
+    }
+
+    public String getDatasetVersion() {
+        return datasetVersion;
+    }
+
+    public String getSplit() {
+        return split;
+    }
+
+    public String getSourceHash() {
+        return sourceHash;
+    }
+
     public boolean sameIdentityAs(SourceRef other) {
         return equals(other);
     }
@@ -87,13 +129,30 @@ public final class SourceRef {
         }
         SourceRef that = (SourceRef) object;
         return Objects.equals(documentId, that.documentId)
-            && Objects.equals(sourceUri, that.sourceUri)
+            && Objects.equals(RetrievalIds.normalizeSourceUri(sourceUri),
+                RetrievalIds.normalizeSourceUri(that.sourceUri))
             && Objects.equals(startOffset, that.startOffset)
-            && Objects.equals(endOffset, that.endOffset);
+            && Objects.equals(endOffset, that.endOffset)
+            && Objects.equals(dataset, that.dataset)
+            && Objects.equals(datasetVersion, that.datasetVersion)
+            && Objects.equals(split, that.split)
+            && Objects.equals(sourceHash, that.sourceHash);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(documentId, sourceUri, startOffset, endOffset);
+        return Objects.hash(documentId, RetrievalIds.normalizeSourceUri(sourceUri), startOffset,
+            endOffset, dataset, datasetVersion, split, sourceHash);
+    }
+
+    private void validateProvenance() {
+        boolean allMissing = dataset == null && datasetVersion == null && split == null
+            && sourceHash == null;
+        boolean allPresent = dataset != null && datasetVersion != null && split != null
+            && sourceHash != null;
+        if (!allMissing && !allPresent) {
+            throw new RetrievalModelValidationException(
+                "source dataset, datasetVersion, split, and sourceHash must be provided together");
+        }
     }
 }

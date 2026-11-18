@@ -46,8 +46,9 @@ public final class EvidenceMapper {
                 null, hit.getRank()));
             Evidence evidence = new Evidence(identity, EvidenceKind.ENTITY, entity.toString(),
                 Collections.emptyList(), Collections.singletonList(toRef(entity)),
-                Collections.emptyList(), Collections.emptyList(), scores,
-                null, (double) hit.getScore(), hit.getRank());
+                Collections.emptyList(), scores, null, (double) hit.getScore(), hit.getRank(),
+                Collections.emptyList(), Evidence.CURRENT_SCHEMA_VERSION,
+                null, null, null, null, null);
             unique.putIfAbsent(identity, evidence);
         }
         return new ArrayList<>(unique.values());

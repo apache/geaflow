@@ -1,0 +1,93 @@
+{
+  "version": "relation-path-golden-v1",
+  "description": "Shared by the Java RankingMetrics.relationPathHit test and the Python evaluator. Each case records the per-implementation results because Java and Python score relation paths at different granularity: Java checks whole-label membership in a predicted label set, Python checks that the predicted path contains the full gold sequence contiguously. Recording both makes the divergence explicit instead of letting the two reports disagree silently.",
+  "cases": [
+    {
+      "id": "2wiki-full-sequence-hit",
+      "source": "2WikiMultiHopQA evidences",
+      "targets": [
+        "directed_by",
+        "written_by"
+      ],
+      "predictedPath": [
+        "directed_by",
+        "written_by"
+      ],
+      "javaRelationPathHit": 1.0,
+      "pythonRelationPathHit": 1
+    },
+    {
+      "id": "2wiki-partial-label-set",
+      "source": "2WikiMultiHopQA evidences",
+      "targets": [
+        "directed_by",
+        "written_by"
+      ],
+      "predictedPath": [
+        "written_by"
+      ],
+      "javaRelationPathHit": 1.0,
+      "pythonRelationPathHit": 0
+    },
+    {
+      "id": "2wiki-no-overlap",
+      "source": "2WikiMultiHopQA evidences",
+      "targets": [
+        "directed_by",
+        "written_by"
+      ],
+      "predictedPath": [
+        "starring"
+      ],
+      "javaRelationPathHit": 0.0,
+      "pythonRelationPathHit": 0
+    },
+    {
+      "id": "2wiki-no-prediction",
+      "source": "2WikiMultiHopQA evidences",
+      "targets": [
+        "directed_by"
+      ],
+      "predictedPath": [],
+      "javaRelationPathHit": 0.0,
+      "pythonRelationPathHit": 0
+    },
+    {
+      "id": "hotpot-full-title-sequence",
+      "source": "HotpotQA supporting_facts titles",
+      "targets": [
+        "Ada Lovelace",
+        "Charles Babbage"
+      ],
+      "predictedPath": [
+        "Ada Lovelace",
+        "Charles Babbage"
+      ],
+      "javaRelationPathHit": 1.0,
+      "pythonRelationPathHit": 1
+    },
+    {
+      "id": "hotpot-single-title",
+      "source": "HotpotQA supporting_facts titles",
+      "targets": [
+        "Ada Lovelace",
+        "Charles Babbage"
+      ],
+      "predictedPath": [
+        "Charles Babbage"
+      ],
+      "javaRelationPathHit": 1.0,
+      "pythonRelationPathHit": 0
+    },
+    {
+      "id": "single-paragraph-has-no-path",
+      "source": "single-paragraph answer",
+      "targets": [],
+      "predictedPath": [
+        "anything"
+      ],
+      "javaRelationPathHit": 0.0,
+      "pythonRelationPathHit": 0
+    }
+  ]
+}

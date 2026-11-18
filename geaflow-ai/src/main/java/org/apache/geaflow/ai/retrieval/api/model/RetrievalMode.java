@@ -25,10 +25,37 @@ public enum RetrievalMode {
     BM25_ONLY,
     VECTOR_ONLY,
     GRAPH_ONLY,
+    /** Hybrid retrieval with fixed channel weights and no routing policy. */
+    FIXED_HYBRID,
+    /** Hybrid retrieval whose plan comes from the adaptive routing policy. */
+    ADAPTIVE_HYBRID,
+    /**
+     * Compatibility alias for a hybrid request that does not state which policy applies.
+     *
+     * <p>It executes the hybrid channel set; the routing policy is consulted only for
+     * {@link #ADAPTIVE_HYBRID}, so a caller that needs adaptive behaviour should ask for it
+     * explicitly instead of relying on an execution-mode side effect.
+     */
     HYBRID;
 
-    /** Returns the canonical MVP mode while preserving KEYWORD compatibility. */
+    /** Returns the channel-set mode, collapsing the aliases onto their concrete counterpart. */
     public RetrievalMode canonical() {
-        return this == KEYWORD ? BM25_ONLY : this;
+        if (this == KEYWORD) {
+            return BM25_ONLY;
+        }
+        if (this == FIXED_HYBRID || this == ADAPTIVE_HYBRID) {
+            return HYBRID;
+        }
+        return this;
+    }
+
+    /** Returns whether this mode selects the adaptive routing policy. */
+    public boolean isAdaptive() {
+        return this == ADAPTIVE_HYBRID;
+    }
+
+    /** Returns whether this mode executes the hybrid channel set. */
+    public boolean isHybrid() {
+        return canonical() == HYBRID;
     }
 }
