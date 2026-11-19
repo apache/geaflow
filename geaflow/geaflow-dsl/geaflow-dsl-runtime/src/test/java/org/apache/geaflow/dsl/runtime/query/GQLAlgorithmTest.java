@@ -116,6 +116,16 @@ public class GQLAlgorithmTest {
     }
 
     @Test
+    public void testAlgorithmDegree() throws Exception {
+        QueryTester
+            .build()
+            .withGraphDefine("/query/modern_graph.sql")
+            .withQueryPath("/query/gql_algorithm_degree.sql")
+            .execute()
+            .checkSinkResult();
+    }
+
+    @Test
     public void testAlgorithmClosenessCentrality() throws Exception {
         QueryTester
             .build()
