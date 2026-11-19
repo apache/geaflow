@@ -44,7 +44,11 @@ public enum StoreType {
     /**
      * PAIMON (Experimental).
      */
-    PAIMON;
+    PAIMON,
+    /**
+     * LMDB.
+     */
+    LMDB;
 
     public static StoreType getEnum(String value) {
         for (StoreType v : values()) {
