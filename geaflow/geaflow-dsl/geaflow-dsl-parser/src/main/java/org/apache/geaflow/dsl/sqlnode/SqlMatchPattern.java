@@ -39,14 +39,17 @@ public class SqlMatchPattern extends SqlCall {
 
     private SqlNode limit;
 
+    private boolean optional;
+
     public SqlMatchPattern(SqlParserPos pos, SqlNode from, SqlNodeList pathPatterns,
-                           SqlNode where, SqlNodeList orderBy, SqlNode limit) {
+            SqlNode where, SqlNodeList orderBy, SqlNode limit, boolean optional) {
         super(pos);
         this.from = from;
         this.pathPatterns = pathPatterns;
         this.where = where;
         this.orderBy = orderBy;
         this.limit = limit;
+        this.optional = optional;
     }
 
     @Override
@@ -57,7 +60,7 @@ public class SqlMatchPattern extends SqlCall {
     @Override
     public List<SqlNode> getOperandList() {
         return ImmutableNullableList.of(getFrom(), getPathPatterns(), getWhere(),
-            getOrderBy(), getLimit());
+                getOrderBy(), getLimit());
     }
 
     @Override
@@ -81,7 +84,6 @@ public class SqlMatchPattern extends SqlCall {
     public SqlNodeList getOrderBy() {
         return orderBy;
     }
-
 
     public SqlNode getLimit() {
         return limit;
@@ -169,5 +171,9 @@ public class SqlMatchPattern extends SqlCall {
 
     public boolean isSinglePattern() {
         return pathPatterns.size() == 1 && pathPatterns.get(0) instanceof SqlPathPattern;
+    }
+
+    public boolean isOptional() {
+        return optional;
     }
 }
