@@ -125,6 +125,15 @@ public class GQLAlgorithmTest {
     }
 
     @Test
+    public void testAlgorithmBetweennessCentrality() throws Exception {
+        QueryTester
+            .build()
+            .withQueryPath("/query/gql_algorithm_betweenness_centrality.sql")
+            .execute()
+            .checkSinkResult();
+    }
+
+    @Test
     public void testAlgorithmWeakConnectedComponents() throws Exception {
         QueryTester
             .build()
