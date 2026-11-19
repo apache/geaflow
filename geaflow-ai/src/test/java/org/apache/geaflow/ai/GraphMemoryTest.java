@@ -23,7 +23,6 @@ import org.apache.geaflow.ai.common.model.ModelConfig;
 import org.apache.geaflow.ai.graph.EmptyGraphAccessor;
 import org.apache.geaflow.ai.graph.GraphAccessor;
 import org.apache.geaflow.ai.graph.LocalMemoryGraphAccessor;
-import org.apache.geaflow.ai.index.EmbeddingIndexStore;
 import org.apache.geaflow.ai.index.EntityAttributeIndexStore;
 import org.apache.geaflow.ai.index.IndexStore;
 import org.apache.geaflow.ai.index.vector.EmbeddingVector;
@@ -97,18 +96,17 @@ public class GraphMemoryTest {
         indexStore.initStore(new SubgraphSemanticPromptFunction(graphAccessor));
         LOGGER.info("Success to init EntityAttributeIndexStore.");
 
+        // No embedding store here. This test used to load one from a checked in index file, but
+        // every query below embeds to double[0] through MockChatRobot, and a vector of a different
+        // length scores 0.0, so no stored vector could ever pass the threshold: what is asserted
+        // comes from the keyword path alone. Most of that file also no longer lined up with the text
+        // the current code would embed, so it could not be carried over to a format that records
+        // what a vector was produced from; see ISSUE-844 for the figures. The embedding store is
+        // covered against a local endpoint by EmbeddingIndexInvalidationTest instead.
         ModelConfig modelInfo = new ModelConfig(null, null, null, null);
-        EmbeddingIndexStore embeddingStore = new EmbeddingIndexStore();
-        embeddingStore.initStore(graphAccessor,
-            new SubgraphSemanticPromptFunction(graphAccessor),
-            "src/test/resources/index/LDBCEmbeddingIndexStore",
-            modelInfo);
-        LOGGER.info("Success to init EmbeddingIndexStore.");
-
         GraphMemoryServer server = new GraphMemoryServer();
         server.addGraphAccessor(graphAccessor);
         server.addIndexStore(indexStore);
-        server.addIndexStore(embeddingStore);
         MockChatRobot robot = new MockChatRobot();
         robot.setModelInfo(modelInfo);
 
