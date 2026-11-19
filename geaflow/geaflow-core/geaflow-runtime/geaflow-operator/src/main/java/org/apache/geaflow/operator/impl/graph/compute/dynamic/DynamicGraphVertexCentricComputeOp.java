@@ -33,6 +33,7 @@ import org.apache.geaflow.common.config.Configuration;
 import org.apache.geaflow.common.config.keys.FrameworkConfigKeys;
 import org.apache.geaflow.common.exception.GeaflowRuntimeException;
 import org.apache.geaflow.infer.InferContext;
+import org.apache.geaflow.infer.InferContextPool;
 import org.apache.geaflow.model.graph.message.DefaultGraphMessage;
 import org.apache.geaflow.model.graph.vertex.IVertex;
 import org.apache.geaflow.model.record.RecordArgs.GraphRecordNames;
@@ -164,11 +165,17 @@ public class DynamicGraphVertexCentricComputeOp<K, VV, EV, M, FUNC extends IncVe
         public IncGraphInferComputeContextImpl() {
             if (clientLocal.get() == null) {
                 try {
-                    inferContext = new InferContext<>(runtimeContext.getConfiguration());
+                    // Use InferContextPool instead of direct instantiation
+                    // This ensures efficient reuse of InferContext instances
+                    inferContext = InferContextPool.getOrCreate(runtimeContext.getConfiguration());
+                    clientLocal.set(inferContext);
+                    LOGGER.debug("InferContext obtained from pool: {}", 
+                        InferContextPool.getStatus());
                 } catch (Exception e) {
-                    throw new GeaflowRuntimeException(e);
+                    LOGGER.error("Failed to obtain InferContext from pool", e);
+                    throw new GeaflowRuntimeException(
+                        "InferContext initialization failed: " + e.getMessage(), e);
                 }
-                clientLocal.set(inferContext);
             } else {
                 inferContext = clientLocal.get();
             }
@@ -186,7 +193,9 @@ public class DynamicGraphVertexCentricComputeOp<K, VV, EV, M, FUNC extends IncVe
         @Override
         public void close() throws IOException {
             if (clientLocal.get() != null) {
-                clientLocal.get().close();
+                // Do NOT close the InferContext here since it's managed by the pool
+                // The pool handles lifecycle management
+                LOGGER.debug("Detaching from pooled InferContext");
                 clientLocal.remove();
             }
         }
