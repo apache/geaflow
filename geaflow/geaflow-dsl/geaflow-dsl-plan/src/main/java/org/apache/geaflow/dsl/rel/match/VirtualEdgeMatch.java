@@ -76,7 +76,8 @@ public class VirtualEdgeMatch extends SingleRel implements SingleMatchNode, IMat
     @Override
     public RelWriter explainTerms(RelWriter pw) {
         return super.explainTerms(pw)
-            .item("targetId", targetIdExpression);
+            .item("targetId", targetIdExpression)
+            .item("pathType", pathType);
     }
 
     public static VirtualEdgeMatch create(IMatchNode input, RexNode targetIdExpression,
