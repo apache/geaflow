@@ -79,7 +79,7 @@
         <jersey.version>2.40</jersey.version>
         <joda-time.version>2.12.1</joda-time.version>
         <jackson.version>2.11.2</jackson.version>
-        <jackson.core.version>2.13.4</jackson.core.version>
+        <jackson.core.version>2.18.6</jackson.core.version>
         <maven.version>3.6.3</maven.version>
         <curator.version>3.2.1</curator.version>
         <brpc.version>3.0.5</brpc.version>
