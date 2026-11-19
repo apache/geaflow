@@ -20,8 +20,10 @@
 package org.apache.geaflow.operator.impl.graph.compute.dynamic;
 
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.apache.geaflow.api.function.iterator.RichIteratorFunction;
 import org.apache.geaflow.api.graph.base.algo.AbstractIncVertexCentricComputeAlgo;
@@ -33,6 +35,7 @@ import org.apache.geaflow.common.config.Configuration;
 import org.apache.geaflow.common.config.keys.FrameworkConfigKeys;
 import org.apache.geaflow.common.exception.GeaflowRuntimeException;
 import org.apache.geaflow.infer.InferContext;
+import org.apache.geaflow.infer.InferContextPool;
 import org.apache.geaflow.model.graph.message.DefaultGraphMessage;
 import org.apache.geaflow.model.graph.vertex.IVertex;
 import org.apache.geaflow.model.record.RecordArgs.GraphRecordNames;
@@ -164,14 +167,60 @@ public class DynamicGraphVertexCentricComputeOp<K, VV, EV, M, FUNC extends IncVe
         public IncGraphInferComputeContextImpl() {
             if (clientLocal.get() == null) {
                 try {
-                    inferContext = new InferContext<>(runtimeContext.getConfiguration());
+                    // Build the effective configuration for this algorithm's InferContext.
+                    // If the algorithm declares its own Python transform class name
+                    // (code-based approach), override the global config with it so that
+                    // each algorithm can use an independent Python subprocess.
+                    // This resolves the UDF naming conflict when multiple algorithms
+                    // with different Python models run in the same job.
+                    Configuration inferConfig = buildInferConfig();
+                    inferContext = InferContextPool.getOrCreate(inferConfig);
+                    clientLocal.set(inferContext);
+                    LOGGER.info(
+                        "InferContext obtained from pool for algorithm '{}', "
+                            + "pythonTransformClass='{}', pool={}",
+                        function.getClass().getSimpleName(),
+                        inferConfig.getString(
+                            FrameworkConfigKeys.INFER_ENV_USER_TRANSFORM_CLASSNAME),
+                        InferContextPool.getStatus());
                 } catch (Exception e) {
-                    throw new GeaflowRuntimeException(e);
+                    LOGGER.error("Failed to obtain InferContext from pool", e);
+                    throw new GeaflowRuntimeException(
+                        "InferContext initialization failed: " + e.getMessage(), e);
                 }
-                clientLocal.set(inferContext);
             } else {
                 inferContext = clientLocal.get();
             }
+        }
+
+        /**
+         * Builds the {@link Configuration} used for creating this algorithm's
+         * {@link InferContext}.
+         *
+         * <p>If the algorithm overrides {@link AbstractIncVertexCentricComputeAlgo
+         * #getPythonTransformClassName()} with a non-null value, a derived
+         * configuration is returned with that value set for
+         * {@code geaflow.infer.env.user.transform.classname}. This gives every
+         * algorithm its own {@code InferContext} (keyed by config hash in
+         * {@link InferContextPool}), so multiple algorithms with different Python
+         * UDFs can coexist in the same job without conflict.
+         *
+         * <p>If the algorithm returns {@code null} (the default), the runtime
+         * configuration is returned as-is, preserving the original behaviour.
+         */
+        private Configuration buildInferConfig() {
+            String algoClassName = function.getPythonTransformClassName();
+            if (algoClassName != null && !algoClassName.trim().isEmpty()) {
+                // Create a shallow copy of the global config and override the
+                // Python transform class name with the algorithm-specific value.
+                Map<String, String> overrideMap =
+                    new HashMap<>(runtimeContext.getConfiguration().getConfigMap());
+                overrideMap.put(
+                    FrameworkConfigKeys.INFER_ENV_USER_TRANSFORM_CLASSNAME.getKey(),
+                    algoClassName);
+                return new Configuration(overrideMap);
+            }
+            return runtimeContext.getConfiguration();
         }
 
         @Override
@@ -186,7 +235,9 @@ public class DynamicGraphVertexCentricComputeOp<K, VV, EV, M, FUNC extends IncVe
         @Override
         public void close() throws IOException {
             if (clientLocal.get() != null) {
-                clientLocal.get().close();
+                // Do NOT close the InferContext here since it's managed by the pool.
+                // The pool handles lifecycle management across the entire job.
+                LOGGER.debug("Detaching from pooled InferContext");
                 clientLocal.remove();
             }
         }

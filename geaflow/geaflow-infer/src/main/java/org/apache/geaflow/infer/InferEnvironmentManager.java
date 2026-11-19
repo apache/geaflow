@@ -122,6 +122,12 @@ public class InferEnvironmentManager implements AutoCloseable {
     }
 
     private InferEnvironmentContext constructInferEnvironment(Configuration configuration) {
+        // Check if system Python should be used
+        boolean useSystemPython = configuration.getBoolean(FrameworkConfigKeys.INFER_ENV_USE_SYSTEM_PYTHON);
+        if (useSystemPython) {
+            return constructSystemPythonEnvironment(configuration);
+        }
+        
         String inferEnvDirectory = InferFileUtils.createTargetDir(VIRTUAL_ENV_DIR, configuration);
         String inferFilesDirectory = InferFileUtils.createTargetDir(INFER_FILES_DIR, configuration);
 
@@ -168,6 +174,45 @@ public class InferEnvironmentManager implements AutoCloseable {
             }
         }
         return environmentContext;
+    }
+
+    private InferEnvironmentContext constructSystemPythonEnvironment(Configuration configuration) {
+        String inferFilesDirectory = InferFileUtils.createTargetDir(INFER_FILES_DIR, configuration);
+        String systemPythonPath = configuration.getString(FrameworkConfigKeys.INFER_ENV_SYSTEM_PYTHON_PATH);
+        
+        if (systemPythonPath == null || systemPythonPath.isEmpty()) {
+            throw new GeaflowRuntimeException(
+                "System Python path not configured. Set geaflow.infer.env.system.python.path");
+        }
+        
+        // Verify Python executable exists
+        File pythonFile = new File(systemPythonPath);
+        if (!pythonFile.exists()) {
+            throw new GeaflowRuntimeException(
+                "Python executable not found at: " + systemPythonPath);
+        }
+        
+        // For system Python, we use the Python path's parent directory as the virtual env directory
+        // This allows InferEnvironmentContext to construct paths correctly
+        String pythonParentDir = new File(systemPythonPath).getParent();
+        String pythonGrandParentDir = new File(pythonParentDir).getParent();
+        
+        InferEnvironmentContext environmentContext =
+            new InferEnvironmentContext(pythonGrandParentDir, inferFilesDirectory, configuration);
+        
+        try {
+            // Setup inference runtime files (Python server scripts)
+            InferDependencyManager inferDependencyManager = new InferDependencyManager(environmentContext);
+            LOGGER.info("Using system Python from: {}", systemPythonPath);
+            LOGGER.info("Inference files directory: {}", inferFilesDirectory);
+            environmentContext.setFinished(true);
+            return environmentContext;
+        } catch (Throwable e) {
+            ERROR_CASE.set(e);
+            LOGGER.error("Failed to setup system Python environment", e);
+            environmentContext.setFinished(false);
+            return environmentContext;
+        }
     }
 
     private boolean createInferVirtualEnv(InferDependencyManager dependencyManager, String workingDir) {
