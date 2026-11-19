@@ -638,4 +638,13 @@ public class ExecutionConfigKeys implements Serializable {
         .defaultValue(false)
         .description("if enable detail job metric");
 
+    // ------------------------------------------------------------------------
+    // optimizer
+    // ------------------------------------------------------------------------
+
+    public static final ConfigKey LOCAL_SHUFFLE_OPTIMIZATION_ENABLE = ConfigKeys
+        .key("geaflow.local.shuffle.optimization.enable")
+        .defaultValue(false)
+        .description("whether to enable local shuffle optimization for graph → sink/map patterns");
+
 }

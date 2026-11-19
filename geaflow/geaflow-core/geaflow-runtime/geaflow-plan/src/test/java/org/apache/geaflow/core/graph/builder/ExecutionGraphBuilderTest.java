@@ -184,7 +184,7 @@ public class ExecutionGraphBuilderTest {
         PipelineGraph pipelineGraph = planBuilder.buildPlan(context);
 
         PipelineGraphOptimizer optimizer = new PipelineGraphOptimizer();
-        optimizer.optimizePipelineGraph(pipelineGraph);
+        optimizer.optimizePipelineGraph(pipelineGraph, new Configuration());
 
         ExecutionGraphBuilder builder = new ExecutionGraphBuilder(pipelineGraph);
         ExecutionGraph graph = builder.buildExecutionGraph(new Configuration());
@@ -225,7 +225,7 @@ public class ExecutionGraphBuilderTest {
         PipelineGraph pipelineGraph = planBuilder.buildPlan(context);
 
         PipelineGraphOptimizer optimizer = new PipelineGraphOptimizer();
-        optimizer.optimizePipelineGraph(pipelineGraph);
+        optimizer.optimizePipelineGraph(pipelineGraph, new Configuration());
 
         ExecutionGraphBuilder builder = new ExecutionGraphBuilder(pipelineGraph);
         ExecutionGraph graph = builder.buildExecutionGraph(new Configuration());
@@ -262,7 +262,7 @@ public class ExecutionGraphBuilderTest {
         PipelinePlanBuilder planBuilder = new PipelinePlanBuilder();
         PipelineGraph pipelineGraph = planBuilder.buildPlan(context);
         PipelineGraphOptimizer optimizer = new PipelineGraphOptimizer();
-        optimizer.optimizePipelineGraph(pipelineGraph);
+        optimizer.optimizePipelineGraph(pipelineGraph, new Configuration());
 
         ExecutionGraphBuilder builder = new ExecutionGraphBuilder(pipelineGraph);
         ExecutionGraph graph = builder.buildExecutionGraph(new Configuration());
@@ -309,7 +309,7 @@ public class ExecutionGraphBuilderTest {
         PipelinePlanBuilder planBuilder = new PipelinePlanBuilder();
         PipelineGraph pipelineGraph = planBuilder.buildPlan(context);
         PipelineGraphOptimizer optimizer = new PipelineGraphOptimizer();
-        optimizer.optimizePipelineGraph(pipelineGraph);
+        optimizer.optimizePipelineGraph(pipelineGraph, new Configuration());
 
         ExecutionGraphBuilder builder = new ExecutionGraphBuilder(pipelineGraph);
         ExecutionGraph graph = builder.buildExecutionGraph(new Configuration());
@@ -368,7 +368,7 @@ public class ExecutionGraphBuilderTest {
         PipelinePlanBuilder planBuilder = new PipelinePlanBuilder();
         PipelineGraph pipelineGraph = planBuilder.buildPlan(context);
         PipelineGraphOptimizer optimizer = new PipelineGraphOptimizer();
-        optimizer.optimizePipelineGraph(pipelineGraph);
+        optimizer.optimizePipelineGraph(pipelineGraph, new Configuration());
 
         ExecutionGraphBuilder builder = new ExecutionGraphBuilder(pipelineGraph);
         ExecutionGraph graph = builder.buildExecutionGraph(new Configuration());
@@ -414,7 +414,7 @@ public class ExecutionGraphBuilderTest {
         PipelinePlanBuilder planBuilder = new PipelinePlanBuilder();
         PipelineGraph pipelineGraph = planBuilder.buildPlan(context);
         PipelineGraphOptimizer optimizer = new PipelineGraphOptimizer();
-        optimizer.optimizePipelineGraph(pipelineGraph);
+        optimizer.optimizePipelineGraph(pipelineGraph, new Configuration());
 
         ExecutionGraphBuilder builder = new ExecutionGraphBuilder(pipelineGraph);
         ExecutionGraph graph = builder.buildExecutionGraph(new Configuration());
@@ -460,7 +460,7 @@ public class ExecutionGraphBuilderTest {
         PipelinePlanBuilder planBuilder = new PipelinePlanBuilder();
         PipelineGraph pipelineGraph = planBuilder.buildPlan(context);
         PipelineGraphOptimizer optimizer = new PipelineGraphOptimizer();
-        optimizer.optimizePipelineGraph(pipelineGraph);
+        optimizer.optimizePipelineGraph(pipelineGraph, new Configuration());
 
         ExecutionGraphBuilder builder = new ExecutionGraphBuilder(pipelineGraph);
         ExecutionGraph graph = builder.buildExecutionGraph(new Configuration());
@@ -507,7 +507,7 @@ public class ExecutionGraphBuilderTest {
         PipelinePlanBuilder planBuilder = new PipelinePlanBuilder();
         PipelineGraph pipelineGraph = planBuilder.buildPlan(context);
         PipelineGraphOptimizer optimizer = new PipelineGraphOptimizer();
-        optimizer.optimizePipelineGraph(pipelineGraph);
+        optimizer.optimizePipelineGraph(pipelineGraph, new Configuration());
 
         ExecutionGraphBuilder builder = new ExecutionGraphBuilder(pipelineGraph);
         ExecutionGraph graph = builder.buildExecutionGraph(new Configuration());
@@ -556,7 +556,7 @@ public class ExecutionGraphBuilderTest {
         PipelinePlanBuilder planBuilder = new PipelinePlanBuilder();
         PipelineGraph pipelineGraph = planBuilder.buildPlan(context);
         PipelineGraphOptimizer optimizer = new PipelineGraphOptimizer();
-        optimizer.optimizePipelineGraph(pipelineGraph);
+        optimizer.optimizePipelineGraph(pipelineGraph, new Configuration());
 
         ExecutionGraphBuilder builder = new ExecutionGraphBuilder(pipelineGraph);
         ExecutionGraph graph = builder.buildExecutionGraph(new Configuration());
@@ -599,7 +599,7 @@ public class ExecutionGraphBuilderTest {
         PipelinePlanBuilder planBuilder = new PipelinePlanBuilder();
         PipelineGraph pipelineGraph = planBuilder.buildPlan(context);
         PipelineGraphOptimizer optimizer = new PipelineGraphOptimizer();
-        optimizer.optimizePipelineGraph(pipelineGraph);
+        optimizer.optimizePipelineGraph(pipelineGraph, new Configuration());
 
         ExecutionGraphBuilder builder = new ExecutionGraphBuilder(pipelineGraph);
         ExecutionGraph graph = builder.buildExecutionGraph(new Configuration());
@@ -649,7 +649,7 @@ public class ExecutionGraphBuilderTest {
         PipelinePlanBuilder planBuilder = new PipelinePlanBuilder();
         PipelineGraph pipelineGraph = planBuilder.buildPlan(context);
         PipelineGraphOptimizer optimizer = new PipelineGraphOptimizer();
-        optimizer.optimizePipelineGraph(pipelineGraph);
+        optimizer.optimizePipelineGraph(pipelineGraph, new Configuration());
 
         ExecutionGraphBuilder builder = new ExecutionGraphBuilder(pipelineGraph);
         ExecutionGraph graph = builder.buildExecutionGraph(new Configuration());
@@ -703,7 +703,7 @@ public class ExecutionGraphBuilderTest {
         PipelinePlanBuilder planBuilder = new PipelinePlanBuilder();
         PipelineGraph pipelineGraph = planBuilder.buildPlan(context);
         PipelineGraphOptimizer optimizer = new PipelineGraphOptimizer();
-        optimizer.optimizePipelineGraph(pipelineGraph);
+        optimizer.optimizePipelineGraph(pipelineGraph, new Configuration());
 
         ExecutionGraphBuilder builder = new ExecutionGraphBuilder(pipelineGraph);
         ExecutionGraph graph = builder.buildExecutionGraph(new Configuration());
@@ -789,7 +789,7 @@ public class ExecutionGraphBuilderTest {
         PipelinePlanBuilder planBuilder = new PipelinePlanBuilder();
         PipelineGraph pipelineGraph = planBuilder.buildPlan(context);
         PipelineGraphOptimizer optimizer = new PipelineGraphOptimizer();
-        optimizer.optimizePipelineGraph(pipelineGraph);
+        optimizer.optimizePipelineGraph(pipelineGraph, new Configuration());
 
         ExecutionGraphBuilder builder = new ExecutionGraphBuilder(pipelineGraph);
         ExecutionGraph graph = builder.buildExecutionGraph(new Configuration());
@@ -828,7 +828,7 @@ public class ExecutionGraphBuilderTest {
         PipelinePlanBuilder planBuilder = new PipelinePlanBuilder();
         PipelineGraph pipelineGraph = planBuilder.buildPlan(context);
         PipelineGraphOptimizer optimizer = new PipelineGraphOptimizer();
-        optimizer.optimizePipelineGraph(pipelineGraph);
+        optimizer.optimizePipelineGraph(pipelineGraph, new Configuration());
 
         ExecutionGraphBuilder builder = new ExecutionGraphBuilder(pipelineGraph);
         ExecutionGraph graph = builder.buildExecutionGraph(new Configuration());
@@ -878,7 +878,7 @@ public class ExecutionGraphBuilderTest {
         PipelinePlanBuilder planBuilder = new PipelinePlanBuilder();
         PipelineGraph pipelineGraph = planBuilder.buildPlan(context);
         PipelineGraphOptimizer optimizer = new PipelineGraphOptimizer();
-        optimizer.optimizePipelineGraph(pipelineGraph);
+        optimizer.optimizePipelineGraph(pipelineGraph, new Configuration());
 
         ExecutionGraphBuilder builder = new ExecutionGraphBuilder(pipelineGraph);
         ExecutionGraph graph = builder.buildExecutionGraph(new Configuration());
