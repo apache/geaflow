@@ -23,6 +23,9 @@ import com.google.common.collect.Lists;
 import org.apache.geaflow.dsl.udf.table.agg.AvgDouble;
 import org.apache.geaflow.dsl.udf.table.agg.AvgInteger;
 import org.apache.geaflow.dsl.udf.table.agg.AvgLong;
+import org.apache.geaflow.dsl.udf.table.agg.BitAndInteger;
+import org.apache.geaflow.dsl.udf.table.agg.BitOrInteger;
+import org.apache.geaflow.dsl.udf.table.agg.BoolAnd;
 import org.apache.geaflow.dsl.udf.table.agg.Count;
 import org.apache.geaflow.dsl.udf.table.agg.MaxDouble;
 import org.apache.geaflow.dsl.udf.table.agg.MaxInteger;
@@ -84,6 +87,62 @@ public class UDAFTest {
         Assert.assertEquals((long) af.getValue(accumulator), 0);
         af.merge(accumulator, Lists.newArrayList(accumulator));
         Assert.assertEquals((long) af.getValue(accumulator), 0);
+    }
+
+    @Test
+    public void testBitAndInteger() {
+        BitAndInteger af = new BitAndInteger();
+        BitAndInteger.Accumulator accumulator = af.createAccumulator();
+        af.accumulate(accumulator, null);
+        Assert.assertNull(af.getValue(accumulator));
+        af.accumulate(accumulator, 7);
+        af.accumulate(accumulator, 3);
+        Assert.assertEquals((int) af.getValue(accumulator), 3);
+
+        BitAndInteger.Accumulator toMerge = af.createAccumulator();
+        af.accumulate(toMerge, 1);
+        af.merge(accumulator, Lists.newArrayList(toMerge));
+        Assert.assertEquals((int) af.getValue(accumulator), 1);
+
+        af.resetAccumulator(accumulator);
+        Assert.assertNull(af.getValue(accumulator));
+    }
+
+    @Test
+    public void testBitOrInteger() {
+        BitOrInteger af = new BitOrInteger();
+        BitOrInteger.Accumulator accumulator = af.createAccumulator();
+        af.accumulate(accumulator, null);
+        Assert.assertNull(af.getValue(accumulator));
+        af.accumulate(accumulator, 4);
+        af.accumulate(accumulator, 2);
+        Assert.assertEquals((int) af.getValue(accumulator), 6);
+
+        BitOrInteger.Accumulator toMerge = af.createAccumulator();
+        af.accumulate(toMerge, 1);
+        af.merge(accumulator, Lists.newArrayList(toMerge));
+        Assert.assertEquals((int) af.getValue(accumulator), 7);
+
+        af.resetAccumulator(accumulator);
+        Assert.assertNull(af.getValue(accumulator));
+    }
+
+    @Test
+    public void testBoolAnd() {
+        BoolAnd af = new BoolAnd();
+        BoolAnd.Accumulator accumulator = af.createAccumulator();
+        af.accumulate(accumulator, null);
+        Assert.assertNull(af.getValue(accumulator));
+        af.accumulate(accumulator, true);
+        Assert.assertTrue(af.getValue(accumulator));
+
+        BoolAnd.Accumulator toMerge = af.createAccumulator();
+        af.accumulate(toMerge, false);
+        af.merge(accumulator, Lists.newArrayList(toMerge));
+        Assert.assertFalse(af.getValue(accumulator));
+
+        af.resetAccumulator(accumulator);
+        Assert.assertNull(af.getValue(accumulator));
     }
 
     @Test
