@@ -73,8 +73,16 @@ elif [[ "$ARCH" = "arm64" || "$ARCH" = "aarch64" ]]; then
   fi
   GEAFLOW_IMAGE_NAME="geaflow-arm"
   CONSOLE_IMAGE_NAME="geaflow-console-arm"
+elif [[ "$ARCH" = "riscv64" || "$ARCH" = "riscv" ]]; then
+  if [[ "$USE_UBUNTU" = "true" ]]; then
+    DOCKER_FILE="Dockerfile-arm64-ubuntu"
+  else
+    DOCKER_FILE="Dockerfile-arm64-centos"
+  fi
+  GEAFLOW_IMAGE_NAME="geaflow-riscv"
+  CONSOLE_IMAGE_NAME="geaflow-console-riscv"
 else
-  echo -e "\033[31munknown arch $ARCH, only support x86_64,arm64,aarch64\033[0m"
+  echo -e "\033[31munknown arch $ARCH, only support x86_64,arm64,aarch64,riscv64\033[0m"
   exit 1
 fi
 
@@ -152,7 +160,13 @@ function buildJarPackage() {
   checkMaven || return 1
 
   cd $MVN_BUILD_DIR
-  mvn clean install -DskipTests -Dcheckstyle.skip -T4 || return 1
+  if [[ "$ARCH" = "arm64" || "$ARCH" = "aarch64" ]]; then
+    mvn clean -Dos.arch=aarch64 -Dos.detected.arch=aarch64 -Dos.detected.arch.classifier=aarch64 install -DskipTests -Dcheckstyle.skip -T4 || return 1
+  elif [[ "$ARCH" = "riscv64" || "$ARCH" = "riscv" ]]; then
+    mvn clean -Dos.arch=riscv64 -Dos.detected.arch=riscv64 -Dos.detected.arch.classifier=riscv64 install -DskipTests -Dcheckstyle.skip -T4 || return 1
+  else
+    mvn clean install -DskipTests -Dcheckstyle.skip -T4 || return 1
+  fi
 }
 
 
