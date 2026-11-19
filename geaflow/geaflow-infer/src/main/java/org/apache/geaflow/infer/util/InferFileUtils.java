@@ -38,6 +38,7 @@ import java.nio.file.FileSystem;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
 import java.util.Collections;
@@ -68,6 +69,11 @@ public class InferFileUtils {
     public static final String PY_FILE_EXTENSION = ".py";
 
     public static final String JAR_FILE_EXTENSION = ".jar";
+
+    public static final String MODEL_FILE_NAME = "model.pt";
+
+    private static final List<String> NATIVE_LIB_EXTENSIONS = Arrays.asList(
+        ".so", ".pyd", ".dll", ".dylib");
 
     private static final int DEFAULT_BUFFER_SIZE = 1024;
 
@@ -239,42 +245,87 @@ public class InferFileUtils {
 
     public static void prepareInferFilesFromJars(String targetDirectory) {
         File userJobJarFile = getUserJobJarFile();
-        Preconditions.checkNotNull(userJobJarFile);
-        try {
-            JarFile jarFile = new JarFile(userJobJarFile);
+        if (userJobJarFile == null) {
+            LOGGER.info("cannot find user job jar in classpath root, fallback to classpath files");
+            prepareInferFilesFromClasspath(targetDirectory);
+            return;
+        }
+        try (JarFile jarFile = new JarFile(userJobJarFile)) {
             Enumeration<JarEntry> entries = jarFile.entries();
             while (entries.hasMoreElements()) {
                 JarEntry entry = entries.nextElement();
                 String entryName = entry.getName();
-                if (!entry.isDirectory()) {
+                if (!entry.isDirectory() && shouldExtractInferResource(entryName)) {
                     String inferFile = extractFile(targetDirectory, entryName, entry, jarFile);
-                    LOGGER.info("cp infer file {} to {} from jar file {}", entryName, inferFile, userJobJarFile.getName());
-                } else {
-                    File entryDestination = new File(targetDirectory, entry.getName());
-                    if (!entryDestination.exists()) {
-                        entryDestination.mkdirs();
-                    }
-                    LOGGER.info("create infer directory is {}", entryDestination);
+                    LOGGER.info("cp infer file {} to {} from jar file {}", entryName, inferFile,
+                        userJobJarFile.getName());
                 }
             }
-            jarFile.close();
         } catch (IOException e) {
             LOGGER.error("open jar file {} failed", userJobJarFile.getName());
         }
     }
 
+    private static void prepareInferFilesFromClasspath(String targetDirectory) {
+        List<File> resourceFiles = getPythonFilesByCondition(file ->
+            file.isFile() && isInferResourceFile(file.getName()));
+        for (File resourceFile : resourceFiles) {
+            String inferFile = copyPythonFile(targetDirectory, resourceFile);
+            LOGGER.info("cp infer file {} to {} from classpath resource", resourceFile.getName(),
+                inferFile);
+        }
+    }
+
+    private static boolean isInferResourceFile(String fileName) {
+        return fileName.endsWith(PY_FILE_EXTENSION)
+            || REQUIREMENTS_TXT.equals(fileName)
+            || MODEL_FILE_NAME.equals(fileName)
+            || isNativeLibFile(fileName);
+    }
+
+    private static boolean shouldExtractInferResource(String entryName) {
+        if (entryName == null || entryName.contains("..")) {
+            return false;
+        }
+        String normalized = entryName.replace('\\', '/');
+        String fileName = normalized.substring(normalized.lastIndexOf('/') + 1);
+        return isInferResourceFile(fileName);
+    }
+
+    private static boolean isNativeLibFile(String fileName) {
+        for (String extension : NATIVE_LIB_EXTENSIONS) {
+            if (fileName.endsWith(extension)) {
+                return true;
+            }
+        }
+        return false;
+    }
 
     private static String extractFile(String targetDirectory, String fileName, JarEntry entry,
                                       JarFile jarFile) throws IOException {
-        String targetFilePath = targetDirectory + File.separator + fileName;
+        File targetFile = buildSafeTargetFile(targetDirectory, fileName);
+        File parent = targetFile.getParentFile();
+        if (parent != null && !parent.exists()) {
+            forceMkdir(parent);
+        }
         try (InputStream inputStream = jarFile.getInputStream(entry);
-             FileOutputStream outputStream = new FileOutputStream(targetFilePath)) {
+             FileOutputStream outputStream = new FileOutputStream(targetFile)) {
             byte[] buffer = new byte[DEFAULT_BUFFER_SIZE];
             int bytesRead;
             while ((bytesRead = inputStream.read(buffer)) != -1) {
                 outputStream.write(buffer, 0, bytesRead);
             }
         }
-        return targetFilePath;
+        return targetFile.getAbsolutePath();
+    }
+
+    private static File buildSafeTargetFile(String targetDirectory, String fileName)
+        throws IOException {
+        Path targetRoot = Paths.get(targetDirectory).toAbsolutePath().normalize();
+        Path targetPath = targetRoot.resolve(fileName).normalize();
+        if (!targetPath.startsWith(targetRoot)) {
+            throw new IOException("illegal infer resource path: " + fileName);
+        }
+        return targetPath.toFile();
     }
 }

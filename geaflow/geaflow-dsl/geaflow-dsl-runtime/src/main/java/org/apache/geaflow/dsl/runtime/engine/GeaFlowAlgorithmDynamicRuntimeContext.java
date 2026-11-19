@@ -80,6 +80,10 @@ public class GeaFlowAlgorithmDynamicRuntimeContext implements AlgorithmSamplingR
         this.edgeQuery.withId(vertexId);
     }
 
+    public Object getVertexId() {
+        return vertexId;
+    }
+
     public IVertex loadVertex() {
         return vertexQuery.get();
     }

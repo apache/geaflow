@@ -22,6 +22,7 @@ package org.apache.geaflow.dsl.runtime.engine;
 import static org.apache.geaflow.common.config.keys.FrameworkConfigKeys.SYSTEM_STATE_BACKEND_TYPE;
 import static org.apache.geaflow.operator.Constants.GRAPH_VERSION;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -33,10 +34,12 @@ import org.apache.geaflow.api.function.iterator.RichIteratorFunction;
 import org.apache.geaflow.api.graph.function.vc.IncVertexCentricAggTraversalFunction;
 import org.apache.geaflow.common.config.keys.FrameworkConfigKeys;
 import org.apache.geaflow.dsl.common.algo.AlgorithmUserFunction;
+import org.apache.geaflow.dsl.common.algo.BatchAlgorithmUserFunction;
 import org.apache.geaflow.dsl.common.data.Row;
 import org.apache.geaflow.dsl.common.data.RowVertex;
 import org.apache.geaflow.dsl.common.types.GraphSchema;
 import org.apache.geaflow.dsl.runtime.traversal.message.ITraversalAgg;
+import org.apache.geaflow.dsl.udf.graph.GCN;
 import org.apache.geaflow.model.graph.edge.IEdge;
 import org.apache.geaflow.model.graph.vertex.IVertex;
 import org.apache.geaflow.model.traversal.ITraversalRequest;
@@ -79,6 +82,10 @@ public class GeaFlowAlgorithmDynamicAggTraversalFunction
 
     private boolean materializeInFinish;
 
+    private transient List<RowVertex> batchFinishVertices;
+
+    private transient List<Optional<Row>> batchFinishValues;
+
     public GeaFlowAlgorithmDynamicAggTraversalFunction(GraphSchema graphSchema,
                                                        AlgorithmUserFunction<Object, Object> userFunction,
                                                        Object[] params) {
@@ -93,9 +100,12 @@ public class GeaFlowAlgorithmDynamicAggTraversalFunction
         IncVertexCentricTraversalFuncContext<Object, Row, Row, Object, Row> vertexCentricFuncContext) {
         this.traversalContext = vertexCentricFuncContext;
         this.materializeInFinish = traversalContext.getRuntimeContext().getConfiguration().getBoolean(FrameworkConfigKeys.UDF_MATERIALIZE_GRAPH_IN_FINISH);
-        this.algorithmCtx = new GeaFlowAlgorithmDynamicRuntimeContext(this, traversalContext,
-            graphSchema);
+        this.algorithmCtx = userFunction instanceof GCN
+            ? new GeaFlowAlgorithmDynamicModelRuntimeContext(this, traversalContext, graphSchema)
+            : new GeaFlowAlgorithmDynamicRuntimeContext(this, traversalContext, graphSchema);
         this.initVertices = new HashSet<>();
+        this.batchFinishVertices = new ArrayList<>();
+        this.batchFinishValues = new ArrayList<>();
         this.userFunction.init(algorithmCtx, params);
         this.mutableGraph = traversalContext.getMutableGraph();
 
@@ -223,7 +233,12 @@ public class GeaFlowAlgorithmDynamicAggTraversalFunction
         }
         if (graphVertex != null) {
             Row newValue = getVertexNewValue(graphVertex.getId());
-            userFunction.finish(graphVertex, Optional.ofNullable(newValue));
+            if (userFunction instanceof BatchAlgorithmUserFunction) {
+                batchFinishVertices.add(graphVertex);
+                batchFinishValues.add(Optional.ofNullable(newValue));
+            } else {
+                userFunction.finish(graphVertex, Optional.ofNullable(newValue));
+            }
         }
         if (materializeInFinish) {
             IVertex vertex = algorithmCtx.getIncVCTraversalCtx().getTemporaryGraph().getVertex();
@@ -244,6 +259,12 @@ public class GeaFlowAlgorithmDynamicAggTraversalFunction
     public void finish() {
         algorithmCtx.finish();
         initVertices.clear();
+        if (userFunction instanceof BatchAlgorithmUserFunction) {
+            ((BatchAlgorithmUserFunction<Object, Object>) userFunction).finishBatch(
+                batchFinishVertices, batchFinishValues);
+            batchFinishVertices.clear();
+            batchFinishValues.clear();
+        }
         userFunction.finish();
         long windowId = traversalContext.getRuntimeContext().getWindowId();
         this.vertexUpdateValues.manage().operate().setCheckpointId(windowId);
