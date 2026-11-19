@@ -53,7 +53,7 @@
     "antd": "^5.9.0",
     "classnames": "^2.3.2",
     "http-proxy-middleware": "^2.0.6",
-    "lodash": "^4.17.21",
+    "lodash": "^4.17.23",
     "moment": "^2.29.4",
     "omit.js": "^2.0.2",
     "rc-menu": "^9.8.2",
