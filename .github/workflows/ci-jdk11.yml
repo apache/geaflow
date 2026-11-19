@@ -86,3 +86,12 @@ jobs:
           test_modules="!geaflow/geaflow-dsl/geaflow-dsl-connector/geaflow-dsl-connector-hive,"
           test_modules+="!geaflow/geaflow-dsl/geaflow-dsl-connector-tests"
           mvn -B -e clean test -Pjdk11 -pl "${test_modules}" -Duser.timezone=Asia/Shanghai -Dlog4j.configuration="log4j.rootLogger=WARN, stdout"
+
+      - name: Verify packaged temporal recovery on JDK 11
+        timeout-minutes: 15
+        run: |
+          mvn -B -e -nsu verify -Pjdk11 -pl geaflow-ai -am \
+            -Dmaven.javadoc.skip=true -Dmaven.source.skip=true \
+            -Dtest=TemporalUdgaIntegrationTest#packagedApplicationContinuesCommittedStateInIndependentJvms \
+            -Dsurefire.failIfNoSpecifiedTests=false \
+            -Duser.timezone=Asia/Shanghai

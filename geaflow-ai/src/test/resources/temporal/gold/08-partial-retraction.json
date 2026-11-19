@@ -1,0 +1,300 @@
+{
+  "schemaVersion": 2,
+  "name": "08-partial-retraction",
+  "events": [
+    {
+      "alias": "original",
+      "id": "event-1",
+      "operation": "ASSERT",
+      "subject": {
+        "id": "alice",
+        "label": "person"
+      },
+      "predicate": "city",
+      "scope": "profile",
+      "factId": "fact-paris",
+      "value": {
+        "kind": "LITERAL",
+        "value": "Paris"
+      },
+      "validFrom": "2024-01-01T00:00:00Z",
+      "validTo": "2024-01-10T00:00:00Z",
+      "recordedAt": "2024-02-01T00:00:00Z",
+      "evidence": [
+        {
+          "id": "ev-1",
+          "source": {
+            "id": "source-1",
+            "name": "source 1"
+          },
+          "content": "Evidence 1."
+        }
+      ]
+    },
+    {
+      "alias": "retract",
+      "id": "event-2",
+      "operation": "RETRACT",
+      "subject": {
+        "id": "alice",
+        "label": "person"
+      },
+      "predicate": "city",
+      "scope": "profile",
+      "factId": "fact-paris",
+      "value": null,
+      "validFrom": "2024-01-03T00:00:00Z",
+      "validTo": "2024-01-07T00:00:00Z",
+      "recordedAt": "2024-02-02T00:00:00Z",
+      "evidence": [
+        {
+          "id": "ev-2",
+          "source": {
+            "id": "source-2",
+            "name": "source 2"
+          },
+          "content": "Evidence 2."
+        }
+      ],
+      "target": "old"
+    }
+  ],
+  "batches": [
+    {
+      "endExclusive": 1,
+      "decisions": [
+        {
+          "event": "original",
+          "code": "ACCEPTED"
+        }
+      ]
+    },
+    {
+      "endExclusive": 2,
+      "decisions": [
+        {
+          "event": "retract",
+          "code": "ACCEPTED"
+        }
+      ]
+    }
+  ],
+  "expected": {
+    "identities": [],
+    "versions": [
+      {
+        "alias": "old",
+        "event": "original",
+        "sourceVersion": null,
+        "subject": {
+          "id": "alice",
+          "label": "person"
+        },
+        "predicate": "city",
+        "scope": "profile",
+        "factId": "fact-paris",
+        "value": {
+          "kind": "LITERAL",
+          "value": "Paris"
+        },
+        "status": "ACTIVE",
+        "validFrom": "2024-01-01T00:00:00Z",
+        "validTo": "2024-01-10T00:00:00Z",
+        "systemFrom": "2024-02-01T00:00:00Z",
+        "systemTo": "2024-02-02T00:00:00Z",
+        "evidence": [
+          {
+            "id": "ev-1",
+            "source": {
+              "id": "source-1",
+              "name": "source 1"
+            },
+            "content": "Evidence 1."
+          }
+        ]
+      },
+      {
+        "alias": "left",
+        "event": "retract",
+        "sourceVersion": "old",
+        "subject": {
+          "id": "alice",
+          "label": "person"
+        },
+        "predicate": "city",
+        "scope": "profile",
+        "factId": "fact-paris",
+        "value": {
+          "kind": "LITERAL",
+          "value": "Paris"
+        },
+        "status": "ACTIVE",
+        "validFrom": "2024-01-01T00:00:00Z",
+        "validTo": "2024-01-03T00:00:00Z",
+        "systemFrom": "2024-02-02T00:00:00Z",
+        "systemTo": null,
+        "evidence": [
+          {
+            "id": "ev-1",
+            "source": {
+              "id": "source-1",
+              "name": "source 1"
+            },
+            "content": "Evidence 1."
+          }
+        ]
+      },
+      {
+        "alias": "tombstone",
+        "event": "retract",
+        "sourceVersion": "old",
+        "subject": {
+          "id": "alice",
+          "label": "person"
+        },
+        "predicate": "city",
+        "scope": "profile",
+        "factId": "fact-paris",
+        "value": {
+          "kind": "LITERAL",
+          "value": "Paris"
+        },
+        "status": "RETRACTED",
+        "validFrom": "2024-01-03T00:00:00Z",
+        "validTo": "2024-01-07T00:00:00Z",
+        "systemFrom": "2024-02-02T00:00:00Z",
+        "systemTo": null,
+        "evidence": [
+          {
+            "id": "ev-2",
+            "source": {
+              "id": "source-2",
+              "name": "source 2"
+            },
+            "content": "Evidence 2."
+          }
+        ]
+      },
+      {
+        "alias": "right",
+        "event": "retract",
+        "sourceVersion": "old",
+        "subject": {
+          "id": "alice",
+          "label": "person"
+        },
+        "predicate": "city",
+        "scope": "profile",
+        "factId": "fact-paris",
+        "value": {
+          "kind": "LITERAL",
+          "value": "Paris"
+        },
+        "status": "ACTIVE",
+        "validFrom": "2024-01-07T00:00:00Z",
+        "validTo": "2024-01-10T00:00:00Z",
+        "systemFrom": "2024-02-02T00:00:00Z",
+        "systemTo": null,
+        "evidence": [
+          {
+            "id": "ev-1",
+            "source": {
+              "id": "source-1",
+              "name": "source 1"
+            },
+            "content": "Evidence 1."
+          }
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "type": "SUPERSEDES",
+        "from": "left",
+        "to": "old"
+      },
+      {
+        "type": "SUPERSEDES",
+        "from": "tombstone",
+        "to": "old"
+      },
+      {
+        "type": "SUPERSEDES",
+        "from": "right",
+        "to": "old"
+      }
+    ],
+    "queries": [
+      {
+        "mode": "CURRENT",
+        "subjectId": "alice",
+        "predicate": "city",
+        "scope": "profile",
+        "validAt": "2024-01-01T00:00:00Z",
+        "versions": [
+          "left"
+        ]
+      },
+      {
+        "mode": "CURRENT",
+        "subjectId": "alice",
+        "predicate": "city",
+        "scope": "profile",
+        "validAt": "2024-01-03T00:00:00Z",
+        "versions": []
+      },
+      {
+        "mode": "CURRENT",
+        "subjectId": "alice",
+        "predicate": "city",
+        "scope": "profile",
+        "validAt": "2024-01-07T00:00:00Z",
+        "versions": [
+          "right"
+        ]
+      },
+      {
+        "mode": "HISTORICAL",
+        "subjectId": "alice",
+        "predicate": "city",
+        "scope": "profile",
+        "validAt": "2024-01-05T00:00:00Z",
+        "versions": [
+          "old",
+          "tombstone"
+        ]
+      },
+      {
+        "mode": "AS_OF",
+        "subjectId": "alice",
+        "predicate": "city",
+        "scope": "profile",
+        "validAt": "2024-01-05T00:00:00Z",
+        "versions": [
+          "old"
+        ],
+        "systemAt": "2024-02-01T00:00:00Z"
+      },
+      {
+        "mode": "AS_OF",
+        "subjectId": "alice",
+        "predicate": "city",
+        "scope": "profile",
+        "validAt": "2024-01-05T00:00:00Z",
+        "versions": [],
+        "systemAt": "2024-02-02T00:00:00Z"
+      },
+      {
+        "mode": "AS_OF",
+        "subjectId": "alice",
+        "predicate": "city",
+        "scope": "profile",
+        "validAt": "2024-01-07T00:00:00Z",
+        "versions": [
+          "right"
+        ],
+        "systemAt": "2024-02-02T00:00:00Z"
+      }
+    ]
+  }
+}

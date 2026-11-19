@@ -1,0 +1,199 @@
+{
+  "schemaVersion": 2,
+  "name": "11-same-timestamp",
+  "events": [
+    {
+      "alias": "second",
+      "id": "event-2",
+      "operation": "CORRECT",
+      "subject": {
+        "id": "alice",
+        "label": "person"
+      },
+      "predicate": "city",
+      "scope": "profile",
+      "factId": "fact-berlin",
+      "value": {
+        "kind": "LITERAL",
+        "value": "Berlin"
+      },
+      "validFrom": "2024-01-01T00:00:00Z",
+      "validTo": "2024-01-10T00:00:00Z",
+      "recordedAt": "2024-02-01T00:00:00Z",
+      "evidence": [
+        {
+          "id": "ev-2",
+          "source": {
+            "id": "source-2",
+            "name": "source 2"
+          },
+          "content": "Evidence 2."
+        }
+      ],
+      "target": "intermediate"
+    },
+    {
+      "alias": "first",
+      "id": "event-1",
+      "operation": "ASSERT",
+      "subject": {
+        "id": "alice",
+        "label": "person"
+      },
+      "predicate": "city",
+      "scope": "profile",
+      "factId": "fact-paris",
+      "value": {
+        "kind": "LITERAL",
+        "value": "Paris"
+      },
+      "validFrom": "2024-01-01T00:00:00Z",
+      "validTo": "2024-01-10T00:00:00Z",
+      "recordedAt": "2024-02-01T00:00:00Z",
+      "evidence": [
+        {
+          "id": "ev-1",
+          "source": {
+            "id": "source-1",
+            "name": "source 1"
+          },
+          "content": "Evidence 1."
+        }
+      ]
+    }
+  ],
+  "batches": [
+    {
+      "endExclusive": 2,
+      "decisions": [
+        {
+          "event": "first",
+          "code": "ACCEPTED"
+        },
+        {
+          "event": "second",
+          "code": "ACCEPTED"
+        }
+      ]
+    }
+  ],
+  "expected": {
+    "identities": [
+      {
+        "alias": "intermediate",
+        "event": "first",
+        "sourceVersion": null,
+        "subject": {
+          "id": "alice",
+          "label": "person"
+        },
+        "predicate": "city",
+        "scope": "profile",
+        "factId": "fact-paris",
+        "value": {
+          "kind": "LITERAL",
+          "value": "Paris"
+        },
+        "status": "ACTIVE",
+        "validFrom": "2024-01-01T00:00:00Z",
+        "validTo": "2024-01-10T00:00:00Z",
+        "systemFrom": "2024-02-01T00:00:00Z",
+        "systemTo": null,
+        "evidence": [
+          {
+            "id": "ev-1",
+            "source": {
+              "id": "source-1",
+              "name": "source 1"
+            },
+            "content": "Evidence 1."
+          }
+        ]
+      }
+    ],
+    "versions": [
+      {
+        "alias": "final",
+        "event": "second",
+        "sourceVersion": "intermediate",
+        "subject": {
+          "id": "alice",
+          "label": "person"
+        },
+        "predicate": "city",
+        "scope": "profile",
+        "factId": "fact-berlin",
+        "value": {
+          "kind": "LITERAL",
+          "value": "Berlin"
+        },
+        "status": "ACTIVE",
+        "validFrom": "2024-01-01T00:00:00Z",
+        "validTo": "2024-01-10T00:00:00Z",
+        "systemFrom": "2024-02-01T00:00:00Z",
+        "systemTo": null,
+        "evidence": [
+          {
+            "id": "ev-2",
+            "source": {
+              "id": "source-2",
+              "name": "source 2"
+            },
+            "content": "Evidence 2."
+          }
+        ]
+      }
+    ],
+    "relations": [],
+    "queries": [
+      {
+        "mode": "CURRENT",
+        "subjectId": "alice",
+        "predicate": "city",
+        "scope": "profile",
+        "validAt": "2024-01-01T00:00:00Z",
+        "versions": [
+          "final"
+        ]
+      },
+      {
+        "mode": "HISTORICAL",
+        "subjectId": "alice",
+        "predicate": "city",
+        "scope": "profile",
+        "validAt": "2024-01-05T00:00:00Z",
+        "versions": [
+          "final"
+        ]
+      },
+      {
+        "mode": "AS_OF",
+        "subjectId": "alice",
+        "predicate": "city",
+        "scope": "profile",
+        "validAt": "2024-01-05T00:00:00Z",
+        "versions": [],
+        "systemAt": "2024-01-31T00:00:00Z"
+      },
+      {
+        "mode": "AS_OF",
+        "subjectId": "alice",
+        "predicate": "city",
+        "scope": "profile",
+        "validAt": "2024-01-05T00:00:00Z",
+        "versions": [
+          "final"
+        ],
+        "systemAt": "2024-02-01T00:00:00Z"
+      },
+      {
+        "mode": "CURRENT",
+        "subjectId": "alice",
+        "predicate": "city",
+        "scope": "profile",
+        "validAt": "2024-01-10T00:00:00Z",
+        "versions": []
+      }
+    ]
+  }
+}
