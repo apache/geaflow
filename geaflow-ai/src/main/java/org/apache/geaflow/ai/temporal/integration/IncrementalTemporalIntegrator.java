@@ -335,6 +335,24 @@ public final class IncrementalTemporalIntegrator {
         return Collections.unmodifiableList(snapshot);
     }
 
+    IncrementalTemporalIntegrator mergeEventHistory(IncrementalTemporalIntegrator other) {
+        Map<String, MemoryEvent> uniqueEvents = new HashMap<>(eventsById);
+        for (MemoryEvent event : other.eventsById.values()) {
+            MemoryEvent existing = uniqueEvents.putIfAbsent(event.getId(), event);
+            if (existing != null && !existing.equals(event)) {
+                throw new IllegalArgumentException("Conflicting event id: " + event.getId());
+            }
+        }
+
+        List<MemoryEvent> orderedEvents = new ArrayList<>(uniqueEvents.values());
+        Collections.sort(orderedEvents, EVENT_ORDER);
+        IncrementalTemporalIntegrator merged = new IncrementalTemporalIntegrator();
+        for (MemoryEvent event : orderedEvents) {
+            merged.apply(event);
+        }
+        return merged;
+    }
+
     private static void applyNormalizedOrderedEvent(
         NormalizedMemoryEvent event,
         List<MemoryFactVersion> versions,

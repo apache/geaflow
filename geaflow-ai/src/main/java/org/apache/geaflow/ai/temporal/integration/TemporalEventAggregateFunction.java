@@ -60,14 +60,6 @@ public final class TemporalEventAggregateFunction implements
         Objects.requireNonNull(left, "left");
         Objects.requireNonNull(right, "right");
 
-        IncrementalTemporalIntegrator merged =
-            new IncrementalTemporalIntegrator();
-        for (MemoryEvent event : left.eventSnapshot()) {
-            merged.apply(event);
-        }
-        for (MemoryEvent event : right.eventSnapshot()) {
-            merged.apply(event);
-        }
-        return merged;
+        return left.mergeEventHistory(right);
     }
 }

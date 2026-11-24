@@ -171,8 +171,60 @@ public class TemporalEventAggregateFunctionTest {
         Assertions.assertEquals(
             function.getResult(merged),
             function.getResult(mergedAgain));
+        Assertions.assertEquals(
+            Arrays.asList(add, lateCorrection, correction, retract),
+            merged.eventSnapshot());
+        Assertions.assertEquals(merged.eventSnapshot(), mergedAgain.eventSnapshot());
         Assertions.assertEquals(leftBefore, function.getResult(left));
         Assertions.assertEquals(rightBefore, function.getResult(right));
+    }
+
+    @Test
+    public void testMergeSortsCombinedHistoryBeforeReplay() {
+        MemoryEvent add = addEvent("event-1", "Beijing", "2024-03-01T00:00:00Z");
+        String changeTime = "2024-06-01T00:00:00Z";
+        MemoryEvent retract = retractEvent("event-2", "2024-04-01T00:00:00Z",
+            "2024-09-01T00:00:00Z", changeTime);
+        MemoryEvent readd = MemoryEvent.add("event-3", fact("Shanghai"),
+            retract.getValidTime(), time(changeTime), evidence("event-3"));
+        IncrementalTemporalIntegrator left = function.createAccumulator();
+        IncrementalTemporalIntegrator right = function.createAccumulator();
+        addAll(left, add, retract);
+        addAll(right, readd);
+        List<MemoryFactVersion> leftBefore = function.getResult(left);
+        List<MemoryFactVersion> rightBefore = function.getResult(right);
+        List<MemoryEvent> combined = Arrays.asList(add, retract, readd);
+        List<MemoryFactVersion> expected = oracle.replay(combined);
+
+        IncrementalTemporalIntegrator merged = function.merge(left, right);
+        IncrementalTemporalIntegrator reversed = function.merge(right, left);
+
+        Assertions.assertEquals(expected, function.getResult(merged));
+        Assertions.assertEquals(expected, function.getResult(reversed));
+        Assertions.assertEquals(combined, merged.eventSnapshot());
+        Assertions.assertEquals(combined, reversed.eventSnapshot());
+        Assertions.assertEquals(leftBefore, function.getResult(left));
+        Assertions.assertEquals(rightBefore, function.getResult(right));
+    }
+
+    @Test
+    public void testMergeRejectsConflictingEventIds() {
+        MemoryEvent leftEvent = addEvent("event-add", "Beijing", "2024-03-01T00:00:00Z");
+        MemoryEvent rightEvent = addEvent("event-add", "Shanghai", "2024-03-01T00:00:00Z");
+        IncrementalTemporalIntegrator left = function.createAccumulator();
+        IncrementalTemporalIntegrator right = function.createAccumulator();
+        addAll(left, leftEvent);
+        addAll(right, rightEvent);
+
+        IllegalArgumentException failure = Assertions.assertThrows(
+            IllegalArgumentException.class, () -> function.merge(left, right));
+        IllegalArgumentException reversedFailure = Assertions.assertThrows(
+            IllegalArgumentException.class, () -> function.merge(right, left));
+
+        Assertions.assertEquals("Conflicting event id: event-add", failure.getMessage());
+        Assertions.assertEquals(failure.getMessage(), reversedFailure.getMessage());
+        Assertions.assertEquals(Collections.singletonList(leftEvent), left.eventSnapshot());
+        Assertions.assertEquals(Collections.singletonList(rightEvent), right.eventSnapshot());
     }
 
     @Test
