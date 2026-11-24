@@ -88,6 +88,10 @@ public final class IncrementalTemporalIntegrator {
 
     public void apply(MemoryEvent event) {
         Objects.requireNonNull(event, "event");
+        if (event.getOperation() == MemoryEventOperation.RETRACT
+            && event.getTargetVersionId().isPresent()) {
+            throw new IllegalArgumentException("Targeted retractions require a normalized memory event");
+        }
 
         MemoryEvent existing = eventsById.get(event.getId());
         if (existing != null) {

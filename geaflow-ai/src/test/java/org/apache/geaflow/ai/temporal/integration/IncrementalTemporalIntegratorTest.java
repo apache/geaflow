@@ -207,6 +207,36 @@ public class IncrementalTemporalIntegratorTest {
     }
 
     @Test
+    public void testLegacyRetractionRejectsMissingTargetWithoutChangingState() {
+        MemoryEvent add = addEvent(
+            "event-add",
+            "fact-alice-city",
+            "person:alice",
+            "Beijing",
+            "2024-01-01T00:00:00Z",
+            "2024-03-01T00:00:00Z");
+        MemoryEvent retract = retractEvent(
+            "event-retract",
+            "fact-alice-city",
+            "2024-04-01T00:00:00Z",
+            "2024-09-01T00:00:00Z",
+            "2024-06-01T00:00:00Z");
+        MemoryEvent targeted = retract.targeting("missing-version");
+        integrator.apply(add);
+        List<MemoryFactVersion> before = integrator.snapshot();
+        List<MemoryEvent> eventsBefore = integrator.eventSnapshot();
+
+        Assertions.assertThrows(IllegalArgumentException.class,
+            () -> integrator.apply(targeted));
+        Assertions.assertEquals(before, integrator.snapshot());
+        Assertions.assertEquals(eventsBefore, integrator.eventSnapshot());
+
+        integrator.apply(retract);
+        Assertions.assertEquals(oracle.replay(Arrays.asList(add, retract)), integrator.snapshot());
+        Assertions.assertEquals(Arrays.asList(add, retract), integrator.eventSnapshot());
+    }
+
+    @Test
     public void testSnapshotIsDeterministicAndImmutable() {
         MemoryEvent bob = addEvent(
             "event-b",
