@@ -67,10 +67,7 @@ public final class EventNormalizer {
                 "CORRECT/RETRACT requires a target version");
         }
 
-        FactKey normalizedKey = new FactKey(
-            normalizeText(factKey.getSubjectId()),
-            normalizeText(factKey.getPredicate()),
-            normalizeText(factKey.getScope()));
+        FactKey normalizedKey = normalizeFactKey(factKey);
         String eventId = normalizeText(event.getId());
         String factId = normalizeText(event.getFactId());
         TimeInterval validTime = normalizeInterval(
@@ -174,6 +171,12 @@ public final class EventNormalizer {
 
     private static String normalizeText(String value) {
         return Normalizer.normalize(value, Normalizer.Form.NFC);
+    }
+
+    /** Returns the canonical fact key used for writes and lookups. */
+    public static FactKey normalizeFactKey(FactKey factKey) {
+        return new FactKey(normalizeText(factKey.getSubjectId()),
+            normalizeText(factKey.getPredicate()), normalizeText(factKey.getScope()));
     }
 
     private static void validateFactKey(

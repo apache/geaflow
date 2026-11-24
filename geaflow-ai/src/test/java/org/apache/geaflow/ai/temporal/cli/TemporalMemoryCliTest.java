@@ -19,6 +19,7 @@
 
 package org.apache.geaflow.ai.temporal.cli;
 
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -54,6 +55,7 @@ import org.apache.geaflow.ai.temporal.semantics.EventNormalizer;
 import org.apache.geaflow.ai.temporal.semantics.NormalizedMemoryEvent;
 import org.apache.geaflow.ai.temporal.semantics.TemporalValidationException;
 import org.apache.geaflow.ai.temporal.semantics.VersionIdentity;
+import org.apache.geaflow.ai.temporal.trace.TraceBuilder;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -224,6 +226,46 @@ public class TemporalMemoryCliTest {
         try (java.util.stream.Stream<Path> paths = Files.walk(directory)) {
             Assertions.assertTrue(paths.noneMatch(path -> path.getFileName().toString().endsWith(".tmp")));
         }
+    }
+
+    @Test
+    public void testRunStoreLoadsLegacyUnicodeQueryTrace() throws Exception {
+        FactKey decomposed = new FactKey(KEY.getSubjectId(), KEY.getPredicate(), "cafe\u0301");
+        TemporalMemoryFacade facade = new TemporalMemoryFacade();
+        NormalizedMemoryEvent first = normalizer.normalize(MemoryEvent.add("first",
+            fact("Paris"), interval(0, 100), at(10), evidence("first")), decomposed);
+        facade.replay(Collections.singletonList(first));
+        facade.query(QueryMode.CURRENT, decomposed, at(40), null);
+        Path run = directory.resolve("unicode-run.json");
+        TemporalRunStore store = new TemporalRunStore();
+        store.save(run, facade);
+
+        JsonObject stored = codec.parseObject(read(run));
+        JsonObject previousTrace = TraceBuilder.query("query-1", 1, QueryMode.CURRENT,
+            decomposed, at(40), null, Collections.emptyList(), facade.getSnapshot().getState()).toJson();
+        JsonArray previousTraces = new JsonArray();
+        previousTraces.add(previousTrace);
+        stored.add("queryTraces", previousTraces);
+        String previousRun = codec.toJson(stored);
+        write(run, previousRun);
+
+        TemporalMemoryFacade restored = store.load(run);
+        JsonObject trace = restored.getQueryTrace("query-1").toJson();
+        Assertions.assertEquals("MATCHED", trace.get("reason").getAsString());
+        Assertions.assertEquals(codec.factKeyToJson(first.getFactKey()), trace.get("factKey"));
+        Assertions.assertEquals(previousRun, read(run));
+        Path saved = saveCopy(store, restored);
+        Assertions.assertEquals(trace, store.load(saved).getQueryTrace("query-1").toJson());
+        Invocation query = invoke("query", "--run", saved.toString(), "--mode", "CURRENT",
+            "--subject", decomposed.getSubjectId(), "--predicate", decomposed.getPredicate(),
+            "--scope", decomposed.getScope(), "--valid-at", at(40).toString());
+        Assertions.assertEquals(0, query.code, query.err);
+        Assertions.assertEquals(trace.get("factKey"), query.json().getAsJsonArray("versions")
+            .get(0).getAsJsonObject().get("factKey"));
+
+        previousTrace.addProperty("reason", "OUTSIDE_INTERVALS");
+        write(run, codec.toJson(stored));
+        Assertions.assertThrows(TemporalValidationException.class, () -> store.load(run));
     }
 
     @Test

@@ -46,6 +46,7 @@ import org.apache.geaflow.ai.temporal.candidate.RetrievalProfile;
 import org.apache.geaflow.ai.temporal.codec.TemporalJsonCodec;
 import org.apache.geaflow.ai.temporal.model.FactKey;
 import org.apache.geaflow.ai.temporal.model.MemoryFactVersion;
+import org.apache.geaflow.ai.temporal.semantics.EventNormalizer;
 import org.apache.geaflow.ai.temporal.semantics.NormalizedMemoryEvent;
 import org.apache.geaflow.ai.temporal.semantics.TemporalErrorCode;
 import org.apache.geaflow.ai.temporal.semantics.TemporalValidationException;
@@ -199,12 +200,13 @@ public final class TemporalMemoryCli {
         }
         TemporalMemoryFacade facade = store.load(run);
         QueryResult query = facade.query(mode, key, validAt, systemAt);
+        FactKey normalizedKey = EventNormalizer.normalizeFactKey(key);
         JsonObject result = json();
         result.addProperty("queryId", query.getTrace().getId());
         result.addProperty("mode", query.getTrace().getMode().name());
         JsonArray versions = new JsonArray();
         for (MemoryFactVersion version : query.getVersions()) {
-            versions.add(codec.versionToJson(key, version,
+            versions.add(codec.versionToJson(normalizedKey, version,
                 facade.getSnapshot().getGeneratingEventIds().get(version.getId())));
         }
         result.add("versions", versions);

@@ -83,6 +83,25 @@ public class TemporalCandidateApiTest {
     }
 
     @Test
+    public void testCandidatesNormalizeEquivalentUnicodeFactKeys() throws Exception {
+        FactKey composed = new FactKey("Jos\u00e9", "caf\u00e9", "r\u00e9sum\u00e9");
+        FactKey decomposed = new FactKey("Jose\u0301", "cafe\u0301", "re\u0301sume\u0301");
+        TemporalMemoryFacade facade = new TemporalMemoryFacade();
+        facade.applyBatch(Collections.singletonList(
+            add("unicode", decomposed, "Paris", "renewable energy", 10)));
+
+        CandidateResult expected = facade.candidates(QueryMode.CURRENT, composed, "renewable",
+            at(50), null, 20);
+        CandidateResult actual = facade.candidates(QueryMode.CURRENT, decomposed, "renewable",
+            at(50), null, 20);
+
+        Assertions.assertEquals(1, expected.getFacts().size());
+        Assertions.assertTrue(expected.getFacts().get(0).isMandatory());
+        Assertions.assertEquals(1, expected.getEvidence().size());
+        Assertions.assertEquals(expected.toJson(), actual.toJson());
+    }
+
+    @Test
     public void testScopeAndTimeSlicesExcludeInvisibleVersions() throws Exception {
         TemporalMemoryFacade facade = populated();
         CandidateResult past = facade.candidates(QueryMode.AS_OF, KEY, "renewable",

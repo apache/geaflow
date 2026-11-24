@@ -43,6 +43,7 @@ import org.apache.geaflow.ai.temporal.oracle.FullReplayOracle;
 import org.apache.geaflow.ai.temporal.query.TemporalQueryService;
 import org.apache.geaflow.ai.temporal.semantics.CanonicalSnapshot;
 import org.apache.geaflow.ai.temporal.semantics.EventLedgerDecision;
+import org.apache.geaflow.ai.temporal.semantics.EventNormalizer;
 import org.apache.geaflow.ai.temporal.semantics.NormalizedMemoryEvent;
 import org.apache.geaflow.ai.temporal.semantics.SnapshotComparator;
 import org.apache.geaflow.ai.temporal.semantics.TemporalErrorCode;
@@ -222,10 +223,11 @@ public final class TemporalMemoryFacade {
             throw new TemporalValidationException(TemporalErrorCode.REJECT_INPUT,
                 "profile must not be null");
         }
+        FactKey normalizedKey = EventNormalizer.normalizeFactKey(factKey);
         TemporalCandidateService service = new TemporalCandidateService(profile);
-        return new CandidateResult(mode, factKey, text, validAt, systemAt, topK,
-            service.facts(snapshot, mode, factKey, validAt, systemAt, text, topK),
-            service.evidence(snapshot, mode, factKey, validAt, systemAt, text, topK),
+        return new CandidateResult(mode, normalizedKey, text, validAt, systemAt, topK,
+            service.facts(snapshot, mode, normalizedKey, validAt, systemAt, text, topK),
+            service.evidence(snapshot, mode, normalizedKey, validAt, systemAt, text, topK),
             snapshot.getGeneratingEventIds(), profile);
     }
 
@@ -237,17 +239,18 @@ public final class TemporalMemoryFacade {
             throw new TemporalValidationException(TemporalErrorCode.REJECT_INPUT,
                 "systemAt is required only for AS_OF");
         }
+        FactKey normalizedKey = EventNormalizer.normalizeFactKey(factKey);
         TemporalQueryService service = new TemporalQueryService();
         List<MemoryFactVersion> matches;
         if (mode == QueryMode.CURRENT) {
-            matches = service.current(snapshot.getState(), factKey, validAt);
+            matches = service.current(snapshot.getState(), normalizedKey, validAt);
         } else if (mode == QueryMode.HISTORICAL) {
-            matches = service.historical(snapshot.getState(), factKey, validAt);
+            matches = service.historical(snapshot.getState(), normalizedKey, validAt);
         } else {
-            matches = service.asOf(snapshot.getState(), factKey, validAt, systemAt);
+            matches = service.asOf(snapshot.getState(), normalizedKey, validAt, systemAt);
         }
         final QueryTrace trace = TraceBuilder.query("query-" + (queries.size() + 1), revision,
-            mode, factKey, validAt, systemAt, matches, snapshot.getState());
+            mode, normalizedKey, validAt, systemAt, matches, snapshot.getState());
         JsonObject operation = new JsonObject();
         operation.addProperty("method", "QUERY");
         operation.addProperty("mode", mode.name());

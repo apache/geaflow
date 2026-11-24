@@ -157,6 +157,30 @@ public class TemporalMemoryFacadeTest {
     }
 
     @Test
+    public void testQueriesNormalizeEquivalentUnicodeFactKeys() {
+        FactKey composed = new FactKey("Jos\u00e9", "caf\u00e9", "r\u00e9sum\u00e9");
+        FactKey decomposed = new FactKey("Jose\u0301", "cafe\u0301", "re\u0301sume\u0301");
+        MemoryFact fact = MemoryFact.attribute("fact-city",
+            new MemoryEntity(decomposed.getSubjectId(), "person"), decomposed.getPredicate(), "Paris");
+        NormalizedMemoryEvent event = normalizer.normalize(
+            MemoryEvent.add("unicode", fact, interval(), at(10), evidence("unicode")), decomposed);
+        TemporalMemoryFacade facade = new TemporalMemoryFacade();
+        facade.applyBatch(Collections.singletonList(event));
+
+        for (QueryMode mode : QueryMode.values()) {
+            Instant systemAt = mode == QueryMode.AS_OF ? at(20) : null;
+            QueryResult expected = facade.query(mode, composed, at(1), systemAt);
+            QueryResult actual = facade.query(mode, decomposed, at(1), systemAt);
+            Assertions.assertEquals(1, expected.getVersions().size());
+            Assertions.assertEquals(expected.getVersions(), actual.getVersions());
+            JsonObject expectedTrace = expected.getTrace().toJson();
+            JsonObject actualTrace = actual.getTrace().toJson();
+            Assertions.assertEquals(expectedTrace.get("factKey"), actualTrace.get("factKey"));
+            Assertions.assertEquals(expectedTrace.get("resultDigest"), actualTrace.get("resultDigest"));
+        }
+    }
+
+    @Test
     public void testPublicCityExampleAgainstHandAuthoredQueryExpectations() throws Exception {
         TemporalJsonCodec codec = new TemporalJsonCodec();
         List<NormalizedMemoryEvent> events = new ArrayList<>();

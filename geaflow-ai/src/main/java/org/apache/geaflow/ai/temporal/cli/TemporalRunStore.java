@@ -34,6 +34,7 @@ import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -48,6 +49,7 @@ import org.apache.geaflow.ai.temporal.semantics.TemporalErrorCode;
 import org.apache.geaflow.ai.temporal.semantics.TemporalValidationException;
 import org.apache.geaflow.ai.temporal.trace.DecisionTrace;
 import org.apache.geaflow.ai.temporal.trace.QueryTrace;
+import org.apache.geaflow.ai.temporal.trace.TraceBuilder;
 
 /** Stores a reproducible journal and verifies every persisted result when loading. */
 public final class TemporalRunStore {
@@ -56,7 +58,11 @@ public final class TemporalRunStore {
     private final TemporalJsonCodec codec = new TemporalJsonCodec();
 
     public void save(Path path, TemporalMemoryFacade facade) throws IOException {
-        writeAtomic(path, codec.toJson(artifact(facade)));
+        JsonArray queries = new JsonArray();
+        for (QueryTrace trace : facade.getQueryTraces()) {
+            queries.add(trace.toJson());
+        }
+        writeAtomic(path, codec.toJson(artifact(facade, queries)));
     }
 
     public TemporalMemoryFacade load(Path path) throws IOException {
@@ -67,17 +73,25 @@ public final class TemporalRunStore {
         version(stored, "artifactVersion", ARTIFACT_VERSION);
         version(stored, "schemaVersion", NormalizedMemoryEvent.SCHEMA_VERSION);
         JsonArray operations = array(stored.get("operations"), "operations");
+        JsonArray storedQueries = array(stored.get("queryTraces"), "queryTraces");
+        JsonArray reproducedQueries = new JsonArray();
         TemporalMemoryFacade facade = new TemporalMemoryFacade();
         for (JsonElement element : operations) {
-            replay(facade, object(element, "operation"));
+            JsonObject operation = object(element, "operation");
+            String method = text(operation, "method");
+            if ("QUERY".equals(method)) {
+                reproducedQueries.add(replayQuery(facade, operation, storedQueries, reproducedQueries.size()));
+            } else {
+                replayEventOperation(facade, operation, method);
+            }
         }
-        if (!stored.equals(artifact(facade))) {
+        if (!stored.equals(artifact(facade, reproducedQueries))) {
             throw invalid("Run journal does not reproduce its snapshot and traces");
         }
         return facade;
     }
 
-    private JsonObject artifact(TemporalMemoryFacade facade) {
+    private JsonObject artifact(TemporalMemoryFacade facade, JsonArray queries) {
         JsonObject value = new JsonObject();
         value.addProperty("artifactVersion", ARTIFACT_VERSION);
         value.addProperty("schemaVersion", NormalizedMemoryEvent.SCHEMA_VERSION);
@@ -88,32 +102,39 @@ public final class TemporalRunStore {
             decisions.add(trace.toJson());
         }
         value.add("decisionTraces", decisions);
-        JsonArray queries = new JsonArray();
-        for (QueryTrace trace : facade.getQueryTraces()) {
-            queries.add(trace.toJson());
-        }
         value.add("queryTraces", queries);
         return value;
     }
 
-    private void replay(TemporalMemoryFacade facade, JsonObject operation) {
-        String method = text(operation, "method");
-        if ("QUERY".equals(method)) {
-            fields(operation, "query operation", "method", "mode", "factKey", "validAt", "systemAt");
-            JsonObject key = object(operation.get("factKey"), "factKey");
-            fields(key, "factKey", "subjectId", "predicate", "scope");
-            QueryMode mode;
-            try {
-                mode = QueryMode.valueOf(text(operation, "mode"));
-            } catch (IllegalArgumentException exception) {
-                throw invalid("Unknown query mode in run journal");
-            }
-            String systemAt = nullableText(operation, "systemAt");
-            facade.query(mode, new FactKey(text(key, "subjectId"), text(key, "predicate"),
-                text(key, "scope")), parseTime(text(operation, "validAt"), "validAt"),
-                systemAt == null ? null : parseTime(systemAt, "systemAt"));
-            return;
+    private JsonObject replayQuery(TemporalMemoryFacade facade, JsonObject operation,
+                                   JsonArray storedQueries, int queryIndex) {
+        fields(operation, "query operation", "method", "mode", "factKey", "validAt", "systemAt");
+        JsonObject key = object(operation.get("factKey"), "factKey");
+        fields(key, "factKey", "subjectId", "predicate", "scope");
+        QueryMode mode;
+        try {
+            mode = QueryMode.valueOf(text(operation, "mode"));
+        } catch (IllegalArgumentException exception) {
+            throw invalid("Unknown query mode in run journal");
         }
+        FactKey factKey = new FactKey(text(key, "subjectId"), text(key, "predicate"), text(key, "scope"));
+        Instant validAt = parseTime(text(operation, "validAt"), "validAt");
+        String systemAtText = nullableText(operation, "systemAt");
+        Instant systemAt = systemAtText == null ? null : parseTime(systemAtText, "systemAt");
+        QueryTrace trace = facade.query(mode, factKey, validAt, systemAt).getTrace();
+        JsonObject reproduced = trace.toJson();
+        if (queryIndex < storedQueries.size() && !key.equals(reproduced.get("factKey"))) {
+            // Before queries normalized keys, non-NFC keys could not match any persisted fact key.
+            JsonObject previous = TraceBuilder.query(trace.getId(), reproduced.get("revision").getAsInt(),
+                mode, factKey, validAt, systemAt, Collections.emptyList(), facade.getSnapshot().getState()).toJson();
+            if (previous.equals(storedQueries.get(queryIndex))) {
+                return previous;
+            }
+        }
+        return reproduced;
+    }
+
+    private void replayEventOperation(TemporalMemoryFacade facade, JsonObject operation, String method) {
         if (!"REPLAY".equals(method) && !"APPLY_BATCH".equals(method)) {
             throw invalid("Unknown run operation: " + method);
         }
